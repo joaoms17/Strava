@@ -1,6 +1,6 @@
 # /src — app React (PWA)
 
-Código chega com o M1, depois da confirmação do schema. Estrutura prevista:
+Estrutura (os ecrãs de Treino e Gráficos são placeholders até ao M2/M3):
 
 ```
 /screens
