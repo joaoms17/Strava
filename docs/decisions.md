@@ -19,6 +19,12 @@
 
 ### Em aberto (a confirmar na revisão da proposta)
 
-- Os `rep_min`/`rep_max` e os `pattern` do catálogo de exercícios (rascunho meu).
-- O seed de `profile.equipment` (`bicicleta com rolo, halteres, bandas elásticas, banco` — deduzido da secção 11) e o conteúdo de `constraints`/`goals`.
+- ~~Os `rep_min`/`rep_max` e os `pattern` do catálogo de exercícios~~ → confirmado a 2026-09-08, ver abaixo.
+- ~~O seed de `profile.equipment`~~ → confirmado a 2026-09-08, ver abaixo.
 - Buckets do Storage (`meal-photos`, `chapter-photos`): proposta para migration própria no M1, junto com as políticas de acesso.
+
+## 2026-09-08 — Confirmação da proposta (respostas do João)
+
+15. **Séries de 8–12 em todos os exercícios com repetições** — é o intervalo que o João prefere. Aplicado a todo o catálogo (banda incluída, com tensão a compensar); a validação com fisio continua pendente, como antes.
+16. **Equipamento:** em casa, bicicleta **estática** (não rolo), halteres, bandas elásticas e banco; **há ginásio disponível e o João quer ir**. `profile.equipment` passa a `{casa: [...], ginasio: true}`. Exercícios de máquinas de ginásio entram no catálogo no M4, quando a geração de planos chegar — sempre dentro das regras do joelho.
+17. **Proposta de schema e estrutura confirmada** — arranca o M1.

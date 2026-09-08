@@ -12,7 +12,10 @@ begin
   insert into public.profile (user_id, equipment, constraints, goals, timeline)
   values (
     v_user,
-    '["bicicleta com rolo", "halteres", "bandas elásticas", "banco"]'::jsonb,
+    '{
+      "casa": ["bicicleta estática", "halteres", "bandas elásticas", "banco"],
+      "ginasio": true
+    }'::jsonb,
     '{
       "joelho": "artrose",
       "regras": ["sem impacto", "carga baixa", "cadência alta", "regra do semáforo de dor"]
