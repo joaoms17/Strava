@@ -28,3 +28,13 @@
 15. **Séries de 8–12 em todos os exercícios com repetições** — é o intervalo que o João prefere. Aplicado a todo o catálogo (banda incluída, com tensão a compensar); a validação com fisio continua pendente, como antes.
 16. **Equipamento:** em casa, bicicleta **estática** (não rolo), halteres, bandas elásticas e banco; **há ginásio disponível e o João quer ir**. `profile.equipment` passa a `{casa: [...], ginasio: true}`. Exercícios de máquinas de ginásio entram no catálogo no M4, quando a geração de planos chegar — sempre dentro das regras do joelho.
 17. **Proposta de schema e estrutura confirmada** — arranca o M1.
+
+## 2026-09-08 — M1
+
+18. **Modelos fixados** depois de confirmar os IDs na referência atual da API: `claude-haiku-4-5` (texto) e `claude-sonnet-5` (foto). O Sonnet 5 já não aceita `temperature`, por isso o parse de foto vai sem ela; o de texto usa `temperature: 0` no Haiku, como a spec pede. Preços por token em `api/_lib/anthropic.ts` para calcular `cost_usd`.
+19. **JSON estrito** com structured outputs (`output_config.format` + `zodOutputFormat`), que valida com os schemas Zod de `api/_lib/schemas.ts`; retry 1x quando o parse falha; tudo registado em `api_calls` mesmo quando falha.
+20. **Fonte única das regras:** as regras da secção 5 vivem em `api/_lib/rules` como funções puras, testadas em `/tests`. O cliente importa a função do dia nutricional só para saber que dia consultar; quem escreve (`/api/meal/save`) recalcula sempre a data e os totais no servidor.
+21. **Fotos:** redimensionadas no cliente para JPEG máx. 1600 px antes do upload (menos tokens, menos dados móveis, formato sempre aceite). Bucket `meal-photos` privado com caminho `<user_id>/...`; o parse valida que o caminho pertence ao utilizador autenticado porque o download usa service role.
+22. **Ícones PWA em PNG** gerados a partir dos SVG (o iOS não aceita SVG no `apple-touch-icon`, e o telemóvel alvo é um iPhone). Os SVG ficam como fonte.
+23. **PIN no cliente** (SHA-256 com salt em localStorage, rebloqueio ao fim de 5 min em segundo plano) é conveniência de ecrã, não segurança — a segurança é o Supabase Auth + RLS.
+24. **Sem fila offline no M1** (é M2): se a rede falhar, o erro fica visível e o texto não se perde do ecrã.
