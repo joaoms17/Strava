@@ -8,6 +8,9 @@
     { "path": "/api/cron/daily", "schedule": "30 4 * * *" }
   ],
   "rewrites": [
+    { "source": "/api/meal/:action", "destination": "/api/meal?action=:action" },
+    { "source": "/api/workout/:action", "destination": "/api/workout?action=:action" },
+    { "source": "/api/strava/:action", "destination": "/api/strava?action=:action" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
