@@ -1,5 +1,10 @@
 // Regra 1: o dia nutricional vai das 04:00 às 04:00 locais (Europe/Lisbon).
 // Devolve o dia (YYYY-MM-DD) a que um instante pertence.
+export function shiftDate(date: string, days: number): string {
+  const ms = Date.parse(`${date}T00:00:00Z`) + days * 86_400_000
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
 export function nutritionalDay(
   instant: Date,
   cutoffHour: number,
