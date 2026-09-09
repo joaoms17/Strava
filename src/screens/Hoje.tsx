@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { localCalendarDate, nutritionalDay } from '../lib/day'
+import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import type { DayRow, Meal, Profile } from '../lib/types'
 
 interface HojeData {
   profile: Profile
   meals: Meal[]
   day: DayRow | null
+  yesterday: DayRow | null
+  date: string
 }
 
 export default function Hoje() {
@@ -27,14 +29,17 @@ export default function Hoje() {
       return
     }
     const date = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-    const [{ data: meals }, { data: day }] = await Promise.all([
+    const [{ data: meals }, { data: day }, { data: yesterday }] = await Promise.all([
       supabase.from('meals').select('*').eq('date', date).order('logged_at'),
       supabase.from('days').select('*').eq('date', date).maybeSingle(),
+      supabase.from('days').select('*').eq('date', shiftDate(date, -1)).maybeSingle(),
     ])
     setData({
       profile: profile as Profile,
       meals: (meals ?? []) as Meal[],
       day: (day ?? null) as DayRow | null,
+      yesterday: (yesterday ?? null) as DayRow | null,
+      date,
     })
   }, [])
 
@@ -65,6 +70,29 @@ export default function Hoje() {
     setWeightBusy(false)
   }
 
+  async function toggleDayClosed() {
+    if (!data) return
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return
+    const flags = new Set(data.day?.flags ?? [])
+    const closing = !flags.has('dia_fechado')
+    if (closing) flags.add('dia_fechado')
+    else flags.delete('dia_fechado')
+    // Só a marca muda aqui; a cron das 04:30 recalcula o resto do dia.
+    await supabase.from('days').upsert(
+      {
+        user_id: user.id,
+        date: data.date,
+        flags: [...flags],
+        is_complete: closing,
+      },
+      { onConflict: 'user_id,date' },
+    )
+    await load()
+  }
+
   if (error) {
     return <p className="pt-8 text-center text-sm text-warn">{error}</p>
   }
@@ -72,7 +100,8 @@ export default function Hoje() {
     return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
   }
 
-  const { profile, meals, day } = data
+  const { profile, meals, day, yesterday } = data
+  const dayClosed = day?.flags?.includes('dia_fechado') ?? false
   const kcalIn = meals.reduce((acc, m) => acc + Number(m.kcal), 0)
   const proteinIn = meals.reduce((acc, m) => acc + Number(m.protein), 0)
   const kcalTarget = day ? day.kcal_target : profile.base_kcal
@@ -102,6 +131,18 @@ export default function Hoje() {
       {day && day.kcal_exercise > 0 && (
         <p className="text-center text-xs text-dim">
           meta de hoje: {kcalTarget} kcal ({profile.base_kcal} + {day.kcal_exercise} de treino)
+        </p>
+      )}
+
+      {yesterday?.flags?.includes('chao') && (
+        <p className="rounded-xl border border-warn/40 bg-card px-4 py-3 text-sm text-warn">
+          A média dos últimos 7 dias completos está abaixo do chão ({profile.kcal_floor_week} kcal).
+          Come um pouco mais.
+        </p>
+      )}
+      {yesterday && !yesterday.is_complete && (
+        <p className="rounded-xl border border-edge bg-card px-4 py-3 text-sm text-dim">
+          Ontem ficou incompleto (menos de 2 refeições ou &lt; 800 kcal) — não conta para as médias.
         </p>
       )}
 
@@ -164,6 +205,15 @@ export default function Hoje() {
           </button>
         </div>
       </div>
+
+      <button
+        onClick={() => void toggleDayClosed()}
+        className={`w-full rounded-2xl border py-3 text-sm font-semibold ${
+          dayClosed ? 'border-ok/50 text-ok' : 'border-edge text-dim'
+        }`}
+      >
+        {dayClosed ? 'Dia fechado ✓ (tocar para reabrir)' : 'Fechar o dia'}
+      </button>
 
       <button className="w-full py-2 text-center text-xs text-dim" onClick={() => void load()}>
         Atualizar

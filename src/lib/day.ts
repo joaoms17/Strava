@@ -1,5 +1,5 @@
 // Fonte única da regra 1 — implementada e testada em api/_lib/rules.
-export { nutritionalDay } from '../../api/_lib/rules/nutritional-day'
+export { nutritionalDay, shiftDate } from '../../api/_lib/rules/nutritional-day'
 
 // Data de calendário local (para o peso), YYYY-MM-DD em Europe/Lisbon.
 export function localCalendarDate(instant = new Date()): string {

@@ -26,6 +26,7 @@ export interface Profile {
   base_kcal: number
   protein_g: number
   protein_per_meal_g: number
+  kcal_floor_week: number
   nutrition_day_cutoff_hour: number
   timeline: { label: string; when: string }[]
 }
@@ -46,8 +47,28 @@ export interface Meal {
 
 export interface DayRow {
   date: string
+  kcal_in: number
   kcal_exercise: number
   kcal_target: number
+  is_complete: boolean
+  flags: string[]
+}
+
+export interface Food {
+  id: string
+  name: string
+  default_portion_g: number | null
+  kcal_100g: number
+  protein_100g: number
+  carbs_100g: number
+  fat_100g: number
+  source: 'user' | 'off' | 'claude'
+  barcode: string | null
+}
+
+export interface WeightRow {
+  date: string
+  kg: number
 }
 
 export interface Chapter {

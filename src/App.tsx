@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, supabaseConfigured } from './lib/supabase'
 import Login from './components/Login'
@@ -7,8 +7,10 @@ import TabBar, { type Tab } from './components/TabBar'
 import Registar from './screens/Registar'
 import Hoje from './screens/Hoje'
 import Treino from './screens/Treino'
-import Graficos from './screens/Graficos'
 import Prologo from './screens/Prologo'
+
+// Gráficos carrega o recharts — fica num chunk próprio, só quando é preciso.
+const Graficos = lazy(() => import('./screens/Graficos'))
 
 export type Page = Tab | 'prologo'
 
@@ -73,7 +75,11 @@ export default function App() {
           {page === 'registar' && <Registar />}
           {page === 'hoje' && <Hoje />}
           {page === 'treino' && <Treino />}
-          {page === 'graficos' && <Graficos />}
+          {page === 'graficos' && (
+            <Suspense fallback={<p className="pt-8 text-center text-sm text-dim">A carregar…</p>}>
+              <Graficos />
+            </Suspense>
+          )}
           {page === 'prologo' && <Prologo />}
         </main>
 
