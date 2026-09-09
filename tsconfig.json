@@ -11,8 +11,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "types": ["vite/client", "node"]
+    "forceConsistentCasingInFileNames": true
   },
   "include": ["src", "api", "tests", "vite.config.ts"]
 }
