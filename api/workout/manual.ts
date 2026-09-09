@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { HttpError, requireUser } from '../_lib/supabase'
 import { respondError } from '../_lib/http'
 import { workoutKcal } from '../_lib/rules/targets'
+import { pairWorkout } from '../_lib/pairing'
 
 const ManualWorkoutSchema = z.object({
   type: z.enum(['bike', 'strength', 'other']),
@@ -46,6 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select()
       .single()
     if (error) throw new HttpError(500, error.message)
+
+    await pairWorkout(db, user.id, workout)
 
     res.status(200).json({ workout })
   } catch (err) {

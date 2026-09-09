@@ -1,6 +1,6 @@
 # /api — funções serverless (Vercel)
 
-Implementados (M1–M3): `meal/parse-text`, `meal/parse-photo`, `meal/save` (dia nutricional, totais e aprendizagem de porções no servidor), `food/barcode/[ean]`, `cron/daily` (reconciliação Strava + fecho do dia), `strava/auth`, `strava/callback`, `strava/webhook`, `workout/manual` e `workout/checkin`. Os restantes chegam nos marcos respetivos.
+Implementados (M1–M4): `meal/parse-text`, `meal/parse-photo`, `meal/save`, `food/barcode/[ean]`, `cron/daily` (reconciliação Strava + fecho do dia + conclusão de blocos), `strava/auth`, `strava/callback`, `strava/webhook`, `workout/manual`, `workout/checkin`, `workout/session` (força com exercise_log) e `plan/generate` (bloco de 4 semanas com validação de catálogo e deload). Os restantes chegam nos marcos respetivos.
 
 | Endpoint | Método | Descrição |
 | --- | --- | --- |

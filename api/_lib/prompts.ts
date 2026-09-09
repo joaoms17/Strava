@@ -3,6 +3,7 @@ import path from 'node:path'
 
 export const PROMPT_MEAL_TEXT = 'meal-parse-text.v1.md'
 export const PROMPT_MEAL_PHOTO = 'meal-parse-photo.v1.md'
+export const PROMPT_PLAN = 'plan-generate.v1.md'
 
 export function readPrompt(filename: string): string {
   const candidates = [

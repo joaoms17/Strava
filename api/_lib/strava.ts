@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { workoutKcal } from './rules/targets'
+import { pairWorkout } from './pairing'
 
 const STRAVA_API = 'https://www.strava.com/api/v3'
 
@@ -136,8 +137,13 @@ export async function upsertActivity(
   userId: string,
 ): Promise<void> {
   const workout = mapActivityToWorkout(activity, userId)
-  const { error } = await admin.from('workouts').upsert(workout, { onConflict: 'strava_id' })
+  const { data: saved, error } = await admin
+    .from('workouts')
+    .upsert(workout, { onConflict: 'strava_id' })
+    .select('id,date,type,planned_session_id')
+    .single()
   if (error) throw new Error(`Upsert do workout ${activity.id}: ${error.message}`)
+  await pairWorkout(admin, userId, saved)
 }
 
 // Reconciliação das últimas 48 h (os webhooks falham). Erros ficam no log —

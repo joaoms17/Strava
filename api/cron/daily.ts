@@ -132,6 +132,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (let back = 3; back >= 1; back--) {
         closed.push(await closeDay(admin, profile, shiftDate(today, -back)))
       }
+
+      // Blocos ativos que já passaram as 4 semanas ficam concluídos.
+      const { data: expired } = await admin
+        .from('plan_blocks')
+        .select('id,start_date')
+        .eq('user_id', profile.user_id)
+        .eq('status', 'active')
+        .lt('start_date', shiftDate(today, -27))
+      for (const block of expired ?? []) {
+        await admin.from('plan_blocks').update({ status: 'completed' }).eq('id', block.id)
+        await admin
+          .from('planned_sessions')
+          .update({ status: 'skipped' })
+          .eq('block_id', block.id)
+          .eq('status', 'planned')
+      }
     }
     res.status(200).json({ ok: true, reconciled, closed })
   } catch (err) {
