@@ -57,3 +57,13 @@
 35. **Check-in (regra 9) no Hoje:** dor 0-10 pós-sessão para os treinos de hoje e "manhã seguinte" para os de ontem. Uma sessão de bike sem watts (rolo sem potenciómetro) pede a confirmação dos watts no mesmo cartão; o servidor recalcula o semáforo e as kcal.
 36. **Meta de hoje ao vivo:** o Hoje calcula `base_kcal` + regra 2 sobre os workouts do próprio dia (funções partilhadas testadas); a cron continua a ser a fonte para os dias fechados.
 37. **Webhook:** responde 200 a atletas desconhecidos e eventos de atleta (para o Strava não reenviar ao infinito) e 500 em falhas transitórias (para haver retry); a reconciliação diária das últimas 48 h na cron apanha o que o webhook perder. A subscrição cria-se uma vez com `scripts/strava-subscribe.mjs`.
+
+## 2026-09-09 — M4
+
+38. **Regra 10, tempo primeiro:** a subida de watts exige as 2 sessões verdes dentro dos caps **e** os 60 min já feitos ao W atual — a spec diz "só quando" (condição necessária), e primeiro construir o tempo é o mais seguro para o joelho e o mais fiel ao tema do bloco 1. Semáforo amarelo/vermelho na última sessão → bike leve (W mais baixo, 30 min).
+39. **Geração do bloco (Sonnet 5, JSON estrito):** o servidor valida além do schema — 4 semanas, exercícios só do catálogo `knee_safe`, sessões coerentes e **deload verificado** (séries da semana 4 ≤ 70% da semana 3). Plano rejeitado → segunda tentativa com os erros concretos; ao falhar duas vezes, 422. O alvo de bike enviado ao Claude é o calculado pelas regras da app (a regra 10 não se delega ao modelo).
+40. **Capítulo do bloco:** por omissão, o primeiro capítulo ainda sem bloco (o Prólogo é o primeiro); `chapter_id` no corpo permite escolher. `start_date` é a segunda-feira seguinte (ou a própria, se for segunda). Um bloco ativo bloqueia nova geração sem `force` (que cancela o anterior).
+41. **Emparelhamento (spec §7):** workout ↔ planned_session do mesmo tipo a ±1 dia, a mais próxima primeiro; nunca falha o registo do treino. A data da sessão deriva de `start_date + (semana-1)×7 + day_index` (0 = segunda). A cron marca blocos com 4 semanas passadas como `completed` e as sessões por fazer como `skipped`.
+42. **Sugestões no cliente com as regras partilhadas** (como as decisões 20/36): o "+2 kg" (regra 11) e o próximo alvo de bike calculam-se no ecrã com as funções puras testadas; as escritas continuam todas no servidor.
+43. **Página Capítulo substitui a página Prólogo:** mostra o capítulo do bloco atual (cartaz + missão em números do plano + estado), o fecho com os números do bloco ao lado dos factos quando termina, e a linha do tempo. Sem bloco, mostra o capítulo 0.
+44. **Interface de Definições (perfil, catálogo, export) fica para o M6**, junto do export CSV — até lá, ajustes ao catálogo fazem-se no Supabase.
