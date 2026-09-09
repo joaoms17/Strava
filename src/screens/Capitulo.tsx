@@ -13,7 +13,7 @@ interface CapituloData {
   timeline: Profile['timeline']
 }
 
-export default function Capitulo() {
+export default function Capitulo({ onOpenTimeline }: { onOpenTimeline?: () => void }) {
   const [data, setData] = useState<CapituloData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -174,6 +174,11 @@ export default function Capitulo() {
           O {chapter.patron} também começou com o corpo desfeito. A lesão no início não decide o
           fim.
         </p>
+        {onOpenTimeline && (
+          <button onClick={onOpenTimeline} className="w-full py-2 text-center text-sm text-accent">
+            Linha do tempo completa →
+          </button>
+        )}
       </section>
     </div>
   )

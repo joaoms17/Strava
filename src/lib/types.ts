@@ -27,6 +27,7 @@ export interface Profile {
   protein_g: number
   protein_per_meal_g: number
   kcal_floor_week: number
+  expected_tdee: number
   nutrition_day_cutoff_hour: number
   bike_watts_options: number[]
   bike_min_cadence: number
@@ -57,6 +58,12 @@ export interface DayRow {
   kcal_target: number
   is_complete: boolean
   flags: string[]
+  tdee_est: number | null
+}
+
+export interface WeeklyReview {
+  week_start: string
+  text: string
 }
 
 export interface Food {

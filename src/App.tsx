@@ -8,11 +8,12 @@ import Registar from './screens/Registar'
 import Hoje from './screens/Hoje'
 import Treino from './screens/Treino'
 import Capitulo from './screens/Capitulo'
+import LinhaDoTempo from './screens/LinhaDoTempo'
 
 // Gráficos carrega o recharts — fica num chunk próprio, só quando é preciso.
 const Graficos = lazy(() => import('./screens/Graficos'))
 
-export type Page = Tab | 'capitulo'
+export type Page = Tab | 'capitulo' | 'linha'
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -80,7 +81,8 @@ export default function App() {
               <Graficos />
             </Suspense>
           )}
-          {page === 'capitulo' && <Capitulo />}
+          {page === 'capitulo' && <Capitulo onOpenTimeline={() => setPage('linha')} />}
+          {page === 'linha' && <LinhaDoTempo />}
         </main>
 
         <TabBar active={page} onChange={setPage} />

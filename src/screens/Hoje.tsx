@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { dayExerciseKcal } from '../../api/_lib/rules/targets'
+import { isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
 import type { DayRow, Meal, Profile, Workout } from '../lib/types'
 import PainCheckin from '../components/PainCheckin'
 
@@ -13,6 +14,8 @@ interface HojeData {
   todayWorkouts: Workout[]
   yesterdayWorkouts: Workout[]
   date: string
+  maintenance: boolean
+  latestTdee: number | null
 }
 
 export default function Hoje() {
@@ -33,14 +36,29 @@ export default function Hoje() {
       return
     }
     const date = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-    const [{ data: meals }, { data: day }, { data: yesterday }, { data: todayW }, { data: yestW }] =
-      await Promise.all([
-        supabase.from('meals').select('*').eq('date', date).order('logged_at'),
-        supabase.from('days').select('*').eq('date', date).maybeSingle(),
-        supabase.from('days').select('*').eq('date', shiftDate(date, -1)).maybeSingle(),
-        supabase.from('workouts').select('*').eq('date', date),
-        supabase.from('workouts').select('*').eq('date', shiftDate(date, -1)),
-      ])
+    const [
+      { data: meals },
+      { data: day },
+      { data: yesterday },
+      { data: todayW },
+      { data: yestW },
+      { data: firstDay },
+      { data: tdeeRows },
+    ] = await Promise.all([
+      supabase.from('meals').select('*').eq('date', date).order('logged_at'),
+      supabase.from('days').select('*').eq('date', date).maybeSingle(),
+      supabase.from('days').select('*').eq('date', shiftDate(date, -1)).maybeSingle(),
+      supabase.from('workouts').select('*').eq('date', date),
+      supabase.from('workouts').select('*').eq('date', shiftDate(date, -1)),
+      supabase.from('days').select('date').order('date').limit(1),
+      supabase
+        .from('days')
+        .select('tdee_est')
+        .not('tdee_est', 'is', null)
+        .order('date', { ascending: false })
+        .limit(1),
+    ])
+    const anchor = firstDay?.[0]?.date ?? null
     setData({
       profile: profile as Profile,
       meals: (meals ?? []) as Meal[],
@@ -49,6 +67,8 @@ export default function Hoje() {
       todayWorkouts: (todayW ?? []) as Workout[],
       yesterdayWorkouts: (yestW ?? []) as Workout[],
       date,
+      maintenance: anchor != null && isMaintenanceWeek(anchor, date),
+      latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
     })
   }, [])
 
@@ -109,11 +129,13 @@ export default function Hoje() {
     return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
   }
 
-  const { profile, meals, day, yesterday, todayWorkouts, yesterdayWorkouts } = data
+  const { profile, meals, day, yesterday, todayWorkouts, yesterdayWorkouts, maintenance, latestTdee } =
+    data
   const dayClosed = day?.flags?.includes('dia_fechado') ?? false
   const kcalIn = meals.reduce((acc, m) => acc + Number(m.kcal), 0)
   const proteinIn = meals.reduce((acc, m) => acc + Number(m.protein), 0)
   // Regra 2, ao vivo: a meta de hoje sobe com o treino de hoje.
+  // Regra 7: na semana de manutenção, a meta é o gasto estimado (ou 2000), fixa.
   const kcalExercise = dayExerciseKcal(
     todayWorkouts.map((w) => ({
       type: w.type,
@@ -122,7 +144,7 @@ export default function Hoje() {
       stravaCalories: w.raw?.calories ?? null,
     })),
   )
-  const kcalTarget = profile.base_kcal + kcalExercise
+  const kcalTarget = maintenance ? maintenanceTarget(latestTdee) : profile.base_kcal + kcalExercise
   const kcalLeft = Math.round(kcalTarget - kcalIn)
   const proteinLeft = Math.round(profile.protein_g - proteinIn)
   const estimatedCount = meals.filter((m) => m.is_estimate).length
@@ -148,10 +170,16 @@ export default function Hoje() {
         </div>
       </div>
 
-      {kcalExercise > 0 && (
-        <p className="text-center text-xs text-dim">
-          meta de hoje: {kcalTarget} kcal ({profile.base_kcal} + {kcalExercise} de treino)
+      {maintenance ? (
+        <p className="rounded-xl border border-ok/40 bg-card px-4 py-3 text-center text-sm text-ok">
+          Semana de manutenção — meta fixa de {kcalTarget} kcal (o teu gasto estimado).
         </p>
+      ) : (
+        kcalExercise > 0 && (
+          <p className="text-center text-xs text-dim">
+            meta de hoje: {kcalTarget} kcal ({profile.base_kcal} + {kcalExercise} de treino)
+          </p>
+        )
       )}
 
       {pendingDuring.map((workout) => (
