@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
-import type { DayRow, Meal, Profile } from '../lib/types'
+import { dayExerciseKcal } from '../../api/_lib/rules/targets'
+import type { DayRow, Meal, Profile, Workout } from '../lib/types'
+import PainCheckin from '../components/PainCheckin'
 
 interface HojeData {
   profile: Profile
   meals: Meal[]
   day: DayRow | null
   yesterday: DayRow | null
+  todayWorkouts: Workout[]
+  yesterdayWorkouts: Workout[]
   date: string
 }
 
@@ -29,16 +33,21 @@ export default function Hoje() {
       return
     }
     const date = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-    const [{ data: meals }, { data: day }, { data: yesterday }] = await Promise.all([
-      supabase.from('meals').select('*').eq('date', date).order('logged_at'),
-      supabase.from('days').select('*').eq('date', date).maybeSingle(),
-      supabase.from('days').select('*').eq('date', shiftDate(date, -1)).maybeSingle(),
-    ])
+    const [{ data: meals }, { data: day }, { data: yesterday }, { data: todayW }, { data: yestW }] =
+      await Promise.all([
+        supabase.from('meals').select('*').eq('date', date).order('logged_at'),
+        supabase.from('days').select('*').eq('date', date).maybeSingle(),
+        supabase.from('days').select('*').eq('date', shiftDate(date, -1)).maybeSingle(),
+        supabase.from('workouts').select('*').eq('date', date),
+        supabase.from('workouts').select('*').eq('date', shiftDate(date, -1)),
+      ])
     setData({
       profile: profile as Profile,
       meals: (meals ?? []) as Meal[],
       day: (day ?? null) as DayRow | null,
       yesterday: (yesterday ?? null) as DayRow | null,
+      todayWorkouts: (todayW ?? []) as Workout[],
+      yesterdayWorkouts: (yestW ?? []) as Workout[],
       date,
     })
   }, [])
@@ -100,14 +109,25 @@ export default function Hoje() {
     return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
   }
 
-  const { profile, meals, day, yesterday } = data
+  const { profile, meals, day, yesterday, todayWorkouts, yesterdayWorkouts } = data
   const dayClosed = day?.flags?.includes('dia_fechado') ?? false
   const kcalIn = meals.reduce((acc, m) => acc + Number(m.kcal), 0)
   const proteinIn = meals.reduce((acc, m) => acc + Number(m.protein), 0)
-  const kcalTarget = day ? day.kcal_target : profile.base_kcal
+  // Regra 2, ao vivo: a meta de hoje sobe com o treino de hoje.
+  const kcalExercise = dayExerciseKcal(
+    todayWorkouts.map((w) => ({
+      type: w.type,
+      minutes: w.minutes,
+      watts: w.watts,
+      stravaCalories: w.raw?.calories ?? null,
+    })),
+  )
+  const kcalTarget = profile.base_kcal + kcalExercise
   const kcalLeft = Math.round(kcalTarget - kcalIn)
   const proteinLeft = Math.round(profile.protein_g - proteinIn)
   const estimatedCount = meals.filter((m) => m.is_estimate).length
+  const pendingDuring = todayWorkouts.filter((w) => w.pain_during == null)
+  const pendingNextDay = yesterdayWorkouts.filter((w) => w.pain_next_day == null)
 
   return (
     <div className="mx-auto max-w-md space-y-4 pt-2">
@@ -128,11 +148,28 @@ export default function Hoje() {
         </div>
       </div>
 
-      {day && day.kcal_exercise > 0 && (
+      {kcalExercise > 0 && (
         <p className="text-center text-xs text-dim">
-          meta de hoje: {kcalTarget} kcal ({profile.base_kcal} + {day.kcal_exercise} de treino)
+          meta de hoje: {kcalTarget} kcal ({profile.base_kcal} + {kcalExercise} de treino)
         </p>
       )}
+
+      {pendingDuring.map((workout) => (
+        <PainCheckin
+          key={workout.id}
+          workout={workout}
+          field="pain_during"
+          onDone={() => void load()}
+        />
+      ))}
+      {pendingNextDay.map((workout) => (
+        <PainCheckin
+          key={workout.id}
+          workout={workout}
+          field="pain_next_day"
+          onDone={() => void load()}
+        />
+      ))}
 
       {yesterday?.flags?.includes('chao') && (
         <p className="rounded-xl border border-warn/40 bg-card px-4 py-3 text-sm text-warn">

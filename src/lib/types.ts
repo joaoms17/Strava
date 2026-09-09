@@ -28,6 +28,9 @@ export interface Profile {
   protein_per_meal_g: number
   kcal_floor_week: number
   nutrition_day_cutoff_hour: number
+  bike_watts_options: number[]
+  bike_min_cadence: number
+  strava_athlete_id: number | null
   timeline: { label: string; when: string }[]
 }
 
@@ -69,6 +72,24 @@ export interface Food {
 export interface WeightRow {
   date: string
   kg: number
+}
+
+export interface Workout {
+  id: string
+  date: string
+  source: 'strava' | 'manual'
+  strava_id: number | null
+  type: 'bike' | 'strength' | 'other'
+  minutes: number | null
+  watts: number | null
+  cadence: number | null
+  avg_hr: number | null
+  max_hr: number | null
+  kcal_est: number | null
+  pain_during: number | null
+  pain_next_day: number | null
+  status: 'green' | 'yellow' | 'red' | null
+  raw: { calories?: number } | null
 }
 
 export interface Chapter {
