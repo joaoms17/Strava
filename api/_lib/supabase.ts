@@ -4,7 +4,15 @@ import type { VercelRequest } from '@vercel/node'
 function env(name: string): string {
   const value = process.env[name]
   if (!value) throw new Error(`Variável de ambiente em falta: ${name}`)
-  return value
+  if (name === 'SUPABASE_URL') {
+    // só a origem — protege contra URLs colados com caminho a mais
+    try {
+      return new URL(value).origin
+    } catch {
+      throw new Error('SUPABASE_URL inválido — devia ser https://xxxx.supabase.co')
+    }
+  }
+  return value.trim()
 }
 
 // Cliente com service role — ignora RLS. Só para o que o cliente não pode
