@@ -1,6 +1,6 @@
 # /api — funções serverless (Vercel)
 
-Implementados no M1: `meal/parse-text`, `meal/parse-photo` e `meal/save` (calcula o dia nutricional e os totais no servidor). Os restantes chegam nos marcos respetivos.
+Implementados (M1–M2): `meal/parse-text`, `meal/parse-photo`, `meal/save` (dia nutricional, totais e aprendizagem de porções no servidor), `food/barcode/[ean]` e `cron/daily` (fecho do dia). Os restantes chegam nos marcos respetivos.
 
 | Endpoint | Método | Descrição |
 | --- | --- | --- |

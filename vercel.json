@@ -4,6 +4,9 @@
       "includeFiles": "prompts/**"
     }
   },
+  "crons": [
+    { "path": "/api/cron/daily", "schedule": "30 4 * * *" }
+  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
