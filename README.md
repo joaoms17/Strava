@@ -2,7 +2,7 @@
 
 App pessoal de nutrição, treino e peso. Utilizador único. PWA mobile-first, dark mode, interface em PT-PT. Cada bloco de 4 semanas é um capítulo com um patrono que voltou de uma lesão grave.
 
-**Estado atual: M4 implementado** — tudo do M1–M3 mais a geração do bloco de 4 semanas pelo Claude (Sonnet 5, só exercícios do catálogo, deload validado na semana 4), execução do plano com registo de cargas por toques, progressão dupla (+2 kg, regra 11) e progressão de bike com validação de watts (regra 10), emparelhamento Strava ↔ sessões planeadas, página de Capítulo com missão em números e fecho do bloco, e gráficos de treino (FC por sessão com anotações de W, carga por exercício, adesão). Falta o deploy (Supabase + Vercel) para ficar a usar-se no telemóvel.
+**Estado atual: M5 implementado e app em produção** — tudo do M1–M4 mais o gasto adaptativo (regra 4) calculado no fecho do dia, a semana de manutenção a cada 6 semanas (regra 7), o review semanal em voz de narrador gerado à segunda-feira, e a página Linha do tempo. Falta o M6: .ics, /api/health/daily, export CSV e as páginas de história com fotos.
 
 ## Stack
 
