@@ -2,7 +2,7 @@
 
 App pessoal de nutrição, treino e peso. Utilizador único. PWA mobile-first, dark mode, interface em PT-PT. Cada bloco de 4 semanas é um capítulo com um patrono que voltou de uma lesão grave.
 
-**Estado atual: M2 implementado** — tudo do M1 mais barcode (Open Food Facts), alimentos pessoais com aprendizagem de porções, fila offline, fecho do dia na cron das 04:30 UTC (com avisos de chão e dia incompleto no Hoje) e o gráfico de peso com média de 7 dias e projeção. Falta o deploy (Supabase + Vercel) para ficar a usar-se no telemóvel.
+**Estado atual: M3 implementado** — tudo do M1/M2 mais a ligação ao Strava (OAuth, webhook e reconciliação diária das 48 h), workouts com kcal pela regra 2, check-in de dor com semáforo (regra 9), sessão manual em 3 toques e meta de kcal do dia a subir ao vivo com o treino. Falta o deploy (Supabase + Vercel) para ficar a usar-se no telemóvel.
 
 ## Stack
 
@@ -57,7 +57,11 @@ Tabelas: `profile`, `foods`, `meals`, `days`, `weights`, `health_daily`, `workou
 2. Aplicar as migrations de `supabase/migrations/` por ordem (`supabase db push` ou SQL editor) e correr os três seeds de `supabase/seed/` por ordem — falham com mensagem clara se a conta ainda não existir; são idempotentes.
 3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), `ANTHROPIC_API_KEY`, `CRON_SECRET` (protege a cron das 04:30), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Em dev local: copiar `.env.example` para `.env`.
 4. Abrir o domínio do Vercel no telemóvel e "Adicionar ao ecrã principal" — a PWA instala com o ícone e abre em standalone. No primeiro arranque: login e criação do PIN.
-5. (M3) App Strava já criada em strava.com/settings/api; callback domain: localhost em dev, domínio Vercel em produção. A subscrição do webhook cria-se por script uma vez, depois do deploy.
+5. Strava: em strava.com/settings/api, definir o callback domain para o domínio do Vercel (localhost em dev). Na app, tocar em "Ligar ao Strava" no ecrã Treino. Depois do deploy, criar a subscrição do webhook **uma vez**:
+   ```
+   STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... STRAVA_VERIFY_TOKEN=... \
+     node scripts/strava-subscribe.mjs create https://a-tua-app.vercel.app
+   ```
 
 ## Marcos
 

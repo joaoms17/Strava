@@ -48,3 +48,12 @@
 29. **"Fechar o dia" no cliente só escreve a marca `dia_fechado`** (e o estado imediato); a cron recalcula tudo o resto e preserva a marca. As regras continuam no servidor.
 30. **Gráficos é um ecrã lazy** (o recharts fica num chunk próprio). No gráfico de peso, a identidade das camadas vem da forma — pontos (pesagens), linha cheia (média 7 dias), tracejado (projeção) — nunca só da cor.
 31. **Open Food Facts não é testável a partir deste ambiente** (a rede do sandbox bloqueia o domínio); o endpoint está defensivo e valida-se no primeiro deploy.
+
+## 2026-09-09 — M3
+
+32. **OAuth Strava:** `/api/strava/auth` é navegação de página inteira (sem header de sessão), com CSRF coberto por um `state` em cookie HttpOnly verificado no callback. Os tokens nunca saem do servidor (`strava_tokens` continua sem políticas RLS) e pertencem ao utilizador único do perfil.
+33. **Mapeamento de atividades:** bike usa `moving_time`; força e outros usam `elapsed_time` (na musculação o moving_time do Strava é enganador). `kcal_est` calcula-se sempre pela regra 2 no upsert — nunca as calorias do relógio para bike/força. O upsert é idempotente por `strava_id` e só escreve campos vindos do Strava: um update de atividade nunca toca na dor, no semáforo nem no emparelhamento.
+34. **Emparelhamento com `planned_sessions` fica para o M4** — as sessões planeadas só nascem com a geração de blocos, e a data delas deriva de `block.start_date` + semana + dia.
+35. **Check-in (regra 9) no Hoje:** dor 0-10 pós-sessão para os treinos de hoje e "manhã seguinte" para os de ontem. Uma sessão de bike sem watts (rolo sem potenciómetro) pede a confirmação dos watts no mesmo cartão; o servidor recalcula o semáforo e as kcal.
+36. **Meta de hoje ao vivo:** o Hoje calcula `base_kcal` + regra 2 sobre os workouts do próprio dia (funções partilhadas testadas); a cron continua a ser a fonte para os dias fechados.
+37. **Webhook:** responde 200 a atletas desconhecidos e eventos de atleta (para o Strava não reenviar ao infinito) e 500 em falhas transitórias (para haver retry); a reconciliação diária das últimas 48 h na cron apanha o que o webhook perder. A subscrição cria-se uma vez com `scripts/strava-subscribe.mjs`.
