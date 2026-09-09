@@ -5,12 +5,16 @@ import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day'
 import { round1 } from '../_lib/rules/meal-totals'
 import { dayExerciseKcal, kcalTarget, type WorkoutType } from '../_lib/rules/targets'
 import { floorWarning, isDayComplete } from '../_lib/rules/day-close'
+import { tdeeRaw, smoothTdee } from '../_lib/rules/adaptativo'
+import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../_lib/rules/manutencao'
 import { reconcileStrava } from '../_lib/strava'
+import { generateWeeklyReview } from '../_lib/review'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
-// reconcilia o Strava das últimas 48 h (os webhooks falham) e fecha os
-// últimos 3 dias nutricionais (idempotente — cobre falhas da cron).
-// O adaptativo e o review chegam no M5.
+// reconcilia o Strava das últimas 48 h (os webhooks falham), fecha os últimos
+// 3 dias nutricionais (idempotente — cobre falhas da cron), calcula o gasto
+// adaptativo, aplica a semana de manutenção e, à segunda, gera o review da
+// semana anterior.
 
 interface ProfileRow {
   user_id: string
@@ -23,7 +27,45 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
 
-async function closeDay(admin: SupabaseClient, profile: ProfileRow, date: string) {
+// Regra 4: sobre os últimos 14 dias completos até esta data; EMA sobre a
+// estimativa anterior. Corre depois do upsert do dia.
+async function computeAdaptive(admin: SupabaseClient, userId: string, date: string) {
+  const { data: completeDays } = await admin
+    .from('days')
+    .select('date,kcal_in,weight_trend')
+    .eq('user_id', userId)
+    .eq('is_complete', true)
+    .lte('date', date)
+    .order('date', { ascending: false })
+    .limit(14)
+  const window = (completeDays ?? [])
+    .reverse()
+    .map((d) => ({ date: d.date, kcal_in: Number(d.kcal_in), weight_trend: d.weight_trend }))
+  const raw = tdeeRaw(window)
+  if (raw == null) return
+
+  const { data: prevRows } = await admin
+    .from('days')
+    .select('tdee_est')
+    .eq('user_id', userId)
+    .lt('date', date)
+    .not('tdee_est', 'is', null)
+    .order('date', { ascending: false })
+    .limit(1)
+  const previous = prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null
+  await admin
+    .from('days')
+    .update({ tdee_est: smoothTdee(previous, raw) })
+    .eq('user_id', userId)
+    .eq('date', date)
+}
+
+async function closeDay(
+  admin: SupabaseClient,
+  profile: ProfileRow,
+  date: string,
+  anchor: string | null,
+) {
   const userId = profile.user_id
 
   const [mealsRes, workoutsRes, weightRes, existingRes, weightsRes, recentDaysRes] =
@@ -62,7 +104,23 @@ async function closeDay(admin: SupabaseClient, profile: ProfileRow, date: string
           : null,
     })),
   )
-  const target = kcalTarget(profile.base_kcal, kcalExercise)
+
+  // Regra 7: na semana de manutenção, a meta é o gasto estimado (ou 2000).
+  const maintenance = anchor != null && isMaintenanceWeek(anchor, date)
+  let target: number
+  if (maintenance) {
+    const { data: tdeeRows } = await admin
+      .from('days')
+      .select('tdee_est')
+      .eq('user_id', userId)
+      .lt('date', date)
+      .not('tdee_est', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1)
+    target = maintenanceTarget(tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null)
+  } else {
+    target = kcalTarget(profile.base_kcal, kcalExercise)
+  }
 
   const prevFlags: string[] = Array.isArray(existingRes.data?.flags) ? existingRes.data.flags : []
   const manuallyClosed = prevFlags.includes('dia_fechado')
@@ -87,6 +145,8 @@ async function closeDay(admin: SupabaseClient, profile: ProfileRow, date: string
   else flags.delete('chao')
   if (complete) flags.delete('dia_incompleto')
   else flags.add('dia_incompleto')
+  if (maintenance) flags.add('manutencao')
+  else flags.delete('manutencao')
 
   const { error } = await admin.from('days').upsert(
     {
@@ -105,7 +165,9 @@ async function closeDay(admin: SupabaseClient, profile: ProfileRow, date: string
   )
   if (error) throw new Error(`days upsert (${date}): ${error.message}`)
 
-  return { date, kcal_in: kcalIn, is_complete: complete, chao }
+  await computeAdaptive(admin, userId, date)
+
+  return { date, kcal_in: kcalIn, is_complete: complete, chao, maintenance }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -127,10 +189,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (error) throw new Error(error.message)
 
     const closed = []
+    let reviews = 0
     for (const profile of (profiles ?? []) as ProfileRow[]) {
       const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+
+      // Âncora da regra 7: a semana do primeiro dia registado.
+      const { data: firstDay } = await admin
+        .from('days')
+        .select('date')
+        .eq('user_id', profile.user_id)
+        .order('date')
+        .limit(1)
+      const anchor = firstDay?.[0]?.date ?? null
+
       for (let back = 3; back >= 1; back--) {
-        closed.push(await closeDay(admin, profile, shiftDate(today, -back)))
+        closed.push(await closeDay(admin, profile, shiftDate(today, -back), anchor))
+      }
+
+      // À segunda-feira, o review da semana que terminou.
+      if (new Date(`${today}T00:00:00Z`).getUTCDay() === 1) {
+        try {
+          if (await generateWeeklyReview(admin, profile.user_id, mondayOf(shiftDate(today, -7)))) {
+            reviews++
+          }
+        } catch (err) {
+          console.error('Review semanal falhou:', err)
+        }
       }
 
       // Blocos ativos que já passaram as 4 semanas ficam concluídos.
@@ -149,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('status', 'planned')
       }
     }
-    res.status(200).json({ ok: true, reconciled, closed })
+    res.status(200).json({ ok: true, reconciled, closed, reviews })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Falha no fecho do dia.' })
