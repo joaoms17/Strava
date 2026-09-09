@@ -163,4 +163,16 @@ export interface Chapter {
   facts: string[]
   theme: string | null
   honest_note: string | null
+  photo_path: string | null
+  photo_credit: string | null
+}
+
+export interface CatalogExercise {
+  id: string
+  name: string
+  pattern: string
+  knee_safe: boolean
+  rep_min: number | null
+  rep_max: number | null
+  notes: string | null
 }

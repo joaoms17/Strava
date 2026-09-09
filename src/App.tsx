@@ -9,11 +9,12 @@ import Hoje from './screens/Hoje'
 import Treino from './screens/Treino'
 import Capitulo from './screens/Capitulo'
 import LinhaDoTempo from './screens/LinhaDoTempo'
+import Definicoes from './screens/Definicoes'
 
 // Gráficos carrega o recharts — fica num chunk próprio, só quando é preciso.
 const Graficos = lazy(() => import('./screens/Graficos'))
 
-export type Page = Tab | 'capitulo' | 'linha'
+export type Page = Tab | 'capitulo' | 'linha' | 'definicoes'
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -63,11 +64,11 @@ export default function App() {
               Capítulo
             </button>
             <button
-              className="text-sm text-dim"
-              onClick={() => void supabase.auth.signOut()}
-              aria-label="Sair"
+              className={`text-sm ${page === 'definicoes' ? 'text-accent' : 'text-dim'}`}
+              onClick={() => setPage('definicoes')}
+              aria-label="Definições"
             >
-              Sair
+              ⚙
             </button>
           </div>
         </header>
@@ -83,6 +84,7 @@ export default function App() {
           )}
           {page === 'capitulo' && <Capitulo onOpenTimeline={() => setPage('linha')} />}
           {page === 'linha' && <LinhaDoTempo />}
+          {page === 'definicoes' && <Definicoes />}
         </main>
 
         <TabBar active={page} onChange={setPage} />

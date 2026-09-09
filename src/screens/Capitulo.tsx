@@ -145,6 +145,19 @@ export default function Capitulo({ onOpenTimeline }: { onOpenTimeline?: () => vo
         </section>
       )}
 
+      {chapter.photo_path && (
+        <figure className="space-y-1">
+          <img
+            src={supabase.storage.from('chapter-photos').getPublicUrl(chapter.photo_path).data.publicUrl}
+            alt={chapter.patron}
+            className="w-full rounded-2xl border border-edge"
+          />
+          {chapter.photo_credit && (
+            <figcaption className="px-1 text-xs text-dim">{chapter.photo_credit}</figcaption>
+          )}
+        </figure>
+      )}
+
       <section className="space-y-2">
         <h2 className="text-sm font-semibold text-dim">Os factos</h2>
         <ul className="space-y-2">
