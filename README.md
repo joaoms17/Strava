@@ -2,7 +2,7 @@
 
 App pessoal de nutrição, treino e peso. Utilizador único. PWA mobile-first, dark mode, interface em PT-PT. Cada bloco de 4 semanas é um capítulo com um patrono que voltou de uma lesão grave.
 
-**Estado atual: M5 implementado e app em produção** — tudo do M1–M4 mais o gasto adaptativo (regra 4) calculado no fecho do dia, a semana de manutenção a cada 6 semanas (regra 7), o review semanal em voz de narrador gerado à segunda-feira, e a página Linha do tempo. Falta o M6: .ics, /api/health/daily, export CSV e as páginas de história com fotos.
+**Estado atual: M1–M6 completos — a app está inteira e em produção.** As 12 regras de negócio têm todas testes (95 no total). Extras possíveis para depois: Withings quando houver balança, Strava se um dia houver subscrição, Atalho iOS para treinos do Apple Health.
 
 ## Stack
 
@@ -62,6 +62,8 @@ Tabelas: `profile`, `foods`, `meals`, `days`, `weights`, `health_daily`, `workou
    STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... STRAVA_VERIFY_TOKEN=... \
      node scripts/strava-subscribe.mjs create https://a-tua-app.vercel.app
    ```
+6. Calendário: no Google Calendar, "Adicionar por URL" com `https://a-tua-app.vercel.app/api/calendar?token=<ICS_TOKEN>` — as sessões planeadas aparecem como eventos de dia inteiro.
+7. Saúde (Atalho iOS, todas as noites): POST para `https://a-tua-app.vercel.app/api/health/daily` com header `Authorization: Bearer <HEALTH_INGEST_TOKEN>` e corpo JSON `{"steps": 8500, "sleep_minutes": 430, "resting_hr": 52}` (a data por omissão é o próprio dia).
 
 ## Marcos
 
