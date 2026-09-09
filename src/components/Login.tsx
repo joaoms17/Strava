@@ -12,7 +12,20 @@ export default function Login() {
     setBusy(true)
     setError(null)
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) setError('Email ou palavra-passe errados.')
+    if (authError) {
+      const message = authError.message.toLowerCase()
+      if (message.includes('confirm')) {
+        setError(
+          'O email ainda não está confirmado. No Supabase: Authentication → Users → abre o utilizador → "Confirm email".',
+        )
+      } else if (message.includes('invalid login')) {
+        setError('Email ou palavra-passe errados.')
+      } else if (message.includes('fetch') || message.includes('network')) {
+        setError('Não consegui falar com o Supabase — verifica as VITE_SUPABASE_* no Vercel.')
+      } else {
+        setError(authError.message)
+      }
+    }
     setBusy(false)
   }
 
