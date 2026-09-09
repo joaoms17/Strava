@@ -5,6 +5,7 @@ import { adminClient, HttpError, requireUser } from '../_lib/supabase'
 import { respondError } from '../_lib/http'
 import { ParsedPhotoMealSchema, type ParsedPhotoMeal } from '../_lib/schemas'
 import { PROMPT_MEAL_PHOTO, promptVersion, readPrompt } from '../_lib/prompts'
+import { mealIsEstimate } from '../_lib/rules/estimativas'
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
 
@@ -94,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       questions: parsed.questions,
       assumed_portions: parsed.assumed_portions,
       // Regra 12: fotografia é sempre estimativa
-      is_estimate: true,
+      is_estimate: mealIsEstimate('photo', jantarFora, parsed.items),
       prompt_version: promptVersion(PROMPT_MEAL_PHOTO),
       model: MODELS.vision,
       cost_usd: cost,

@@ -5,6 +5,7 @@ import { adminClient, HttpError, requireUser } from '../_lib/supabase'
 import { respondError } from '../_lib/http'
 import { ParsedMealSchema, type ParsedMeal } from '../_lib/schemas'
 import { PROMPT_MEAL_TEXT, promptVersion, readPrompt } from '../_lib/prompts'
+import { mealIsEstimate } from '../_lib/rules/estimativas'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -57,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       items: parsed.items,
       confidence: Math.min(1, Math.max(0, parsed.confidence)),
       questions: parsed.questions,
-      is_estimate: jantarFora || parsed.items.some((i) => i.estimated),
+      is_estimate: mealIsEstimate('text', jantarFora, parsed.items),
       prompt_version: promptVersion(PROMPT_MEAL_TEXT),
       model: MODELS.text,
       cost_usd: cost,
