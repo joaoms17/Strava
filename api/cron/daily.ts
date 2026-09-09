@@ -5,10 +5,12 @@ import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day'
 import { round1 } from '../_lib/rules/meal-totals'
 import { dayExerciseKcal, kcalTarget, type WorkoutType } from '../_lib/rules/targets'
 import { floorWarning, isDayComplete } from '../_lib/rules/day-close'
+import { reconcileStrava } from '../_lib/strava'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
-// fecha os últimos 3 dias nutricionais (idempotente — cobre falhas da cron).
-// A reconciliação do Strava chega no M3; o adaptativo e o review, no M5.
+// reconcilia o Strava das últimas 48 h (os webhooks falham) e fecha os
+// últimos 3 dias nutricionais (idempotente — cobre falhas da cron).
+// O adaptativo e o review chegam no M5.
 
 interface ProfileRow {
   user_id: string
@@ -115,6 +117,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const admin = adminClient()
+
+    // Primeiro o Strava, para o fecho do dia já contar os treinos.
+    const reconciled = await reconcileStrava(admin)
+
     const { data: profiles, error } = await admin
       .from('profile')
       .select('user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour')
@@ -127,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         closed.push(await closeDay(admin, profile, shiftDate(today, -back)))
       }
     }
-    res.status(200).json({ ok: true, closed })
+    res.status(200).json({ ok: true, reconciled, closed })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Falha no fecho do dia.' })
