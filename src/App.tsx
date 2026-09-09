@@ -7,12 +7,12 @@ import TabBar, { type Tab } from './components/TabBar'
 import Registar from './screens/Registar'
 import Hoje from './screens/Hoje'
 import Treino from './screens/Treino'
-import Prologo from './screens/Prologo'
+import Capitulo from './screens/Capitulo'
 
 // Gráficos carrega o recharts — fica num chunk próprio, só quando é preciso.
 const Graficos = lazy(() => import('./screens/Graficos'))
 
-export type Page = Tab | 'prologo'
+export type Page = Tab | 'capitulo'
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
@@ -56,10 +56,10 @@ export default function App() {
           </button>
           <div className="flex items-center gap-4">
             <button
-              className={`text-sm ${page === 'prologo' ? 'text-accent' : 'text-dim'}`}
-              onClick={() => setPage('prologo')}
+              className={`text-sm ${page === 'capitulo' ? 'text-accent' : 'text-dim'}`}
+              onClick={() => setPage('capitulo')}
             >
-              Prólogo
+              Capítulo
             </button>
             <button
               className="text-sm text-dim"
@@ -80,7 +80,7 @@ export default function App() {
               <Graficos />
             </Suspense>
           )}
-          {page === 'prologo' && <Prologo />}
+          {page === 'capitulo' && <Capitulo />}
         </main>
 
         <TabBar active={page} onChange={setPage} />

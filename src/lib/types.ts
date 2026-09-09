@@ -30,6 +30,8 @@ export interface Profile {
   nutrition_day_cutoff_hour: number
   bike_watts_options: number[]
   bike_min_cadence: number
+  bike_hr_avg_cap: number
+  bike_hr_max_cap: number
   strava_athlete_id: number | null
   timeline: { label: string; when: string }[]
 }
@@ -89,7 +91,58 @@ export interface Workout {
   pain_during: number | null
   pain_next_day: number | null
   status: 'green' | 'yellow' | 'red' | null
+  planned_session_id: string | null
   raw: { calories?: number } | null
+}
+
+export interface PlanExercise {
+  name: string
+  sets: number
+  rep_min: number
+  rep_max: number
+  load_kg: number | null
+  notes: string | null
+}
+
+export interface PlanBike {
+  watts: number
+  minutes: number
+  cadence_min: number
+}
+
+export interface PlannedSession {
+  id: string
+  block_id: string
+  week: number
+  day_index: number
+  type: 'bike' | 'strength'
+  name: string | null
+  details: { bike: PlanBike | null; exercises: PlanExercise[]; notes: string | null }
+  status: 'planned' | 'done' | 'skipped' | 'swapped'
+  workout_id: string | null
+}
+
+export interface PlanBlock {
+  id: string
+  chapter_id: string | null
+  start_date: string
+  weeks: number
+  status: 'draft' | 'active' | 'completed' | 'cancelled'
+  plan: {
+    mission: { title: string; numbers: string[] }
+    weeks: { week: number; focus: string | null }[]
+    rationale: string
+  } | null
+}
+
+export interface ExerciseLogRow {
+  workout_id: string
+  exercise: string
+  set_index: number
+  reps: number | null
+  load_kg: number | null
+  rpe: number | null
+  created_at: string
 }
 
 export interface Chapter {
