@@ -57,7 +57,7 @@ Tabelas: `profile`, `foods`, `meals`, `days`, `weights`, `health_daily`, `workou
 2. Aplicar as migrations de `supabase/migrations/` por ordem (`supabase db push` ou SQL editor) e correr os três seeds de `supabase/seed/` por ordem — falham com mensagem clara se a conta ainda não existir; são idempotentes.
 3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), `ANTHROPIC_API_KEY`, `CRON_SECRET` (protege a cron das 04:30), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Em dev local: copiar `.env.example` para `.env`.
 4. Abrir o domínio do Vercel no telemóvel e "Adicionar ao ecrã principal" — a PWA instala com o ícone e abre em standalone. No primeiro arranque: login e criação do PIN.
-5. Strava: em strava.com/settings/api, definir o callback domain para o domínio do Vercel (localhost em dev). Na app, tocar em "Ligar ao Strava" no ecrã Treino. Depois do deploy, criar a subscrição do webhook **uma vez**:
+5. Strava (**opcional** — a API do Strava passou a exigir subscrição paga; sem ela, tudo funciona com sessão manual + check-in, que também capta watts, FC média/máxima e cadência). Com subscrição: criar a app em strava.com/settings/api com o callback domain do Vercel, preencher as env vars do Strava, pôr `VITE_STRAVA_ENABLED=true`, tocar em "Ligar ao Strava" no Treino, e criar a subscrição do webhook **uma vez**:
    ```
    STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... STRAVA_VERIFY_TOKEN=... \
      node scripts/strava-subscribe.mjs create https://a-tua-app.vercel.app

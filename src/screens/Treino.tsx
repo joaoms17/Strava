@@ -346,7 +346,7 @@ export default function Treino() {
         </p>
       </div>
 
-      {profile.strava_athlete_id == null && (
+      {profile.strava_athlete_id == null && import.meta.env.VITE_STRAVA_ENABLED === 'true' && (
         <a
           href="/api/strava/auth"
           className="block rounded-2xl border border-edge bg-card px-4 py-4 text-center font-semibold text-accent"

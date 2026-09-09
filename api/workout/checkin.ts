@@ -9,8 +9,12 @@ const CheckinSchema = z.object({
   workout_id: z.string().uuid(),
   pain_during: z.number().int().min(0).max(10).nullable().optional(),
   pain_next_day: z.number().int().min(0).max(10).nullable().optional(),
-  // confirmação de watts numa sessão de bike (ex.: rolo sem potenciómetro)
+  // dados da sessão de bike vindos da consola/relógio — sem Strava, é aqui
+  // que entram os valores de que a regra 10 precisa
   watts: z.number().int().min(30).max(500).nullable().optional(),
+  avg_hr: z.number().int().min(40).max(230).nullable().optional(),
+  max_hr: z.number().int().min(40).max(240).nullable().optional(),
+  cadence: z.number().int().min(30).max(200).nullable().optional(),
 })
 
 // Check-in de dor (regra 9) e confirmação de watts. O semáforo e as kcal
@@ -22,7 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const body = CheckinSchema.safeParse(req.body)
     if (!body.success) throw new HttpError(400, 'Check-in inválido.')
-    const { workout_id, pain_during, pain_next_day, watts } = body.data
+    const { workout_id, pain_during, pain_next_day, watts, avg_hr, max_hr, cadence } = body.data
 
     const { data: workout, error: findError } = await db
       .from('workouts')
@@ -34,14 +38,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const patch: Record<string, unknown> = {}
     if (pain_during !== undefined) patch.pain_during = pain_during
     if (pain_next_day !== undefined) patch.pain_next_day = pain_next_day
-    if (watts !== undefined && workout.type === 'bike') {
-      patch.watts = watts
-      patch.kcal_est = workoutKcal({
-        type: workout.type as WorkoutType,
-        minutes: workout.minutes,
-        watts,
-        stravaCalories: null,
-      })
+    if (workout.type === 'bike') {
+      if (avg_hr !== undefined) patch.avg_hr = avg_hr
+      if (max_hr !== undefined) patch.max_hr = max_hr
+      if (cadence !== undefined) patch.cadence = cadence
+      if (watts !== undefined) {
+        patch.watts = watts
+        patch.kcal_est = workoutKcal({
+          type: workout.type as WorkoutType,
+          minutes: workout.minutes,
+          watts,
+          stravaCalories: null,
+        })
+      }
     }
 
     patch.status = painStatus(

@@ -67,3 +67,8 @@
 42. **Sugestões no cliente com as regras partilhadas** (como as decisões 20/36): o "+2 kg" (regra 11) e o próximo alvo de bike calculam-se no ecrã com as funções puras testadas; as escritas continuam todas no servidor.
 43. **Página Capítulo substitui a página Prólogo:** mostra o capítulo do bloco atual (cartaz + missão em números do plano + estado), o fecho com os números do bloco ao lado dos factos quando termina, e a linha do tempo. Sem bloco, mostra o capítulo 0.
 44. **Interface de Definições (perfil, catálogo, export) fica para o M6**, junto do export CSV — até lá, ajustes ao catálogo fazem-se no Supabase.
+
+## 2026-09-09 — Strava sem subscrição
+
+45. **A API do Strava passou a exigir subscrição paga e o João não é subscritor.** A integração fica no código, intacta e pronta (OAuth, webhook, reconciliação), mas desligada: o botão "Ligar ao Strava" só aparece com `VITE_STRAVA_ENABLED=true`, e as env vars do Strava passam a opcionais. Sem tokens, a reconciliação da cron é um no-op. Se um dia houver subscrição, é ligar a flag e correr o script do webhook.
+46. **O check-in pós-sessão de bike passa a captar watts, FC média, FC máxima e cadência** (da consola da bicicleta ou de um relógio), porque sem Strava era impossível alimentar a regra 10 (caps de FC para subir de W). Os campos só aparecem quando faltam e são opcionais — a dor continua a ser o único obrigatório. Alternativa futura (M6+): um Atalho iOS a enviar treinos do Apple Health para um endpoint próprio, na linha do /api/health/daily.
