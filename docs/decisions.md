@@ -38,3 +38,13 @@
 22. **Ícones PWA em PNG** gerados a partir dos SVG (o iOS não aceita SVG no `apple-touch-icon`, e o telemóvel alvo é um iPhone). Os SVG ficam como fonte.
 23. **PIN no cliente** (SHA-256 com salt em localStorage, rebloqueio ao fim de 5 min em segundo plano) é conveniência de ecrã, não segurança — a segurança é o Supabase Auth + RLS.
 24. **Sem fila offline no M1** (é M2): se a rede falhar, o erro fica visível e o texto não se perde do ecrã.
+
+## 2026-09-09 — M2
+
+25. **Barcode:** `BarcodeDetector` nativo quando o browser o tem; senão ZXing por import dinâmico (chunk separado); e há sempre o campo manual para escrever o EAN. O endpoint devolve primeiro o alimento pessoal (por barcode) antes de ir ao Open Food Facts; o User-Agent identifica a app com o URL do repositório, sem dados pessoais.
+26. **Aprendizagem de porções:** ao guardar, itens com `food_id` fazem `use_count + 1` e a porção habitual aproxima-se do usado (EMA α 0,3). Alimentos novos só nascem de registos de **texto não estimados** — a fotografia não cria alimentos (as estimativas poluíam a biblioteca); o barcode entra com source `off` no primeiro scan.
+27. **Fila offline (IndexedDB) só para texto.** Guarda o `logged_at` original e o `/api/meal/save` passa a aceitar `logged_at` (nunca no futuro) para a refeição contar para o dia nutricional certo. Sincroniza ao abrir a app e quando a rede volta. Fotos ficam de fora: o upload precisa de rede de qualquer maneira.
+28. **Cron protegida com `CRON_SECRET`** (o Vercel envia `Authorization: Bearer` quando a env var existe). Cada corrida fecha os últimos 3 dias nutricionais — idempotente, cobre corridas falhadas.
+29. **"Fechar o dia" no cliente só escreve a marca `dia_fechado`** (e o estado imediato); a cron recalcula tudo o resto e preserva a marca. As regras continuam no servidor.
+30. **Gráficos é um ecrã lazy** (o recharts fica num chunk próprio). No gráfico de peso, a identidade das camadas vem da forma — pontos (pesagens), linha cheia (média 7 dias), tracejado (projeção) — nunca só da cor.
+31. **Open Food Facts não é testável a partir deste ambiente** (a rede do sandbox bloqueia o domínio); o endpoint está defensivo e valida-se no primeiro deploy.
