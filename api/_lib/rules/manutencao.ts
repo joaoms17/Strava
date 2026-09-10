@@ -1,7 +1,7 @@
 // Regra 7: semana de manutenção a cada 6 semanas — kcal_target = tdee_est
 // (ou 2000 sem estimativa). As semanas contam-se em semanas de calendário
 // (segunda a domingo) desde a semana do primeiro dia registado.
-import { shiftDate } from './nutritional-day'
+import { shiftDate } from './nutritional-day.js'
 
 export function mondayOf(date: string): string {
   const dow = new Date(`${date}T00:00:00Z`).getUTCDay() // 0 = domingo

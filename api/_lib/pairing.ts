@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { sessionDate } from './rules/plan-dates'
+import { sessionDate } from './rules/plan-dates.js'
 
 // Emparelha um workout com a planned_session do dia (mesmo tipo, +-1 dia).
 // Nunca falha o registo do treino — erros ficam no log.

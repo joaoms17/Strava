@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
-import { adminClient } from '../_lib/supabase'
+import { adminClient } from '../_lib/supabase.js'
 
 const HealthSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

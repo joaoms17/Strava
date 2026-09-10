@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import parseText from './_meal/parse-text'
-import parsePhoto from './_meal/parse-photo'
-import save from './_meal/save'
+import parseText from './_meal/parse-text.js'
+import parsePhoto from './_meal/parse-photo.js'
+import save from './_meal/save.js'
 
 // O plano Hobby do Vercel limita a 12 funções por deploy; os endpoints de
 // refeições vivem juntos numa função, com os caminhos originais preservados

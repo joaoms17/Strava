@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { adminClient } from '../_lib/supabase'
+import { adminClient } from '../_lib/supabase.js'
 
 function cookieValue(header: string | undefined, name: string): string | null {
   if (!header) return null

@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, type Usage } from './anthropic'
-import { PROMPT_REVIEW, readPrompt } from './prompts'
-import { shiftDate } from './rules/nutritional-day'
+import { anthropic, MODELS, logApiCall, type Usage } from './anthropic.js'
+import { PROMPT_REVIEW, readPrompt } from './prompts.js'
+import { shiftDate } from './rules/nutritional-day.js'
 
 const ReviewSchema = z.object({ text: z.string() })
 

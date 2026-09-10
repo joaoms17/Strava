@@ -1,14 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { adminClient } from '../_lib/supabase'
-import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day'
-import { round1 } from '../_lib/rules/meal-totals'
-import { dayExerciseKcal, kcalTarget, type WorkoutType } from '../_lib/rules/targets'
-import { floorWarning, isDayComplete } from '../_lib/rules/day-close'
-import { tdeeRaw, smoothTdee } from '../_lib/rules/adaptativo'
-import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../_lib/rules/manutencao'
-import { reconcileStrava } from '../_lib/strava'
-import { generateWeeklyReview } from '../_lib/review'
+import { adminClient } from '../_lib/supabase.js'
+import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
+import { round1 } from '../_lib/rules/meal-totals.js'
+import { dayExerciseKcal, kcalTarget, type WorkoutType } from '../_lib/rules/targets.js'
+import { floorWarning, isDayComplete } from '../_lib/rules/day-close.js'
+import { tdeeRaw, smoothTdee } from '../_lib/rules/adaptativo.js'
+import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../_lib/rules/manutencao.js'
+import { reconcileStrava } from '../_lib/strava.js'
+import { generateWeeklyReview } from '../_lib/review.js'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
 // reconcilia o Strava das últimas 48 h (os webhooks falham), fecha os últimos

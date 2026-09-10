@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
-import { HttpError, requireUser } from '../_lib/supabase'
-import { respondError } from '../_lib/http'
-import { workoutKcal } from '../_lib/rules/targets'
-import { pairWorkout } from '../_lib/pairing'
+import { HttpError, requireUser } from '../_lib/supabase.js'
+import { respondError } from '../_lib/http.js'
+import { workoutKcal } from '../_lib/rules/targets.js'
+import { pairWorkout } from '../_lib/pairing.js'
 
 const ManualWorkoutSchema = z.object({
   type: z.enum(['bike', 'strength', 'other']),

@@ -2,7 +2,7 @@
 // Subir watts só quando 2 sessões consecutivas ao W atual têm avg_hr <= cap e
 // max_hr <= cap, ambas verdes — e já com os 60 min feitos (primeiro o tempo,
 // depois a potência); depois, sessão de validação de 30 min no W seguinte.
-import type { Semaforo } from './semaforo'
+import type { Semaforo } from './semaforo.js'
 
 export interface BikeSessionSummary {
   watts: number | null

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { adminClient } from './_lib/supabase'
-import { buildIcs, type IcsEvent } from './_lib/ics'
-import { sessionDate } from './_lib/rules/plan-dates'
+import { adminClient } from './_lib/supabase.js'
+import { buildIcs, type IcsEvent } from './_lib/ics.js'
+import { sessionDate } from './_lib/rules/plan-dates.js'
 
 interface SessionRow {
   id: string

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { HttpError, requireUser } from '../../_lib/supabase'
-import { respondError } from '../../_lib/http'
-import { round1 } from '../../_lib/rules/meal-totals'
+import { HttpError, requireUser } from '../../_lib/supabase.js'
+import { respondError } from '../../_lib/http.js'
+import { round1 } from '../../_lib/rules/meal-totals.js'
 
 const OFF_USER_AGENT = 'EpocaDoRegresso/0.1 (https://github.com/joaoms17/Strava)'
 

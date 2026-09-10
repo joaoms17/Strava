@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
-import { HttpError, requireUser } from '../_lib/supabase'
-import { respondError } from '../_lib/http'
-import { painStatus } from '../_lib/rules/semaforo'
-import { workoutKcal, type WorkoutType } from '../_lib/rules/targets'
+import { HttpError, requireUser } from '../_lib/supabase.js'
+import { respondError } from '../_lib/http.js'
+import { painStatus } from '../_lib/rules/semaforo.js'
+import { workoutKcal, type WorkoutType } from '../_lib/rules/targets.js'
 
 const CheckinSchema = z.object({
   workout_id: z.string().uuid(),

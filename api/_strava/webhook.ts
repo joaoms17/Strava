@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { adminClient } from '../_lib/supabase'
-import { fetchActivity, freshAccessToken, upsertActivity } from '../_lib/strava'
+import { adminClient } from '../_lib/supabase.js'
+import { fetchActivity, freshAccessToken, upsertActivity } from '../_lib/strava.js'
 
 interface StravaEvent {
   object_type: 'activity' | 'athlete'

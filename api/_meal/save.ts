@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { HttpError, requireUser } from '../_lib/supabase'
-import { respondError } from '../_lib/http'
-import { SaveMealSchema } from '../_lib/schemas'
-import { nutritionalDay } from '../_lib/rules/nutritional-day'
-import { mealTotals } from '../_lib/rules/meal-totals'
-import { learnFoods } from '../_lib/foods'
+import { HttpError, requireUser } from '../_lib/supabase.js'
+import { respondError } from '../_lib/http.js'
+import { SaveMealSchema } from '../_lib/schemas.js'
+import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
+import { mealTotals } from '../_lib/rules/meal-totals.js'
+import { learnFoods } from '../_lib/foods.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {

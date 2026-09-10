@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import auth from './_strava/auth'
-import callback from './_strava/callback'
-import webhook from './_strava/webhook'
+import auth from './_strava/auth.js'
+import callback from './_strava/callback.js'
+import webhook from './_strava/webhook.js'
 
 // Consolidado numa função (limite de 12 do Hobby); caminhos originais
 // preservados por rewrites no vercel.json — o redirect_uri do OAuth e o

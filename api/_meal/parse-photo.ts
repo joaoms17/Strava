@@ -1,11 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, type Usage } from '../_lib/anthropic'
-import { adminClient, HttpError, requireUser } from '../_lib/supabase'
-import { respondError } from '../_lib/http'
-import { ParsedPhotoMealSchema, type ParsedPhotoMeal } from '../_lib/schemas'
-import { PROMPT_MEAL_PHOTO, promptVersion, readPrompt } from '../_lib/prompts'
-import { mealIsEstimate } from '../_lib/rules/estimativas'
+import { anthropic, MODELS, logApiCall, type Usage } from '../_lib/anthropic.js'
+import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
+import { respondError } from '../_lib/http.js'
+import { ParsedPhotoMealSchema, type ParsedPhotoMeal } from '../_lib/schemas.js'
+import { PROMPT_MEAL_PHOTO, promptVersion, readPrompt } from '../_lib/prompts.js'
+import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
 

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { round1, type MealItem } from './rules/meal-totals'
+import { round1, type MealItem } from './rules/meal-totals.js'
 
 // Aprendizagem de porções: a porção habitual aproxima-se do que foi usado.
 const PORTION_ALPHA = 0.3

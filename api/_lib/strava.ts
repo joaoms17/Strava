@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { workoutKcal } from './rules/targets'
-import { pairWorkout } from './pairing'
+import { workoutKcal } from './rules/targets.js'
+import { pairWorkout } from './pairing.js'
 
 const STRAVA_API = 'https://www.strava.com/api/v3'
 

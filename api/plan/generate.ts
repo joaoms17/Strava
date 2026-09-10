@@ -1,13 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, type Usage } from '../_lib/anthropic'
-import { HttpError, adminClient, requireUser } from '../_lib/supabase'
-import { respondError } from '../_lib/http'
-import { GeneratedPlanSchema, validatePlan, type GeneratedPlan } from '../_lib/schemas'
-import { PROMPT_PLAN, promptVersion, readPrompt } from '../_lib/prompts'
-import { mondayOnOrAfter } from '../_lib/rules/plan-dates'
-import { nextBikeTarget } from '../_lib/rules/progressao-bike'
-import type { Semaforo } from '../_lib/rules/semaforo'
+import { anthropic, MODELS, logApiCall, type Usage } from '../_lib/anthropic.js'
+import { HttpError, adminClient, requireUser } from '../_lib/supabase.js'
+import { respondError } from '../_lib/http.js'
+import { GeneratedPlanSchema, validatePlan, type GeneratedPlan } from '../_lib/schemas.js'
+import { PROMPT_PLAN, promptVersion, readPrompt } from '../_lib/prompts.js'
+import { mondayOnOrAfter } from '../_lib/rules/plan-dates.js'
+import { nextBikeTarget } from '../_lib/rules/progressao-bike.js'
+import type { Semaforo } from '../_lib/rules/semaforo.js'
 
 function localToday(): string {
   return new Intl.DateTimeFormat('en-CA', {

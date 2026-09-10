@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import manual from './_workout/manual'
-import checkin from './_workout/checkin'
-import session from './_workout/session'
+import manual from './_workout/manual.js'
+import checkin from './_workout/checkin.js'
+import session from './_workout/session.js'
 
 // Consolidado numa função (limite de 12 do Hobby); caminhos originais
 // preservados por rewrites no vercel.json.

@@ -1,5 +1,5 @@
 import type { VercelResponse } from '@vercel/node'
-import { HttpError } from './supabase'
+import { HttpError } from './supabase.js'
 
 export function respondError(res: VercelResponse, err: unknown): void {
   if (err instanceof HttpError) {
