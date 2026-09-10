@@ -89,3 +89,7 @@
 55. **Export CSV no cliente:** os dados são do próprio utilizador (RLS), por isso o CSV gera-se no browser (aspas/vírgulas/objetos escapados, BOM para o Excel) — sem endpoint novo nem headers em links.
 56. **Fotos dos capítulos** num bucket público `chapter-photos` (imagens CC do Wikimedia, nada sensível), escrita só autenticada; upload nas Definições com redimensionamento no cliente e crédito obrigatório por cortesia (campo próprio, mostrado na página do capítulo). **Migration nova a correr no Supabase.**
 57. **Regra 12 extraída para `rules/estimativas.ts`** e usada pelos endpoints — com isto, as 12 regras da secção 5 têm todas função pura + testes. Definições fecha o M6: perfil, linha do tempo, catálogo (knee_safe + ranges), fotos, export, PIN e sessão.
+
+## 2026-09-10 — Lições do primeiro deploy real
+
+58. **Vercel Hobby: máximo 12 funções por deploy** — os endpoints vivem consolidados em 8 funções (meal, workout e strava com dispatch interno + rewrites que preservam os caminhos). **As funções correm como ES modules**, por isso todos os imports relativos em `/api` levam extensão `.js` (o Node exige; o tsc, o Vite e o vitest resolvem `.js` → `.ts` sem problema). `maxDuration: 60` para as chamadas ao Sonnet. E o `SUPABASE_URL` normaliza-se para a origem nos dois lados, porque URLs colados trazem lixo.
