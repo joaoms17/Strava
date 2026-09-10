@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/**/*.ts": {
-      "includeFiles": "prompts/**"
+      "includeFiles": "prompts/**",
+      "maxDuration": 60
     }
   },
   "crons": [
