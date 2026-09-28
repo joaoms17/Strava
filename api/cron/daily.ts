@@ -1,174 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { adminClient } from '../_lib/supabase.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
-import { round1 } from '../_lib/rules/meal-totals.js'
-import { kcalTarget, storedExerciseKcal, type WorkoutType } from '../_lib/rules/targets.js'
-import { floorWarning, isDayComplete } from '../_lib/rules/day-close.js'
-import { tdeeRaw, smoothTdee } from '../_lib/rules/adaptativo.js'
-import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../_lib/rules/manutencao.js'
+import { mondayOf } from '../_lib/rules/manutencao.js'
+import { closeDay, recomputeRange, type CloseDayProfile } from '../_lib/close-day.js'
 import { generateWeeklyReview } from '../_lib/review.js'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
-// fecha os últimos 3 dias nutricionais (idempotente — cobre falhas da cron),
-// calcula o gasto adaptativo, aplica a semana de manutenção e, à segunda, gera
-// o review da semana anterior.
+// recalcula, por ordem, os dias alterados (marcados pelo trigger mark_day_dirty)
+// e sempre os últimos 3 — no máximo 21 por noite, a noite seguinte continua —,
+// calcula o gasto adaptativo, aplica a semana de pausa da dieta e, à segunda,
+// gera o review da semana anterior.
 
-interface ProfileRow {
-  user_id: string
-  base_kcal: number
-  kcal_floor_week: number
-  nutrition_day_cutoff_hour: number
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
-}
-
-// Regra 4: sobre os últimos 14 dias completos até esta data; EMA sobre a
-// estimativa anterior. Corre depois do upsert do dia.
-async function computeAdaptive(admin: SupabaseClient, userId: string, date: string) {
-  const { data: completeDays } = await admin
-    .from('days')
-    .select('date,kcal_in,weight_trend')
-    .eq('user_id', userId)
-    .eq('is_complete', true)
-    .lte('date', date)
-    .order('date', { ascending: false })
-    .limit(14)
-  const window = (completeDays ?? [])
-    .reverse()
-    .map((d) => ({ date: d.date, kcal_in: Number(d.kcal_in), weight_trend: d.weight_trend }))
-  const raw = tdeeRaw(window)
-  if (raw == null) return
-
-  const { data: prevRows } = await admin
-    .from('days')
-    .select('tdee_est')
-    .eq('user_id', userId)
-    .lt('date', date)
-    .not('tdee_est', 'is', null)
-    .order('date', { ascending: false })
-    .limit(1)
-  const previous = prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null
-  await admin
-    .from('days')
-    .update({ tdee_est: smoothTdee(previous, raw) })
-    .eq('user_id', userId)
-    .eq('date', date)
-}
-
-async function closeDay(
-  admin: SupabaseClient,
-  profile: ProfileRow,
-  date: string,
-  anchor: string | null,
-) {
-  const userId = profile.user_id
-
-  const [mealsRes, workoutsRes, weightRes, existingRes, weightsRes, recentDaysRes] =
-    await Promise.all([
-      admin.from('meals').select('kcal,protein').eq('user_id', userId).eq('date', date),
-      admin.from('workouts').select('type,minutes,watts,raw,kcal_est').eq('user_id', userId).eq('date', date),
-      admin.from('weights').select('kg').eq('user_id', userId).eq('date', date).maybeSingle(),
-      admin.from('days').select('flags').eq('user_id', userId).eq('date', date).maybeSingle(),
-      admin
-        .from('weights')
-        .select('date,kg')
-        .eq('user_id', userId)
-        .gte('date', shiftDate(date, -6))
-        .lte('date', date),
-      admin
-        .from('days')
-        .select('kcal_in,is_complete')
-        .eq('user_id', userId)
-        .lt('date', date)
-        .order('date', { ascending: false })
-        .limit(21),
-    ])
-
-  const meals = mealsRes.data ?? []
-  const kcalIn = Math.round(meals.reduce((acc, m) => acc + Number(m.kcal), 0))
-  const protein = round1(meals.reduce((acc, m) => acc + Number(m.protein), 0))
-
-  // Soma as kcal guardadas em cada treino (a regra 2 corre ao gravar).
-  const kcalExercise = storedExerciseKcal(
-    (workoutsRes.data ?? []).map((w) => ({
-      type: w.type as WorkoutType,
-      minutes: w.minutes as number | null,
-      watts: w.watts as number | null,
-      deviceCalories:
-        typeof (w.raw as { calories?: unknown } | null)?.calories === 'number'
-          ? ((w.raw as { calories: number }).calories)
-          : null,
-      kcal_est: w.kcal_est as number | null,
-    })),
-  )
-
-  // Regra 7: na semana de manutenção, a meta é o gasto estimado (ou 2000).
-  const maintenance = anchor != null && isMaintenanceWeek(anchor, date)
-  let target: number
-  if (maintenance) {
-    const { data: tdeeRows } = await admin
-      .from('days')
-      .select('tdee_est')
-      .eq('user_id', userId)
-      .lt('date', date)
-      .not('tdee_est', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1)
-    target = maintenanceTarget(tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null)
-  } else {
-    target = kcalTarget(profile.base_kcal, kcalExercise)
-  }
-
-  const prevFlags: string[] = Array.isArray(existingRes.data?.flags) ? existingRes.data.flags : []
-  const manuallyClosed = prevFlags.includes('dia_fechado')
-  const complete = isDayComplete({ mealCount: meals.length, kcalIn, manuallyClosed })
-
-  // Tendência (regra 3): média das pesagens na janela [date-6, date].
-  const windowWeights = (weightsRes.data ?? []).map((w) => Number(w.kg))
-  const weightTrend = windowWeights.length
-    ? round2(windowWeights.reduce((a, b) => a + b, 0) / windowWeights.length)
-    : null
-
-  // Chão (regra 6): média dos últimos 7 dias completos, este incluído se completo.
-  const completeKcals = (recentDaysRes.data ?? [])
-    .filter((d) => d.is_complete)
-    .map((d) => Number(d.kcal_in))
-    .reverse()
-  if (complete) completeKcals.push(kcalIn)
-  const chao = floorWarning(completeKcals, profile.kcal_floor_week)
-
-  const flags = new Set(prevFlags)
-  if (chao) flags.add('chao')
-  else flags.delete('chao')
-  if (complete) flags.delete('dia_incompleto')
-  else flags.add('dia_incompleto')
-  if (maintenance) flags.add('manutencao')
-  else flags.delete('manutencao')
-
-  const { error } = await admin.from('days').upsert(
-    {
-      user_id: userId,
-      date,
-      kcal_in: kcalIn,
-      protein,
-      kcal_exercise: kcalExercise,
-      kcal_target: target,
-      is_complete: complete,
-      weight_kg: weightRes.data ? Number(weightRes.data.kg) : null,
-      weight_trend: weightTrend,
-      flags: [...flags],
-    },
-    { onConflict: 'user_id,date' },
-  )
-  if (error) throw new Error(`days upsert (${date}): ${error.message}`)
-
-  await computeAdaptive(admin, userId, date)
-
-  return { date, kcal_in: kcalIn, is_complete: complete, chao, maintenance }
-}
+const MAX_DAYS_PER_NIGHT = 21
+const TIME_BUDGET_MS = 45_000
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const secret = process.env.CRON_SECRET
@@ -182,25 +26,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: profiles, error } = await admin
       .from('profile')
-      .select('user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour')
+      .select(
+        'user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour,maintenance_enabled,maintenance_anchor',
+      )
     if (error) throw new Error(error.message)
 
+    const startedAt = Date.now()
     const closed = []
     let reviews = 0
-    for (const profile of (profiles ?? []) as ProfileRow[]) {
+    for (const profile of (profiles ?? []) as CloseDayProfile[]) {
       const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
 
-      // Âncora da regra 7: a semana do primeiro dia registado.
-      const { data: firstDay } = await admin
+      // Âncora da regra 7: fixa no perfil; sem ela, a semana do primeiro dia registado.
+      let anchor = profile.maintenance_anchor ?? null
+      if (!anchor) {
+        const { data: firstDay } = await admin
+          .from('days')
+          .select('date')
+          .eq('user_id', profile.user_id)
+          .order('date')
+          .limit(1)
+        anchor = firstDay?.[0]?.date ?? null
+      }
+
+      const { data: dirtyRows } = await admin
         .from('days')
         .select('date')
         .eq('user_id', profile.user_id)
+        .eq('dirty', true)
+        .lt('date', today)
         .order('date')
         .limit(1)
-      const anchor = firstDay?.[0]?.date ?? null
+      const { dates, next } = recomputeRange(today, dirtyRows?.[0]?.date ?? null, MAX_DAYS_PER_NIGHT)
 
-      for (let back = 3; back >= 1; back--) {
-        closed.push(await closeDay(admin, profile, shiftDate(today, -back), anchor))
+      let stoppedAt: string | null = next
+      for (const date of dates) {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) {
+          stoppedAt = date
+          break
+        }
+        closed.push(await closeDay(admin, profile, date, anchor))
+      }
+      // Ficou a meio: marca o dia seguinte para a próxima noite continuar a cadeia.
+      if (stoppedAt) {
+        await admin
+          .from('days')
+          .upsert({ user_id: profile.user_id, date: stoppedAt, dirty: true }, { onConflict: 'user_id,date' })
       }
 
       // À segunda-feira, o review da semana que terminou.

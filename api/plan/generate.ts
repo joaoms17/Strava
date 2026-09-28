@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Histórico de 8 semanas
     const since = new Date(Date.now() - 56 * 86_400_000).toISOString().slice(0, 10)
     const [{ data: workouts }, { data: logs }, { data: prevBlocks }] = await Promise.all([
-      db.from('workouts').select('*').gte('date', since).order('date'),
+      db.from('workouts_active').select('*').gte('date', since).order('date'),
       db
         .from('exercise_log')
         .select('exercise,set_index,reps,load_kg,rpe,workout_id,created_at')

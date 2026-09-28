@@ -19,6 +19,15 @@ describe('isDayComplete', () => {
     expect(isDayComplete({ mealCount: 0, kcalIn: 0, manuallyClosed: true })).toBe(true)
     expect(isDayComplete({ mealCount: 1, kcalIn: 500, manuallyClosed: true })).toBe(true)
   })
+
+  it('"faltou algo" tira o dia das contas, mesmo com refeições suficientes', () => {
+    expect(
+      isDayComplete({ mealCount: 3, kcalIn: 1800, manuallyClosed: false, missingSomething: true }),
+    ).toBe(false)
+    expect(
+      isDayComplete({ mealCount: 3, kcalIn: 1800, manuallyClosed: true, missingSomething: true }),
+    ).toBe(false)
+  })
 })
 
 // Regra 6: média de 7 dias completos < kcal_floor_week gera aviso.

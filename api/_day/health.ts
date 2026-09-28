@@ -83,7 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   )
 
   const aiOptions = { maxRetries: 0, timeout: 8_000 }
-  const [supabase, haiku, sonnet] = await Promise.all([
+  const [supabase, schema, haiku, sonnet] = await Promise.all([
     timed(async () => {
       const { count, error } = await adminClient()
         .from('profile')
@@ -91,6 +91,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (error) throw new Error(error.message)
       if (!count) throw new Error('Sem perfil — corre os seeds no Supabase.')
       return `${count} perfil`
+    }),
+    // Migração 1 (Fase 1): favoritos e as vistas das linhas contadas.
+    timed(async () => {
+      const admin = adminClient()
+      for (const table of ['favorites', 'meals_counted', 'workouts_active']) {
+        const { error } = await admin.from(table).select('*', { count: 'exact', head: true })
+        if (error) throw new Error(`falta ${table}: corre a migração 20260928000000_fase1.sql`)
+      }
+      return 'migração 1'
     }),
     timed(async () => {
       await anthropic().models.retrieve(MODELS.text, {}, aiOptions)
@@ -104,12 +113,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const missing = REQUIRED_ENV.filter((name) => !env[name])
   const promptsOk = Object.values(prompts).every(Boolean)
-  const ok = missing.length === 0 && promptsOk && supabase.ok && haiku.ok && sonnet.ok
+  const ok = missing.length === 0 && promptsOk && supabase.ok && schema.ok && haiku.ok && sonnet.ok
 
   const problems: string[] = []
   if (missing.length) problems.push(`faltam variáveis: ${missing.join(', ')}`)
   if (!promptsOk) problems.push('os prompts não foram incluídos no deploy')
   if (!supabase.ok) problems.push('o Supabase não responde')
+  else if (!schema.ok) problems.push('falta correr a migração da Fase 1 no Supabase')
   if (!haiku.ok || !sonnet.ok) problems.push('a Anthropic não responde (chave ou modelos)')
 
   res.setHeader('Cache-Control', 'no-store')
@@ -121,6 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     env,
     prompts,
     supabase,
+    schema,
     anthropic: { [MODELS.text]: haiku, [MODELS.vision]: sonnet },
   })
 }

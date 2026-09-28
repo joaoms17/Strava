@@ -23,3 +23,11 @@ export function canProgress(statuses: (Semaforo | null)[]): boolean {
   if (known.length < 2) return false
   return known[known.length - 1] === 'green' && known[known.length - 2] === 'green'
 }
+
+// Respostas de 1 toque sobre o joelho: Bem, Algum incómodo, Doeu. Valem 1, 4
+// e 7 na escala 0-10, por isso caem no verde, amarelo e vermelho.
+export const KNEE_ANSWERS = [
+  { label: 'Bem', value: 1 },
+  { label: 'Algum incómodo', value: 4 },
+  { label: 'Doeu', value: 7 },
+] as const

@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { workoutKcal } from '../_lib/rules/targets.js'
+import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { pairWorkout } from '../_lib/pairing.js'
 
 const SetSchema = z.object({
@@ -19,14 +20,6 @@ const SessionSchema = z.object({
   sets: z.array(SetSchema).min(1).max(60),
 })
 
-function localCalendarDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Lisbon',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
-}
 
 // Sessão de força executada: cria o workout, grava as séries em exercise_log
 // e marca a planned_session como feita.
@@ -34,6 +27,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== 'POST') throw new HttpError(405, 'Método não suportado.')
     const { user, db } = await requireUser(req)
+    // O treino conta para o dia nutricional (04:00–04:00), como as refeições.
+    const { data: profile } = await db.from('profile').select('nutrition_day_cutoff_hour').single()
+    const today = nutritionalDay(new Date(), profile?.nutrition_day_cutoff_hour ?? 4)
 
     const body = SessionSchema.safeParse(req.body)
     if (!body.success) throw new HttpError(400, 'Sessão inválida.')
@@ -43,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .from('workouts')
       .insert({
         user_id: user.id,
-        date: localCalendarDate(),
+        date: today,
         source: 'manual',
         type: 'strength',
         minutes,

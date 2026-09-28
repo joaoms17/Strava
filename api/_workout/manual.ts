@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { workoutKcal } from '../_lib/rules/targets.js'
+import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { pairWorkout } from '../_lib/pairing.js'
 
 const ManualWorkoutSchema = z.object({
@@ -17,14 +18,6 @@ function shiftDays(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
 }
 
-function localCalendarDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Lisbon',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
-}
 
 // Sessão manual em 3 toques — sem Strava tudo funciona.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -36,7 +29,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!body.success) throw new HttpError(400, 'Sessão inválida.')
     const { type, minutes } = body.data
     const watts = type === 'bike' ? (body.data.watts ?? null) : null
-    const today = localCalendarDate()
+    // O treino conta para o dia nutricional (04:00–04:00), como as refeições.
+    const { data: profile } = await db.from('profile').select('nutrition_day_cutoff_hour').single()
+    const today = nutritionalDay(new Date(), profile?.nutrition_day_cutoff_hour ?? 4)
     const sport = type === 'other' ? (body.data.sport ?? 'outro') : null
 
     // Treino «Outro» sem calorias do relógio: estima pelo peso médio dos últimos 7 dias.

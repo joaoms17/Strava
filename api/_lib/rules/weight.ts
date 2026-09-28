@@ -86,3 +86,46 @@ export function projectWeight(
 
   return { slopePerDay: slope, projected, targetDate }
 }
+
+// O peso médio só aparece a partir de 3 pesagens.
+export const MIN_WEIGHINGS_FOR_TREND = 3
+
+// «a descer 0,4 kg por semana»: declive do peso médio nos últimos 14 dias,
+// só com pelo menos 8 pesagens nessa janela e 14 dias de história.
+export const RATE_WINDOW_DAYS = 14
+export const RATE_MIN_WEIGHINGS = 8
+
+export function weeklyRate(weights: DatedValue[]): number | null {
+  if (weights.length === 0) return null
+  const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date))
+  const lastDay = dayNumber(sorted[sorted.length - 1]!.date)
+  if (lastDay - dayNumber(sorted[0]!.date) < RATE_WINDOW_DAYS - 1) return null
+  const inWindow = sorted.filter((w) => dayNumber(w.date) > lastDay - RATE_WINDOW_DAYS)
+  if (inWindow.length < RATE_MIN_WEIGHINGS) return null
+  const trend = trend7(sorted).filter((p) => dayNumber(p.date) > lastDay - RATE_WINDOW_DAYS)
+  return Math.round(linearSlope(trend) * 7 * 100) / 100
+}
+
+// Faixa segura: perder mais de 0,85 kg por semana gasta músculo.
+export const FAST_LOSS_KG_WEEK = 0.85
+
+// Uma pesagem a mais de 3 kg do peso médio é quase sempre um erro a teclar:
+// falta a vírgula (854 → 85,4) ou dois algarismos trocados (48,5 → 84,5).
+export const TYPO_THRESHOLD_KG = 3
+
+export type WeightCheck =
+  | { kind: 'ok' }
+  | { kind: 'suggest'; value: number }
+  | { kind: 'confirm' }
+
+export function checkWeighing(value: number, reference: number | null): WeightCheck {
+  if (reference == null || Math.abs(value - reference) <= TYPO_THRESHOLD_KG) return { kind: 'ok' }
+  const candidates = [value / 10, value / 100, value * 10]
+  const [intPart, decPart] = value.toFixed(1).split('.') as [string, string]
+  if (intPart.length === 2) candidates.push(Number(`${intPart[1]}${intPart[0]}.${decPart}`))
+  const near = candidates
+    .map((c) => Math.round(c * 10) / 10)
+    .filter((c) => Math.abs(c - reference) <= TYPO_THRESHOLD_KG)
+    .sort((a, b) => Math.abs(a - reference) - Math.abs(b - reference))
+  return near[0] != null ? { kind: 'suggest', value: near[0] } : { kind: 'confirm' }
+}

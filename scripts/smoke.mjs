@@ -16,6 +16,7 @@ if (!base || !token) {
 const probes = [
   ['POST', '/api/meal/parse-text'],
   ['POST', '/api/meal/save'],
+  ['POST', '/api/meal/log-favorite'],
   ['GET', '/api/food/barcode/5601234567890'],
   ['POST', '/api/workout/manual'],
   ['POST', '/api/plan/generate'],

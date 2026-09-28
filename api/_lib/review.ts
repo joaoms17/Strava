@@ -38,13 +38,13 @@ export async function generateWeeklyReview(
       .lte('date', weekEnd)
       .order('date'),
     admin
-      .from('meals')
+      .from('meals_counted')
       .select('is_estimate')
       .eq('user_id', userId)
       .gte('date', weekStart)
       .lte('date', weekEnd),
     admin
-      .from('workouts')
+      .from('workouts_active')
       .select('date,type,minutes,watts,avg_hr,max_hr,status,planned_session_id')
       .eq('user_id', userId)
       .gte('date', weekStart)

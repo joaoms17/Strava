@@ -1,10 +1,13 @@
-// Regra 5: dia completo = >= 2 refeições registadas ou marcado "dia fechado".
-// Dias com kcal_in < 800 sem marca são incompletos (ficam fora do adaptativo).
+// Regra 5: dia completo = >= 2 refeições registadas ou marcado "dia fechado"
+// («Sim, foi tudo»). Dias com kcal_in < 800 sem marca são incompletos (ficam
+// fora do adaptativo), e «Não, faltou algo» tira sempre o dia das contas.
 export function isDayComplete(input: {
   mealCount: number
   kcalIn: number
   manuallyClosed: boolean
+  missingSomething?: boolean
 }): boolean {
+  if (input.missingSomething) return false
   if (input.manuallyClosed) return true
   return input.mealCount >= 2 && input.kcalIn >= 800
 }
