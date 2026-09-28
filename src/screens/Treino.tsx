@@ -2,12 +2,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
 import { localCalendarDate, shiftDate } from '../lib/day'
+import { useDataVersion, emitDataChanged } from '../lib/events'
+import { useToast } from '../lib/toast'
+import KneePicker from '../components/ui/KneePicker'
+import BikeHrChart from '../components/BikeHrChart'
+import LoadChart from '../components/LoadChart'
 import { blockWeekOf, sessionDate } from '../../api/_lib/rules/plan-dates'
 import { nextBikeTarget, type BikeTarget } from '../../api/_lib/rules/progressao-bike'
 import { readyForIncrease } from '../../api/_lib/rules/progressao-forca'
 import type { Semaforo } from '../../api/_lib/rules/semaforo'
 import type {
-  Chapter,
   ExerciseLogRow,
   PlanBlock,
   PlannedSession,
@@ -19,35 +23,47 @@ import StrengthLogger, { type ExerciseSuggestion } from '../components/StrengthL
 type ManualType = Workout['type']
 
 const TYPE_LABEL: Record<ManualType, string> = {
-  bike: 'Bike',
-  strength: 'Força',
+  bike: 'Bicicleta',
+  strength: 'Ginásio',
   other: 'Outro',
 }
+
+const SPORTS = [
+  ['caminhada', 'Caminhada'],
+  ['eliptica', 'Elíptica'],
+  ['natacao', 'Natação'],
+  ['outro', 'Outro'],
+] as const
+type Sport = (typeof SPORTS)[number][0]
 
 const TARGET_LABEL: Record<BikeTarget['kind'], string> = {
   start: 'primeira sessão',
   'progress-time': 'sobe o tempo',
-  'validate-next-watts': 'validação do W seguinte',
+  'validate-next-watts': 'experimenta a potência seguinte',
   hold: 'mantém',
-  ease: 'bike leve (semáforo)',
+  ease: 'bicicleta leve (joelho)',
 }
 
 const STATUS_DOT: Record<NonNullable<Workout['status']>, string> = {
   green: 'bg-ok',
-  yellow: 'bg-accent',
-  red: 'bg-warn',
+  yellow: 'bg-attn',
+  red: 'bg-pain',
 }
 
 interface TreinoData {
   profile: Profile
-  block: (PlanBlock & { chapter: Chapter | null }) | null
+  block: PlanBlock | null
   sessions: (PlannedSession & { date: string })[]
   workouts: Workout[]
   logs: ExerciseLogRow[]
 }
 
 export default function Treino() {
+  const version = useDataVersion()
+  const toast = useToast()
   const [data, setData] = useState<TreinoData | null>(null)
+  const [sport, setSport] = useState<Sport>('caminhada')
+  const [kneeFor, setKneeFor] = useState<Workout | null>(null)
   const [logging, setLogging] = useState<string | null>(null) // planned_session_id
   const [manualType, setManualType] = useState<ManualType | null>(null)
   const [minutes, setMinutes] = useState<number | null>(null)
@@ -68,28 +84,21 @@ export default function Treino() {
           .order('created_at', { ascending: false })
           .limit(1),
         supabase
-          .from('workouts')
+          .from('workouts_active')
           .select('*')
-          .gte('date', shiftDate(today, -59))
+          .gte('date', shiftDate(today, -83))
           .order('date'),
         supabase
           .from('exercise_log')
           .select('workout_id,exercise,set_index,reps,load_kg,rpe,created_at')
           .order('created_at')
-          .limit(400),
+          .limit(600),
       ])
 
     const block = (blocks?.[0] ?? null) as PlanBlock | null
-    let chapter: Chapter | null = null
     let sessions: (PlannedSession & { date: string })[] = []
     if (block) {
-      const [{ data: chapterRow }, { data: sessionRows }] = await Promise.all([
-        block.chapter_id
-          ? supabase.from('chapters').select('*').eq('id', block.chapter_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-        supabase.from('planned_sessions').select('*').eq('block_id', block.id),
-      ])
-      chapter = (chapterRow ?? null) as Chapter | null
+      const { data: sessionRows } = await supabase.from('planned_sessions').select('*').eq('block_id', block.id)
       sessions = ((sessionRows ?? []) as PlannedSession[])
         .map((s) => ({ ...s, date: sessionDate(block.start_date, s.week, s.day_index) }))
         .sort((a, b) => a.date.localeCompare(b.date))
@@ -97,7 +106,7 @@ export default function Treino() {
 
     setData({
       profile: profile as Profile,
-      block: block ? { ...block, chapter } : null,
+      block,
       sessions,
       workouts: (workouts ?? []) as Workout[],
       logs: (logs ?? []) as ExerciseLogRow[],
@@ -106,7 +115,7 @@ export default function Treino() {
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, version])
 
   const today = localCalendarDate()
 
@@ -178,15 +187,17 @@ export default function Treino() {
     setBusy(true)
     setError(null)
     try {
-      await postApi('/api/workout/manual', {
+      const { workout } = await postApi<{ workout: Workout }>('/api/workout/manual', {
         type: manualType,
         minutes,
         watts: manualType === 'bike' ? watts : null,
+        ...(manualType === 'other' ? { sport } : {}),
       })
       setManualType(null)
       setMinutes(null)
       setWatts(null)
-      await load()
+      emitDataChanged()
+      setKneeFor(workout)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao guardar a sessão.')
     } finally {
@@ -198,12 +209,13 @@ export default function Treino() {
     setBusy(true)
     setError(null)
     try {
-      await postApi('/api/workout/manual', {
+      const { workout } = await postApi<{ workout: Workout }>('/api/workout/manual', {
         type: 'bike',
         minutes: session.details.bike?.minutes ?? 45,
         watts: session.details.bike?.watts ?? null,
       })
-      await load()
+      emitDataChanged()
+      setKneeFor(workout)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao marcar a sessão.')
     } finally {
@@ -224,7 +236,59 @@ export default function Treino() {
     }
   }
 
-  if (!data || !derived) return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
+  async function answerKnee(workout: Workout, pain: number) {
+    setBusy(true)
+    try {
+      await postApi('/api/workout/checkin', { workout_id: workout.id, pain_during: pain })
+      emitDataChanged()
+      setKneeFor(null)
+      toast(`${TYPE_LABEL[workout.type]} registada${workout.kcal_est ? ` · +${workout.kcal_est} no plano` : ''}`)
+    } catch {
+      setError('Não consegui gravar o joelho. Tenta outra vez.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeWorkout(workout: Workout) {
+    const { error: deleteError } = await supabase
+      .from('workouts')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', workout.id)
+    if (deleteError) {
+      toast('Não consegui apagar.')
+      return
+    }
+    emitDataChanged()
+    toast('Treino apagado', [
+      {
+        label: 'Anular',
+        run: async () => {
+          await supabase.from('workouts').update({ deleted_at: null }).eq('id', workout.id)
+          emitDataChanged()
+        },
+      },
+    ])
+  }
+
+  if (!data || !derived) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+
+  if (kneeFor) {
+    return (
+      <div className="space-y-4 pt-1">
+        <div className="space-y-3 rounded-3xl bg-surface p-5">
+          <p className="text-[17px]">
+            Como esteve o joelho durante {kneeFor.type === 'bike' ? 'a bicicleta' : kneeFor.type === 'strength' ? 'o ginásio' : 'o treino'}?
+          </p>
+          <KneePicker busy={busy} onAnswer={(pain) => void answerKnee(kneeFor, pain)} />
+          <button onClick={() => setKneeFor(null)} className="text-[15px] text-dim">
+            Responder depois (fica no Hoje)
+          </button>
+        </div>
+        {error && <p className="text-[15px] text-pain">{error}</p>}
+      </div>
+    )
+  }
 
   const { profile, block, workouts } = data
   const { bikeTarget, suggestions, advisory, todaySessions, nextSession, done } = derived
@@ -248,129 +312,34 @@ export default function Treino() {
     )
   }
 
+  const recent = workouts.filter((w) => w.date >= shiftDate(today, -13)).slice().reverse()
+  const chip = (active: boolean) =>
+    `min-h-11 rounded-xl text-[15px] ${active ? 'bg-eat text-bg font-semibold' : 'bg-surface2'}`
+
   return (
-    <div className="mx-auto max-w-md space-y-4 pt-2">
-      {block ? (
-        <div className="rounded-2xl border border-edge bg-card px-4 py-3">
-          <p className="text-sm font-semibold">
-            {block.chapter ? `${block.chapter.title} — ${block.chapter.patron}` : 'Bloco ativo'}
-          </p>
-          <p className="text-xs text-dim">
-            Semana {week} de 4{week === 4 && ' · deload'} · feitas {done} de {data.sessions.length}
-          </p>
-        </div>
-      ) : (
-        <button
-          disabled={generating}
-          onClick={() => void generateBlock()}
-          className="w-full rounded-2xl bg-accent py-4 font-semibold text-bg disabled:opacity-50"
-        >
-          {generating ? 'A gerar o bloco… (pode demorar um pouco)' : 'Gerar bloco de 4 semanas'}
-        </button>
-      )}
-
-      {advisory && (
-        <p
-          className={`rounded-xl border bg-card px-4 py-3 text-sm ${
-            advisory.level === 'red' ? 'border-warn/50 text-warn' : 'border-accent/50 text-accent'
-          }`}
-        >
-          {advisory.text}
-        </p>
-      )}
-
-      {todaySessions.map((session) => (
-        <div key={session.id} className="space-y-3 rounded-2xl border border-accent/40 bg-card p-4">
-          <div className="flex items-baseline justify-between">
-            <p className="font-semibold">{session.name ?? TYPE_LABEL[session.type]}</p>
-            <p className="text-xs text-dim">hoje · semana {session.week}</p>
-          </div>
-          {session.type === 'bike' && session.details.bike && (
-            <>
-              <p className="text-sm">
-                <span className="font-semibold text-accent">{session.details.bike.watts} W</span> ·{' '}
-                {session.details.bike.minutes} min · cadência ≥ {session.details.bike.cadence_min}
-              </p>
-              <p className="text-xs text-dim">
-                FC média ≤ {profile.bike_hr_avg_cap} · máx ≤ {profile.bike_hr_max_cap}. Quando
-                acabares, marca aqui e diz como ficou o joelho.
-              </p>
-              <button
-                disabled={busy}
-                onClick={() => void markBikeDone(session)}
-                className="w-full rounded-xl border border-edge py-2.5 text-sm font-semibold text-ink disabled:opacity-50"
-              >
-                Marcar feita
-              </button>
-            </>
-          )}
-          {session.type === 'strength' && (
-            <>
-              <ul className="space-y-1 text-sm">
-                {session.details.exercises.map((exercise) => (
-                  <li key={exercise.name} className="flex justify-between gap-2">
-                    <span>{exercise.name}</span>
-                    <span className="shrink-0 text-dim">
-                      {exercise.sets}×{exercise.rep_min}–{exercise.rep_max}
-                      {suggestions[exercise.name]?.ready && (
-                        <span className="ml-1 text-ok">+2 kg</span>
-                      )}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <button
-                onClick={() => setLogging(session.id)}
-                className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-bg"
-              >
-                Registar cargas
-              </button>
-            </>
-          )}
-          {session.details.notes && <p className="text-xs text-dim">{session.details.notes}</p>}
-        </div>
-      ))}
-
-      {todaySessions.length === 0 && block && (
-        <div className="rounded-2xl border border-edge bg-card px-4 py-3 text-sm text-dim">
-          {nextSession
-            ? `Hoje é descanso. Próxima sessão: ${nextSession.name ?? TYPE_LABEL[nextSession.type]}, ${nextSession.date.split('-').reverse().slice(0, 2).join('/')}.`
-            : 'Sem sessões planeadas por fazer neste bloco.'}
-        </div>
-      )}
-
-      <div className="rounded-2xl border border-edge bg-card px-4 py-3">
-        <p className="text-xs text-dim">Próximo alvo de bike ({TARGET_LABEL[bikeTarget.kind]})</p>
-        <p className="text-sm font-semibold">
-          {bikeTarget.watts} W · {bikeTarget.minutes} min · cadência ≥ {profile.bike_min_cadence}
-        </p>
-      </div>
-
-      <div className="space-y-3 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Sessão manual</h2>
+    <div className="space-y-4 pt-1">
+      <section className="space-y-3 rounded-3xl bg-surface p-5">
+        <h2 className="text-[17px] font-semibold">Já fiz</h2>
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(TYPE_LABEL) as ManualType[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => setManualType(manualType === type ? null : type)}
-              className={`rounded-xl border py-3 text-sm font-semibold ${
-                manualType === type ? 'border-accent text-accent' : 'border-edge text-dim'
-              }`}
-            >
+            <button key={type} onClick={() => setManualType(manualType === type ? null : type)} className={chip(manualType === type)}>
               {TYPE_LABEL[type]}
             </button>
           ))}
         </div>
+        {manualType === 'other' && (
+          <div className="grid grid-cols-4 gap-2">
+            {SPORTS.map(([id, label]) => (
+              <button key={id} onClick={() => setSport(id)} className={`${chip(sport === id)} text-[13px]`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {manualType && (
           <div className="grid grid-cols-4 gap-2">
             {[30, 45, 60, 90].map((option) => (
-              <button
-                key={option}
-                onClick={() => setMinutes(minutes === option ? null : option)}
-                className={`rounded-xl border py-2 text-sm ${
-                  minutes === option ? 'border-accent text-accent' : 'border-edge text-dim'
-                }`}
-              >
+              <button key={option} onClick={() => setMinutes(minutes === option ? null : option)} className={chip(minutes === option)}>
                 {option} min
               </button>
             ))}
@@ -379,13 +348,7 @@ export default function Treino() {
         {manualType === 'bike' && minutes && (
           <div className="grid grid-cols-3 gap-2">
             {(profile.bike_watts_options ?? [130, 140, 150]).map((option) => (
-              <button
-                key={option}
-                onClick={() => setWatts(watts === option ? null : option)}
-                className={`rounded-xl border py-2 text-sm ${
-                  watts === option ? 'border-accent text-accent' : 'border-edge text-dim'
-                }`}
-              >
+              <button key={option} onClick={() => setWatts(watts === option ? null : option)} className={chip(watts === option)}>
                 {option} W
               </button>
             ))}
@@ -395,57 +358,150 @@ export default function Treino() {
           <button
             disabled={busy}
             onClick={() => void saveManual()}
-            className="w-full rounded-xl bg-accent py-3 font-semibold text-bg disabled:opacity-50"
+            className="min-h-14 w-full rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
           >
             {busy
               ? 'A guardar…'
-              : `Guardar ${TYPE_LABEL[manualType]} · ${minutes} min${
-                  manualType === 'bike' && watts ? ` · ${watts} W` : ''
-                }`}
+              : `Guardar ${TYPE_LABEL[manualType]} · ${minutes} min${manualType === 'bike' && watts ? ` · ${watts} W` : ''}`}
           </button>
         )}
-      </div>
-
-      {error && <p className="text-sm text-warn">{error}</p>}
-
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-dim">Últimas 2 semanas</h2>
-        {workouts.filter((w) => w.date >= shiftDate(today, -13)).length === 0 && (
-          <p className="text-sm text-dim">Ainda sem sessões.</p>
+        {!manualType && (
+          <p className="text-[13px] text-dim">
+            Escolhe o tipo, a duração e (na bicicleta) a potência. A seguir pergunto pelo joelho.
+          </p>
         )}
-        {workouts
-          .filter((w) => w.date >= shiftDate(today, -13))
-          .slice()
-          .reverse()
-          .map((workout) => (
-            <div
-              key={workout.id}
-              className="flex items-center justify-between rounded-xl border border-edge bg-card px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    workout.status ? STATUS_DOT[workout.status] : 'bg-edge'
-                  }`}
-                />
-                <div>
-                  <p className="text-sm">
-                    {TYPE_LABEL[workout.type]}
-                    {workout.minutes != null && ` · ${workout.minutes} min`}
-                    {workout.watts != null && ` · ${workout.watts} W`}
-                  </p>
-                  <p className="text-xs text-dim">
-                    {workout.date.split('-').reverse().slice(0, 2).join('/')}
-                    {workout.avg_hr != null && ` · FC ${workout.avg_hr}`}
-                    {workout.planned_session_id != null && ' · do plano'}
-                    {` · ${workout.source === 'strava' ? 'Strava' : 'manual'}`}
-                  </p>
-                </div>
-              </div>
-              <p className="text-sm font-semibold">{workout.kcal_est ?? 0} kcal</p>
-            </div>
-          ))}
+      </section>
+
+      {error && <p className="text-[15px] text-pain">{error}</p>}
+
+      {advisory && (
+        <p
+          className={`rounded-2xl bg-surface px-4 py-3 text-[15px] ${
+            advisory.level === 'red' ? 'text-pain' : 'text-attn'
+          }`}
+        >
+          {advisory.level === 'red'
+            ? 'O joelho doeu: 48 h sem pernas. Troca por tronco ou core.'
+            : 'O joelho deu sinal: a próxima sessão de pernas passa a tronco ou bicicleta leve.'}
+        </p>
+      )}
+
+      <div className="rounded-2xl bg-surface px-4 py-3">
+        <p className="text-[13px] text-dim">Sugestão seguinte na bicicleta ({TARGET_LABEL[bikeTarget.kind]})</p>
+        <p className="text-[17px] font-semibold tabular-nums">
+          {bikeTarget.watts} W · {bikeTarget.minutes} min · {profile.bike_min_cadence} rpm ou mais
+        </p>
       </div>
+
+      {todaySessions.map((session) => (
+        <div key={session.id} className="space-y-3 rounded-2xl bg-surface p-4">
+          <div className="flex items-baseline justify-between">
+            <p className="font-semibold">{session.name ?? TYPE_LABEL[session.type]}</p>
+            <p className="text-[13px] text-dim">hoje · semana {session.week}</p>
+          </div>
+          {session.type === 'bike' && session.details.bike && (
+            <>
+              <p className="text-[15px] tabular-nums">
+                <span className="font-semibold text-burn">{session.details.bike.watts} W</span> ·{' '}
+                {session.details.bike.minutes} min · {session.details.bike.cadence_min} rpm ou mais
+              </p>
+              <p className="text-[13px] text-dim">
+                Batimentos médios até {profile.bike_hr_avg_cap} · máximos até {profile.bike_hr_max_cap}. Quando
+                acabares, marca aqui e diz como ficou o joelho.
+              </p>
+              <button
+                disabled={busy}
+                onClick={() => void markBikeDone(session)}
+                className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] font-semibold disabled:opacity-50"
+              >
+                Marcar feita
+              </button>
+            </>
+          )}
+          {session.type === 'strength' && (
+            <>
+              <ul className="space-y-1 text-[15px]">
+                {session.details.exercises.map((exercise) => (
+                  <li key={exercise.name} className="flex justify-between gap-2">
+                    <span>{exercise.name}</span>
+                    <span className="shrink-0 text-dim tabular-nums">
+                      {exercise.sets}×{exercise.rep_min}–{exercise.rep_max}
+                      {suggestions[exercise.name]?.ready && <span className="ml-1 text-ok">+2 kg</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => setLogging(session.id)}
+                className="min-h-12 w-full rounded-xl bg-eat text-[15px] font-semibold text-bg"
+              >
+                Registar cargas
+              </button>
+            </>
+          )}
+          {session.details.notes && <p className="text-[13px] text-dim">{session.details.notes}</p>}
+        </div>
+      ))}
+
+      {block ? (
+        <div className="rounded-2xl bg-surface px-4 py-3">
+          <p className="text-[15px] font-semibold">Plano de 4 semanas</p>
+          <p className="text-[13px] text-dim">
+            Semana {week} de 4{week === 4 && ' · semana leve'} · feitas {done} de {data.sessions.length}
+            {todaySessions.length === 0 &&
+              (nextSession
+                ? ` · próxima: ${nextSession.name ?? TYPE_LABEL[nextSession.type]}, ${nextSession.date.split('-').reverse().slice(0, 2).join('/')}`
+                : ' · sem sessões por fazer')}
+          </p>
+        </div>
+      ) : (
+        <button
+          disabled={generating}
+          onClick={() => void generateBlock()}
+          className="min-h-12 w-full rounded-2xl bg-surface2 text-[15px] disabled:opacity-50"
+        >
+          {generating ? 'A preparar o plano… (pode demorar um pouco)' : 'Gerar plano de ginásio de 4 semanas'}
+        </button>
+      )}
+
+      <section className="space-y-2">
+        <h2 className="text-[15px] font-semibold text-dim">Últimas 2 semanas</h2>
+        {recent.length === 0 && <p className="text-[15px] text-dim">Ainda sem treinos.</p>}
+        {recent.map((workout) => (
+          <div key={workout.id} className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">
+            <span
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${workout.status ? STATUS_DOT[workout.status] : 'bg-line'}`}
+              aria-label={workout.status ? `joelho ${workout.status}` : 'joelho sem resposta'}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-[15px] tabular-nums">
+                {TYPE_LABEL[workout.type]}
+                {workout.minutes != null && ` · ${workout.minutes} min`}
+                {workout.watts != null && ` · ${workout.watts} W`}
+              </p>
+              <p className="text-[13px] text-dim tabular-nums">
+                {workout.date.split('-').reverse().slice(0, 2).join('/')}
+                {workout.avg_hr != null && ` · ${workout.avg_hr} bpm`}
+                {workout.planned_session_id != null && ' · do plano'}
+              </p>
+            </div>
+            <p className="shrink-0 text-[15px] text-burn tabular-nums">+{workout.kcal_est ?? 0}</p>
+            <button
+              onClick={() => void removeWorkout(workout)}
+              className="shrink-0 px-1 text-[13px] text-dim"
+              aria-label="Apagar treino"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-[15px] font-semibold text-dim">Progressão</h2>
+        <BikeHrChart workouts={workouts} capAvg={profile.bike_hr_avg_cap} />
+        <LoadChart logs={data.logs} workoutDates={new Map(workouts.map((w) => [w.id, w.date]))} />
+      </section>
     </div>
   )
 }

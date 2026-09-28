@@ -1,289 +1,764 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation, useParams } from 'wouter'
 import { supabase } from '../lib/supabase'
+import { postApi } from '../lib/api'
+import { useReadyProfile, useProfile } from '../lib/profile'
+import { useSheet } from '../lib/sheet'
+import { useToast } from '../lib/toast'
+import { emitDataChanged, useDataVersion } from '../lib/events'
+import { signedUrls } from '../lib/photos'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
+import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
+import { deleteMeal, logFavorite } from '../lib/meal-actions'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
-import type { DayRow, Meal, Profile, Workout } from '../lib/types'
-import PainCheckin from '../components/PainCheckin'
+import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
+import {
+  dismissNudge,
+  nextStep,
+  type NextStepId,
+  type NudgeState,
+} from '../../api/_lib/rules/proximo-passo'
+import type { DayRow, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
+import Bar from '../components/ui/Bar'
+import BottomSheet from '../components/ui/BottomSheet'
+import KneePicker from '../components/ui/KneePicker'
+import PhotoButton from '../components/ui/PhotoButton'
+import WeekStrip from '../components/ui/WeekStrip'
 
-interface HojeData {
-  profile: Profile
-  meals: Meal[]
-  day: DayRow | null
-  yesterday: DayRow | null
-  todayWorkouts: Workout[]
+interface DayData {
+  meals: (Meal & { created_at: string })[]
+  deleted: Meal[]
+  workouts: Workout[]
   yesterdayWorkouts: Workout[]
-  date: string
-  maintenance: boolean
+  weights: WeightRow[]
+  yesterday: { meals: number; flags: string[] }
   latestTdee: number | null
+  favorites: Favorite[]
+  photos: Record<string, string>
+  weighedToday: boolean
+  hasAnyWeight: boolean
+  hasAnyMeal: boolean
+}
+
+const WORKOUT_LABEL: Record<Workout['type'], string> = {
+  bike: 'Bicicleta',
+  strength: 'Ginásio',
+  other: 'Treino',
+}
+const WORKOUT_OF: Record<Workout['type'], string> = {
+  bike: 'a bicicleta',
+  strength: 'o ginásio',
+  other: 'o treino',
+}
+const WORKOUT_AFTER: Record<Workout['type'], string> = {
+  bike: 'da bicicleta',
+  strength: 'do ginásio',
+  other: 'do treino',
+}
+const WORKOUT_ICON: Record<Workout['type'], string> = { bike: '🚲', strength: '🏋', other: '🏃' }
+const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
+
+function minutesOf(time: string): number {
+  const [h, m] = time.split(':').map(Number) as [number, number]
+  return h * 60 + m
 }
 
 export default function Hoje() {
-  const [data, setData] = useState<HojeData | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [weight, setWeight] = useState('')
-  const [weightBusy, setWeightBusy] = useState(false)
-  const [weightSaved, setWeightSaved] = useState(false)
+  const profile = useReadyProfile()
+  const { update } = useProfile()
+  const params = useParams<{ date?: string }>()
+  const [, navigate] = useLocation()
+  const sheet = useSheet()
+  const toast = useToast()
+  const version = useDataVersion()
+  const now = new Date()
+  const today = nutritionalDay(now, profile.nutrition_day_cutoff_hour)
+  const date = params.date && params.date <= today ? params.date : today
+  const isToday = date === today
+  const [data, setData] = useState<DayData | null>(null)
+  const [planOpen, setPlanOpen] = useState(false)
+  const [showDeleted, setShowDeleted] = useState(false)
 
   const load = useCallback(async () => {
-    setError(null)
-    const { data: profile, error: profileError } = await supabase
-      .from('profile')
-      .select('*')
-      .single()
-    if (profileError || !profile) {
-      setError('Perfil não encontrado — corre os seeds no Supabase.')
-      return
-    }
-    const date = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     const [
       { data: meals },
-      { data: day },
-      { data: yesterday },
-      { data: todayW },
-      { data: yestW },
-      { data: firstDay },
+      { data: deleted },
+      { data: workouts },
+      { data: yWorkouts },
+      { data: weights },
+      { data: yMeals },
+      { data: yDay },
       { data: tdeeRows },
+      { data: favorites },
+      { data: todayWeights },
+      { count: weightCount },
+      { count: mealCount },
     ] = await Promise.all([
-      supabase.from('meals').select('*').eq('date', date).order('logged_at'),
-      supabase.from('days').select('*').eq('date', date).maybeSingle(),
-      supabase.from('days').select('*').eq('date', shiftDate(date, -1)).maybeSingle(),
-      supabase.from('workouts').select('*').eq('date', date),
-      supabase.from('workouts').select('*').eq('date', shiftDate(date, -1)),
-      supabase.from('days').select('date').order('date').limit(1),
+      supabase.from('meals_counted').select('*').eq('date', date).order('logged_at'),
+      supabase
+        .from('meals')
+        .select('*')
+        .eq('date', date)
+        .not('deleted_at', 'is', null)
+        .gte('deleted_at', weekAgo),
+      supabase.from('workouts_active').select('*').eq('date', date).order('created_at'),
+      supabase.from('workouts_active').select('*').eq('date', shiftDate(date, -1)),
+      supabase.from('weights').select('date,kg,measured_at,created_at').eq('date', date),
+      supabase.from('meals_counted').select('id').eq('date', shiftDate(date, -1)),
+      supabase.from('days').select('flags').eq('date', shiftDate(date, -1)).maybeSingle(),
       supabase
         .from('days')
         .select('tdee_est')
+        .lt('date', date)
         .not('tdee_est', 'is', null)
         .order('date', { ascending: false })
         .limit(1),
+      supabase.from('favorites').select('*').eq('kind', 'meal').eq('archived', false),
+      supabase.from('weights').select('date').eq('date', localCalendarDate()),
+      supabase.from('weights').select('date', { count: 'exact', head: true }),
+      supabase.from('meals_counted').select('id', { count: 'exact', head: true }),
     ])
-    const anchor = firstDay?.[0]?.date ?? null
+    const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
+    const photos = await signedUrls(mealRows.map((m) => m.photo_path).filter((p): p is string => !!p))
     setData({
-      profile: profile as Profile,
-      meals: (meals ?? []) as Meal[],
-      day: (day ?? null) as DayRow | null,
-      yesterday: (yesterday ?? null) as DayRow | null,
-      todayWorkouts: (todayW ?? []) as Workout[],
-      yesterdayWorkouts: (yestW ?? []) as Workout[],
-      date,
-      maintenance: anchor != null && isMaintenanceWeek(anchor, date),
+      meals: mealRows,
+      deleted: (deleted ?? []) as Meal[],
+      workouts: (workouts ?? []) as Workout[],
+      yesterdayWorkouts: (yWorkouts ?? []) as Workout[],
+      weights: ((weights ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })),
+      yesterday: {
+        meals: (yMeals ?? []).length,
+        flags: Array.isArray(yDay?.flags) ? (yDay.flags as string[]) : [],
+      },
       latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
+      favorites: (favorites ?? []) as Favorite[],
+      photos,
+      weighedToday: (todayWeights ?? []).length > 0,
+      hasAnyWeight: (weightCount ?? 0) > 0,
+      hasAnyMeal: (mealCount ?? 0) > 0,
     })
-  }, [])
+  }, [date])
 
   useEffect(() => {
     void load()
-  }, [load])
+  }, [load, version])
 
-  async function saveWeight() {
-    const kg = Number(weight.replace(',', '.'))
-    if (!Number.isFinite(kg) || kg < 30 || kg > 200) return
-    setWeightBusy(true)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (user) {
-      const { error: upsertError } = await supabase
-        .from('weights')
-        .upsert(
-          { user_id: user.id, date: localCalendarDate(), kg, source: 'manual' },
-          { onConflict: 'user_id,date' },
-        )
-      if (!upsertError) {
-        setWeight('')
-        setWeightSaved(true)
-        setTimeout(() => setWeightSaved(false), 2500)
-      }
-    }
-    setWeightBusy(false)
+  if (!data) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+
+  const kcalIn = data.meals.reduce((acc, m) => acc + Number(m.kcal), 0)
+  const proteinIn = data.meals.reduce((acc, m) => acc + Number(m.protein), 0)
+  const carbsIn = data.meals.reduce((acc, m) => acc + Number(m.carbs), 0)
+  const fatIn = data.meals.reduce((acc, m) => acc + Number(m.fat), 0)
+  // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
+  // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa.
+  const workoutKcals = data.workouts.map((w) => ({
+    workout: w,
+    kcal: storedExerciseKcal([
+      {
+        type: w.type,
+        minutes: w.minutes,
+        watts: w.watts,
+        deviceCalories: w.raw?.calories ?? null,
+        kcal_est: w.kcal_est,
+      },
+    ]),
+  }))
+  const kcalExercise = workoutKcals.reduce((acc, w) => acc + w.kcal, 0)
+  const maintenance =
+    profile.maintenance_enabled !== false &&
+    profile.maintenance_anchor != null &&
+    isMaintenanceWeek(profile.maintenance_anchor, date)
+  const plan = maintenance ? maintenanceTarget(data.latestTdee) : profile.base_kcal + kcalExercise
+  const left = plan - kcalIn
+  const over = left < 0
+  const underSpend = data.latestTdee != null && kcalIn < data.latestTdee
+
+  // Linhas do joelho: nunca na fila do Próximo passo; ficam até haver resposta (48 h).
+  const kneeRows = isToday
+    ? [
+        ...data.workouts
+          .filter((w) => w.pain_during == null)
+          .map((w) => ({ workout: w, field: 'pain_during' as const })),
+        ...data.yesterdayWorkouts
+          .filter((w) => w.pain_next_day == null)
+          .map((w) => ({ workout: w, field: 'pain_next_day' as const })),
+      ]
+    : []
+
+  const clock = lisbonClock(now)
+  const minutesOfDay = clock.hour * 60 + clock.minute
+  const nudges = (profile.nudge_state ?? {}) as NudgeState
+  const step: NextStepId | null = isToday
+    ? nextStep({
+        today,
+        minutesOfDay,
+        weighedToday: data.weighedToday,
+        yesterdayMeals: data.yesterday.meals,
+        yesterdayAnswered:
+          data.yesterday.flags.includes('dia_fechado') || data.yesterday.flags.includes('faltou_algo'),
+        mealsToday: data.meals.length,
+        kcalToday: kcalIn,
+        proteinToday: proteinIn,
+        proteinTarget: profile.protein_g,
+        nudges,
+      })
+    : null
+  const proteinFavorites = [...data.favorites]
+    .filter((f) => Number(f.protein) >= 15)
+    .sort((a, b) => Number(b.protein) - Number(a.protein))
+    .slice(0, 3)
+
+  const hints = profile.dismissed_hints ?? []
+  const firstCards = isToday
+    ? [
+        !data.hasAnyWeight && !hints.includes('primeira_pesagem') ? 'primeira_pesagem' : null,
+        !data.hasAnyMeal && !hints.includes('primeira_foto') ? 'primeira_foto' : null,
+      ].filter((c): c is string => c != null)
+    : []
+
+  // Linha de lacuna: no máximo 1, só com um favorito habitual para esse momento.
+  const nowSlot = slotOf(now)
+  const gapFavorite =
+    isToday &&
+    GAP_SLOTS.includes(nowSlot) &&
+    !hints.includes('lacuna') &&
+    minutesOfDay > minutesOf(SLOT_TIME[nowSlot]) + 30 &&
+    !data.meals.some((m) => slotOf(new Date(m.logged_at)) === nowSlot)
+      ? (data.favorites
+          .filter((f) => f.default_slot === nowSlot)
+          .sort((a, b) => b.use_count - a.use_count)[0] ?? null)
+      : null
+
+  async function dismiss(id: NextStepId) {
+    await update({ nudge_state: dismissNudge(nudges, id, today) as Record<string, unknown> })
   }
 
-  async function toggleDayClosed() {
-    if (!data) return
+  async function dismissHint(hint: string) {
+    await update({ dismissed_hints: [...hints, hint] })
+  }
+
+  async function answerYesterday(flag: 'dia_fechado' | 'faltou_algo') {
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) return
-    const flags = new Set(data.day?.flags ?? [])
-    const closing = !flags.has('dia_fechado')
-    if (closing) flags.add('dia_fechado')
-    else flags.delete('dia_fechado')
-    // Só a marca muda aqui; a cron das 04:30 recalcula o resto do dia.
-    await supabase.from('days').upsert(
-      {
-        user_id: user.id,
-        date: data.date,
-        flags: [...flags],
-        is_complete: closing,
-      },
-      { onConflict: 'user_id,date' },
-    )
-    await load()
+    const other = flag === 'dia_fechado' ? 'faltou_algo' : 'dia_fechado'
+    const flags = [...data!.yesterday.flags.filter((f) => f !== other && f !== flag), flag]
+    const { error } = await supabase
+      .from('days')
+      .upsert(
+        { user_id: user.id, date: shiftDate(today, -1), flags, dirty: true },
+        { onConflict: 'user_id,date' },
+      )
+    if (error) {
+      toast('Não consegui gravar. Tenta outra vez.')
+      return
+    }
+    emitDataChanged()
+    toast(flag === 'dia_fechado' ? 'Ontem fica completo.' : 'Ontem fica fora das contas do gasto.')
   }
 
-  if (error) {
-    return <p className="pt-8 text-center text-sm text-warn">{error}</p>
+  type Entry = { at: string; key: string; node: React.ReactNode }
+  const entries: Entry[] = []
+  for (const w of data.weights) {
+    const at = w.measured_at ?? w.created_at ?? `${w.date}T07:00:00Z`
+    entries.push({
+      at,
+      key: `w-${w.date}`,
+      node: (
+        <button
+          onClick={() => sheet.open('peso', { data: w.date, valor: fmt1(w.kg) })}
+          className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
+        >
+          <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(at)}</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2" aria-hidden>
+            ⚖
+          </span>
+          <span className="flex-1 text-[15px]">Peso</span>
+          <span className="text-[15px] tabular-nums text-body">
+            {profile.calm_mode ? '✓' : `${fmt1(w.kg)} kg`}
+          </span>
+        </button>
+      ),
+    })
   }
-  if (!data) {
-    return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
+  for (const meal of data.meals) {
+    const slot = slotOf(new Date(meal.logged_at))
+    const fresh = Date.now() - Date.parse(meal.created_at) < 60_000
+    const thumb = meal.photo_path ? data.photos[meal.photo_path] : null
+    const fromFavorite = meal.input_type === 'favorite' && meal.raw_text
+    const title = fromFavorite ? meal.raw_text! : SLOT_LABEL[slot]
+    const subtitle = fromFavorite ? SLOT_LABEL[slot] : meal.items.map((i) => i.name).join(', ')
+    entries.push({
+      at: meal.logged_at,
+      key: `m-${meal.id}`,
+      node: (
+        <div>
+          <button
+            onClick={() => sheet.open('refeicao', { id: meal.id })}
+            className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 py-1 text-left"
+          >
+            <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
+            {thumb ? (
+              <img src={thumb} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
+            ) : (
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2" aria-hidden>
+                🍽
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px]">
+                {title}
+                {meal.favorite_id && <span className="ml-1 text-attn">★</span>}
+              </span>
+              <span className="block truncate text-[13px] text-dim">{subtitle}</span>
+            </span>
+            <span className="shrink-0 text-[15px] tabular-nums">
+              {meal.is_estimate ? '≈ ' : ''}
+              {fmtKcal(Number(meal.kcal))}
+            </span>
+          </button>
+          {fresh && (
+            <p className="pl-[72px] text-[13px] text-dim">
+              acabado de registar ·{' '}
+              <button className="text-eat" onClick={() => void deleteMeal(meal.id, toast)}>
+                Anular
+              </button>
+            </p>
+          )}
+        </div>
+      ),
+    })
   }
-
-  const { profile, meals, day, yesterday, todayWorkouts, yesterdayWorkouts, maintenance, latestTdee } =
-    data
-  const dayClosed = day?.flags?.includes('dia_fechado') ?? false
-  const kcalIn = meals.reduce((acc, m) => acc + Number(m.kcal), 0)
-  const proteinIn = meals.reduce((acc, m) => acc + Number(m.protein), 0)
-  // Regra 2, ao vivo: a meta de hoje sobe com o treino de hoje.
-  // Regra 7: na semana de manutenção, a meta é o gasto estimado (ou 2000), fixa.
-  const kcalExercise = storedExerciseKcal(
-    todayWorkouts.map((w) => ({
-      type: w.type,
-      minutes: w.minutes,
-      watts: w.watts,
-      deviceCalories: w.raw?.calories ?? null,
-      kcal_est: w.kcal_est,
-    })),
-  )
-  const kcalTarget = maintenance ? maintenanceTarget(latestTdee) : profile.base_kcal + kcalExercise
-  const kcalLeft = Math.round(kcalTarget - kcalIn)
-  const proteinLeft = Math.round(profile.protein_g - proteinIn)
-  const estimatedCount = meals.filter((m) => m.is_estimate).length
-  const pendingDuring = todayWorkouts.filter((w) => w.pain_during == null)
-  const pendingNextDay = yesterdayWorkouts.filter((w) => w.pain_next_day == null)
+  for (const { workout, kcal } of workoutKcals) {
+    entries.push({
+      at: workout.created_at,
+      key: `t-${workout.id}`,
+      node: (
+        <button
+          onClick={() => navigate('/treino')}
+          className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
+        >
+          <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(workout.created_at)}</span>
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2" aria-hidden>
+            {WORKOUT_ICON[workout.type]}
+          </span>
+          <span className="flex-1 text-[15px]">
+            {WORKOUT_LABEL[workout.type]}
+            {workout.minutes != null && ` · ${workout.minutes} min`}
+            {(workout.status === 'yellow' || workout.status === 'red') && (
+              <span
+                className={`ml-2 inline-block h-2 w-2 rounded-full ${workout.status === 'red' ? 'bg-pain' : 'bg-attn'}`}
+                aria-label="joelho"
+              />
+            )}
+          </span>
+          {kcal > 0 && <span className="text-[15px] tabular-nums text-burn">+{fmtKcal(kcal)}</span>}
+        </button>
+      ),
+    })
+  }
+  entries.sort((a, b) => a.at.localeCompare(b.at))
+  const empty = entries.length === 0
 
   return (
-    <div className="mx-auto max-w-md space-y-4 pt-2">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-edge bg-card p-4 text-center">
-          <p className={`text-4xl font-bold ${kcalLeft < 0 ? 'text-warn' : 'text-ink'}`}>
-            {Math.abs(kcalLeft)}
-          </p>
-          <p className="mt-1 text-xs text-dim">
-            {kcalLeft >= 0 ? 'kcal em falta' : 'kcal acima da meta'}
-          </p>
-        </div>
-        <div className="rounded-2xl border border-edge bg-card p-4 text-center">
-          <p className={`text-4xl font-bold ${proteinLeft <= 0 ? 'text-ok' : 'text-ink'}`}>
-            {Math.max(0, proteinLeft)}
-          </p>
-          <p className="mt-1 text-xs text-dim">g de proteína em falta</p>
-        </div>
-      </div>
+    <div className="space-y-4 pt-1">
+      <WeekStrip
+        selected={date}
+        today={today}
+        onPick={(picked) => navigate(picked === today ? '/hoje' : `/hoje/${picked}`)}
+      />
 
-      {maintenance ? (
-        <p className="rounded-xl border border-ok/40 bg-card px-4 py-3 text-center text-sm text-ok">
-          Semana de manutenção — meta fixa de {kcalTarget} kcal (o teu gasto estimado).
-        </p>
-      ) : (
-        kcalExercise > 0 && (
-          <p className="text-center text-xs text-dim">
-            meta de hoje: {kcalTarget} kcal ({profile.base_kcal} + {kcalExercise} de treino)
-          </p>
-        )
-      )}
-
-      {pendingDuring.map((workout) => (
-        <PainCheckin
-          key={workout.id}
-          workout={workout}
-          field="pain_during"
-          onDone={() => void load()}
-        />
-      ))}
-      {pendingNextDay.map((workout) => (
-        <PainCheckin
-          key={workout.id}
-          workout={workout}
-          field="pain_next_day"
-          onDone={() => void load()}
-        />
-      ))}
-
-      {yesterday?.flags?.includes('chao') && (
-        <p className="rounded-xl border border-warn/40 bg-card px-4 py-3 text-sm text-warn">
-          A média dos últimos 7 dias completos está abaixo do chão ({profile.kcal_floor_week} kcal).
-          Come um pouco mais.
-        </p>
-      )}
-      {yesterday && !yesterday.is_complete && (
-        <p className="rounded-xl border border-edge bg-card px-4 py-3 text-sm text-dim">
-          Ontem ficou incompleto (menos de 2 refeições ou &lt; 800 kcal) — não conta para as médias.
+      {!isToday && (
+        <p className="flex items-center justify-between rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+          <span>A ver {fmtDayShort(date)}</span>
+          <button className="text-eat" onClick={() => navigate('/hoje')}>
+            Voltar a hoje
+          </button>
         </p>
       )}
 
-      <div className="space-y-2">
-        <h2 className="text-sm font-semibold text-dim">Refeições</h2>
-        {meals.length === 0 && <p className="text-sm text-dim">Ainda nada registado hoje.</p>}
-        {meals.map((meal) => {
-          const proteinOk = Number(meal.protein) >= profile.protein_per_meal_g
-          const time = new Date(meal.logged_at).toLocaleTimeString('pt-PT', {
-            timeZone: 'Europe/Lisbon',
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-          return (
-            <div
-              key={meal.id}
-              className="flex items-center justify-between rounded-xl border border-edge bg-card px-4 py-3"
-            >
-              <div>
-                <p className="text-sm">
-                  {meal.items.map((i) => i.name).join(', ') || meal.raw_text || 'Refeição'}
-                </p>
-                <p className="text-xs text-dim">
-                  {time}
-                  {meal.is_estimate && ' · estimada'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold">{Math.round(Number(meal.kcal))} kcal</p>
-                <p className={`text-xs ${proteinOk ? 'text-ok' : 'text-dim'}`}>
-                  {Math.round(Number(meal.protein))} g prot.
-                </p>
-              </div>
-            </div>
+      <button onClick={() => setPlanOpen(true)} className="block w-full space-y-3 rounded-3xl bg-surface p-5 text-left">
+        {isToday ? (
+          over ? (
+            <>
+              <p className="text-[40px] leading-none font-bold tracking-tight text-attn tabular-nums">
+                Passaste {fmtKcal(-left)}
+              </p>
+              <p className="text-[15px] text-dim">
+                do plano de hoje.{' '}
+                {underSpend ? 'Mas continuas a comer menos do que gastas.' : 'A semana conta mais do que o dia.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[15px] text-dim">{empty ? 'Podes comer' : 'Podes comer mais'}</p>
+              <p className="text-[56px] leading-none font-bold tracking-tight tabular-nums">{fmtKcal(left)}</p>
+              <p className="text-[15px] text-dim">
+                de {fmtKcal(plan)} do plano de hoje
+                {kcalExercise > 0 && !maintenance && (
+                  <span className="text-burn"> · +{fmtKcal(kcalExercise)} do treino</span>
+                )}
+              </p>
+            </>
           )
-        })}
-        {estimatedCount > 0 && (
-          <p className="text-xs text-dim">
-            {estimatedCount} de {meals.length} refeições estimadas
-          </p>
+        ) : (
+          <>
+            <p className="text-[15px] text-dim">Comeste</p>
+            <p className="text-[48px] leading-none font-bold tracking-tight tabular-nums">{fmtKcal(kcalIn)}</p>
+            <p className="text-[15px] text-dim">de {fmtKcal(plan)} do plano desse dia</p>
+          </>
         )}
-      </div>
+        <Bar value={kcalIn} max={plan} tone="eat" label="Comer" />
+        <div className="space-y-1.5">
+          <Bar value={proteinIn} max={profile.protein_g} tone="protein" label="Proteína" />
+          <p className="text-[13px] text-dim tabular-nums">
+            <span className="text-protein">Proteína</span> {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g
+          </p>
+        </div>
+        {maintenance && (
+          <span className="inline-block rounded-full bg-surface2 px-3 py-1 text-[13px] text-burn">
+            Semana de pausa da dieta
+          </span>
+        )}
+      </button>
 
-      <div className="space-y-2 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Peso de hoje</h2>
-        <div className="flex gap-2">
-          <input
-            inputMode="decimal"
-            placeholder="kg"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            className="min-w-0 flex-1 rounded-xl border border-edge bg-bg px-3 py-2 text-ink placeholder:text-dim focus:border-accent focus:outline-none"
-          />
+      {firstCards.map((card) => (
+        <div key={card} className="space-y-3 rounded-2xl border border-line p-4">
+          {card === 'primeira_pesagem' ? (
+            <>
+              <p className="text-[17px] font-semibold">Pesa-te</p>
+              <p className="text-[15px] text-dim">
+                De manhã, antes de comer. Com 3 pesagens mostro o teu peso médio.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => sheet.open('peso')} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+                  Pesar
+                </button>
+                <button onClick={() => void dismissHint(card)} className="min-h-12 px-4 text-[15px] text-dim">
+                  Saltar
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[17px] font-semibold">Fotografa a próxima refeição</p>
+              <p className="text-[15px] text-dim">Toca em + e tira uma foto ao prato. Eu faço as contas.</p>
+              <button onClick={() => void dismissHint(card)} className="text-[15px] text-dim">
+                Saltar
+              </button>
+            </>
+          )}
+        </div>
+      ))}
+
+      {kneeRows.map(({ workout, field }) => (
+        <KneeRow
+          key={`${workout.id}-${field}`}
+          workout={workout}
+          field={field}
+          onDone={() => emitDataChanged()}
+        />
+      ))}
+
+      {step && (
+        <NextStepCard
+          id={step}
+          yesterdayMeals={data.yesterday.meals}
+          favorites={proteinFavorites}
+          onWeigh={() => sheet.open('peso')}
+          onYesterday={(flag) => void answerYesterday(flag)}
+          onFavorite={(fav) => void logFavorite(fav, null, toast)}
+          onDismiss={() => void dismiss(step)}
+        />
+      )}
+
+      {empty ? (
+        <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
+          <p className="text-[15px] text-dim">
+            {isToday
+              ? 'O teu dia começa aqui. Toca em + e tira uma foto ao que comes. Eu faço as contas.'
+              : `Nada registado em ${weekdayShort(date)}. Toca em + para registar nesse dia.`}
+          </p>
+          {isToday && (
+            <>
+              <PhotoButton
+                source="camera"
+                className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-eat text-[17px] font-semibold text-bg"
+              >
+                Fotografar
+              </PhotoButton>
+              {!data.weighedToday && (
+                <button onClick={() => sheet.open('peso')} className="text-[15px] text-eat">
+                  Ou pesa-te primeiro
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="-mx-2 space-y-1">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
+      )}
+
+      {gapFavorite && (
+        <div className="flex items-center gap-2 rounded-2xl border border-dashed border-line px-3 py-2 text-[15px]">
+          <span className="flex-1 text-dim">Ainda sem {SLOT_LABEL[nowSlot].toLowerCase()}</span>
           <button
-            disabled={weightBusy || !weight.trim()}
-            onClick={() => void saveWeight()}
-            className="rounded-xl bg-accent px-4 py-2 font-semibold text-bg disabled:opacity-50"
+            onClick={() => void logFavorite(gapFavorite, null, toast)}
+            className="rounded-full bg-surface2 px-3 py-1.5"
           >
-            {weightSaved ? '✓' : 'Guardar'}
+            {gapFavorite.name}
+          </button>
+          <PhotoButton source="camera" className="rounded-full bg-surface2 px-3 py-1.5">
+            📷
+          </PhotoButton>
+          <button onClick={() => void dismissHint('lacuna')} className="px-1 text-[13px] text-dim" aria-label="Não mostrar isto">
+            ✕
           </button>
         </div>
-      </div>
+      )}
 
-      <button
-        onClick={() => void toggleDayClosed()}
-        className={`w-full rounded-2xl border py-3 text-sm font-semibold ${
-          dayClosed ? 'border-ok/50 text-ok' : 'border-edge text-dim'
-        }`}
-      >
-        {dayClosed ? 'Dia fechado ✓ (tocar para reabrir)' : 'Fechar o dia'}
-      </button>
+      {data.deleted.length > 0 && (
+        <div className="space-y-2">
+          <button onClick={() => setShowDeleted(!showDeleted)} className="text-[13px] text-dim">
+            Apagados ({data.deleted.length}) {showDeleted ? '▾' : '›'}
+          </button>
+          {showDeleted &&
+            data.deleted.map((meal) => (
+              <div key={meal.id} className="flex items-center justify-between rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+                <span className="min-w-0 truncate text-dim">
+                  {timeOf(meal.logged_at)} · {meal.items.map((i) => i.name).join(', ') || 'Refeição'}
+                </span>
+                <button
+                  className="shrink-0 pl-3 text-eat"
+                  onClick={async () => {
+                    try {
+                      await postApi('/api/meal/restore', { meal_id: meal.id })
+                      emitDataChanged()
+                    } catch {
+                      toast('Não consegui repor.')
+                    }
+                  }}
+                >
+                  Repor
+                </button>
+              </div>
+            ))}
+        </div>
+      )}
 
-      <button className="w-full py-2 text-center text-xs text-dim" onClick={() => void load()}>
-        Atualizar
-      </button>
+      {planOpen && (
+        <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)}>
+          <div className="space-y-4 pb-2 text-[15px]">
+            {maintenance ? (
+              <p>
+                Esta semana o plano é comer o que gastas ({fmtInt(plan)}) para o corpo descansar da dieta.
+              </p>
+            ) : (
+              <p className="tabular-nums">
+                Plano: {fmtInt(profile.base_kcal)}
+                {kcalExercise > 0 && (
+                  <>
+                    {' '}
+                    + <span className="text-burn">{fmtInt(kcalExercise)} do treino</span> = {fmtInt(plan)}
+                  </>
+                )}
+              </p>
+            )}
+            <p className="tabular-nums">
+              Comeste {fmtInt(kcalIn)}
+              {isToday && !over && <> · Podes comer mais {fmtInt(left)}</>}
+              {over && <> · Passaste {fmtInt(-left)} do plano</>}
+            </p>
+            <p className="text-dim tabular-nums">
+              <span className="text-protein">Proteína {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g</span> ·
+              Hidratos {fmtInt(carbsIn)} g · Gordura {fmtInt(fatIn)} g
+            </p>
+            {workoutKcals.length > 0 && (
+              <ul className="space-y-1 text-dim">
+                {workoutKcals.map(({ workout, kcal }) => (
+                  <li key={workout.id} className="tabular-nums">
+                    {WORKOUT_LABEL[workout.type]} · +{fmtInt(kcal)}{' '}
+                    {workout.type === 'bike' && workout.watts != null
+                      ? `pela potência (${workout.watts} W × ${workout.minutes} min)`
+                      : workout.type === 'strength'
+                        ? '150 fixas por ginásio de 30 min ou mais'
+                        : workout.raw?.calories != null
+                          ? '70 % das calorias do relógio'
+                          : 'pelo tempo e pelo teu peso'}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {kcalExercise === 0 && !maintenance && (
+              <p className="text-dim">Um treino aumenta o que podes comer.</p>
+            )}
+          </div>
+        </BottomSheet>
+      )}
+    </div>
+  )
+}
+
+function KneeRow({
+  workout,
+  field,
+  onDone,
+}: {
+  workout: Workout
+  field: 'pain_during' | 'pain_next_day'
+  onDone: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [details, setDetails] = useState(false)
+  const [values, setValues] = useState({ watts: '', avg_hr: '', max_hr: '', cadence: '' })
+  const [error, setError] = useState(false)
+  const bikeMissing =
+    workout.type === 'bike' && field === 'pain_during' && (workout.avg_hr == null || workout.watts == null)
+
+  async function answer(pain: number) {
+    setBusy(true)
+    setError(false)
+    const extras: Record<string, number> = {}
+    const limits: Record<string, [number, number]> = {
+      watts: [30, 500],
+      avg_hr: [40, 230],
+      max_hr: [40, 240],
+      cadence: [30, 200],
+    }
+    for (const [key, raw] of Object.entries(values)) {
+      const n = Math.round(Number(raw))
+      const [min, max] = limits[key]!
+      if (raw && Number.isFinite(n) && n >= min && n <= max) extras[key] = n
+    }
+    try {
+      await postApi('/api/workout/checkin', { workout_id: workout.id, [field]: pain, ...extras })
+      onDone()
+    } catch {
+      setError(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-line p-4">
+      <p className="text-[17px]">
+        {field === 'pain_during'
+          ? `Como esteve o joelho durante ${WORKOUT_OF[workout.type]}?`
+          : `Joelho depois ${WORKOUT_AFTER[workout.type]} de ontem?`}
+      </p>
+      {bikeMissing &&
+        (details ? (
+          <div className="grid grid-cols-4 gap-2">
+            {(
+              [
+                ['watts', 'W', workout.watts == null],
+                ['avg_hr', 'bat. méd.', true],
+                ['max_hr', 'bat. máx.', true],
+                ['cadence', 'rpm', workout.cadence == null],
+              ] as const
+            ).map(([key, label, show]) =>
+              show ? (
+                <label key={key} className="space-y-1 text-center text-[13px] text-dim">
+                  <span className="block">{label}</span>
+                  <input
+                    inputMode="numeric"
+                    value={values[key]}
+                    onChange={(e) => setValues({ ...values, [key]: e.target.value.replace(/\D/g, '') })}
+                    className="h-11 w-full rounded-xl border border-line bg-bg text-center text-ink tabular-nums focus:border-eat focus:outline-none"
+                  />
+                </label>
+              ) : null,
+            )}
+          </div>
+        ) : (
+          <button onClick={() => setDetails(true)} className="text-[13px] text-eat">
+            ＋ batimentos e rpm da consola (ajudam a subir a potência)
+          </button>
+        ))}
+      <KneePicker busy={busy} onAnswer={(pain) => void answer(pain)} />
+      {error && <p className="text-[13px] text-pain">Não consegui gravar. Tenta outra vez.</p>}
+    </div>
+  )
+}
+
+function NextStepCard({
+  id,
+  yesterdayMeals,
+  favorites,
+  onWeigh,
+  onYesterday,
+  onFavorite,
+  onDismiss,
+}: {
+  id: NextStepId
+  yesterdayMeals: number
+  favorites: Favorite[]
+  onWeigh: () => void
+  onYesterday: (flag: 'dia_fechado' | 'faltou_algo') => void
+  onFavorite: (favorite: Favorite) => void
+  onDismiss: () => void
+}) {
+  const later = (
+    <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
+      Agora não
+    </button>
+  )
+  const chips = favorites.length > 0 && (
+    <div className="flex flex-wrap gap-2">
+      {favorites.map((fav) => (
+        <button key={fav.id} onClick={() => onFavorite(fav)} className="rounded-full bg-surface2 px-3 py-2 text-[15px]">
+          {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g</span>
+        </button>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className="space-y-3 rounded-2xl bg-surface p-4">
+      {id === 'pesar' && (
+        <>
+          <p className="text-[17px]">Bom dia. Pesa-te?</p>
+          <div className="flex items-center gap-2">
+            <button onClick={onWeigh} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+              Pesar
+            </button>
+            {later}
+          </div>
+        </>
+      )}
+      {id === 'ontem' && (
+        <>
+          <p className="text-[17px]">
+            Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'}. Foi tudo?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => onYesterday('dia_fechado')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+              Sim, foi tudo
+            </button>
+            <button onClick={() => onYesterday('faltou_algo')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+              Não, faltou algo
+            </button>
+          </div>
+        </>
+      )}
+      {id === 'pouco' && (
+        <>
+          <p className="text-[17px]">Hoje comeste pouco. Um lanche com proteína ajuda o músculo e o joelho.</p>
+          {chips}
+          <div className="flex justify-end">{later}</div>
+        </>
+      )}
+      {id === 'proteina' && (
+        <>
+          <p className="text-[17px]">Ainda tens espaço para proteína.</p>
+          {chips}
+          <div className="flex justify-end">{later}</div>
+        </>
+      )}
     </div>
   )
 }

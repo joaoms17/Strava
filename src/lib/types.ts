@@ -35,30 +35,71 @@ export interface Profile {
   bike_hr_max_cap: number
   strava_athlete_id: number | null
   timeline: { label: string; when: string }[]
+  height_cm: number
+  // Migração 1 (Fase 1)
+  sex: 'm' | 'f'
+  birth_year: number | null
+  theme: 'system' | 'dark' | 'light'
+  calm_mode: boolean
+  pin_mode: 'off' | '12h' | 'always'
+  maintenance_enabled: boolean
+  maintenance_anchor: string | null
+  dismissed_hints: string[]
+  nudge_state: Record<string, unknown>
+  carbs_ref_g: number | null
+  fat_ref_g: number | null
+  scale_has_bodyfat: boolean
 }
 
 export interface Meal {
   id: string
   date: string
   logged_at: string
-  input_type: 'text' | 'photo' | 'barcode' | 'manual'
+  input_type: 'text' | 'photo' | 'barcode' | 'manual' | 'favorite' | 'repeat'
   raw_text: string | null
+  photo_path: string | null
   items: MealItem[]
   kcal: number
   protein: number
   carbs: number
   fat: number
   is_estimate: boolean
+  favorite_id: string | null
+  portion_factor: number
+  deleted_at: string | null
+}
+
+export type Slot = 'pequeno_almoco' | 'almoco' | 'lanche' | 'jantar' | 'ceia'
+
+export interface Favorite {
+  id: string
+  kind: 'meal' | 'workout'
+  name: string
+  items: MealItem[]
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+  photo_path: string | null
+  default_slot: Slot | null
+  source_meal_id: string | null
+  use_count: number
+  last_used_at: string | null
+  archived: boolean
 }
 
 export interface DayRow {
   date: string
   kcal_in: number
+  protein: number
+  carbs: number
+  fat: number
   kcal_exercise: number
   kcal_target: number
   is_complete: boolean
   flags: string[]
   tdee_est: number | null
+  weight_trend: number | null
 }
 
 export interface WeeklyReview {
@@ -81,6 +122,9 @@ export interface Food {
 export interface WeightRow {
   date: string
   kg: number
+  body_fat_pct?: number | null
+  measured_at?: string | null
+  created_at?: string
 }
 
 export interface Workout {
@@ -99,7 +143,9 @@ export interface Workout {
   pain_next_day: number | null
   status: 'green' | 'yellow' | 'red' | null
   planned_session_id: string | null
-  raw: { calories?: number } | null
+  raw: { calories?: number; sport?: string } | null
+  created_at: string
+  deleted_at: string | null
 }
 
 export interface PlanExercise {

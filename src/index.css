@@ -1,31 +1,143 @@
 @import "tailwindcss";
 
+/* Paleta do redesenho (docs/redesenho-2026-09.md › Design visual). A cor só
+   aparece quando tem significado: Comer índigo, Gasto teal, Proteína azul-céu,
+   Corpo fúcsia, atenção âmbar; vermelho só para dor no joelho e erros. */
 @theme {
-  --color-bg: #0a0a0b;
-  --color-card: #161619;
-  --color-edge: #26262b;
-  --color-ink: #e7e5e4;
-  --color-dim: #a1a1aa;
-  --color-accent: #f59e0b;
+  --color-bg: #0f1115;
+  --color-surface: #181b21;
+  --color-surface2: #22262e;
+  --color-line: #2c313a;
+  --color-ink: #f2f3f5;
+  --color-dim: #9aa1ac;
+  --color-eat: #8b8ff7;
+  --color-burn: #2dd4bf;
+  --color-protein: #4cc3f5;
+  --color-body: #e879f9;
+  --color-bodyfat: #f5d0fe;
+  --color-attn: #f5b942;
+  --color-pain: #f0716b;
   --color-ok: #4ade80;
-  --color-warn: #f87171;
-  --font-display: Georgia, "Times New Roman", serif;
+
+  /* Nomes antigos, usados pelos ecrãs que ainda não mudaram */
+  --color-card: var(--color-surface);
+  --color-edge: var(--color-line);
+  --color-accent: var(--color-eat);
+  --color-warn: var(--color-pain);
+
+  --font-sans: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-sans);
 }
 
-html {
-  background-color: var(--color-bg);
+@layer base {
+  :root[data-theme="light"] {
+    --color-bg: #f6f7f9;
+    --color-surface: #ffffff;
+    --color-surface2: #eef0f3;
+    --color-line: #e1e4e9;
+    --color-ink: #111318;
+    --color-dim: #5f6672;
+    --color-eat: #4f53cf;
+    --color-burn: #0f8f80;
+    --color-protein: #0b7fb8;
+    --color-body: #a21caf;
+    --color-bodyfat: #f0abfc;
+    --color-attn: #b7791f;
+    --color-pain: #d14343;
+    --color-ok: #15803d;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --color-bg: #f6f7f9;
+      --color-surface: #ffffff;
+      --color-surface2: #eef0f3;
+      --color-line: #e1e4e9;
+      --color-ink: #111318;
+      --color-dim: #5f6672;
+      --color-eat: #4f53cf;
+      --color-burn: #0f8f80;
+      --color-protein: #0b7fb8;
+      --color-body: #a21caf;
+      --color-bodyfat: #f0abfc;
+      --color-attn: #b7791f;
+      --color-pain: #d14343;
+      --color-ok: #15803d;
+      color-scheme: light;
+    }
+  }
+
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    background-color: var(--color-bg);
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-bg);
+    font-family: var(--font-sans);
+    font-size: 17px;
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+
+  input,
+  textarea,
+  button,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
 }
 
-body {
-  margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
-  color: var(--color-ink);
-  -webkit-font-smoothing: antialiased;
-  overscroll-behavior-y: none;
+/* Excesso acima do plano: tracejado, para não depender só da cor. */
+.bar-over {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--color-attn) 0 4px,
+    color-mix(in oklab, var(--color-attn) 45%, transparent) 4px 8px
+  );
 }
 
-input,
-textarea,
-button {
-  font: inherit;
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.sheet-in {
+  animation: sheet-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fade-in {
+  animation: fade-in 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-in,
+  .fade-in {
+    animation: none;
+  }
 }

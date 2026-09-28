@@ -39,13 +39,17 @@ async function inStore<T>(
   }
 }
 
-export async function enqueueMeal(text: string, jantarFora: boolean): Promise<void> {
+export async function enqueueMeal(
+  text: string,
+  jantarFora: boolean,
+  loggedAt: string = new Date().toISOString(),
+): Promise<void> {
   await inStore('readwrite', (store) =>
     store.add({
       id: crypto.randomUUID(),
       text,
       jantar_fora: jantarFora,
-      logged_at: new Date().toISOString(),
+      logged_at: loggedAt,
     }),
   )
 }

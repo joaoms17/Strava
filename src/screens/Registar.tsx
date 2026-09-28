@@ -1,9 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useLocation, useSearch } from 'wouter'
 import { getApi, isNetworkError, postApi } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { toJpeg } from '../lib/image'
-import { enqueueMeal, listQueuedMeals, removeQueuedMeal, type QueuedMeal } from '../lib/queue'
+import { enqueueMeal } from '../lib/queue'
+import { takePendingPhoto } from '../lib/capture'
+import { useReadyProfile } from '../lib/profile'
+import { useToast } from '../lib/toast'
+import { emitDataChanged } from '../lib/events'
+import { nutritionalDay, shiftDate } from '../lib/day'
+import { fmtDayShort, fmtKcal } from '../lib/format'
 import { round1 } from '../../api/_lib/rules/meal-totals'
+import { SLOTS, SLOT_LABEL, SLOT_TIME, loggedAtFor, type Slot } from '../../api/_lib/rules/momentos'
 import type { Food, MealItem, Meal, ParsedMealResponse } from '../lib/types'
 import MealReview from '../components/MealReview'
 import BarcodeScanner from '../components/BarcodeScanner'
@@ -13,7 +21,6 @@ type Stage =
   | { kind: 'parsing' }
   | { kind: 'review'; parsed: ParsedMealResponse }
   | { kind: 'portion'; food: Food; from: string }
-  | { kind: 'saved'; meal: Meal }
 
 interface Source {
   input_type: 'text' | 'photo' | 'barcode'
@@ -22,20 +29,38 @@ interface Source {
   notes: string[]
 }
 
+// Registar por foto, galeria, texto ou código de barras. Nesta fase a análise
+// ainda espera pela IA; na Fase 2 passa a correr em segundo plano.
 export default function Registar() {
+  const profile = useReadyProfile()
+  const toast = useToast()
+  const [, navigate] = useLocation()
+  const search = new URLSearchParams(useSearch())
+  const cutoff = profile.nutrition_day_cutoff_hour
+  const today = nutritionalDay(new Date(), cutoff)
+  const initialDate = search.get('data')
+  const [date, setDate] = useState(initialDate && initialDate <= today ? initialDate : today)
+  const [slot, setSlot] = useState<Slot | 'agora'>(initialDate && initialDate < today ? 'almoco' : 'agora')
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
   const [text, setText] = useState('')
   const [jantarFora, setJantarFora] = useState(false)
   const [slow, setSlow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [info, setInfo] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [grams, setGrams] = useState('')
-  const [pending, setPending] = useState<QueuedMeal[]>([])
-  const [syncing, setSyncing] = useState(false)
+  const [preview, setPreview] = useState<string | null>(null)
   const source = useRef<Source | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const started = useRef(false)
+
+  const isPast = date !== today
+  const effectiveSlot: Slot | 'agora' = isPast && slot === 'agora' ? 'almoco' : slot
+
+  function loggedAt(): string {
+    if (effectiveSlot === 'agora') return new Date().toISOString()
+    return loggedAtFor(date, SLOT_TIME[effectiveSlot], cutoff, new Date()).toISOString()
+  }
 
   useEffect(() => {
     if (stage.kind !== 'parsing') {
@@ -46,57 +71,21 @@ export default function Registar() {
     return () => clearTimeout(timer)
   }, [stage.kind])
 
-  const refreshPending = useCallback(async () => {
-    try {
-      setPending(await listQueuedMeals())
-    } catch {
-      // IndexedDB indisponível — a fila simplesmente não aparece
-    }
+  // Foto escolhida na folha (+): começa logo.
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    const pending = takePendingPhoto()
+    if (pending) void handlePhoto(pending.file)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const syncPending = useCallback(async () => {
-    if (!navigator.onLine) return
-    const queued = await listQueuedMeals().catch(() => [] as QueuedMeal[])
-    if (queued.length === 0) return
-    setSyncing(true)
-    for (const entry of queued) {
-      try {
-        const parsed = await postApi<ParsedMealResponse>('/api/meal/parse-text', {
-          text: entry.text,
-          jantar_fora: entry.jantar_fora,
-        })
-        await postApi<{ meal: Meal }>('/api/meal/save', {
-          input_type: 'text',
-          raw_text: entry.text,
-          photo_path: null,
-          items: parsed.items,
-          is_estimate: parsed.is_estimate,
-          confidence: parsed.confidence,
-          prompt_version: parsed.prompt_version,
-          model: parsed.model,
-          cost_usd: parsed.cost_usd,
-          logged_at: entry.logged_at,
-        })
-        await removeQueuedMeal(entry.id)
-      } catch {
-        break // sem rede outra vez (ou erro) — fica para a próxima
-      }
-    }
-    setSyncing(false)
-    await refreshPending()
-  }, [refreshPending])
-
-  useEffect(() => {
-    void refreshPending()
-    void syncPending()
-    const onOnline = () => void syncPending()
-    window.addEventListener('online', onOnline)
-    return () => window.removeEventListener('online', onOnline)
-  }, [refreshPending, syncPending])
+  useEffect(() => () => {
+    if (preview) URL.revokeObjectURL(preview)
+  }, [preview])
 
   async function parseText(fullText: string) {
     setError(null)
-    setInfo(null)
     setStage({ kind: 'parsing' })
     try {
       const parsed = await postApi<ParsedMealResponse>('/api/meal/parse-text', {
@@ -107,21 +96,19 @@ export default function Registar() {
       setStage({ kind: 'review', parsed })
     } catch (err) {
       if (isNetworkError(err)) {
-        await enqueueMeal(fullText, jantarFora).catch(() => undefined)
-        await refreshPending()
-        setInfo('Sem rede — a refeição ficou na fila e entra quando voltares a ter ligação.')
-        setText('')
-        setJantarFora(false)
-      } else {
-        setError(err instanceof Error ? err.message : 'Erro ao analisar.')
+        await enqueueMeal(fullText, jantarFora, loggedAt()).catch(() => undefined)
+        emitDataChanged()
+        toast('Sem rede — a refeição ficou guardada e entra quando voltares a ter ligação.')
+        navigate(isPast ? `/hoje/${date}` : '/hoje')
+        return
       }
+      setError(err instanceof Error ? err.message : 'Erro ao analisar.')
       setStage({ kind: 'idle' })
     }
   }
 
   async function parsePhoto(photoPath: string, notes: string[]) {
     setError(null)
-    setInfo(null)
     setStage({ kind: 'parsing' })
     try {
       const parsed = await postApi<ParsedMealResponse>('/api/meal/parse-photo', {
@@ -129,7 +116,7 @@ export default function Registar() {
         note: notes.join('; ') || undefined,
         jantar_fora: jantarFora,
       })
-      source.current = { input_type: 'photo', raw_text: null, photo_path: photoPath, notes }
+      source.current = { input_type: 'photo', raw_text: notes.join('; ') || null, photo_path: photoPath, notes }
       setStage({ kind: 'review', parsed })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao analisar a fotografia.')
@@ -137,11 +124,9 @@ export default function Registar() {
     }
   }
 
-  async function onPhotoChosen(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
+  async function handlePhoto(file: File) {
     setError(null)
+    setPreview(URL.createObjectURL(file))
     setStage({ kind: 'parsing' })
     try {
       const {
@@ -153,12 +138,18 @@ export default function Registar() {
       const { error: uploadError } = await supabase.storage
         .from('meal-photos')
         .upload(path, blob, { contentType: 'image/jpeg' })
-      if (uploadError) throw new Error('Falha no upload da fotografia.')
+      if (uploadError) throw new Error('Falha no envio da fotografia. Tenta outra vez.')
       await parsePhoto(path, text.trim() ? [text.trim()] : [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro com a fotografia.')
       setStage({ kind: 'idle' })
     }
+  }
+
+  function onPhotoChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) void handlePhoto(file)
   }
 
   async function onBarcode(ean: string) {
@@ -235,11 +226,19 @@ export default function Registar() {
         prompt_version: parsed.prompt_version || null,
         model: parsed.model || null,
         cost_usd: parsed.cost_usd,
+        logged_at: loggedAt(),
       })
-      setStage({ kind: 'saved', meal })
-      setText('')
-      setJantarFora(false)
-      source.current = null
+      emitDataChanged()
+      toast(`Registado · ${fmtKcal(Number(meal.kcal))} kcal`, [
+        {
+          label: 'Anular',
+          run: async () => {
+            await postApi('/api/meal/delete', { meal_id: meal.id })
+            emitDataChanged()
+          },
+        },
+      ])
+      navigate(meal.date === today ? '/hoje' : `/hoje/${meal.date}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao guardar.')
     } finally {
@@ -247,16 +246,60 @@ export default function Registar() {
     }
   }
 
+  const when = (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        {[0, -1, -2].map((back) => {
+          const day = shiftDate(today, back)
+          return (
+            <button
+              key={back}
+              onClick={() => setDate(day)}
+              className={`rounded-full px-3 py-1.5 text-[15px] ${day === date ? 'bg-eat text-bg' : 'bg-surface2'}`}
+            >
+              {back === 0 ? 'Hoje' : back === -1 ? 'Ontem' : 'Anteontem'}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {!isPast && (
+          <button
+            onClick={() => setSlot('agora')}
+            className={`rounded-full px-3 py-1.5 text-[13px] ${effectiveSlot === 'agora' ? 'bg-eat text-bg' : 'bg-surface2'}`}
+          >
+            Agora
+          </button>
+        )}
+        {SLOTS.map((s) => (
+          <button
+            key={s}
+            onClick={() => setSlot(s)}
+            className={`rounded-full px-3 py-1.5 text-[13px] ${effectiveSlot === s ? 'bg-eat text-bg' : 'bg-surface2'}`}
+          >
+            {SLOT_LABEL[s]} {SLOT_TIME[s]}
+          </button>
+        ))}
+      </div>
+      {isPast && <p className="text-[13px] text-dim">Fica em {fmtDayShort(date)}.</p>}
+    </div>
+  )
+
   if (stage.kind === 'review') {
     return (
-      <div className="mx-auto max-w-md space-y-4 pt-2">
-        {error && <p className="text-sm text-warn">{error}</p>}
+      <div className="space-y-4 pt-1">
+        {preview && <img src={preview} alt="" className="max-h-48 w-full rounded-2xl object-cover" />}
+        {when}
+        {error && <p className="text-[15px] text-pain">{error}</p>}
         <MealReview
           parsed={stage.parsed}
           busy={busy}
           onSave={(items) => void save(items, stage.parsed)}
           onCorrect={correct}
-          onDiscard={() => setStage({ kind: 'idle' })}
+          onDiscard={() => {
+            setStage({ kind: 'idle' })
+            setPreview(null)
+          }}
         />
       </div>
     )
@@ -265,40 +308,37 @@ export default function Registar() {
   if (stage.kind === 'portion') {
     const quantity = Number(grams.replace(',', '.')) || 0
     return (
-      <div className="mx-auto max-w-md space-y-4 pt-2">
-        <div className="space-y-3 rounded-2xl border border-edge bg-card p-4">
+      <div className="space-y-4 pt-1">
+        <div className="space-y-3 rounded-2xl bg-surface p-4">
           <p className="font-semibold">{stage.food.name}</p>
-          <p className="text-xs text-dim">
-            {Math.round(stage.food.kcal_100g)} kcal · {stage.food.protein_100g} g prot. por 100 g
+          <p className="text-[13px] text-dim">
+            {Math.round(stage.food.kcal_100g)} kcal · {stage.food.protein_100g} g proteína por 100 g
             {stage.from === 'pessoal' && ' · já conhecido'}
           </p>
           <label className="block space-y-1">
-            <span className="text-xs text-dim">quantidade (g)</span>
+            <span className="text-[13px] text-dim">quantidade (g)</span>
             <input
               inputMode="decimal"
               autoFocus
               value={grams}
               onChange={(e) => setGrams(e.target.value)}
-              className="w-full rounded-xl border border-edge bg-bg px-3 py-3 text-lg text-ink focus:border-accent focus:outline-none"
+              className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] focus:border-eat focus:outline-none"
             />
           </label>
-          <p className="text-sm text-dim">
+          <p className="text-[15px] text-dim">
             = <span className="font-semibold text-ink">{Math.round((stage.food.kcal_100g * quantity) / 100)} kcal</span> ·{' '}
-            <span className="font-semibold text-ink">
+            <span className="font-semibold text-protein">
               {round1((stage.food.protein_100g * quantity) / 100)} g proteína
             </span>
           </p>
           <div className="flex gap-2">
-            <button
-              onClick={() => setStage({ kind: 'idle' })}
-              className="rounded-xl border border-edge px-4 py-3 text-sm text-dim"
-            >
+            <button onClick={() => setStage({ kind: 'idle' })} className="min-h-12 rounded-xl bg-surface2 px-4 text-[15px] text-dim">
               Cancelar
             </button>
             <button
               disabled={quantity <= 0}
               onClick={() => confirmPortion(stage.food)}
-              className="flex-1 rounded-xl bg-accent py-3 font-semibold text-bg disabled:opacity-50"
+              className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg disabled:opacity-50"
             >
               Rever
             </button>
@@ -308,104 +348,64 @@ export default function Registar() {
     )
   }
 
+  const parsing = stage.kind === 'parsing'
   return (
-    <div className="mx-auto max-w-md space-y-4 pt-2">
+    <div className="space-y-4 pt-1">
       {scanning && <BarcodeScanner onDetect={(ean) => void onBarcode(ean)} onClose={() => setScanning(false)} />}
 
-      {stage.kind === 'saved' && (
-        <div className="rounded-2xl border border-edge bg-card p-4 text-sm">
-          <p>
-            Guardado: <span className="font-semibold">{Math.round(stage.meal.kcal)} kcal</span> ·{' '}
-            <span className="font-semibold">{stage.meal.protein} g proteína</span>
-          </p>
+      {preview && <img src={preview} alt="" className="max-h-56 w-full rounded-2xl object-cover" />}
+
+      {parsing ? (
+        <div className="space-y-2 rounded-2xl bg-surface p-5 text-center">
+          <p className="text-[17px]">{slow ? 'Ainda a analisar…' : 'A analisar…'}</p>
+          <p className="text-[13px] text-dim">Demora uns segundos. Dá para ir preenchendo o dia e a hora.</p>
         </div>
-      )}
-      {info && <p className="rounded-2xl border border-edge bg-card p-4 text-sm text-dim">{info}</p>}
-
-      <button
-        disabled={stage.kind === 'parsing'}
-        onClick={() => fileInput.current?.click()}
-        className="flex w-full flex-col items-center gap-2 rounded-2xl border border-edge bg-card py-10 disabled:opacity-50"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          className="h-10 w-10 text-accent"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M4 8h3l2-3h6l2 3h3v12H4V8Z" />
-          <circle cx="12" cy="13" r="3.5" />
-        </svg>
-        <span className="text-sm text-dim">Fotografar a refeição</span>
-      </button>
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => void onPhotoChosen(e)}
-      />
-
-      <textarea
-        rows={3}
-        placeholder="ex.: 2 ovos mexidos, 100g arroz, salada"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        disabled={stage.kind === 'parsing'}
-        className="w-full rounded-2xl border border-edge bg-card px-4 py-3 text-ink placeholder:text-dim focus:border-accent focus:outline-none"
-      />
-
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm text-dim">
-          <input
-            type="checkbox"
-            checked={jantarFora}
-            onChange={(e) => setJantarFora(e.target.checked)}
-            className="h-5 w-5 accent-amber-500"
+      ) : (
+        <>
+          <textarea
+            rows={4}
+            autoFocus={search.get('modo') === 'escrever'}
+            enterKeyHint="done"
+            placeholder={preview ? 'Nota (ex.: comi metade, com azeite)' : 'Ex.: 2 ovos mexidos, 1 torrada, café com leite'}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full rounded-2xl border border-line bg-surface px-4 py-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
           />
-          Jantar fora
-        </label>
-        <button
-          disabled={stage.kind === 'parsing'}
-          onClick={() => setScanning(true)}
-          className="rounded-xl border border-edge px-3 py-2 text-xs text-ink disabled:opacity-50"
-        >
-          Barcode
-        </button>
-      </div>
-
-      {error && <p className="text-sm text-warn">{error}</p>}
-
-      <button
-        disabled={stage.kind === 'parsing' || !text.trim()}
-        onClick={() => void parseText(text.trim())}
-        className="w-full rounded-2xl bg-accent py-4 text-lg font-semibold text-bg disabled:opacity-50"
-      >
-        {stage.kind === 'parsing' ? (slow ? 'Ainda a processar…' : 'A analisar…') : 'Analisar'}
-      </button>
-
-      {pending.length > 0 && (
-        <div className="space-y-2 rounded-2xl border border-edge bg-card p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-dim">Na fila ({pending.length})</h2>
-            <button
-              disabled={syncing}
-              onClick={() => void syncPending()}
-              className="text-xs text-accent disabled:opacity-50"
-            >
-              {syncing ? 'A sincronizar…' : 'Sincronizar'}
-            </button>
+          <div className="flex items-center justify-between gap-2">
+            <label className="flex items-center gap-2 text-[15px] text-dim">
+              <input
+                type="checkbox"
+                checked={jantarFora}
+                onChange={(e) => setJantarFora(e.target.checked)}
+                className="h-5 w-5 accent-[var(--color-eat)]"
+              />
+              Jantar fora
+            </label>
+            <div className="flex gap-2">
+              <button onClick={() => fileInput.current?.click()} className="min-h-11 rounded-xl bg-surface2 px-3 text-[15px]">
+                📷 Juntar foto
+              </button>
+              <button onClick={() => setScanning(true)} className="min-h-11 rounded-xl bg-surface2 px-3 text-[15px]">
+                Código de barras
+              </button>
+            </div>
           </div>
-          {pending.map((entry) => (
-            <p key={entry.id} className="truncate text-xs text-dim">
-              · {entry.text}
-            </p>
-          ))}
-        </div>
+        </>
+      )}
+      <input ref={fileInput} type="file" accept="image/*" className="hidden" onChange={onPhotoChosen} />
+
+      {when}
+
+      {error && <p className="text-[15px] text-pain">{error}</p>}
+
+      {!parsing && (
+        <button
+          disabled={!text.trim()}
+          onClick={() => void parseText(text.trim())}
+          className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
+        >
+          Enviar
+        </button>
       )}
     </div>
   )

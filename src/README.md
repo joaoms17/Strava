@@ -1,20 +1,22 @@
 # /src — app React (PWA)
 
-Estrutura (os ecrãs de Treino e Gráficos são placeholders até ao M2/M3):
+Redesenho em curso (docs/redesenho-2026-09.md). Fase 1:
 
 ```
 /screens
-  Registar.tsx        default: câmara, texto, barcode, toggle "jantar fora"
-  Hoje.tsx            faltam X kcal / Y g proteína, refeições, peso, check-in de dor
-  Treino.tsx          sessão de hoje, cargas por toques, bike com alvo, sessão manual
-  Graficos.tsx        peso + tendência + projeção, FC por W, cargas, kcal/proteína, adaptativo
-  Capitulo.tsx        abertura e fecho de capítulo
-  Historia.tsx        página do patrono (fotos CC opcionais)
-  LinhaDoTempo.tsx    profile.timeline lado a lado com as linhas dos patronos
-  Definicoes.tsx      profile, timeline, catálogo, export CSV
-/components           Cartaz SVG (sem imagens externas), cartões, gráficos Recharts
-/lib                  cliente supabase, fila offline (IndexedDB), formatação PT-PT
-/types
+  Hoje.tsx            quanto ainda podes comer, proteína, joelho, próximo passo, linha do dia, faixa da semana
+  Balanco.tsx         a semana numa frase e num gráfico (Comer contra o plano), detalhes recolhidos
+  Treino.tsx          «Já fiz», sugestão seguinte, plano de 4 semanas (até à Fase 5), histórico, progressão
+  Corpo.tsx           peso médio, ritmo semanal, gráfico 1M · 3M · Tudo
+  Favoritos.tsx       refeições favoritas (1 toque) e biblioteca de alimentos
+  Registar.tsx        foto, galeria, texto e código de barras, com dia e momento
+  Definicoes.tsx      perfil, bicicleta, balança, aparência, PIN, exportar
+  Avancado.tsx        custos da IA, mínimo semanal, exercícios seguros, calendário
+  Arquivo.tsx         capítulos, linha do tempo e resumos antigos (só leitura)
+/components
+  sheets/             folhas por URL: (+) Registar, Peso, Refeição
+  ui/                 folha inferior, joelho em 1 toque, barras, faixa da semana, botão de foto
+/lib                  supabase, perfil, tema, avisos com Anular, folhas, fila offline, formatação PT-PT
 ```
 
-Sem regras de negócio no cliente e sem segredos no cliente. Interface toda em PT-PT, dark mode, uso a uma mão.
+As regras de negócio vivem em `/api/_lib/rules` (funções puras testadas) e o cliente importa-as de lá. Sem segredos no cliente. Interface em PT-PT, tema Sistema/Escuro/Claro, uso a uma mão.

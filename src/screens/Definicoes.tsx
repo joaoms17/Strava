@@ -1,372 +1,285 @@
-import { useCallback, useEffect, useState, type ChangeEvent } from 'react'
+import { useState, type ReactNode } from 'react'
+import { Link } from 'wouter'
 import { supabase } from '../lib/supabase'
+import { useProfile, useReadyProfile } from '../lib/profile'
+import { useToast } from '../lib/toast'
 import { toCsv, downloadCsv } from '../lib/csv'
-import { toJpeg } from '../lib/image'
-import { clearPin } from '../lib/pin'
-import type { CatalogExercise, Chapter, Profile } from '../lib/types'
+import { clearPin, getPinMode, hasPin, setPinMode, type PinMode } from '../lib/pin'
+import type { Profile } from '../lib/types'
 
-const PROFILE_FIELDS: { key: keyof Profile & string; label: string }[] = [
-  { key: 'base_kcal', label: 'base kcal' },
-  { key: 'protein_g', label: 'proteína g/dia' },
-  { key: 'protein_per_meal_g', label: 'proteína g/refeição' },
-  { key: 'kcal_floor_week', label: 'chão semanal kcal' },
-  { key: 'expected_tdee', label: 'gasto previsto' },
-  { key: 'target_weight_kg', label: 'peso alvo kg' },
-  { key: 'bike_hr_avg_cap', label: 'cap FC média' },
-  { key: 'bike_hr_max_cap', label: 'cap FC máx' },
-  { key: 'bike_min_cadence', label: 'cadência mín' },
+interface Field {
+  key: keyof Profile & string
+  label: string
+  help?: string
+  unit?: string
+  min: number
+  max: number
+}
+
+const GOALS: Field[] = [
+  { key: 'height_cm', label: 'Altura', unit: 'cm', min: 120, max: 230 },
+  { key: 'birth_year', label: 'Ano de nascimento', min: 1920, max: 2015 },
+  { key: 'target_weight_kg', label: 'Peso-meta', unit: 'kg', min: 40, max: 200 },
+  {
+    key: 'base_kcal',
+    label: 'Plano base por dia, sem treino',
+    unit: 'kcal',
+    help: 'O que podes comer num dia sem treino. Cada treino soma o que gastou.',
+    min: 1000,
+    max: 4000,
+  },
+  { key: 'protein_g', label: 'Proteína por dia', unit: 'g', min: 40, max: 300 },
+  { key: 'protein_per_meal_g', label: 'Proteína por refeição principal', unit: 'g', min: 10, max: 80 },
 ]
 
-const EXPORT_TABLES = [
-  'meals',
-  'days',
-  'weights',
-  'workouts',
-  'exercise_log',
-  'foods',
-  'health_daily',
-  'api_calls',
+const BIKE: Field[] = [
+  { key: 'bike_hr_avg_cap', label: 'Batimentos médios máximos', unit: 'bpm', min: 80, max: 200 },
+  { key: 'bike_hr_max_cap', label: 'Batimentos máximos', unit: 'bpm', min: 90, max: 220 },
+  { key: 'bike_min_cadence', label: 'Rotações mínimas', unit: 'rpm', min: 50, max: 130 },
 ]
 
+const EXPORT_TABLES: [string, string][] = [
+  ['meals', 'refeicoes'],
+  ['favorites', 'favoritos'],
+  ['days', 'dias'],
+  ['weights', 'pesagens'],
+  ['workouts', 'treinos'],
+  ['exercise_log', 'series'],
+  ['foods', 'alimentos'],
+  ['health_daily', 'saude'],
+]
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="px-1 text-[13px] font-semibold text-dim">{title}</h2>
+      <div className="space-y-3 rounded-2xl bg-surface p-4">{children}</div>
+    </section>
+  )
+}
+
+function Toggle({ label, help, value, onChange }: { label: string; help?: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-start justify-between gap-4">
+      <span>
+        <span className="block text-[15px]">{label}</span>
+        {help && <span className="block text-[13px] text-dim">{help}</span>}
+      </span>
+      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-[var(--color-eat)]" />
+    </label>
+  )
+}
+
+function Choice<T extends string>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
+  return (
+    <div className="grid rounded-xl bg-surface2 p-1 text-[15px]" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+      {options.map(([id, label]) => (
+        <button key={id} onClick={() => onChange(id)} className={`min-h-10 rounded-lg ${value === id ? 'bg-surface font-semibold' : 'text-dim'}`}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Perfil, metas, bicicleta, aparência e dados — com etiquetas simples.
 export default function Definicoes() {
-  const [profile, setProfile] = useState<(Profile & { id: string }) | null>(null)
-  const [fields, setFields] = useState<Record<string, string>>({})
-  const [timeline, setTimeline] = useState<{ label: string; when: string }[]>([])
-  const [catalog, setCatalog] = useState<CatalogExercise[]>([])
-  const [dirtyCatalog, setDirtyCatalog] = useState<Set<string>>(new Set())
-  const [chapters, setChapters] = useState<Chapter[]>([])
-  const [credits, setCredits] = useState<Record<string, string>>({})
-  const [message, setMessage] = useState<string | null>(null)
+  const profile = useReadyProfile()
+  const { update } = useProfile()
+  const toast = useToast()
+  const initial = (fields: Field[]) =>
+    Object.fromEntries(fields.map((f) => [f.key, profile[f.key] != null ? String(profile[f.key]) : '']))
+  const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial(GOALS), ...initial(BIKE) }))
+  const [watts, setWatts] = useState((profile.bike_watts_options ?? []).join(' · '))
+  const [pinMode, setPinModeState] = useState<PinMode>(getPinMode())
   const [busy, setBusy] = useState(false)
 
-  const load = useCallback(async () => {
-    const [{ data: profileRow }, { data: catalogRows }, { data: chapterRows }] = await Promise.all([
-      supabase.from('profile').select('*').single(),
-      supabase.from('exercise_catalog').select('*').order('knee_safe', { ascending: false }).order('name'),
-      supabase.from('chapters').select('*').order('order_index'),
-    ])
-    if (profileRow) {
-      setProfile(profileRow as Profile & { id: string })
-      const initial: Record<string, string> = {}
-      for (const field of PROFILE_FIELDS) {
-        initial[field.key] = String((profileRow as Record<string, unknown>)[field.key] ?? '')
+  async function saveFields(fields: Field[]) {
+    const patch: Record<string, number | null | number[]> = {}
+    for (const field of fields) {
+      const raw = values[field.key]?.trim().replace(',', '.') ?? ''
+      if (!raw && field.key === 'birth_year') {
+        patch[field.key] = null
+        continue
       }
-      setFields(initial)
-      setTimeline((profileRow.timeline ?? []) as { label: string; when: string }[])
+      const n = Number(raw)
+      if (!Number.isFinite(n) || n < field.min || n > field.max) {
+        toast(`${field.label}: ${raw || 'vazio'}? Parece fora do normal. Confirma.`)
+        return
+      }
+      patch[field.key] = n
     }
-    setCatalog((catalogRows ?? []) as CatalogExercise[])
-    const chapterList = (chapterRows ?? []) as Chapter[]
-    setChapters(chapterList)
-    setCredits(Object.fromEntries(chapterList.map((c) => [c.id, c.photo_credit ?? ''])))
-  }, [])
-
-  useEffect(() => {
-    void load()
-  }, [load])
-
-  function flash(text: string) {
-    setMessage(text)
-    setTimeout(() => setMessage(null), 3000)
-  }
-
-  async function saveProfile() {
-    if (!profile) return
+    if (fields === BIKE) {
+      const options = watts
+        .split(/[^\d]+/)
+        .map(Number)
+        .filter((n) => n >= 30 && n <= 500)
+      if (options.length === 0) {
+        toast('Escreve pelo menos uma potência, por exemplo 130 · 140 · 150.')
+        return
+      }
+      patch.bike_watts_options = [...new Set(options)].sort((a, b) => a - b)
+    }
     setBusy(true)
-    const patch: Record<string, number> = {}
-    for (const field of PROFILE_FIELDS) {
-      const value = Number(String(fields[field.key]).replace(',', '.'))
-      if (Number.isFinite(value) && value > 0) patch[field.key] = value
-    }
-    const { error } = await supabase.from('profile').update(patch).eq('id', profile.id)
+    const ok = await update(patch as Partial<Profile>)
     setBusy(false)
-    flash(error ? 'Erro a guardar o perfil.' : 'Perfil guardado.')
+    toast(ok ? 'Guardado.' : 'Não consegui guardar. Tenta outra vez.')
   }
 
-  async function saveTimeline() {
-    if (!profile) return
+  async function exportTable(table: string, filename: string) {
     setBusy(true)
-    const cleaned = timeline.filter((t) => t.label.trim() && t.when.trim())
-    const { error } = await supabase
-      .from('profile')
-      .update({ timeline: cleaned })
-      .eq('id', profile.id)
-    setBusy(false)
-    flash(error ? 'Erro a guardar a linha do tempo.' : 'Linha do tempo guardada.')
-  }
-
-  function updateExercise(id: string, patch: Partial<CatalogExercise>) {
-    setCatalog((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
-    setDirtyCatalog((prev) => new Set(prev).add(id))
-  }
-
-  async function saveCatalog() {
-    setBusy(true)
-    let failed = false
-    for (const exercise of catalog.filter((e) => dirtyCatalog.has(e.id))) {
-      const { error } = await supabase
-        .from('exercise_catalog')
-        .update({
-          knee_safe: exercise.knee_safe,
-          rep_min: exercise.rep_min,
-          rep_max: exercise.rep_max,
-        })
-        .eq('id', exercise.id)
-      if (error) failed = true
-    }
-    setDirtyCatalog(new Set())
-    setBusy(false)
-    flash(failed ? 'Erro a guardar o catálogo.' : 'Catálogo guardado.')
-  }
-
-  async function uploadChapterPhoto(chapter: Chapter, event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setBusy(true)
-    try {
-      const blob = await toJpeg(file, 1600, 0.85)
-      const path = `cap-${chapter.order_index}.jpg`
-      const { error: uploadError } = await supabase.storage
-        .from('chapter-photos')
-        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
-      if (uploadError) throw uploadError
-      const { error } = await supabase
-        .from('chapters')
-        .update({ photo_path: path, photo_credit: credits[chapter.id]?.trim() || null })
-        .eq('id', chapter.id)
-      if (error) throw error
-      await load()
-      flash('Foto guardada — não te esqueças do crédito CC.')
-    } catch {
-      flash('Erro no upload da foto.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function saveCredit(chapter: Chapter) {
-    const { error } = await supabase
-      .from('chapters')
-      .update({ photo_credit: credits[chapter.id]?.trim() || null })
-      .eq('id', chapter.id)
-    flash(error ? 'Erro a guardar o crédito.' : 'Crédito guardado.')
-  }
-
-  async function exportTable(table: string) {
-    setBusy(true)
-    const { data, error } = await supabase.from(table).select('*').limit(10_000)
+    const { data, error } = await supabase.from(table).select('*').limit(20_000)
     setBusy(false)
     if (error || !data) {
-      flash(`Erro a exportar ${table}.`)
+      toast(`Não consegui exportar ${filename}.`)
       return
     }
-    downloadCsv(`${table}.csv`, toCsv(data as Record<string, unknown>[]))
+    downloadCsv(`${filename}.csv`, toCsv(data as Record<string, unknown>[]))
   }
 
-  const input =
-    'w-full rounded-lg border border-edge bg-bg px-2 py-1.5 text-sm text-ink focus:border-accent focus:outline-none'
+  function numberInput(field: Field) {
+    return (
+      <label key={field.key} className="block space-y-1">
+        <span className="flex items-baseline justify-between gap-3">
+          <span className="text-[15px]">{field.label}</span>
+          <span className="flex items-center gap-1.5">
+            <input
+              inputMode="decimal"
+              value={values[field.key] ?? ''}
+              onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
+              className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
+            />
+            {field.unit && <span className="w-8 text-[13px] text-dim">{field.unit}</span>}
+          </span>
+        </span>
+        {field.help && <span className="block text-[13px] text-dim">{field.help}</span>}
+      </label>
+    )
+  }
 
-  if (!profile) return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
+  const saveButton = (fields: Field[]) => (
+    <button
+      disabled={busy}
+      onClick={() => void saveFields(fields)}
+      className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-50"
+    >
+      Guardar
+    </button>
+  )
 
   return (
-    <div className="mx-auto max-w-md space-y-6 pt-2">
-      {message && (
-        <p className="rounded-xl border border-accent/40 bg-card px-4 py-2 text-center text-sm">
-          {message}
-        </p>
-      )}
+    <div className="space-y-6 pt-1 pb-4">
+      <Section title="Perfil e metas">
+        {GOALS.map(numberInput)}
+        <Toggle
+          label="Semana de pausa da dieta"
+          help="A cada 6 semanas, uma semana a comer o que gastas, para o corpo descansar da dieta."
+          value={profile.maintenance_enabled !== false}
+          onChange={(v) => void update({ maintenance_enabled: v })}
+        />
+        {saveButton(GOALS)}
+      </Section>
 
-      <section className="space-y-3 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Perfil</h2>
+      <Section title="Bicicleta">
+        <label className="block space-y-1">
+          <span className="flex items-baseline justify-between gap-3">
+            <span className="text-[15px]">Potências que usas</span>
+            <input
+              value={watts}
+              onChange={(e) => setWatts(e.target.value)}
+              className="h-11 w-36 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
+            />
+          </span>
+          <span className="block text-[13px] text-dim">Em watts, por exemplo 130 · 140 · 150.</span>
+        </label>
+        {BIKE.map(numberInput)}
+        {saveButton(BIKE)}
+      </Section>
+
+      <Section title="Balança">
+        <Toggle
+          label="A minha balança mede gordura"
+          help="Mostra um campo opcional na pesagem. É outra forma de medir; não se mistura com a fita."
+          value={profile.scale_has_bodyfat}
+          onChange={(v) => void update({ scale_has_bodyfat: v })}
+        />
+      </Section>
+
+      <Section title="Aparência">
+        <Choice
+          options={[
+            ['system', 'Sistema'],
+            ['dark', 'Escuro'],
+            ['light', 'Claro'],
+          ]}
+          value={profile.theme ?? 'system'}
+          onChange={(v) => void update({ theme: v })}
+        />
+        <Toggle
+          label="Modo calmo"
+          help="Esconde o peso de cada dia; fica só o peso médio."
+          value={profile.calm_mode}
+          onChange={(v) => void update({ calm_mode: v })}
+        />
+      </Section>
+
+      <Section title="Privacidade">
+        <p className="text-[15px]">Pedir o PIN</p>
+        <Choice
+          options={[
+            ['off', 'Nunca'],
+            ['12h', 'Após 12 h'],
+            ['always', 'Sempre'],
+          ]}
+          value={pinMode}
+          onChange={(mode) => {
+            setPinMode(mode)
+            setPinModeState(mode)
+            void update({ pin_mode: mode })
+            if (mode !== 'off' && !hasPin()) window.location.reload()
+          }}
+        />
         <div className="grid grid-cols-2 gap-2">
-          {PROFILE_FIELDS.map((field) => (
-            <label key={field.key} className="space-y-0.5 text-xs text-dim">
-              <span className="block">{field.label}</span>
-              <input
-                inputMode="decimal"
-                value={fields[field.key] ?? ''}
-                onChange={(e) => setFields((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                className={input}
-              />
-            </label>
-          ))}
-        </div>
-        <button
-          disabled={busy}
-          onClick={() => void saveProfile()}
-          className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-bg disabled:opacity-50"
-        >
-          Guardar perfil
-        </button>
-      </section>
-
-      <section className="space-y-3 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Linha do tempo</h2>
-        {timeline.map((entry, i) => (
-          <div key={i} className="flex gap-2">
-            <input
-              placeholder="quando"
-              value={entry.when}
-              onChange={(e) =>
-                setTimeline((prev) => prev.map((t, j) => (j === i ? { ...t, when: e.target.value } : t)))
-              }
-              className={`${input} w-28 shrink-0`}
-            />
-            <input
-              placeholder="o que aconteceu"
-              value={entry.label}
-              onChange={(e) =>
-                setTimeline((prev) => prev.map((t, j) => (j === i ? { ...t, label: e.target.value } : t)))
-              }
-              className={input}
-            />
-            <button
-              className="shrink-0 px-1 text-dim"
-              onClick={() => setTimeline((prev) => prev.filter((_, j) => j !== i))}
-              aria-label="Remover"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setTimeline((prev) => [...prev, { label: '', when: '' }])}
-            className="rounded-xl border border-edge px-3 py-2 text-sm text-dim"
-          >
-            + marco
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => void saveTimeline()}
-            className="flex-1 rounded-xl bg-accent py-2 text-sm font-semibold text-bg disabled:opacity-50"
-          >
-            Guardar linha do tempo
-          </button>
-        </div>
-      </section>
-
-      <section className="space-y-2 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Catálogo de exercícios</h2>
-        <p className="text-xs text-dim">
-          knee_safe define o que o Claude pode usar nos planos. Valida com fisio quando puderes.
-        </p>
-        {catalog.map((exercise) => (
-          <div key={exercise.id} className="flex items-center gap-2 border-t border-edge py-2 first:border-t-0">
-            <input
-              type="checkbox"
-              checked={exercise.knee_safe}
-              onChange={(e) => updateExercise(exercise.id, { knee_safe: e.target.checked })}
-              className="h-4 w-4 shrink-0 accent-amber-500"
-            />
-            <span className={`min-w-0 flex-1 truncate text-sm ${exercise.knee_safe ? '' : 'text-dim line-through'}`}>
-              {exercise.name}
-            </span>
-            <input
-              inputMode="numeric"
-              value={exercise.rep_min ?? ''}
-              onChange={(e) =>
-                updateExercise(exercise.id, { rep_min: e.target.value ? Number(e.target.value) : null })
-              }
-              className={`${input} w-12 shrink-0 text-center`}
-            />
-            <span className="text-xs text-dim">–</span>
-            <input
-              inputMode="numeric"
-              value={exercise.rep_max ?? ''}
-              onChange={(e) =>
-                updateExercise(exercise.id, { rep_max: e.target.value ? Number(e.target.value) : null })
-              }
-              className={`${input} w-12 shrink-0 text-center`}
-            />
-          </div>
-        ))}
-        <button
-          disabled={busy || dirtyCatalog.size === 0}
-          onClick={() => void saveCatalog()}
-          className="w-full rounded-xl bg-accent py-2.5 text-sm font-semibold text-bg disabled:opacity-50"
-        >
-          Guardar catálogo ({dirtyCatalog.size})
-        </button>
-      </section>
-
-      <section className="space-y-3 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Fotos dos capítulos (CC, com crédito)</h2>
-        {chapters.map((chapter) => (
-          <div key={chapter.id} className="space-y-1.5 border-t border-edge py-2 first:border-t-0">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm">
-                {chapter.order_index}. {chapter.patron}
-                {chapter.photo_path && <span className="ml-2 text-xs text-ok">foto ✓</span>}
-              </p>
-              <label className="shrink-0 cursor-pointer rounded-lg border border-edge px-2.5 py-1.5 text-xs text-accent">
-                {chapter.photo_path ? 'Trocar' : 'Carregar'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => void uploadChapterPhoto(chapter, e)}
-                />
-              </label>
-            </div>
-            <div className="flex gap-2">
-              <input
-                placeholder="crédito (autor, licença CC, fonte)"
-                value={credits[chapter.id] ?? ''}
-                onChange={(e) => setCredits((prev) => ({ ...prev, [chapter.id]: e.target.value }))}
-                className={input}
-              />
-              <button
-                onClick={() => void saveCredit(chapter)}
-                className="shrink-0 rounded-lg border border-edge px-2.5 text-xs text-dim"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        ))}
-      </section>
-
-      <section className="space-y-2 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Export CSV</h2>
-        <div className="grid grid-cols-2 gap-2">
-          {EXPORT_TABLES.map((table) => (
-            <button
-              key={table}
-              disabled={busy}
-              onClick={() => void exportTable(table)}
-              className="rounded-xl border border-edge py-2 text-sm text-ink disabled:opacity-50"
-            >
-              {table}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-2 rounded-2xl border border-edge bg-card p-4">
-        <h2 className="text-sm font-semibold text-dim">Calendário e sessão</h2>
-        <p className="break-all text-xs text-dim">
-          Feed .ics para o Google Calendar: {window.location.origin}/api/calendar?token=ICS_TOKEN (o
-          token que definiste no Vercel).
-        </p>
-        <div className="flex gap-2">
           <button
             onClick={() => {
               clearPin()
+              if (getPinMode() === 'off') setPinMode('12h')
               window.location.reload()
             }}
-            className="flex-1 rounded-xl border border-edge py-2.5 text-sm text-dim"
+            className="min-h-12 rounded-xl bg-surface2 text-[15px]"
           >
-            Trocar PIN
+            {hasPin() ? 'Trocar PIN' : 'Criar PIN'}
           </button>
-          <button
-            onClick={() => void supabase.auth.signOut()}
-            className="flex-1 rounded-xl border border-warn/40 py-2.5 text-sm text-warn"
-          >
-            Sair
+          <button onClick={() => void supabase.auth.signOut()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
+            Terminar sessão
           </button>
         </div>
-      </section>
+      </Section>
+
+      <Section title="Os meus dados">
+        <p className="text-[13px] text-dim">Exportar em CSV (abre no Excel ou no Numbers).</p>
+        <div className="grid grid-cols-2 gap-2">
+          {EXPORT_TABLES.map(([table, filename]) => (
+            <button
+              key={table}
+              disabled={busy}
+              onClick={() => void exportTable(table, filename)}
+              className="min-h-11 rounded-xl bg-surface2 text-[15px] capitalize disabled:opacity-50"
+            >
+              {filename}
+            </button>
+          ))}
+        </div>
+      </Section>
+
+      <div className="divide-y divide-line rounded-2xl bg-surface">
+        <Link href="/definicoes/avancado" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+          Avançado <span className="text-dim">›</span>
+        </Link>
+        <Link href="/definicoes/arquivo" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+          Arquivo <span className="text-dim">›</span>
+        </Link>
+      </div>
     </div>
   )
 }

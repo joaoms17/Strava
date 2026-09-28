@@ -8,14 +8,9 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
+import { useThemeColors } from '../lib/colors'
 import type { ExerciseLogRow } from '../lib/types'
 
-const COLORS = {
-  accent: '#f59e0b',
-  dim: '#a1a1aa',
-  edge: '#26262b',
-  ink: '#e7e5e4',
-}
 
 function fmtDate(date: string): string {
   const [, month, day] = date.split('-')
@@ -30,6 +25,7 @@ export default function LoadChart({
   logs: ExerciseLogRow[]
   workoutDates: Map<string, string>
 }) {
+  const colors = useThemeColors()
   const { exercises, seriesFor } = useMemo(() => {
     const byExercise = new Map<string, Map<string, number>>() // exercise -> date -> top load
     for (const log of logs) {
@@ -59,7 +55,7 @@ export default function LoadChart({
   if (!exercise) {
     return (
       <div className="rounded-2xl border border-edge bg-card p-6 text-center text-sm text-dim">
-        <p className="font-display text-lg text-ink">Cargas</p>
+        <p className="text-[17px] font-semibold text-ink">Cargas</p>
         <p className="mt-2">Regista sessões de força para veres a progressão por exercício.</p>
       </div>
     )
@@ -89,18 +85,18 @@ export default function LoadChart({
       <div className="mt-2 h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
-            <CartesianGrid stroke={COLORS.edge} vertical={false} />
+            <CartesianGrid stroke={colors.line} vertical={false} />
             <XAxis
               dataKey="date"
               tickFormatter={fmtDate}
-              tick={{ fill: COLORS.dim, fontSize: 11 }}
-              axisLine={{ stroke: COLORS.edge }}
+              tick={{ fill: colors.dim, fontSize: 11 }}
+              axisLine={{ stroke: colors.line }}
               tickLine={false}
               minTickGap={40}
             />
             <YAxis
               domain={[yMin, yMax]}
-              tick={{ fill: COLORS.dim, fontSize: 11 }}
+              tick={{ fill: colors.dim, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
               width={72}
@@ -108,20 +104,20 @@ export default function LoadChart({
             />
             <Tooltip
               contentStyle={{
-                background: '#161619',
-                border: `1px solid ${COLORS.edge}`,
+                background: colors.surface,
+                border: `1px solid ${colors.line}`,
                 borderRadius: 12,
-                color: COLORS.ink,
+                color: colors.ink,
                 fontSize: 12,
               }}
               labelFormatter={(label) => fmtDate(String(label))}
               formatter={(value) => [`${value} kg`, 'melhor série']}
             />
-            <Line
+            <Line isAnimationActive={false}
               dataKey="load"
-              stroke={COLORS.accent}
+              stroke={colors.burn}
               strokeWidth={2}
-              dot={{ r: 3, fill: COLORS.accent, strokeWidth: 0 }}
+              dot={{ r: 3, fill: colors.burn, strokeWidth: 0 }}
             />
           </LineChart>
         </ResponsiveContainer>

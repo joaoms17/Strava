@@ -1,5 +1,8 @@
 // Bloqueio por PIN no cliente — conveniência local, não substitui o Auth.
 const STORAGE_KEY = 'regresso.pin'
+const MODE_KEY = 'regresso.pin_mode'
+
+export type PinMode = 'off' | '12h' | 'always'
 
 interface StoredPin {
   salt: string
@@ -41,4 +44,27 @@ export async function checkPin(pin: string): Promise<boolean> {
 
 export function clearPin(): void {
   localStorage.removeItem(STORAGE_KEY)
+}
+
+// Por omissão pede o PIN só depois de 12 h em segundo plano.
+export function getPinMode(): PinMode {
+  try {
+    const mode = localStorage.getItem(MODE_KEY)
+    return mode === 'off' || mode === 'always' ? mode : '12h'
+  } catch {
+    return '12h'
+  }
+}
+
+export function setPinMode(mode: PinMode): void {
+  try {
+    localStorage.setItem(MODE_KEY, mode)
+  } catch {
+    // ignora
+  }
+}
+
+export function lockAfterMs(mode: PinMode): number | null {
+  if (mode === 'off') return null
+  return mode === 'always' ? 30_000 : 12 * 60 * 60 * 1000
 }
