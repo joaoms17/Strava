@@ -292,8 +292,8 @@ export default function Treino() {
                 {session.details.bike.minutes} min · cadência ≥ {session.details.bike.cadence_min}
               </p>
               <p className="text-xs text-dim">
-                FC média ≤ {profile.bike_hr_avg_cap} · máx ≤ {profile.bike_hr_max_cap}. Regista no
-                Strava (entra sozinha) ou marca aqui.
+                FC média ≤ {profile.bike_hr_avg_cap} · máx ≤ {profile.bike_hr_max_cap}. Quando
+                acabares, marca aqui e diz como ficou o joelho.
               </p>
               <button
                 disabled={busy}
@@ -345,15 +345,6 @@ export default function Treino() {
           {bikeTarget.watts} W · {bikeTarget.minutes} min · cadência ≥ {profile.bike_min_cadence}
         </p>
       </div>
-
-      {profile.strava_athlete_id == null && import.meta.env.VITE_STRAVA_ENABLED === 'true' && (
-        <a
-          href="/api/strava/auth"
-          className="block rounded-2xl border border-edge bg-card px-4 py-4 text-center font-semibold text-accent"
-        >
-          Ligar ao Strava
-        </a>
-      )}
 
       <div className="space-y-3 rounded-2xl border border-edge bg-card p-4">
         <h2 className="text-sm font-semibold text-dim">Sessão manual</h2>

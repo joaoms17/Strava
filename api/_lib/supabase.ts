@@ -16,7 +16,7 @@ function env(name: string): string {
 }
 
 // Cliente com service role — ignora RLS. Só para o que o cliente não pode
-// fazer (api_calls, strava_tokens, ler fotos do Storage).
+// fazer (api_calls, ler fotos do Storage, cron).
 export function adminClient(): SupabaseClient {
   return createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), {
     auth: { persistSession: false },

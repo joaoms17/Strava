@@ -1,6 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, type Usage } from '../_lib/anthropic.js'
+import {
+  anthropic,
+  MODELS,
+  NO_THINKING,
+  logApiCall,
+  timeLeftForRetry,
+  usableOutput,
+  type Usage,
+} from '../_lib/anthropic.js'
 import { HttpError, adminClient, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { GeneratedPlanSchema, validatePlan, type GeneratedPlan } from '../_lib/schemas.js'
@@ -159,8 +167,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let plan: GeneratedPlan | null = null
     let lastErrors: string[] = []
 
-    // 2 tentativas: a segunda recebe os erros de validação da primeira.
+    // 2 tentativas: a segunda recebe os erros de validação da primeira,
+    // mas só se ainda couber nos 60 s da função.
+    const startedAt = Date.now()
     for (let attempt = 0; attempt < 2 && !plan; attempt++) {
+      if (attempt > 0 && !timeLeftForRetry(startedAt, 12_000)) break
       const messages: { role: 'user'; content: string }[] = [
         { role: 'user', content: JSON.stringify(payload) },
       ]
@@ -170,16 +181,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           content: `O plano anterior foi rejeitado. Corrige: ${lastErrors.join(' ')}`,
         })
       }
-      const response = await anthropic().messages.parse({
-        model: MODELS.vision,
-        max_tokens: 16000,
-        system,
-        messages,
-        output_config: { format: zodOutputFormat(GeneratedPlanSchema) },
-      })
+      const response = await anthropic().messages.parse(
+        {
+          model: MODELS.vision,
+          max_tokens: 16000,
+          thinking: NO_THINKING,
+          system,
+          messages,
+          output_config: { format: zodOutputFormat(GeneratedPlanSchema) },
+        },
+        { maxRetries: 0, timeout: 50_000 },
+      )
       usage.input_tokens += response.usage.input_tokens
       usage.output_tokens += response.usage.output_tokens
-      const candidate = response.parsed_output
+      const candidate = usableOutput(response)
       if (!candidate) {
         lastErrors = ['A resposta não era JSON válido.']
         continue

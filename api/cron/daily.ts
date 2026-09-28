@@ -3,18 +3,16 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { adminClient } from '../_lib/supabase.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { round1 } from '../_lib/rules/meal-totals.js'
-import { dayExerciseKcal, kcalTarget, type WorkoutType } from '../_lib/rules/targets.js'
+import { kcalTarget, storedExerciseKcal, type WorkoutType } from '../_lib/rules/targets.js'
 import { floorWarning, isDayComplete } from '../_lib/rules/day-close.js'
 import { tdeeRaw, smoothTdee } from '../_lib/rules/adaptativo.js'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../_lib/rules/manutencao.js'
-import { reconcileStrava } from '../_lib/strava.js'
 import { generateWeeklyReview } from '../_lib/review.js'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
-// reconcilia o Strava das últimas 48 h (os webhooks falham), fecha os últimos
-// 3 dias nutricionais (idempotente — cobre falhas da cron), calcula o gasto
-// adaptativo, aplica a semana de manutenção e, à segunda, gera o review da
-// semana anterior.
+// fecha os últimos 3 dias nutricionais (idempotente — cobre falhas da cron),
+// calcula o gasto adaptativo, aplica a semana de manutenção e, à segunda, gera
+// o review da semana anterior.
 
 interface ProfileRow {
   user_id: string
@@ -71,7 +69,7 @@ async function closeDay(
   const [mealsRes, workoutsRes, weightRes, existingRes, weightsRes, recentDaysRes] =
     await Promise.all([
       admin.from('meals').select('kcal,protein').eq('user_id', userId).eq('date', date),
-      admin.from('workouts').select('type,minutes,watts,raw').eq('user_id', userId).eq('date', date),
+      admin.from('workouts').select('type,minutes,watts,raw,kcal_est').eq('user_id', userId).eq('date', date),
       admin.from('weights').select('kg').eq('user_id', userId).eq('date', date).maybeSingle(),
       admin.from('days').select('flags').eq('user_id', userId).eq('date', date).maybeSingle(),
       admin
@@ -93,15 +91,17 @@ async function closeDay(
   const kcalIn = Math.round(meals.reduce((acc, m) => acc + Number(m.kcal), 0))
   const protein = round1(meals.reduce((acc, m) => acc + Number(m.protein), 0))
 
-  const kcalExercise = dayExerciseKcal(
+  // Soma as kcal guardadas em cada treino (a regra 2 corre ao gravar).
+  const kcalExercise = storedExerciseKcal(
     (workoutsRes.data ?? []).map((w) => ({
       type: w.type as WorkoutType,
       minutes: w.minutes as number | null,
       watts: w.watts as number | null,
-      stravaCalories:
+      deviceCalories:
         typeof (w.raw as { calories?: unknown } | null)?.calories === 'number'
           ? ((w.raw as { calories: number }).calories)
           : null,
+      kcal_est: w.kcal_est as number | null,
     })),
   )
 
@@ -180,9 +180,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const admin = adminClient()
 
-    // Primeiro o Strava, para o fecho do dia já contar os treinos.
-    const reconciled = await reconcileStrava(admin)
-
     const { data: profiles, error } = await admin
       .from('profile')
       .select('user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour')
@@ -233,7 +230,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('status', 'planned')
       }
     }
-    res.status(200).json({ ok: true, reconciled, closed, reviews })
+    res.status(200).json({ ok: true, closed, reviews })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Falha no fecho do dia.' })

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
-import { dayExerciseKcal } from '../../api/_lib/rules/targets'
+import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
 import type { DayRow, Meal, Profile, Workout } from '../lib/types'
 import PainCheckin from '../components/PainCheckin'
@@ -136,12 +136,13 @@ export default function Hoje() {
   const proteinIn = meals.reduce((acc, m) => acc + Number(m.protein), 0)
   // Regra 2, ao vivo: a meta de hoje sobe com o treino de hoje.
   // Regra 7: na semana de manutenção, a meta é o gasto estimado (ou 2000), fixa.
-  const kcalExercise = dayExerciseKcal(
+  const kcalExercise = storedExerciseKcal(
     todayWorkouts.map((w) => ({
       type: w.type,
       minutes: w.minutes,
       watts: w.watts,
-      stravaCalories: w.raw?.calories ?? null,
+      deviceCalories: w.raw?.calories ?? null,
+      kcal_est: w.kcal_est,
     })),
   )
   const kcalTarget = maintenance ? maintenanceTarget(latestTdee) : profile.base_kcal + kcalExercise

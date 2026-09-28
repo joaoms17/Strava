@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, type Usage } from './anthropic.js'
+import { anthropic, MODELS, NO_THINKING, logApiCall, usableOutput, type Usage } from './anthropic.js'
 import { PROMPT_REVIEW, readPrompt } from './prompts.js'
 import { shiftDate } from './rules/nutritional-day.js'
 
@@ -104,18 +104,21 @@ export async function generateWeeklyReview(
 
   const usage: Usage = { input_tokens: 0, output_tokens: 0 }
   let text: string | null = null
-  for (let attempt = 0; attempt < 2 && !text; attempt++) {
-    const response = await anthropic().messages.parse({
+  // Corre dentro da cron (60 s no total): uma só chamada, sem pensamento alargado.
+  const response = await anthropic().messages.parse(
+    {
       model: MODELS.vision,
       max_tokens: 2000,
+      thinking: NO_THINKING,
       system: readPrompt(PROMPT_REVIEW),
       messages: [{ role: 'user', content: JSON.stringify(payload) }],
       output_config: { format: zodOutputFormat(ReviewSchema) },
-    })
-    usage.input_tokens += response.usage.input_tokens
-    usage.output_tokens += response.usage.output_tokens
-    text = response.parsed_output?.text?.trim() || null
-  }
+    },
+    { maxRetries: 0, timeout: 25_000 },
+  )
+  usage.input_tokens += response.usage.input_tokens
+  usage.output_tokens += response.usage.output_tokens
+  text = usableOutput(response)?.text?.trim() || null
   await logApiCall(admin, { user_id: userId, kind: 'weekly_review', model: MODELS.vision, usage })
   if (!text) throw new Error('Review semanal sem texto válido.')
 

@@ -24,9 +24,6 @@ function clientEnv(mode: string) {
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(
       pick('VITE_SUPABASE_ANON_KEY', 'SUPABASE_ANON_KEY'),
     ),
-    'import.meta.env.VITE_STRAVA_ENABLED': JSON.stringify(
-      pick('VITE_STRAVA_ENABLED', 'STRAVA_ENABLED'),
-    ),
   }
 }
 

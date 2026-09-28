@@ -10,7 +10,12 @@ const ManualWorkoutSchema = z.object({
   minutes: z.number().int().min(1).max(600),
   watts: z.number().int().min(30).max(500).nullable().optional(),
   cadence: z.number().int().min(30).max(200).nullable().optional(),
+  sport: z.enum(['caminhada', 'eliptica', 'natacao', 'outro']).optional(),
 })
+
+function shiftDays(date: string, days: number): string {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+}
 
 function localCalendarDate(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -31,18 +36,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!body.success) throw new HttpError(400, 'Sessão inválida.')
     const { type, minutes } = body.data
     const watts = type === 'bike' ? (body.data.watts ?? null) : null
+    const today = localCalendarDate()
+    const sport = type === 'other' ? (body.data.sport ?? 'outro') : null
+
+    // Treino «Outro» sem calorias do relógio: estima pelo peso médio dos últimos 7 dias.
+    let weightKg: number | null = null
+    if (type === 'other') {
+      const { data: recent } = await db
+        .from('weights')
+        .select('kg')
+        .gte('date', shiftDays(today, -6))
+        .lte('date', today)
+      if (recent?.length) weightKg = recent.reduce((acc, w) => acc + Number(w.kg), 0) / recent.length
+      else {
+        const { data: last } = await db
+          .from('weights')
+          .select('kg')
+          .order('date', { ascending: false })
+          .limit(1)
+        weightKg = last?.[0] ? Number(last[0].kg) : null
+      }
+    }
 
     const { data: workout, error } = await db
       .from('workouts')
       .insert({
         user_id: user.id,
-        date: localCalendarDate(),
+        date: today,
         source: 'manual',
         type,
         minutes,
         watts,
         cadence: type === 'bike' ? (body.data.cadence ?? null) : null,
-        kcal_est: workoutKcal({ type, minutes, watts, stravaCalories: null }),
+        kcal_est: workoutKcal({ type, minutes, watts, deviceCalories: null, sport, weightKg }),
+        raw: sport ? { sport } : null,
       })
       .select()
       .single()

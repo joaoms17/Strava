@@ -2,14 +2,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import parseText from './_meal/parse-text.js'
 import parsePhoto from './_meal/parse-photo.js'
 import save from './_meal/save.js'
+import barcode from './_meal/barcode.js'
 
 // O plano Hobby do Vercel limita a 12 funções por deploy; os endpoints de
 // refeições vivem juntos numa função, com os caminhos originais preservados
-// por rewrites no vercel.json (/api/meal/:action -> /api/meal?action=...).
+// por rewrites no vercel.json (/api/meal/:action -> /api/meal?action=...,
+// /api/food/barcode/:ean -> /api/meal?action=barcode&ean=...).
 const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<void> | void> = {
   'parse-text': parseText,
   'parse-photo': parsePhoto,
   save,
+  barcode,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

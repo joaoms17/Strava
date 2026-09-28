@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         type: 'strength',
         minutes,
         planned_session_id: planned_session_id ?? null,
-        kcal_est: workoutKcal({ type: 'strength', minutes, watts: null, stravaCalories: null }),
+        kcal_est: workoutKcal({ type: 'strength', minutes, watts: null, deviceCalories: null }),
       })
       .select()
       .single()

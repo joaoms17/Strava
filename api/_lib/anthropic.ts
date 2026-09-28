@@ -19,6 +19,29 @@ export function anthropic(): Anthropic {
   return client
 }
 
+// Opções por pedido. Sem repetições automáticas do SDK: cada função tem 60 s
+// no total, e as repetições escondidas multiplicavam o tempo e o custo.
+export const REQUEST_TEXT = { maxRetries: 0, timeout: 20_000 }
+export const REQUEST_VISION = { maxRetries: 0, timeout: 35_000 }
+
+// O Sonnet 5 pensa de forma adaptativa quando o parâmetro é omitido; para
+// extrair JSON não compensa o tempo nem o custo.
+export const NO_THINKING = { type: 'disabled' } as const
+
+// Uma resposta cortada (max_tokens) ou recusada não conta como resultado.
+export function usableOutput<T>(response: {
+  stop_reason: string | null
+  parsed_output: T | null
+}): T | null {
+  if (response.stop_reason === 'max_tokens' || response.stop_reason === 'refusal') return null
+  return response.parsed_output
+}
+
+// Só se tenta outra vez se ainda houver tempo para uma segunda chamada.
+export function timeLeftForRetry(startedAt: number, budgetMs: number): boolean {
+  return Date.now() - startedAt < budgetMs
+}
+
 export interface Usage {
   input_tokens: number
   output_tokens: number

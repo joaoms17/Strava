@@ -2,7 +2,7 @@
 
 App pessoal de nutrição, treino e peso. Utilizador único. PWA mobile-first, dark mode, interface em PT-PT. Cada bloco de 4 semanas é um capítulo com um patrono que voltou de uma lesão grave.
 
-**Estado atual: M1–M6 completos — a app está inteira e em produção.** As 12 regras de negócio têm todas testes (95 no total). Extras possíveis para depois: Withings quando houver balança, Strava se um dia houver subscrição, Atalho iOS para treinos do Apple Health.
+**Estado atual: M1–M6 completos e em produção; em curso o redesenho para centro de fitness** ([plano](docs/redesenho-2026-09.md)). Fase 0 feita: deploy estável, 7 funções, estado do deploy em `/api/day/health`. As 12 regras de negócio têm todas testes, mais guardas do deploy em `tests/guardas.test.ts`.
 
 ## Stack
 
@@ -12,15 +12,16 @@ React + Vite + TypeScript, Tailwind, Recharts, vite-plugin-pwa. Supabase (Postgr
 
 ```
 /api                      Funções serverless (Vercel)
-  /_lib                   Clientes partilhados (supabase admin, anthropic, strava)
+  /_lib                   Clientes partilhados (supabase admin, anthropic, mapeamento Strava)
     /rules                Regras de negócio da secção 5, funções puras — testadas em /tests
-  /meal                   parse-text.ts, parse-photo.ts
+  meal.ts + /_meal        parse-text, parse-photo, save, barcode (uma função, rewrites no vercel.json)
+  workout.ts + /_workout  manual, checkin, session
+  day.ts + /_day          health (estado do deploy)
   /plan                   generate.ts
-  /strava                 auth.ts, callback.ts, webhook.ts
-  /food                   barcode/[ean].ts
-  /health                 daily.ts
-  /cron                   daily.ts (fecho do dia, adaptativo, reconciliação Strava, review à segunda)
+  /health                 daily.ts (Atalho iOS)
+  /cron                   daily.ts (fecho do dia, adaptativo, review à segunda)
   calendar.ts             feed .ics
+/archive/strava           integração por API do Strava (exige subscrição paga) — fora do deploy
 /docs
   decisions.md            registo de decisões
 /prompts                  prompts versionados: <funcao>.v<N>.md
@@ -57,11 +58,7 @@ Tabelas: `profile`, `foods`, `meals`, `days`, `weights`, `health_daily`, `workou
 2. Aplicar as migrations de `supabase/migrations/` por ordem (`supabase db push` ou SQL editor) e correr os três seeds de `supabase/seed/` por ordem — falham com mensagem clara se a conta ainda não existir; são idempotentes.
 3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), `ANTHROPIC_API_KEY`, `CRON_SECRET` (protege a cron das 04:30), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Em dev local: copiar `.env.example` para `.env`.
 4. Abrir o domínio do Vercel no telemóvel e "Adicionar ao ecrã principal" — a PWA instala com o ícone e abre em standalone. No primeiro arranque: login e criação do PIN.
-5. Strava (**opcional** — a API do Strava passou a exigir subscrição paga; sem ela, tudo funciona com sessão manual + check-in, que também capta watts, FC média/máxima e cadência). Com subscrição: criar a app em strava.com/settings/api com o callback domain do Vercel, preencher as env vars do Strava, pôr `VITE_STRAVA_ENABLED=true`, tocar em "Ligar ao Strava" no Treino, e criar a subscrição do webhook **uma vez**:
-   ```
-   STRAVA_CLIENT_ID=... STRAVA_CLIENT_SECRET=... STRAVA_VERIFY_TOKEN=... \
-     node scripts/strava-subscribe.mjs create https://a-tua-app.vercel.app
-   ```
+5. Verificar o deploy: abrir `https://a-tua-app.vercel.app/api/day/health?token=<CRON_SECRET>` — diz que variáveis faltam (nunca mostra valores), se os prompts foram incluídos, se o Supabase responde e se a chave da Anthropic chega aos dois modelos. Da linha de comandos: `CRON_SECRET=... node scripts/smoke.mjs https://a-tua-app.vercel.app`.
 6. Calendário: no Google Calendar, "Adicionar por URL" com `https://a-tua-app.vercel.app/api/calendar?token=<ICS_TOKEN>` — as sessões planeadas aparecem como eventos de dia inteiro.
 7. Saúde (Atalho iOS, todas as noites): POST para `https://a-tua-app.vercel.app/api/health/daily` com header `Authorization: Bearer <HEALTH_INGEST_TOKEN>` e corpo JSON `{"steps": 8500, "sleep_minutes": 430, "resting_hr": 52}` (a data por omissão é o próprio dia).
 

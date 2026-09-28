@@ -1,6 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, type Usage } from '../_lib/anthropic.js'
+import {
+  anthropic,
+  MODELS,
+  NO_THINKING,
+  REQUEST_VISION,
+  logApiCall,
+  timeLeftForRetry,
+  usableOutput,
+  type Usage,
+} from '../_lib/anthropic.js'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { ParsedPhotoMealSchema, type ParsedPhotoMeal } from '../_lib/schemas.js'
@@ -53,11 +62,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const usage: Usage = { input_tokens: 0, output_tokens: 0 }
     let parsed: ParsedPhotoMeal | null = null
-    // JSON estrito com retry 1x (Sonnet 5 não aceita temperature)
+    const startedAt = Date.now()
+    // JSON estrito; uma segunda tentativa só se couber no tempo da função
+    // (Sonnet 5 não aceita temperature)
     for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      if (attempt > 0 && !timeLeftForRetry(startedAt, 20_000)) break
       const response = await anthropic().messages.parse({
         model: MODELS.vision,
         max_tokens: 4096,
+        thinking: NO_THINKING,
         system,
         messages: [
           {
@@ -76,10 +89,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         ],
         output_config: { format: zodOutputFormat(ParsedPhotoMealSchema) },
-      })
+      }, REQUEST_VISION)
       usage.input_tokens += response.usage.input_tokens
       usage.output_tokens += response.usage.output_tokens
-      parsed = response.parsed_output
+      parsed = usableOutput(response)
     }
     const cost = await logApiCall(adminClient(), {
       user_id: user.id,

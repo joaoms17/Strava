@@ -155,8 +155,8 @@ export default function Graficos() {
           </p>
           {shouldAdjustBase(tdee, expected) && (
             <p className="text-xs text-accent">
-              O gasto real difere do previsto em mais de 250 kcal — considera ajustar o base_kcal
-              nas Definições (M6) ou no Supabase.
+              O gasto real difere do previsto em mais de 250 kcal. Podes ajustar o plano base
+              nas Definições (⚙).
             </p>
           )}
         </div>

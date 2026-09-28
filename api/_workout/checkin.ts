@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           type: workout.type as WorkoutType,
           minutes: workout.minutes,
           watts,
-          stravaCalories: null,
+          deviceCalories: null,
         })
       }
     }
