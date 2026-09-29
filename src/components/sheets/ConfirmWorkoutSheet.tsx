@@ -46,7 +46,7 @@ const SOURCE_LABEL: Record<string, string> = {
   screenshot: 'print do relógio',
   manual: 'à mão',
   strava: 'Strava',
-  intervals: 'Garmin (auto)',
+  intervals: 'Relógio (auto)',
 }
 
 // Folha Confirmar treino: rever o que a IA leu dos prints, juntá-lo a uma

@@ -30,7 +30,7 @@ export function syncSummary(r: SyncResult): string {
   // Sem nenhuma noite nos dias pedidos: ou não dormiu com o relógio, ou a
   // ligação do intervals.icu ao Garmin não traz o bem-estar.
   if (r.nights === 0) {
-    return `${first} Não veio nenhuma noite de sono. Se dormiste com o relógio, no intervals.icu vai a Settings › Garmin e liga «Wellness».`
+    return `${first} Não veio nenhuma noite de sono. Se dormiste com o relógio: no intervals.icu, em Settings, na ligação do teu relógio, ativa «Descarregar dados de bem-estar» e carrega em «Descarregar dados antigos».`
   }
   return first
 }

@@ -29,7 +29,7 @@ const KNEE_DOT: Record<NonNullable<Workout['status']>, string> = {
 function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
   if (w.source === 'strava') return 'Strava'
-  if (w.source === 'intervals') return 'Garmin (auto)'
+  if (w.source === 'intervals') return 'Relógio (auto)'
   return w.favorite_id ? 'favorito' : 'à mão'
 }
 
@@ -217,7 +217,7 @@ export default function Treino() {
       {icu?.connected && (
         <div className="flex items-center justify-between gap-2 text-[14px] text-dim">
           <span>
-            Garmin (intervals.icu){icu.last_sync_at ? ` · sincronizado ${syncedAgo(icu.last_sync_at, new Date())}` : ''}
+            Relógio (intervals.icu){icu.last_sync_at ? ` · sincronizado ${syncedAgo(icu.last_sync_at, new Date())}` : ''}
             {icu.last_error ? ` · ${icu.last_error}` : ''}
           </span>
           <button

@@ -39,10 +39,10 @@ export default function IntervalsSettings() {
   if (!status?.connected) {
     return (
       <div className="space-y-3 text-[15px]">
-        <p>Em 5 minutos os treinos do teu Garmin passam a entrar sozinhos.</p>
+        <p>Em 5 minutos os treinos e o sono do teu relógio (Garmin, Amazfit…) passam a entrar sozinhos.</p>
         <ol className="list-decimal space-y-1.5 pl-5 text-dim">
           <li>Cria uma conta grátis em intervals.icu.</li>
-          <li>Em Settings › Garmin Connect › Connect, entra no Garmin e autoriza atividades e bem-estar.</li>
+          <li>Em Settings, liga o teu relógio (Garmin Connect, Amazfit/Zepp…) e ativa as atividades e os dados de bem-estar.</li>
           <li>Se o Strava também estiver ligado lá, desmarca «Download activities» do Strava.</li>
           <li>Em Settings › Developer Settings (no fundo da página), gera a chave e copia-a.</li>
           <li>Cola a chave aqui e toca em Testar e ligar.</li>

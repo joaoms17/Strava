@@ -231,7 +231,7 @@ export default function Definicoes() {
         {BIKE.map(numberInput)}
         {saveButton(BIKE)}
         <Toggle
-          label="Gravo os treinos num relógio Garmin"
+          label="Gravo os treinos num relógio (Garmin, Amazfit…)"
           help="O print do relógio junta os batimentos às sessões. Os treinos automáticos (intervals.icu) vêm mais tarde."
           value={profile.has_garmin_watch ?? false}
           onChange={(v) => void update({ has_garmin_watch: v })}

@@ -69,7 +69,7 @@ export default function TreinoSheet() {
           </ShotButton>
         </div>
         <p className="text-[14px] text-dim">
-          Print: no Garmin Connect abre o treino e tira 2 capturas (Resumo e Estatísticas). Também serve o Strava ou
+          Print: na app do relógio (Garmin Connect, Zepp…) abre o treino e tira 2 capturas (Resumo e Estatísticas). Também serve o Strava ou
           uma foto da consola da bicicleta.
         </p>
       </div>
