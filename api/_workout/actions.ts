@@ -10,7 +10,6 @@ import { estimatedStart, exerciseKcal, mergePatch, type WattsSource } from '../_
 import type { OtherSport, WorkoutType } from '../_lib/rules/targets.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { claimAndParse, type ImportRow } from '../_lib/workout-shot.js'
-import { pairWorkout } from '../_lib/pairing.js'
 
 // Treino (Fase 3): guardar em poucos toques (favorito, «Já fiz», rascunho de
 // um print), juntar um print a uma sessão já registada sem duplicar, editar,
@@ -60,6 +59,27 @@ const ShotSchema = z.object({
   source_paths: z.array(z.string().min(3)).min(1).max(4),
   thumb_paths: z.array(z.string().min(3)).max(4).default([]),
   image_hashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(4).default([]),
+})
+
+const StrengthSchema = z.object({
+  client_id: z.string().uuid(),
+  workout_id: z.string().uuid().nullable().optional(), // editar uma sessão antiga
+  started_at: z.string().nullable().optional(),
+  minutes: int(1, 300),
+  sets: z
+    .array(
+      z.object({
+        exercise: z.string().trim().min(1).max(80),
+        set_index: int(1, 20),
+        reps: int(0, 60).nullable(),
+        load_kg: z.number().min(0).max(300).nullable(),
+        rpe: z.number().min(1).max(10).nullable(),
+      }),
+    )
+    .max(120),
+  pain_during: int(0, 10).nullable().optional(),
+  favorite_id: z.string().uuid().nullable().optional(),
+  note: z.string().max(500).nullable().optional(),
 })
 
 const WorkoutIdSchema = z.object({ workout_id: z.string().uuid() })
@@ -321,7 +341,104 @@ export const save = post(async ({ db, userId, body, res }) => {
   if (importRow) {
     await db.from('workout_imports').update({ status: 'guardado', workout_id: workout.id }).eq('id', importRow.id)
   }
-  await pairWorkout(db, userId, workout)
+  res.status(200).json({ workout })
+})
+
+// Sessão de ginásio livre (Fase 5): cria (ou, com workout_id, edita) o
+// treino e grava as séries em exercise_log. As kcal são as 150 fixas.
+export const strength = post(async ({ db, userId, body, res }) => {
+  const input = parse(StrengthSchema, body)
+  const kcal = exerciseKcal({ type: 'strength', minutes: input.minutes, watts: null, wattsSource: null, deviceCalories: null })
+  const rows = (workoutId: string) =>
+    input.sets.map((s) => ({
+      user_id: userId,
+      workout_id: workoutId,
+      exercise: s.exercise,
+      set_index: s.set_index,
+      reps: s.reps,
+      load_kg: s.load_kg,
+      rpe: s.rpe,
+    }))
+
+  if (input.workout_id) {
+    const target = await ownWorkout(db, input.workout_id)
+    const patch: Record<string, unknown> = {
+      minutes: input.minutes,
+      kcal_est: kcal.kcal,
+      kcal_rule: kcal.rule,
+      kcal_estimated: false,
+    }
+    if (input.pain_during !== undefined) {
+      patch.pain_during = input.pain_during
+      patch.status = painStatus(input.pain_during, (target.pain_next_day as number | null) ?? null)
+    }
+    if (input.note !== undefined) patch.note = input.note?.trim() || null
+    const { data, error } = await db.from('workouts').update(patch).eq('id', target.id).select().single()
+    if (error) throw new HttpError(500, error.message)
+    await db.from('exercise_log').delete().eq('workout_id', target.id)
+    if (input.sets.length) {
+      const { error: logError } = await db.from('exercise_log').insert(rows(target.id))
+      if (logError) throw new HttpError(500, logError.message)
+    }
+    res.status(200).json({ workout: data })
+    return
+  }
+
+  const { data: again } = await db.from('workouts').select('*').eq('client_id', input.client_id).maybeSingle()
+  if (again) {
+    res.status(200).json({ workout: again })
+    return
+  }
+  const now = new Date()
+  const startedAt = instantOrNow(input.started_at, new Date(estimatedStart(now, input.minutes)))
+  const date = nutritionalDay(startedAt, await cutoffHour(db))
+  if (input.favorite_id) {
+    const { data: favorite } = await db.from('favorites').select('id,use_count').eq('id', input.favorite_id).maybeSingle()
+    if (favorite) {
+      await db
+        .from('favorites')
+        .update({ use_count: (favorite.use_count ?? 0) + 1, last_used_at: now.toISOString() })
+        .eq('id', favorite.id)
+    }
+  }
+  const { data: workout, error } = await db
+    .from('workouts')
+    .insert({
+      user_id: userId,
+      client_id: input.client_id,
+      date,
+      started_at: startedAt.toISOString(),
+      source: 'manual',
+      type: 'strength',
+      minutes: input.minutes,
+      kcal_est: kcal.kcal,
+      kcal_rule: kcal.rule,
+      kcal_estimated: false,
+      pain_during: input.pain_during ?? null,
+      status: painStatus(input.pain_during ?? null, null),
+      favorite_id: input.favorite_id ?? null,
+      note: input.note?.trim() || null,
+    })
+    .select()
+    .single()
+  if (error) {
+    if (error.code === '23505') {
+      const { data: dup } = await db.from('workouts').select('*').eq('client_id', input.client_id).maybeSingle()
+      if (dup) {
+        res.status(200).json({ workout: dup })
+        return
+      }
+    }
+    throw new HttpError(500, error.message)
+  }
+  if (input.sets.length) {
+    const { error: logError } = await db.from('exercise_log').insert(rows(workout.id as string))
+    if (logError) {
+      // Sem séries a sessão não serve: desfaz o treino.
+      await db.from('workouts').delete().eq('id', workout.id)
+      throw new HttpError(500, logError.message)
+    }
+  }
   res.status(200).json({ workout })
 })
 

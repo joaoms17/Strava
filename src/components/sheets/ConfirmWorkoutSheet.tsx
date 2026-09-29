@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'wouter'
 import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
@@ -512,6 +513,7 @@ function ImportConfirm({ id }: { id: string }) {
 
 function WorkoutDetail({ id }: { id: string }) {
   const sheet = useSheet()
+  const [, navigate] = useLocation()
   const toast = useToast()
   const [workout, setWorkout] = useState<Workout | null | undefined>(undefined)
   const [thumbs, setThumbs] = useState<string[]>([])
@@ -693,6 +695,17 @@ function WorkoutDetail({ id }: { id: string }) {
               />
             </div>
 
+            {w.type === 'strength' && (
+              <button
+                onClick={() => {
+                  sheet.close()
+                  setTimeout(() => navigate(`/treino/ginasio?id=${w.id}`), 0)
+                }}
+                className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+              >
+                Ver e corrigir as séries
+              </button>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <ShotButton className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line text-[15px]">
                 <Icon name="watch" size={18} /> Juntar print

@@ -36,6 +36,7 @@ const Treino = lazy(() => import('./screens/Treino'))
 const Avancado = lazy(() => import('./screens/Avancado'))
 const Arquivo = lazy(() => import('./screens/Arquivo'))
 const MedidasHistorico = lazy(() => import('./screens/MedidasHistorico'))
+const Ginasio = lazy(() => import('./screens/Ginasio'))
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -47,6 +48,7 @@ function Centered({ children }: { children: ReactNode }) {
 
 const PARENT: [RegExp, string][] = [
   [/^\/corpo\/.+/, '/corpo'],
+  [/^\/treino\/.+/, '/treino'],
   [/^\/definicoes\/arquivo\/.+/, '/definicoes/arquivo'],
   [/^\/definicoes\/.+/, '/definicoes'],
   [/^\/(definicoes|favoritos)/, '/hoje'],
@@ -54,6 +56,7 @@ const PARENT: [RegExp, string][] = [
 
 const TITLES: [RegExp, string][] = [
   [/^\/balanco/, 'Balanço'],
+  [/^\/treino\/ginasio/, 'Ginásio'],
   [/^\/treino/, 'Treino'],
   [/^\/corpo\/medidas/, 'Medidas'],
   [/^\/corpo/, 'Corpo'],
@@ -210,6 +213,7 @@ function Shell() {
             <Route path="/hoje/:date" component={Hoje} />
             <Route path="/balanco" component={Balanco} />
             <Route path="/treino" component={Treino} />
+            <Route path="/treino/ginasio" component={Ginasio} />
             <Route path="/corpo" component={Corpo} />
             <Route path="/corpo/medidas" component={MedidasHistorico} />
             <Route path="/favoritos" component={Favoritos} />

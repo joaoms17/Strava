@@ -8,11 +8,12 @@ import { fmtKcal, weekdayShort } from '../lib/format'
 import { workoutTitle } from '../lib/workout-actions'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { bikeSuggestion, nextBikeTarget } from '../../api/_lib/rules/progressao-bike'
-import type { Favorite, Workout, WorkoutImport } from '../lib/types'
+import type { ExerciseLogRow, Favorite, Workout, WorkoutImport } from '../lib/types'
 import Icon from '../components/ui/Icon'
 import ShotButton from '../components/ui/ShotButton'
 import BikeHrChart from '../components/BikeHrChart'
-import PlanoForca from '../components/PlanoForca'
+import LoadChart from '../components/LoadChart'
+import { useLocation } from 'wouter'
 
 const KNEE_DOT: Record<NonNullable<Workout['status']>, string> = {
   green: 'bg-ok',
@@ -31,6 +32,7 @@ interface TreinoData {
   workouts: Workout[]
   favorites: Favorite[]
   pending: WorkoutImport[]
+  logs: ExerciseLogRow[]
 }
 
 // Treino: registar em poucos toques (Bicicleta habitual, Já fiz, print do
@@ -42,9 +44,10 @@ export default function Treino() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [data, setData] = useState<TreinoData | null>(null)
   const [showAll, setShowAll] = useState(false)
+  const [, navigate] = useLocation()
 
   const load = useCallback(async () => {
-    const [{ data: workouts }, { data: favorites }, { data: pending }] = await Promise.all([
+    const [{ data: workouts }, { data: favorites }, { data: pending }, { data: logs }] = await Promise.all([
       supabase
         .from('workouts_active')
         .select('*')
@@ -63,11 +66,17 @@ export default function Treino() {
         .in('status', ['a_ler', 'por_confirmar', 'erro'])
         .gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString())
         .order('created_at', { ascending: false }),
+      supabase
+        .from('exercise_log')
+        .select('workout_id,exercise,set_index,reps,load_kg,rpe,created_at')
+        .order('created_at')
+        .limit(600),
     ])
     setData({
       workouts: (workouts ?? []) as Workout[],
       favorites: (favorites ?? []) as Favorite[],
       pending: (pending ?? []) as WorkoutImport[],
+      logs: (logs ?? []) as ExerciseLogRow[],
     })
   }, [today])
 
@@ -86,6 +95,13 @@ export default function Treino() {
 
   const habitual = favorites.find((f) => f.name === 'Bicicleta habitual') ?? favorites.find((f) => f.workout?.type === 'bike')
   const others = favorites.filter((f) => f !== habitual)
+  // Um favorito de ginásio abre a Sessão de ginásio; os outros, a folha Joelho.
+  const openFavorite = (f: Favorite) =>
+    f.workout?.type === 'strength' ? navigate(`/treino/ginasio?fav=${f.id}`) : sheet.open('joelho', { fav: f.id })
+  const openWorkout = (w: Workout) =>
+    w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
+      ? navigate(`/treino/ginasio?id=${w.id}`)
+      : sheet.open('confirmar-treino', { id: w.id })
 
   const bikes = workouts.filter((w) => w.type === 'bike')
   const target = nextBikeTarget(
@@ -177,7 +193,10 @@ export default function Treino() {
         <button onClick={() => sheet.open('ja-fiz')} className={secondary}>
           <Icon name="check" size={20} /> Já fiz
         </button>
-        <ShotButton className={secondary}>
+        <button onClick={() => navigate('/treino/ginasio')} className={secondary}>
+          <Icon name="dumbbell" size={20} /> Ginásio
+        </button>
+        <ShotButton className={`${secondary} col-span-2`}>
           <Icon name="watch" size={20} /> Print do relógio
         </ShotButton>
       </div>
@@ -187,10 +206,11 @@ export default function Treino() {
           {others.map((f) => (
             <button
               key={f.id}
-              onClick={() => sheet.open('joelho', { fav: f.id })}
+              onClick={() => openFavorite(f)}
               className="min-h-10 rounded-full border border-line px-3 text-[15px]"
             >
-              {f.name} · {f.workout?.minutes} min
+              {f.name}
+              {f.workout?.type !== 'strength' && ` · ${f.workout?.minutes} min`}
             </button>
           ))}
         </div>
@@ -213,7 +233,7 @@ export default function Treino() {
             {shown.map((w) => (
               <button
                 key={w.id}
-                onClick={() => sheet.open('confirmar-treino', { id: w.id })}
+                onClick={() => openWorkout(w)}
                 className="flex w-full items-center gap-3 py-2.5 text-left"
               >
                 <span className="flex w-11 shrink-0 flex-col items-center">
@@ -276,10 +296,12 @@ export default function Treino() {
         </section>
       )}
 
-      <section className="space-y-2">
-        <p className="label">Plano de força atual</p>
-        <PlanoForca />
-      </section>
+      {data.logs.length > 0 && (
+        <section className="space-y-2">
+          <p className="label">Cargas no ginásio</p>
+          <LoadChart logs={data.logs} workoutDates={new Map(workouts.map((w) => [w.id, w.date]))} />
+        </section>
+      )}
     </div>
   )
 }

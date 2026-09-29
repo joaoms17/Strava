@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'wouter'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { fmtDayShort } from '../../lib/format'
@@ -13,6 +14,7 @@ export default function TreinoSheet() {
   const sheet = useSheet()
   const date = sheet.params.get('data')
   const [favorites, setFavorites] = useState<Favorite[] | null>(null)
+  const [, navigate] = useLocation()
 
   useEffect(() => {
     void supabase
@@ -35,7 +37,11 @@ export default function TreinoSheet() {
         {(favorites ?? []).map((favorite) => (
           <button
             key={favorite.id}
-            onClick={() => sheet.open('joelho', { fav: favorite.id, ...extra })}
+            onClick={() =>
+              favorite.workout?.type === 'strength'
+                ? (sheet.close(), navigate(`/treino/ginasio?fav=${favorite.id}`))
+                : sheet.open('joelho', { fav: favorite.id, ...extra })
+            }
             className="flex min-h-[88px] w-full items-center gap-4 rounded-[20px] bg-burn px-4 text-left text-bg"
           >
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-bg text-burn">
@@ -46,8 +52,9 @@ export default function TreinoSheet() {
                 {favorite.name}
               </span>
               <span className="mt-1 block font-display text-[17px] font-semibold uppercase">
-                {favorite.workout?.minutes} min
-                {favorite.workout?.watts ? ` · ${favorite.workout.watts} W` : ''}
+                {favorite.workout?.type === 'strength'
+                  ? `${favorite.workout.exercises?.length ?? 0} exercícios`
+                  : `${favorite.workout?.minutes} min${favorite.workout?.watts ? ` · ${favorite.workout.watts} W` : ''}`}
               </span>
             </span>
             <Icon name="chevron" size={22} stroke={2.4} />

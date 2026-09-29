@@ -208,12 +208,12 @@ export default function Avancado() {
 
       <section className="space-y-2 rounded-2xl bg-surface p-4 text-[13px] text-dim">
         <h2 className="text-[15px] font-semibold text-ink">Calendário (.ics)</h2>
-        <p className="break-all">
-          {window.location.origin}/api/calendar?token=… (o ICS_TOKEN definido no Vercel). Deixa de ser preciso
-          quando o plano gerado sair.
+        <p>
+          O plano de 4 semanas saiu da app e o calendário deixou de existir. Se o subscreveste no iPhone, remove-o
+          em Definições › Calendário › Contas › Calendários subscritos.
         </p>
         <h2 className="pt-2 text-[15px] font-semibold text-ink">Versão</h2>
-        <p>Regresso · redesenho fase 1 · base de dados com migração 1</p>
+        <p>Regresso · redesenho fase 5 · 5 funções no Vercel</p>
       </section>
     </div>
   )

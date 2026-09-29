@@ -5,7 +5,6 @@ import { anthropic, MODELS } from '../_lib/anthropic.js'
 import {
   PROMPT_MEAL_PHOTO,
   PROMPT_MEAL_TEXT,
-  PROMPT_PLAN,
   PROMPT_REVIEW,
   PROMPT_MEAL_PHOTO_V2,
   PROMPT_MEAL_TEXT_V2,
@@ -80,8 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     [
       PROMPT_MEAL_TEXT,
       PROMPT_MEAL_PHOTO,
-      PROMPT_PLAN,
-      PROMPT_REVIEW,
+          PROMPT_REVIEW,
       PROMPT_MEAL_PHOTO_V2,
       PROMPT_MEAL_TEXT_V2,
       PROMPT_MEAL_CORRECT,

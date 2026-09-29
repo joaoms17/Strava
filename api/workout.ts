@@ -1,16 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import manual from './_workout/manual.js'
 import checkin from './_workout/checkin.js'
-import session from './_workout/session.js'
-import { discard, parseShot, remove, restore, save, shot, update } from './_workout/actions.js'
+import { discard, parseShot, remove, restore, save, shot, strength, update } from './_workout/actions.js'
 
 // Consolidado numa função (limite de 12 do Hobby); caminhos originais
 // preservados por rewrites no vercel.json.
 const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<void> | void> = {
-  manual,
   checkin,
-  session,
   save,
+  strength,
   update,
   delete: remove,
   restore,

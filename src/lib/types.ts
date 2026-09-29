@@ -115,6 +115,7 @@ export interface FavoriteWorkout {
   minutes: number
   watts?: number | null
   sport?: string | null
+  exercises?: { name: string; sets: number; rep_min: number; rep_max: number }[]
 }
 
 export interface DayRow {
