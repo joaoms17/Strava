@@ -9,6 +9,7 @@ type Status = 'loading' | 'ready' | 'no-profile' | 'needs-migration' | 'error'
 interface ProfileState {
   profile: Profile | null
   status: Status
+  missingMigrations: string[]
   reload: () => Promise<void>
   update: (patch: Partial<Profile>) => Promise<boolean>
 }
@@ -16,6 +17,7 @@ interface ProfileState {
 const ProfileContext = createContext<ProfileState>({
   profile: null,
   status: 'loading',
+  missingMigrations: [],
   reload: async () => {},
   update: async () => false,
 })
@@ -34,6 +36,7 @@ export function useReadyProfile(): Profile {
 export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [status, setStatus] = useState<Status>('loading')
+  const [missingMigrations, setMissing] = useState<string[]>([])
 
   const reload = useCallback(async () => {
     const [{ data, error }, migration] = await Promise.all([
@@ -48,8 +51,14 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       setStatus('no-profile')
       return
     }
-    if (migration.error || !('pin_mode' in data)) {
+    // Cada fase nova do redesenho traz uma migração para correr no Supabase.
+    const missing = [
+      ...(migration.error || !('pin_mode' in data) ? ['20260928000000_fase1.sql'] : []),
+      ...(!('ai_monthly_cap_eur' in data) ? ['20260929000000_fase2.sql'] : []),
+    ]
+    if (missing.length) {
       setProfile(data as Profile)
+      setMissing(missing)
       setStatus('needs-migration')
       return
     }
@@ -79,7 +88,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   }, [reload])
 
   return (
-    <ProfileContext.Provider value={{ profile, status, reload, update }}>
+    <ProfileContext.Provider value={{ profile, status, missingMigrations, reload, update }}>
       {children}
     </ProfileContext.Provider>
   )

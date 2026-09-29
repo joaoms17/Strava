@@ -3,14 +3,15 @@ import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { useReadyProfile, useProfile } from '../lib/profile'
 import { fmtInt } from '../lib/format'
+import { USD_TO_EUR, nearMonthlyCap } from '../../api/_lib/rules/custos'
 import type { CatalogExercise } from '../lib/types'
-
-// Taxa fixa para mostrar os custos em euros (aproximado).
-const USD_TO_EUR = 0.92
 
 const KIND_LABEL: Record<string, string> = {
   meal_parse_text: 'refeições por texto',
   meal_parse_photo: 'fotos',
+  meal_photo: 'fotos',
+  meal_text: 'refeições por texto',
+  meal_correct: 'correções',
   plan_generate: 'planos',
   weekly_review: 'resumos',
 }
@@ -20,7 +21,9 @@ export default function Avancado() {
   const profile = useReadyProfile()
   const { update } = useProfile()
   const toast = useToast()
-  const [costs, setCosts] = useState<{ eur: number; byKind: Record<string, number> } | null>(null)
+  const [costs, setCosts] = useState<{ eur: number; usd: number; byKind: Record<string, number> } | null>(null)
+  const [cap, setCap] = useState(String(profile.ai_monthly_cap_eur ?? 10))
+  const [visionCap, setVisionCap] = useState(String(profile.ai_daily_vision_cap ?? 40))
   const [catalog, setCatalog] = useState<CatalogExercise[]>([])
   const [dirty, setDirty] = useState<Set<string>>(new Set())
   const [floor, setFloor] = useState(String(profile.kcal_floor_week))
@@ -38,9 +41,10 @@ export default function Avancado() {
       let usd = 0
       for (const call of calls ?? []) {
         usd += Number(call.cost_usd)
-        byKind[call.kind as string] = (byKind[call.kind as string] ?? 0) + 1
+        const label = KIND_LABEL[call.kind as string] ?? (call.kind as string)
+        byKind[label] = (byKind[label] ?? 0) + 1
       }
-      setCosts({ eur: usd * USD_TO_EUR, byKind })
+      setCosts({ eur: usd * USD_TO_EUR, usd, byKind })
       setCatalog((exercises ?? []) as CatalogExercise[])
     }
     void load()
@@ -77,13 +81,58 @@ export default function Avancado() {
             </p>
             <p className="text-[13px] text-dim">
               {Object.entries(costs.byKind)
-                .map(([kind, n]) => `${fmtInt(n)} ${KIND_LABEL[kind] ?? kind}`)
+                .map(([label, n]) => `${fmtInt(n)} ${label}`)
                 .join(' · ') || 'Nenhuma chamada este mês.'}
             </p>
+            {nearMonthlyCap(costs.usd, Number(profile.ai_monthly_cap_eur ?? 10)) && (
+              <p className="text-[13px] text-attn">Estás perto do limite mensal que definiste.</p>
+            )}
           </>
         ) : (
           <p className="text-[15px] text-dim">A carregar…</p>
         )}
+      </section>
+
+      <section className="space-y-3 rounded-2xl bg-surface p-4">
+        <h2 className="text-[15px] font-semibold">Limites da IA</h2>
+        <p className="text-[13px] text-dim">
+          Ao chegar ao limite, as fotos ficam guardadas sem análise e podes analisá-las à mesma. Nunca pergunto antes de
+          cada foto.
+        </p>
+        <label className="flex items-center justify-between gap-3 text-[15px]">
+          <span>Limite mensal (€)</span>
+          <input
+            inputMode="decimal"
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+            className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3 text-[15px]">
+          <span>Análises de fotos por dia</span>
+          <input
+            inputMode="numeric"
+            value={visionCap}
+            onChange={(e) => setVisionCap(e.target.value.replace(/\D/g, ''))}
+            className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
+          />
+        </label>
+        <button
+          onClick={async () => {
+            const eur = Number(cap.replace(',', '.'))
+            const perDay = Number(visionCap)
+            if (!Number.isFinite(eur) || eur < 0 || eur > 500 || !Number.isInteger(perDay) || perDay < 1 || perDay > 500) {
+              toast('Limites fora do normal. Confirma os valores.')
+              return
+            }
+            toast(
+              (await update({ ai_monthly_cap_eur: eur, ai_daily_vision_cap: perDay })) ? 'Guardado.' : 'Não consegui guardar.',
+            )
+          }}
+          className="min-h-11 w-full rounded-xl bg-eat font-semibold text-bg"
+        >
+          Guardar limites
+        </button>
       </section>
 
       <section className="space-y-3 rounded-2xl bg-surface p-4">

@@ -7,6 +7,7 @@ export interface MealItem {
   fat: number
   food_id: string | null
   estimated: boolean
+  confidence?: 'alta' | 'media' | 'baixa'
 }
 
 export interface ParsedMealResponse {
@@ -49,13 +50,16 @@ export interface Profile {
   carbs_ref_g: number | null
   fat_ref_g: number | null
   scale_has_bodyfat: boolean
+  // Migração 2 (Fase 2)
+  ai_monthly_cap_eur: number
+  ai_daily_vision_cap: number
 }
 
 export interface Meal {
   id: string
   date: string
   logged_at: string
-  input_type: 'text' | 'photo' | 'barcode' | 'manual' | 'favorite' | 'repeat'
+  input_type: 'text' | 'photo' | 'barcode' | 'manual' | 'favorite' | 'repeat' | 'quick'
   raw_text: string | null
   photo_path: string | null
   items: MealItem[]
@@ -67,6 +71,19 @@ export interface Meal {
   favorite_id: string | null
   portion_factor: number
   deleted_at: string | null
+  created_at: string
+  // Migração 2 (Fase 2)
+  client_id: string | null
+  photo_paths: string[]
+  thumb_paths: string[]
+  note: string | null
+  analysis_note: string | null
+  tags: string[]
+  slot: Slot | null
+  status: 'a_analisar' | 'por_rever' | 'ok' | 'erro' | 'sem_analise'
+  analysis_started_at: string | null
+  analysis_attempts: number
+  analysis_error: string | null
 }
 
 export type Slot = 'pequeno_almoco' | 'almoco' | 'lanche' | 'jantar' | 'ceia'

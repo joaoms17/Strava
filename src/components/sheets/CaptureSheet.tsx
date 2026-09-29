@@ -105,7 +105,7 @@ export default function CaptureSheet() {
         ) : null}
 
         <div className="grid grid-cols-2 gap-3">
-          <PhotoButton source="camera" date={dateParam} className={big}>
+          <PhotoButton source="camera" date={dateParam} className={big} onDone={sheet.close}>
             <span className="text-2xl" aria-hidden>
               📷
             </span>
@@ -120,7 +120,7 @@ export default function CaptureSheet() {
         </div>
 
         <button
-          onClick={() => go(`/registar?modo=escrever${dateParam ? `&data=${dateParam}` : ''}`)}
+          onClick={() => sheet.open('escrever', dateParam ? { data: dateParam } : {})}
           className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-surface2 text-[15px] font-semibold"
         >
           <span aria-hidden>✎</span> Escrever ou ditar

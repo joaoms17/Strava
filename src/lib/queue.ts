@@ -1,7 +1,6 @@
-// Fila offline de refeições de texto (IndexedDB). Fotos ficam de fora:
-// o upload precisa de rede de qualquer maneira e o texto não se perde.
-const DB_NAME = 'regresso'
-const STORE = 'meal_queue'
+// Fila antiga (Fase 1) de refeições de texto. As capturas novas vão para
+// capture-queue; esta só esvazia o que já lá estava.
+import { STORES, inStore as inAnyStore } from './idb'
 
 export interface QueuedMeal {
   id: string
@@ -10,33 +9,8 @@ export interface QueuedMeal {
   logged_at: string
 }
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1)
-    request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) {
-        request.result.createObjectStore(STORE, { keyPath: 'id' })
-      }
-    }
-    request.onsuccess = () => resolve(request.result)
-    request.onerror = () => reject(request.error ?? new Error('IndexedDB indisponível'))
-  })
-}
-
-async function inStore<T>(
-  mode: IDBTransactionMode,
-  run: (store: IDBObjectStore) => IDBRequest<T>,
-): Promise<T> {
-  const db = await openDb()
-  try {
-    return await new Promise<T>((resolve, reject) => {
-      const request = run(db.transaction(STORE, mode).objectStore(STORE))
-      request.onsuccess = () => resolve(request.result)
-      request.onerror = () => reject(request.error ?? new Error('Falha na fila offline'))
-    })
-  } finally {
-    db.close()
-  }
+function inStore<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+  return inAnyStore(STORES.meals, mode, run)
 }
 
 export async function enqueueMeal(

@@ -7,6 +7,7 @@ import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
+import { recomputeFrom } from '../../lib/recompute'
 import { localCalendarDate, shiftDate } from '../../lib/day'
 import { fmt1, parseDecimal } from '../../lib/format'
 import { checkWeighing, trend7 } from '../../../api/_lib/rules/weight'
@@ -102,6 +103,8 @@ export default function WeighSheet() {
       return
     }
     emitDataChanged()
+    // Uma pesagem num dia passado muda o peso médio e o gasto dos dias seguintes.
+    recomputeFrom(date, today)
 
     const series = trend7(
       [...weights.filter((w) => w.date !== date), { date, kg }]

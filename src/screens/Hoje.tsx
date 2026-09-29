@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
@@ -10,6 +10,8 @@ import { signedUrls } from '../lib/photos'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite } from '../lib/meal-actions'
+import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
+import { recomputeFrom } from '../lib/recompute'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
@@ -79,6 +81,8 @@ export default function Hoje() {
   const [data, setData] = useState<DayData | null>(null)
   const [planOpen, setPlanOpen] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
+  const captures = useCaptures()
+  const retried = useRef(new Set<string>())
 
   const load = useCallback(async () => {
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
@@ -96,7 +100,7 @@ export default function Hoje() {
       { count: weightCount },
       { count: mealCount },
     ] = await Promise.all([
-      supabase.from('meals_counted').select('*').eq('date', date).order('logged_at'),
+      supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
       supabase
         .from('meals')
         .select('*')
@@ -121,7 +125,9 @@ export default function Hoje() {
       supabase.from('meals_counted').select('id', { count: 'exact', head: true }),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
-    const photos = await signedUrls(mealRows.map((m) => m.photo_path).filter((p): p is string => !!p))
+    const photos = await signedUrls(
+      mealRows.map((m) => m.thumb_paths?.[0] ?? m.photo_path).filter((p): p is string => !!p),
+    )
     setData({
       meals: mealRows,
       deleted: (deleted ?? []) as Meal[],
@@ -145,12 +151,44 @@ export default function Hoje() {
     void load()
   }, [load, version])
 
+  // Fotos a analisar: pergunta pelo estado de 3 em 3 s (de 15 em 15 s depois
+  // de 2 min) e pede outra tentativa quando uma análise parou a meio.
+  useEffect(() => {
+    const analysing = (data?.meals ?? []).filter((m) => m.status === 'a_analisar')
+    if (analysing.length === 0) return
+    const now = Date.now()
+    const oldest = Math.min(...analysing.map((m) => Date.parse(m.created_at)))
+    const timer = setTimeout(() => {
+      if (!document.hidden) void load()
+    }, now - oldest > 120_000 ? 15_000 : 3_000)
+    for (const meal of analysing) {
+      const started = meal.analysis_started_at ? Date.parse(meal.analysis_started_at) : null
+      const stalled = started == null ? now - Date.parse(meal.created_at) > 25_000 : now - started > 95_000
+      const key = `${meal.id}:${meal.analysis_started_at ?? '-'}`
+      if (stalled && meal.analysis_attempts < 3 && !retried.current.has(key)) {
+        retried.current.add(key)
+        void postApi('/api/meal/analyse', { meal_id: meal.id })
+          .then(() => load())
+          .catch(() => undefined)
+      }
+    }
+    return () => clearTimeout(timer)
+  }, [data, load])
+
   if (!data) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
 
-  const kcalIn = data.meals.reduce((acc, m) => acc + Number(m.kcal), 0)
-  const proteinIn = data.meals.reduce((acc, m) => acc + Number(m.protein), 0)
-  const carbsIn = data.meals.reduce((acc, m) => acc + Number(m.carbs), 0)
-  const fatIn = data.meals.reduce((acc, m) => acc + Number(m.fat), 0)
+  // Só contam as refeições analisadas (ok e por rever); as outras avisam.
+  const counted = data.meals.filter((m) => m.status === 'ok' || m.status === 'por_rever')
+  const kcalIn = counted.reduce((acc, m) => acc + Number(m.kcal), 0)
+  const proteinIn = counted.reduce((acc, m) => acc + Number(m.protein), 0)
+  const carbsIn = counted.reduce((acc, m) => acc + Number(m.carbs), 0)
+  const fatIn = counted.reduce((acc, m) => acc + Number(m.fat), 0)
+  const errorMeals = data.meals.filter((m) => m.status === 'erro')
+  const limitMeals = data.meals.filter((m) => m.status === 'sem_analise')
+  const reviewMeals = data.meals.filter((m) => m.status === 'por_rever')
+  const localCaptures = captures.filter((c) => (c.date ?? today) === date)
+  const stillCounting =
+    data.meals.filter((m) => m.status === 'a_analisar').length + localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
   // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa.
   const workoutKcals = data.workouts.map((w) => ({
@@ -198,10 +236,13 @@ export default function Hoje() {
         yesterdayMeals: data.yesterday.meals,
         yesterdayAnswered:
           data.yesterday.flags.includes('dia_fechado') || data.yesterday.flags.includes('faltou_algo'),
-        mealsToday: data.meals.length,
+        mealsToday: counted.length,
         kcalToday: kcalIn,
         proteinToday: proteinIn,
         proteinTarget: profile.protein_g,
+        mealsWithError: errorMeals.length,
+        mealsOverLimit: limitMeals.length,
+        mealsToReview: reviewMeals.length,
         nudges,
       })
     : null
@@ -257,6 +298,7 @@ export default function Hoje() {
       return
     }
     emitDataChanged()
+    recomputeFrom(shiftDate(today, -1), today)
     toast(flag === 'dia_fechado' ? 'Ontem fica completo.' : 'Ontem fica fora das contas do gasto.')
   }
 
@@ -285,48 +327,126 @@ export default function Hoje() {
     })
   }
   for (const meal of data.meals) {
-    const slot = slotOf(new Date(meal.logged_at))
+    const slot = meal.slot ?? slotOf(new Date(meal.logged_at))
     const fresh = Date.now() - Date.parse(meal.created_at) < 60_000
-    const thumb = meal.photo_path ? data.photos[meal.photo_path] : null
+    const thumbPath = meal.thumb_paths?.[0] ?? meal.photo_path
+    const thumb = thumbPath ? data.photos[thumbPath] : null
     const fromFavorite = meal.input_type === 'favorite' && meal.raw_text
     const title = fromFavorite ? meal.raw_text! : SLOT_LABEL[slot]
-    const subtitle = fromFavorite ? SLOT_LABEL[slot] : meal.items.map((i) => i.name).join(', ')
+    const analysed = meal.status === 'ok' || meal.status === 'por_rever'
+    const subtitle =
+      meal.status === 'a_analisar'
+        ? 'A analisar…'
+        : meal.status === 'erro'
+          ? 'Não consegui ler · toca para tentar de novo'
+          : meal.status === 'sem_analise'
+            ? 'Sem análise (limite da IA)'
+            : fromFavorite
+              ? SLOT_LABEL[slot]
+              : meal.items.map((i) => i.name).join(', ')
     entries.push({
       at: meal.logged_at,
       key: `m-${meal.id}`,
       node: (
         <div>
-          <button
-            onClick={() => sheet.open('refeicao', { id: meal.id })}
-            className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 py-1 text-left"
-          >
-            <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
-            {thumb ? (
-              <img src={thumb} alt="" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
-            ) : (
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2" aria-hidden>
-                🍽
+          <div className="flex items-center">
+            <button
+              onClick={() => sheet.open('refeicao', { id: meal.id })}
+              className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-left"
+            >
+              <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
+              {thumb ? (
+                <img
+                  src={thumb}
+                  alt=""
+                  className={`h-12 w-12 shrink-0 rounded-xl object-cover ${meal.status === 'a_analisar' ? 'animate-pulse' : ''}`}
+                />
+              ) : (
+                <span
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 ${meal.status === 'a_analisar' ? 'animate-pulse' : ''}`}
+                  aria-hidden
+                >
+                  🍽
+                </span>
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px]">
+                  {title}
+                  {meal.favorite_id && <span className="ml-1 text-attn">★</span>}
+                </span>
+                <span
+                  className={`block truncate text-[13px] ${meal.status === 'erro' ? 'text-pain' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
+                >
+                  {subtitle}
+                </span>
               </span>
+              {analysed && (
+                <span className="flex shrink-0 items-center gap-1.5 text-[15px] tabular-nums">
+                  {meal.status === 'por_rever' && (
+                    <span className="h-2 w-2 rounded-full bg-attn" aria-label="por confirmar" />
+                  )}
+                  {meal.is_estimate ? '≈ ' : ''}
+                  {fmtKcal(Number(meal.kcal))}
+                </span>
+              )}
+            </button>
+            {meal.status === 'a_analisar' && (
+              <button
+                onClick={() => sheet.open('nota', { id: meal.id })}
+                className="min-h-11 shrink-0 rounded-xl px-3 text-[13px] text-eat"
+              >
+                ＋ Nota
+              </button>
             )}
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px]">
-                {title}
-                {meal.favorite_id && <span className="ml-1 text-attn">★</span>}
-              </span>
-              <span className="block truncate text-[13px] text-dim">{subtitle}</span>
-            </span>
-            <span className="shrink-0 text-[15px] tabular-nums">
-              {meal.is_estimate ? '≈ ' : ''}
-              {fmtKcal(Number(meal.kcal))}
-            </span>
-          </button>
-          {fresh && (
+          </div>
+          {fresh && analysed && (
             <p className="pl-[72px] text-[13px] text-dim">
               acabado de registar ·{' '}
               <button className="text-eat" onClick={() => void deleteMeal(meal.id, toast)}>
                 Anular
               </button>
             </p>
+          )}
+        </div>
+      ),
+    })
+  }
+  // Capturas que ainda não chegaram ao servidor (sem rede ou a enviar).
+  for (const capture of localCaptures) {
+    entries.push({
+      at: capture.taken_at ?? capture.created_at,
+      key: `c-${capture.client_id}`,
+      node: (
+        <div className="flex min-h-14 items-center gap-3 px-2 py-1">
+          <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">
+            {timeOf(capture.taken_at ?? capture.created_at)}
+          </span>
+          {capture.preview ? (
+            <img src={capture.preview} alt="" className="h-12 w-12 shrink-0 animate-pulse rounded-xl object-cover" />
+          ) : (
+            <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-surface2" aria-hidden>
+              ✎
+            </span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px]">{capture.text ?? 'Foto'}</span>
+            <span className={`block truncate text-[13px] ${capture.state === 'erro' ? 'text-pain' : 'text-dim'}`}>
+              {capture.state === 'erro'
+                ? (capture.error ?? 'Não consegui enviar.')
+                : navigator.onLine
+                  ? 'A enviar…'
+                  : 'À espera de rede · fica guardada'}
+            </span>
+          </span>
+          {capture.state === 'erro' && (
+            <span className="flex shrink-0 gap-1">
+              <button onClick={() => void retryCapture(capture.client_id)} className="min-h-11 px-2 text-[13px] text-eat">
+                Tentar
+              </button>
+              <button onClick={() => void discardCapture(capture.client_id)} className="min-h-11 px-2 text-[13px] text-dim">
+                Descartar
+              </button>
+            </span>
           )}
         </div>
       ),
@@ -394,8 +514,15 @@ export default function Hoje() {
             </>
           ) : (
             <>
-              <p className="text-[15px] text-dim">{empty ? 'Podes comer' : 'Podes comer mais'}</p>
-              <p className="text-[56px] leading-none font-bold tracking-tight tabular-nums">{fmtKcal(left)}</p>
+              <p className="text-[15px] text-dim">
+                {counted.length === 0 ? 'Podes comer' : 'Podes comer mais'}
+                {stillCounting > 0 && ' cerca de'}
+              </p>
+              <p
+                className={`text-[56px] leading-none font-bold tracking-tight tabular-nums ${stillCounting ? 'opacity-50' : ''}`}
+              >
+                {fmtKcal(left)}
+              </p>
               <p className="text-[15px] text-dim">
                 de {fmtKcal(plan)} do plano de hoje
                 {kcalExercise > 0 && !maintenance && (
@@ -410,6 +537,11 @@ export default function Hoje() {
             <p className="text-[48px] leading-none font-bold tracking-tight tabular-nums">{fmtKcal(kcalIn)}</p>
             <p className="text-[15px] text-dim">de {fmtKcal(plan)} do plano desse dia</p>
           </>
+        )}
+        {stillCounting > 0 && (
+          <p className="text-[13px] text-dim">
+            ainda a contar {stillCounting} {stillCounting === 1 ? 'foto' : 'fotos'}
+          </p>
         )}
         <Bar value={kcalIn} max={plan} tone="eat" label="Comer" />
         <div className="space-y-1.5">
@@ -472,6 +604,20 @@ export default function Hoje() {
           onYesterday={(flag) => void answerYesterday(flag)}
           onFavorite={(fav) => void logFavorite(fav, null, toast)}
           onDismiss={() => void dismiss(step)}
+          errorMeal={errorMeals[0] ?? null}
+          limitMeal={limitMeals[0] ?? null}
+          reviewCount={reviewMeals.length}
+          onOpenMeal={(id) => sheet.open('refeicao', { id })}
+          onAnalyse={async (id, body) => {
+            try {
+              await postApi('/api/meal/analyse', { meal_id: id, ...body })
+            } catch (err) {
+              toast(err instanceof Error ? err.message : 'Não consegui analisar.')
+            }
+            emitDataChanged()
+          }}
+          onReview={() => sheet.open('rever')}
+          onRaiseLimit={() => navigate('/definicoes/avancado')}
         />
       )}
 
@@ -537,6 +683,7 @@ export default function Hoje() {
                     try {
                       await postApi('/api/meal/restore', { meal_id: meal.id })
                       emitDataChanged()
+                      recomputeFrom(meal.date, today)
                     } catch {
                       toast('Não consegui repor.')
                     }
@@ -693,6 +840,13 @@ function NextStepCard({
   onYesterday,
   onFavorite,
   onDismiss,
+  errorMeal,
+  limitMeal,
+  reviewCount,
+  onOpenMeal,
+  onAnalyse,
+  onReview,
+  onRaiseLimit,
 }: {
   id: NextStepId
   yesterdayMeals: number
@@ -701,6 +855,13 @@ function NextStepCard({
   onYesterday: (flag: 'dia_fechado' | 'faltou_algo') => void
   onFavorite: (favorite: Favorite) => void
   onDismiss: () => void
+  errorMeal: Meal | null
+  limitMeal: Meal | null
+  reviewCount: number
+  onOpenMeal: (id: string) => void
+  onAnalyse: (id: string, body: Record<string, boolean>) => Promise<void>
+  onReview: () => void
+  onRaiseLimit: () => void
 }) {
   const later = (
     <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
@@ -719,6 +880,57 @@ function NextStepCard({
 
   return (
     <div className="space-y-3 rounded-2xl bg-surface p-4">
+      {id === 'erro' && errorMeal && (
+        <>
+          <p className="text-[17px]">Não consegui ler a refeição das {timeOf(errorMeal.logged_at)}.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => void onAnalyse(errorMeal.id, { reset: true })}
+              className="min-h-12 rounded-xl bg-eat font-semibold text-bg"
+            >
+              Tentar de novo
+            </button>
+            <button onClick={() => onOpenMeal(errorMeal.id)} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+              Escrever o que era
+            </button>
+          </div>
+        </>
+      )}
+      {id === 'limite' && limitMeal && (
+        <>
+          <p className="text-[17px]">
+            Chegaste ao limite da IA que definiste. A foto das {timeOf(limitMeal.logged_at)} está guardada.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              onClick={() => void onAnalyse(limitMeal.id, { force: true })}
+              className="min-h-12 rounded-xl bg-eat px-1 text-[13px] font-semibold text-bg"
+            >
+              Analisar esta mesmo assim
+            </button>
+            <button onClick={onRaiseLimit} className="min-h-12 rounded-xl bg-surface2 px-1 text-[13px]">
+              Subir limite
+            </button>
+            <button onClick={() => onOpenMeal(limitMeal.id)} className="min-h-12 rounded-xl bg-surface2 px-1 text-[13px]">
+              Escrever em vez disso
+            </button>
+          </div>
+        </>
+      )}
+      {id === 'rever' && (
+        <>
+          <p className="text-[17px]">
+            {reviewCount} {reviewCount === 1 ? 'refeição por confirmar' : 'refeições por confirmar'}. Já contam; confirmar é
+            opcional.
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={onReview} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+              Rever
+            </button>
+            {later}
+          </div>
+        </>
+      )}
       {id === 'pesar' && (
         <>
           <p className="text-[17px]">Bom dia. Pesa-te?</p>

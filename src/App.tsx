@@ -3,9 +3,10 @@ import type { Session } from '@supabase/supabase-js'
 import { Link, Redirect, Route, Switch, useLocation } from 'wouter'
 import { supabase, supabaseConfigured } from './lib/supabase'
 import { ProfileProvider, useProfile } from './lib/profile'
-import { ToastProvider } from './lib/toast'
+import { ToastProvider, useToast } from './lib/toast'
 import { useSheet } from './lib/sheet'
 import { useQueueCount } from './lib/sync'
+import { onDuplicate, useCaptureSync } from './lib/capture-queue'
 import { fmtDayShort } from './lib/format'
 import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
@@ -14,8 +15,13 @@ import TabBar from './components/TabBar'
 import CaptureSheet from './components/sheets/CaptureSheet'
 import WeighSheet from './components/sheets/WeighSheet'
 import MealSheet from './components/sheets/MealSheet'
+import GallerySheet from './components/sheets/GallerySheet'
+import WriteSheet from './components/sheets/WriteSheet'
+import NoteSheet from './components/sheets/NoteSheet'
+import QuickSheet from './components/sheets/QuickSheet'
+import BarcodeSheet from './components/sheets/BarcodeSheet'
+import ReviewSheet from './components/sheets/ReviewSheet'
 import Hoje from './screens/Hoje'
-import Registar from './screens/Registar'
 import Favoritos from './screens/Favoritos'
 import Definicoes from './screens/Definicoes'
 
@@ -37,7 +43,7 @@ function Centered({ children }: { children: ReactNode }) {
 const PARENT: [RegExp, string][] = [
   [/^\/definicoes\/arquivo\/.+/, '/definicoes/arquivo'],
   [/^\/definicoes\/.+/, '/definicoes'],
-  [/^\/(definicoes|favoritos|registar)/, '/hoje'],
+  [/^\/(definicoes|favoritos)/, '/hoje'],
 ]
 
 const TITLES: [RegExp, string][] = [
@@ -45,7 +51,6 @@ const TITLES: [RegExp, string][] = [
   [/^\/treino/, 'Treino'],
   [/^\/corpo/, 'Corpo'],
   [/^\/favoritos/, 'Favoritos'],
-  [/^\/registar/, 'Registar'],
   [/^\/definicoes\/avancado/, 'Avançado'],
   [/^\/definicoes\/arquivo/, 'Arquivo'],
   [/^\/definicoes/, 'Definições'],
@@ -76,7 +81,7 @@ function Header() {
       <div className="flex shrink-0 items-center gap-3">
         {queued > 0 && (
           <span className="rounded-full bg-surface2 px-2.5 py-1 text-[13px] text-dim">
-            {queued} à espera de rede
+            {navigator.onLine ? `A enviar ${queued}` : `${queued} à espera de rede`}
           </span>
         )}
         {!location.startsWith('/definicoes') && (
@@ -100,11 +105,35 @@ function Sheets() {
   if (sheet.name === 'refeicao' && sheet.params.get('id')) {
     return <MealSheet key={sheet.params.get('id')} />
   }
+  if (sheet.name === 'galeria') return <GallerySheet />
+  if (sheet.name === 'escrever') return <WriteSheet />
+  if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
+  if (sheet.name === 'numeros') return <QuickSheet />
+  if (sheet.name === 'barras') return <BarcodeSheet />
+  if (sheet.name === 'rever') return <ReviewSheet />
+  return null
+}
+
+// Envia as capturas em fila e avisa quando uma foto já estava registada.
+function CaptureSync() {
+  const toast = useToast()
+  const sheet = useSheet()
+  useCaptureSync()
+  useEffect(
+    () =>
+      onDuplicate((meal) =>
+        toast(`Esta foto já estava registada (${fmtDayShort(meal.date)})`, [
+          { label: 'Abrir', run: () => sheet.open('refeicao', { id: meal.id }) },
+        ]),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toast],
+  )
   return null
 }
 
 function Shell() {
-  const { status, reload } = useProfile()
+  const { status, reload, missingMigrations } = useProfile()
 
   if (status === 'loading') return <div className="min-h-dvh bg-bg" />
   if (status === 'no-profile') {
@@ -120,10 +149,17 @@ function Shell() {
       <Centered>
         <p className="text-[17px] font-semibold text-ink">Falta um passo no Supabase</p>
         <p>
-          A app nova precisa de uma atualização da base de dados. No Supabase, abre o SQL Editor,
-          cola o ficheiro <code className="text-ink">supabase/migrations/20260928000000_fase1.sql</code> e
-          carrega em Run. Demora segundos e não apaga nada.
+          A app nova precisa de uma atualização da base de dados. No Supabase, abre o SQL Editor e corre,
+          por esta ordem, {missingMigrations.length === 1 ? 'o ficheiro' : 'os ficheiros'}:
         </p>
+        <ul className="space-y-1">
+          {missingMigrations.map((file) => (
+            <li key={file}>
+              <code className="text-ink">supabase/migrations/{file}</code>
+            </li>
+          ))}
+        </ul>
+        <p>Cola cada um, carrega em Run. Demora segundos e não apaga nada.</p>
         <button onClick={() => void reload()} className="mt-2 rounded-xl bg-eat px-4 py-3 font-semibold text-bg">
           Já corri, tentar outra vez
         </button>
@@ -145,7 +181,8 @@ function Shell() {
   return (
     <div className="min-h-dvh bg-bg">
       <Header />
-      <main className="mx-auto max-w-md px-4 pb-32">
+      {/* Espaço em baixo para as últimas linhas nunca ficarem por baixo da barra nem de um aviso. */}
+      <main className="mx-auto max-w-md px-4 pb-48">
         <Suspense fallback={loading}>
           <Switch>
             <Route path="/">
@@ -157,7 +194,6 @@ function Shell() {
             <Route path="/treino" component={Treino} />
             <Route path="/corpo" component={Corpo} />
             <Route path="/favoritos" component={Favoritos} />
-            <Route path="/registar" component={Registar} />
             <Route path="/definicoes" component={Definicoes} />
             <Route path="/definicoes/avancado" component={Avancado} />
             <Route path="/definicoes/arquivo" nest>
@@ -171,6 +207,7 @@ function Shell() {
       </main>
       <TabBar />
       <Sheets />
+      <CaptureSync />
     </div>
   )
 }

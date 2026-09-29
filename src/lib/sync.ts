@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { postApi } from './api'
 import { listQueuedMeals, removeQueuedMeal, type QueuedMeal } from './queue'
+import { listCaptures } from './capture-queue'
 import { emitDataChanged } from './events'
 import type { Meal, ParsedMealResponse } from './types'
 
@@ -46,7 +47,8 @@ export function useQueueCount(): number {
   const [count, setCount] = useState(0)
   const refresh = useCallback(async () => {
     try {
-      setCount((await listQueuedMeals()).length)
+      const [legacy, captures] = await Promise.all([listQueuedMeals(), listCaptures()])
+      setCount(legacy.length + captures.filter((c) => c.state === 'pendente').length)
     } catch {
       setCount(0)
     }
@@ -60,10 +62,12 @@ export function useQueueCount(): number {
     }
     window.addEventListener('online', run)
     window.addEventListener('regresso:data', refresh)
+    window.addEventListener('regresso:captures', refresh)
     document.addEventListener('visibilitychange', onVisible)
     return () => {
       window.removeEventListener('online', run)
       window.removeEventListener('regresso:data', refresh)
+      window.removeEventListener('regresso:captures', refresh)
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [refresh])

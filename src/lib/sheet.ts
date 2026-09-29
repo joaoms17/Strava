@@ -2,7 +2,16 @@ import { useLocation, useSearch } from 'wouter'
 
 // Folhas abertas por URL (?folha=peso&data=…): recarregar mantém o ecrã e o
 // botão de voltar fecha a folha. No máximo uma de cada vez.
-export type SheetName = 'registar' | 'peso' | 'refeicao'
+export type SheetName =
+  | 'registar'
+  | 'peso'
+  | 'refeicao'
+  | 'galeria'
+  | 'escrever'
+  | 'nota'
+  | 'numeros'
+  | 'barras'
+  | 'rever'
 
 export function useSheet() {
   const [location, navigate] = useLocation()
