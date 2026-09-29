@@ -4,7 +4,7 @@ import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { recomputeFrom } from '../lib/recompute'
 import { nutritionalDay } from '../lib/day'
-import { syncNow } from '../lib/intervals'
+import { syncNow, syncSummary } from '../lib/intervals'
 import { syncedAgo } from '../../api/_lib/rules/intervals'
 
 // Definições › Ligações › Treinos automáticos (intervals.icu). Só com relógio
@@ -33,12 +33,7 @@ export default function IntervalsSettings() {
     run('sincronizar', async () => {
       const r = await syncNow(days)
       if (r.oldestChanged) recomputeFrom(r.oldestChanged, today)
-      const parts = [
-        r.inserted ? `${r.inserted} ${r.inserted === 1 ? 'treino novo' : 'treinos novos'}` : null,
-        r.merged ? `${r.merged} ${r.merged === 1 ? 'junto a uma sessão' : 'juntos a sessões'}` : null,
-        r.weights ? `${r.weights} ${r.weights === 1 ? 'pesagem' : 'pesagens'}` : null,
-      ].filter(Boolean)
-      return parts.length ? `Sincronizado: ${parts.join(' · ')}` : 'Sincronizado. Nada de novo.'
+      return syncSummary(r)
     })
 
   if (!status?.connected) {
@@ -86,6 +81,9 @@ export default function IntervalsSettings() {
         {status.last_sync_at ? ` · sincronizado ${syncedAgo(status.last_sync_at, new Date())}` : ''}
       </p>
       {status.last_error && <p className="text-[14px] text-pain">{status.last_error}</p>}
+      {status.wellness_error && (
+        <p className="text-[14px] text-attn">Não consegui ler o sono: {status.wellness_error}</p>
+      )}
       <p className="text-[13px] text-dim">
         As pesagens do intervals.icu só entram nos dias sem pesagem tua. Os treinos juntam-se à Bicicleta habitual ou ao
         print quando são a mesma sessão.

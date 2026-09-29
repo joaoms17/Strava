@@ -51,6 +51,7 @@ interface DayData {
   photos: Record<string, string>
   weighedToday: boolean
   sleep: NightSleep | null
+  lastNight: (NightSleep & { date: string }) | null
   importsToConfirm: string[]
   weightCount: number
   lastMeasureDate: string | null
@@ -75,6 +76,13 @@ const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
 function minutesOf(time: string): number {
   const [h, m] = time.split(':').map(Number) as [number, number]
   return h * 60 + m
+}
+
+// A noite deste dia e, se faltar, a última registada nos 3 dias antes.
+function pickNights(date: string, rows: (Partial<NightSleep> & { date: string })[]) {
+  const withSleep = rows.filter((r) => hasSleep(r)) as (NightSleep & { date: string })[]
+  const tonight = withSleep.find((r) => r.date === date) ?? null
+  return { sleep: tonight, lastNight: tonight ? null : (withSleep.find((r) => r.date < date) ?? null) }
 }
 
 export default function Hoje() {
@@ -150,8 +158,14 @@ export default function Hoje() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),
-      // O sono da noite que acabou neste dia (Garmin via intervals.icu).
-      supabase.from('health_daily').select('*').eq('date', date).maybeSingle(),
+      // O sono da noite que acabou neste dia (Garmin via intervals.icu) e das
+      // três noites antes, para dizer qual foi a última quando esta falta.
+      supabase
+        .from('health_daily')
+        .select('*')
+        .lte('date', date)
+        .gte('date', shiftDate(date, -3))
+        .order('date', { ascending: false }),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
@@ -175,7 +189,7 @@ export default function Hoje() {
       importsToConfirm: (imports ?? []).map((i) => i.id as string),
       weightCount: weightCount ?? 0,
       lastMeasureDate: (lastMeasure?.[0]?.date as string | undefined) ?? null,
-      sleep: hasSleep(health as Partial<NightSleep> | null) ? (health as NightSleep) : null,
+      ...pickNights(date, (health ?? []) as (Partial<NightSleep> & { date: string })[]),
       expenditure,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
@@ -357,6 +371,32 @@ export default function Hoje() {
 
   type Entry = { at: string; key: string; node: React.ReactNode }
   const entries: Entry[] = []
+  // Sem sono desta noite (não dormiu com o relógio): diz qual foi a última.
+  if (!data.sleep && data.lastNight) {
+    const last = data.lastNight
+    entries.push({
+      at: `${date}T00:00:00Z`,
+      key: 'sono',
+      node: (
+        <div className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 opacity-80">
+          <span className="w-12 shrink-0 font-display text-[15px] font-semibold tracking-[0.04em] text-dim uppercase">
+            Noite
+          </span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-[1.5px] border-dashed border-line text-dim">
+            <Icon name="moon" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-semibold">Sem registo esta noite</span>
+            <span className="block truncate text-[14px] text-dim">
+              Última: {last.date === shiftDate(date, -1) ? 'ontem' : weekdayShort(last.date)}
+              {last.sleep_minutes != null ? ` · ${fmtSleep(last.sleep_minutes)}` : ''}
+              {sleepDetail(last) ? ` · ${sleepDetail(last)}` : ''}
+            </span>
+          </span>
+        </div>
+      ),
+    })
+  }
   // O sono da noite abre o dia (antes da pesagem e das refeições).
   if (data.sleep) {
     const night = data.sleep

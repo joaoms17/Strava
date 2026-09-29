@@ -54,6 +54,11 @@ export interface SyncResult {
   inserted: number
   merged: number
   weights: number
+  // Bem-estar: dias que o intervals.icu devolveu, noites com sono gravadas
+  // e o erro, se não foi possível ler (antes ficava calado).
+  wellnessDays: number
+  nights: number
+  wellnessError: string | null
   oldestChanged: string | null
 }
 
@@ -90,12 +95,24 @@ export async function syncIntervals(
   const oldest = shiftDate(today, -options.days)
   const newest = shiftDate(today, 1)
   const range = `oldest=${oldest}&newest=${newest}`
-  const [activities, wellness] = await Promise.all([
+  const [activities, wellnessRead] = await Promise.all([
     icuGet<IcuActivity[]>(key, `/activities?${range}`, options.timeoutMs),
-    icuGet<IcuWellness[]>(key, `/wellness?${range}`, options.timeoutMs).catch(() => [] as IcuWellness[]),
+    icuGet<IcuWellness[]>(key, `/wellness?${range}`, options.timeoutMs).then(
+      (rows) => ({ rows: Array.isArray(rows) ? rows : [], error: null as string | null }),
+      (err: unknown) => ({ rows: [] as IcuWellness[], error: err instanceof Error ? err.message : String(err) }),
+    ),
   ])
+  const wellness = wellnessRead.rows
 
-  const result: SyncResult = { inserted: 0, merged: 0, weights: 0, oldestChanged: null }
+  const result: SyncResult = {
+    inserted: 0,
+    merged: 0,
+    weights: 0,
+    wellnessDays: wellness.length,
+    nights: 0,
+    wellnessError: wellnessRead.error,
+    oldestChanged: null,
+  }
   const touch = (date: string) => {
     if (!result.oldestChanged || date < result.oldestChanged) result.oldestChanged = date
   }
@@ -265,11 +282,13 @@ export async function syncIntervals(
       const extras = Object.fromEntries(
         Object.entries(sleepExtras).map(([k, v]) => [k, v ?? (health as Record<string, unknown> | null)?.[k] ?? null]),
       )
-      const { error } = await admin.from('health_daily').upsert({ ...row, ...extras }, { onConflict: 'user_id,date' })
+      let { error } = await admin.from('health_daily').upsert({ ...row, ...extras }, { onConflict: 'user_id,date' })
       // Antes da migração 9 as colunas do sono não existem: grava o resto.
       if (error && /sleep_score|sleep_quality|hrv|avg_sleep_hr|column/i.test(error.message)) {
-        await admin.from('health_daily').upsert(row, { onConflict: 'user_id,date' })
+        ;({ error } = await admin.from('health_daily').upsert(row, { onConflict: 'user_id,date' }))
       }
+      if (error) console.error('health_daily:', m.date, error.message)
+      else if (m.sleepMinutes != null || m.sleepScore != null || m.sleepQuality != null) result.nights++
     }
   }
 
@@ -279,7 +298,12 @@ export async function syncIntervals(
     .update({ last_sync_at: now, last_error: null })
     .eq('user_id', userId)
     .eq('provider', 'intervals')
-  await setStatus(admin, userId, { connected: true, last_sync_at: now, last_error: null })
+  await setStatus(admin, userId, {
+    connected: true,
+    last_sync_at: now,
+    last_error: null,
+    wellness_error: wellnessRead.error,
+  })
   return result
 }
 

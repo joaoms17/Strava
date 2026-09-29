@@ -58,7 +58,13 @@ export interface Profile {
   measure_interval_days?: number
   thigh_landmark_cm?: number
   integration_status?: {
-    intervals?: { connected?: boolean; athlete?: string | null; last_sync_at?: string | null; last_error?: string | null }
+    intervals?: {
+      connected?: boolean
+      athlete?: string | null
+      last_sync_at?: string | null
+      last_error?: string | null
+      wellness_error?: string | null
+    }
   }
 }
 

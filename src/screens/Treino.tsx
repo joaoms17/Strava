@@ -14,7 +14,7 @@ import Icon from '../components/ui/Icon'
 import ShotButton from '../components/ui/ShotButton'
 import BikeHrChart from '../components/BikeHrChart'
 import LoadChart from '../components/LoadChart'
-import { syncNow, useAutoSync } from '../lib/intervals'
+import { syncNow, syncSummary, useAutoSync } from '../lib/intervals'
 import { syncedAgo } from '../../api/_lib/rules/intervals'
 import { useProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
@@ -225,7 +225,7 @@ export default function Treino() {
             onClick={() => {
               setSyncing(true)
               void syncNow(3)
-                .then((r) => toast(r.inserted || r.merged ? 'Treinos do relógio atualizados.' : 'Nada de novo no relógio.'))
+                .then((r) => toast(syncSummary(r)))
                 .catch((err) => toast(err instanceof Error ? err.message : 'Não consegui sincronizar.'))
                 .finally(() => {
                   setSyncing(false)
