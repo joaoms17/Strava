@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import checkin from './_workout/checkin.js'
-import { discard, parseShot, remove, restore, save, shot, strength, update } from './_workout/actions.js'
+import { discard, parseShot, remove, restore, save, shot, shotAdd, strength, update } from './_workout/actions.js'
 import { connect, disconnect, sync } from './_workout/intervals.js'
 
 // Consolidado numa função (limite de 12 do Hobby); caminhos originais
@@ -14,6 +14,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   restore,
   shot,
   'parse-shot': parseShot,
+  'shot-add': shotAdd,
   discard,
   connect,
   disconnect,

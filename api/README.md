@@ -20,13 +20,13 @@
 | `/api/meal/attach` | POST | Junta até 4 fotos a uma refeição que já existe e volta a analisá-la com todas. |
 | `/api/workout/save` | POST | Guarda um treino (favorito, «Já fiz» ou rascunho de um print), com a cadeia de watts e as kcal da regra 2 revista; com `merge_into` junta o print a uma sessão existente sem duplicar. |
 | `/api/workout/strength` | POST | Sessão de ginásio livre: cria ou corrige a sessão e as séries (`exercise_log`). |
-| `/api/workout/shot` · `parse-shot` · `discard` | POST | Print do relógio: rascunho em `workout_imports`, leitura em segundo plano (Sonnet 5), outra tentativa e descartar. O mesmo print outra vez devolve o treino. |
+| `/api/workout/shot` · `shot-add` · `parse-shot` · `discard` | POST | Print do relógio: rascunho em `workout_imports`, leitura em segundo plano (Sonnet 5), outra tentativa e descartar. O mesmo print outra vez devolve o treino. |
 | `/api/workout/update` · `delete` · `restore` | POST | Editar (recalcula as kcal desse treino), apagar e repor. |
 | `/api/workout/checkin` | POST | Semáforo de dor (durante / dia seguinte) e dados da consola. |
 | `/api/workout/connect` · `sync` · `disconnect` | POST | intervals.icu (relógio Garmin): valida e guarda a chave só no servidor (`integrations`, RLS sem políticas), sincroniza atividades e bem-estar (3 dias ao abrir a app, 30 a pedido) e desliga. A cron sincroniza os últimos 3 dias antes de fechar os dias (máx. 8 s). |
 | `/api/day/recompute` | POST | Recalcula os dias desde `from` até ontem, por ordem, em blocos de 30 (`next` diz onde continuar). |
 | `/api/day/health` | GET | Estado do deploy (`?token=CRON_SECRET`): env vars presentes (nunca valores), prompts, Supabase, migração 1 e acesso aos modelos da Anthropic. |
-| `/api/health/daily` | POST | Bearer `HEALTH_INGEST_TOKEN`. Passos, sono, FC em repouso (Atalho iOS). |
+| `/api/health/daily` | POST | Bearer `HEALTH_INGEST_TOKEN`. Passos, sono, FC em repouso (Atalho iOS) e, com `body: [{date, weight_kg, body_fat_pct}]`, o peso e a % de gordura da balança (só em dias sem pesagem do João). |
 | `/api/cron/daily` | — | 04:30 UTC: marca análises presas como erro; recalcula por ordem os dias marcados pelo trigger `mark_day_dirty` e sempre os últimos 3 (no máximo 21 por noite), com `_lib/close-day.ts`: refeições contadas, fotos por contar, `kcal_est` guardado, macros, pausa da dieta, dia completo, peso médio e gasto medido. À segunda, o review semanal; ao domingo, limpa refeições apagadas há mais de 7 dias e fotos sem dono. |
 
 Regras: Anthropic SDK só aqui; JSON estrito validado com Zod; sem repetições automáticas do SDK (`maxRetries: 0`) e uma segunda tentativa só se ainda houver tempo dentro dos 60 s; respostas cortadas ou recusadas não contam; tudo registado em `api_calls`. As regras de negócio da secção 5 vivem em `/api/_lib/rules` como funções puras, testadas em `/tests`.

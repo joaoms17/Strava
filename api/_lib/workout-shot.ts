@@ -15,6 +15,7 @@ import { checkShotNumbers } from './rules/treino.js'
 export interface ImportRow {
   id: string
   user_id: string
+  client_id: string
   status: string
   source_paths: string[]
   thumb_paths: string[]

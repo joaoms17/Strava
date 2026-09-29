@@ -11,8 +11,8 @@ import { syncUser } from '../_lib/intervals-sync.js'
 // (marcados pelo trigger mark_day_dirty) e sempre os últimos 3 — no máximo 21
 // por noite, a noite seguinte continua —, com o gasto adaptativo e a semana de
 // pausa da dieta; o resumo neutro da semana anterior, na primeira noite em
-// que falte; ao domingo, limpa refeições apagadas há mais de 7 dias e fotos
-// sem dono.
+// que falte; ao domingo, limpa refeições apagadas há mais de 7 dias, fotos
+// sem dono e as imagens dos prints com mais de 90 dias.
 
 const MAX_DAYS_PER_NIGHT = 21
 const TIME_BUDGET_MS = 45_000
@@ -152,7 +152,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         else orphans = names.length
       }
     }
-    res.status(200).json({ ok: true, synced, closed, reviews, purged, orphans })
+    // Ao domingo: as imagens dos prints com mais de 90 dias apagam-se; os
+    // números ficam no treino.
+    let prints = 0
+    if (new Date(`${todayLisbon}T12:00:00Z`).getUTCDay() === 0 && Date.now() - startedAt < TIME_BUDGET_MS) {
+      const { data: old } = await admin
+        .from('workout_imports')
+        .select('id,workout_id,source_paths,thumb_paths')
+        .lt('created_at', new Date(Date.now() - 90 * 86_400_000).toISOString())
+        .neq('status', 'por_confirmar')
+        .neq('thumb_paths', '{}')
+        .limit(50)
+      for (const row of (old ?? []) as { id: string; workout_id: string | null; source_paths: string[]; thumb_paths: string[] }[]) {
+        const files = [...(row.source_paths ?? []), ...(row.thumb_paths ?? [])]
+        if (!files.length) continue
+        const { error: removeError } = await admin.storage.from('workout-shots').remove(files)
+        if (removeError) {
+          console.error('Prints antigos:', removeError.message)
+          continue
+        }
+        await admin.from('workout_imports').update({ source_paths: [], thumb_paths: [] }).eq('id', row.id)
+        if (row.workout_id) await admin.from('workouts').update({ source_paths: [] }).eq('id', row.workout_id)
+        prints++
+      }
+    }
+    res.status(200).json({ ok: true, synced, closed, reviews, purged, orphans, prints })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Falha no fecho do dia.' })

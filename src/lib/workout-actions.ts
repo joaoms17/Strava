@@ -147,3 +147,47 @@ export async function sendShots(
   }
   return postApi('/api/workout/shot', { client_id: clientId, source_paths, thumb_paths, image_hashes })
 }
+
+// «Juntar outro print» a um rascunho: sobe as imagens para a pasta dele e
+// pede outra leitura, sem reescrever o que o João já corrigiu.
+export async function addShots(
+  row: Pick<WorkoutImport, 'id' | 'client_id'>,
+  files: File[],
+  editedFields: string[],
+): Promise<WorkoutImport> {
+  if (!navigator.onLine) throw new Error('Sem rede. Junta o print quando tiveres rede.')
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Sessão expirada. Volta a entrar.')
+  const stamp = Date.now().toString(36)
+  const source_paths: string[] = []
+  const thumb_paths: string[] = []
+  const image_hashes: string[] = []
+  for (let i = 0; i < Math.min(files.length, 4); i++) {
+    const original = files[i]!
+    const hash = await sha256Hex(original)
+    const { full, thumb } = await prepareShot(original)
+    const base = `${user.id}/${row.client_id}/a${stamp}-${i}`
+    for (const [path, blob] of [
+      [`${base}.jpg`, full],
+      [`${base}_t.jpg`, thumb],
+    ] as const) {
+      const { error } = await supabase.storage
+        .from('workout-shots')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+      if (error) throw new Error('Não consegui enviar o print. Tenta outra vez.')
+    }
+    source_paths.push(`${base}.jpg`)
+    thumb_paths.push(`${base}_t.jpg`)
+    image_hashes.push(hash)
+  }
+  const { import: updated } = await postApi<{ import: WorkoutImport }>('/api/workout/shot-add', {
+    import_id: row.id,
+    source_paths,
+    thumb_paths,
+    image_hashes,
+    edited_fields: editedFields,
+  })
+  return updated
+}

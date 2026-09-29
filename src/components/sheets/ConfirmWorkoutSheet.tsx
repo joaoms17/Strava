@@ -9,7 +9,7 @@ import { useReadyProfile } from '../../lib/profile'
 import { signedUrls } from '../../lib/photos'
 import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, fmtKcal, timeOf } from '../../lib/format'
-import { deleteWorkout, saveWorkout, workoutTitle } from '../../lib/workout-actions'
+import { addShots, deleteWorkout, saveWorkout, workoutTitle } from '../../lib/workout-actions'
 import { instantInNutritionalDay, lisbonInstant } from '../../../api/_lib/rules/momentos'
 import {
   countedMinutes,
@@ -105,6 +105,9 @@ function ImportConfirm({ id }: { id: string }) {
   const [pain, setPain] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [lastWatts, setLastWatts] = useState<number | null>(null)
+  // O que o João já corrigiu à mão: sobrevive a «Juntar outro print».
+  const [edited, setEdited] = useState<Partial<Draft>>({})
+  const [adding, setAdding] = useState(false)
   const kicked = useRef(false)
 
   const load = useCallback(async () => {
@@ -168,7 +171,8 @@ function ImportConfirm({ id }: { id: string }) {
       cadence: str(a.avg_cadence),
       kcalDevice: str(a.calories_device),
     }
-    setDraft(next)
+    setDraft({ ...next, ...edited })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row, draft, today, profile.nutrition_day_cutoff_hour])
 
   // Sem watts no print, propõe os últimos confirmados (≈, não contam para subir).
@@ -339,7 +343,41 @@ function ImportConfirm({ id }: { id: string }) {
   })
   const kneeNeeded = !merging && type !== 'other'
   const canSave = minutes != null && minutes > 0 && (!kneeNeeded || pain != null)
-  const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch })
+  const set = (patch: Partial<Draft>) => {
+    setDraft({ ...draft, ...patch })
+    setEdited({ ...edited, ...patch })
+  }
+
+  // Nomes dos campos do print que o João corrigiu (a leitura nova não os mexe).
+  const SHOT_FIELD: Partial<Record<keyof Draft, string[]>> = {
+    kind: ['sport'],
+    day: ['date'],
+    time: ['start_time'],
+    minutes: ['moving_time_s', 'total_time_s'],
+    watts: ['avg_power_w'],
+    avgHr: ['avg_hr'],
+    maxHr: ['max_hr'],
+    cadence: ['avg_cadence'],
+    kcalDevice: ['calories_device'],
+  }
+
+  async function addMore(files: File[]) {
+    if (!row || !files.length) return
+    setAdding(true)
+    try {
+      const updated = await addShots(
+        row,
+        files,
+        (Object.keys(edited) as (keyof Draft)[]).flatMap((k) => SHOT_FIELD[k] ?? []),
+      )
+      kicked.current = false
+      setDraft(null)
+      setRow(updated)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Não consegui juntar o print.')
+    }
+    setAdding(false)
+  }
 
   const input = (label: string, key: keyof Draft, lowKey: string, unit: string) => (
     <label className="block space-y-1">
@@ -408,6 +446,23 @@ function ImportConfirm({ id }: { id: string }) {
     >
       <div className="space-y-5 pb-2">
         <Thumbs paths={row.thumb_paths} />
+        {row.source_paths.length < 4 && (
+          <label className={`flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px] ${adding ? 'opacity-50' : ''}`}>
+            <Icon name="watch" size={18} /> {adding ? 'A enviar…' : 'Juntar outro print'}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              disabled={adding}
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])]
+                e.target.value = ''
+                void addMore(files)
+              }}
+            />
+          </label>
+        )}
         {row.parsed?.same_activity === false && (
           <p className="rounded-xl bg-attn/15 px-3 py-2 text-[15px] text-attn">
             Estes prints parecem de treinos diferentes

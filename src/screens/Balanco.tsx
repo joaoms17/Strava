@@ -33,6 +33,7 @@ import {
 import { weeklyRate } from '../../api/_lib/rules/weight'
 import { belowFloor, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
 import type { Meal, Workout } from '../lib/types'
+import BalancoMes from '../components/BalancoMes'
 
 interface WeekData {
   days: (BalanceDay & { out: number })[]
@@ -58,6 +59,7 @@ export default function Balanco() {
   const [monday, setMonday] = useState(() => mondayOf(today))
   const [data, setData] = useState<WeekData | null>(null)
   const [details, setDetails] = useState(false)
+  const [view, setView] = useState<'semana' | 'mes'>('semana')
   const [birthYear, setBirthYear] = useState('')
   const { update } = useProfile()
   const toast = useToast()
@@ -188,6 +190,26 @@ export default function Balanco() {
     void load()
   }, [load, version])
 
+  const toggle = (
+    <div className="grid grid-cols-2 rounded-xl border border-line bg-surface p-1 font-display text-[15px] font-bold tracking-[0.08em] uppercase">
+      {(
+        [
+          ['semana', 'Semana'],
+          ['mes', 'Mês'],
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          onClick={() => setView(id)}
+          className={`min-h-10 rounded-lg ${view === id ? 'bg-cta text-on-cta' : 'text-dim'}`}
+          aria-pressed={view === id}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+
   const header = (
     <div className="flex items-center justify-between">
       <button onClick={() => setMonday(shiftDate(monday, -7))} className="h-11 w-11 text-xl text-dim" aria-label="Semana anterior">
@@ -205,9 +227,19 @@ export default function Balanco() {
     </div>
   )
 
+  if (view === 'mes') {
+    return (
+      <div className="space-y-4 pt-1">
+        {toggle}
+        <BalancoMes today={today} />
+      </div>
+    )
+  }
+
   if (!data) {
     return (
       <div className="space-y-4 pt-1">
+        {toggle}
         {header}
         <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
       </div>
@@ -246,6 +278,7 @@ export default function Balanco() {
 
   return (
     <div className="space-y-4 pt-1">
+      {toggle}
       {header}
 
       {!hasAny ? (

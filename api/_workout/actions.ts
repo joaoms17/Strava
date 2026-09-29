@@ -82,6 +82,16 @@ const StrengthSchema = z.object({
   note: z.string().max(500).nullable().optional(),
 })
 
+const ShotAddSchema = z.object({
+  import_id: z.string().uuid(),
+  source_paths: z.array(z.string().min(3)).min(1).max(4),
+  thumb_paths: z.array(z.string().min(3)).max(4).default([]),
+  image_hashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(4).default([]),
+  edited_fields: z.array(z.string().max(40)).max(30).default([]),
+})
+
+const MAX_SHOTS = 4
+
 const WorkoutIdSchema = z.object({ workout_id: z.string().uuid() })
 const ImportIdSchema = z.object({ import_id: z.string().uuid(), reset: z.boolean().optional() })
 
@@ -581,6 +591,45 @@ export const shot = post(async ({ db, userId, body, res }) => {
     waitUntil(claimAndParse(admin, row.id as string).catch((err) => console.error('Print em segundo plano falhou:', err)))
   }
   res.status(202).json({ import: row })
+})
+
+// «Juntar outro print» a um rascunho: as imagens novas juntam-se às que lá
+// estão e o rascunho volta a ser lido com os valores atuais e os campos que
+// o João já corrigiu (que nunca são reescritos).
+export const shotAdd = post(async ({ db, userId, body, res }) => {
+  const input = parse(ShotAddSchema, body)
+  const row = await ownImport(db, input.import_id)
+  if (row.status === 'guardado' || row.status === 'descartado') throw new HttpError(409, 'Este print já foi tratado.')
+  const prefix = `${userId}/${row.client_id}/`
+  if ([...input.source_paths, ...input.thumb_paths].some((p) => !p.startsWith(prefix) || p.includes('..'))) {
+    throw new HttpError(403, 'Imagem inválida.')
+  }
+  const added = input.source_paths.filter((p) => !row.source_paths.includes(p))
+  if (row.source_paths.length + added.length > MAX_SHOTS) {
+    throw new HttpError(422, `Cada treino leva no máximo ${MAX_SHOTS} prints.`)
+  }
+  const admin = adminClient()
+  if (await aiLimitReached(admin, userId, true)) {
+    throw new HttpError(429, 'Chegaste ao limite da IA que definiste. Preenche à mão ou sobe o limite.')
+  }
+  const { data, error } = await db
+    .from('workout_imports')
+    .update({
+      source_paths: [...row.source_paths, ...added],
+      thumb_paths: [...row.thumb_paths, ...input.thumb_paths.filter((p) => !row.thumb_paths.includes(p))],
+      image_hashes: [...row.image_hashes, ...input.image_hashes.filter((h) => !row.image_hashes.includes(h))],
+      edited_fields: [...new Set([...(row.edited_fields ?? []), ...input.edited_fields])],
+      status: 'a_ler',
+      analysis_attempts: 0,
+      analysis_started_at: null,
+      analysis_error: null,
+    })
+    .eq('id', row.id)
+    .select()
+    .single()
+  if (error) throw new HttpError(500, error.message)
+  waitUntil(claimAndParse(admin, row.id).catch((err) => console.error('Print em segundo plano falhou:', err)))
+  res.status(202).json({ import: data })
 })
 
 // «Tentar de novo» (ou o telemóvel a pedir outra vez um rascunho parado).
