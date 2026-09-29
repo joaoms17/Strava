@@ -8,6 +8,9 @@ import { useToast } from '../../lib/toast'
 import { useProfile, useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
+import { MAX_MEAL_PHOTOS } from '../../lib/capture'
+import AttachPhotoButton from '../ui/AttachPhotoButton'
+import Icon from '../ui/Icon'
 import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
@@ -406,6 +409,16 @@ export default function MealSheet() {
                 ? (current.analysis_error ?? 'Não consegui ler esta refeição.')
                 : 'Chegaste ao limite da IA que definiste. A foto está guardada.'}
             </p>
+            {current.status === 'erro' && (current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
+              <AttachPhotoButton
+                meal={current}
+                onDone={() => void load()}
+                className={`${primary} flex items-center justify-center gap-2`}
+              >
+                <Icon name="camera" size={20} />
+                Juntar outra foto
+              </AttachPhotoButton>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button
                 disabled={busy}
@@ -444,7 +457,7 @@ export default function MealSheet() {
         {analysed && (
           <>
             <div>
-              <p className="text-[24px] font-semibold tabular-nums">
+              <p className="num text-[32px]">
                 {current.is_estimate ? '≈ ' : ''}
                 {fmtKcal(totals.kcal)} kcal
               </p>
@@ -548,6 +561,11 @@ export default function MealSheet() {
                         >
                           Reanalisar foto
                         </button>
+                      )}
+                      {(current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
+                        <AttachPhotoButton meal={current} onDone={() => void load()} className="text-eat">
+                          Juntar foto
+                        </AttachPhotoButton>
                       )}
                     </div>
                   )

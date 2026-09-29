@@ -10,7 +10,6 @@ import { onDuplicate, useCaptureSync } from './lib/capture-queue'
 import { fmtDayShort } from './lib/format'
 import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
-import PinGate from './components/PinGate'
 import TabBar from './components/TabBar'
 import CaptureSheet from './components/sheets/CaptureSheet'
 import WeighSheet from './components/sheets/WeighSheet'
@@ -68,16 +67,21 @@ function Header() {
     : (TITLES.find(([re]) => re.test(location))?.[1] ?? '')
 
   return (
-    <header className="mx-auto flex max-w-md items-center justify-between gap-3 px-4 pt-[calc(12px+env(safe-area-inset-top))] pb-2">
+    <header className="mx-auto flex max-w-md items-end justify-between gap-3 px-4 pt-[calc(14px+env(safe-area-inset-top))] pb-3">
       <div className="flex min-w-0 items-center gap-1">
         {parent && (
-          <button onClick={() => navigate(parent)} className="-ml-2 px-2 py-1 text-[17px] text-eat">
+          <button onClick={() => navigate(parent)} className="-ml-2 px-2 py-1 text-[17px] font-medium text-ink">
             ‹ Voltar
           </button>
         )}
-        {!parent && <h1 className="truncate text-[22px] font-semibold">{title}</h1>}
+        {!parent && (
+          <div className="min-w-0">
+            {location.startsWith('/hoje') && <p className="label">{hojeDate === today ? 'Hoje' : 'A ver o dia'}</p>}
+            <h1 className="truncate font-display text-[34px] leading-none font-extrabold uppercase">{title}</h1>
+          </div>
+        )}
       </div>
-      {parent && <h1 className="truncate text-[17px] font-semibold">{title}</h1>}
+      {parent && <h1 className="truncate font-display text-[22px] font-bold uppercase">{title}</h1>}
       <div className="flex shrink-0 items-center gap-3">
         {queued > 0 && (
           <span className="rounded-full bg-surface2 px-2.5 py-1 text-[13px] text-dim">
@@ -87,7 +91,7 @@ function Header() {
         {!location.startsWith('/definicoes') && (
           <Link
             href="/definicoes"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface2 text-[15px] font-semibold"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface font-display text-[20px] font-bold"
             aria-label="Definições"
           >
             J
@@ -234,12 +238,10 @@ export default function App() {
   if (!session) return <Login />
 
   return (
-    <PinGate>
-      <ProfileProvider>
-        <ToastProvider>
-          <Shell />
-        </ToastProvider>
-      </ProfileProvider>
-    </PinGate>
+    <ProfileProvider>
+      <ToastProvider>
+        <Shell />
+      </ToastProvider>
+    </ProfileProvider>
   )
 }

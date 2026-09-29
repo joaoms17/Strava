@@ -1,23 +1,28 @@
 @import "tailwindcss";
 
-/* Paleta do redesenho (docs/redesenho-2026-09.md › Design visual). A cor só
-   aparece quando tem significado: Comer índigo, Gasto teal, Proteína azul-céu,
-   Corpo fúcsia, atenção âmbar; vermelho só para dor no joelho e erros. */
+/* Design «Dia de jogo» (escuro) e «Cartaz» (claro): letras de placar
+   (Barlow Condensed) para números e rótulos, Barlow no texto. A cor só
+   aparece quando tem significado: Comer laranja, Gasto e treino lima (azul
+   no claro), Proteína branco (preto no claro), Corpo fúcsia, atenção âmbar;
+   vermelho só para dor no joelho e erros. */
 @theme {
-  --color-bg: #0f1115;
-  --color-surface: #181b21;
-  --color-surface2: #22262e;
-  --color-line: #2c313a;
-  --color-ink: #f2f3f5;
-  --color-dim: #9aa1ac;
-  --color-eat: #8b8ff7;
-  --color-burn: #2dd4bf;
-  --color-protein: #4cc3f5;
-  --color-body: #e879f9;
+  --color-bg: #0c110e;
+  --color-surface: #141b17;
+  --color-surface2: #1c2520;
+  --color-line: #243029;
+  --color-ink: #eef2e8;
+  --color-dim: #93a197;
+  --color-eat: #ff7a3d;
+  --color-burn: #c6f432;
+  --color-protein: #eef2e8;
+  --color-body: #f08bff;
   --color-bodyfat: #f5d0fe;
   --color-attn: #f5b942;
-  --color-pain: #f0716b;
-  --color-ok: #4ade80;
+  --color-pain: #ff6b61;
+  --color-ok: #5bd68a;
+  /* Botão principal neutro: lima no escuro, preto no claro */
+  --color-cta: #c6f432;
+  --color-on-cta: #0c110e;
 
   /* Nomes antigos, usados pelos ecrãs que ainda não mudaram */
   --color-card: var(--color-surface);
@@ -25,45 +30,49 @@
   --color-accent: var(--color-eat);
   --color-warn: var(--color-pain);
 
-  --font-sans: -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-sans);
+  --font-sans: "Barlow", -apple-system, system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", -apple-system, system-ui, sans-serif;
 }
 
 @layer base {
   :root[data-theme="light"] {
-    --color-bg: #f6f7f9;
+    --color-bg: #f1eee7;
     --color-surface: #ffffff;
-    --color-surface2: #eef0f3;
-    --color-line: #e1e4e9;
-    --color-ink: #111318;
-    --color-dim: #5f6672;
-    --color-eat: #4f53cf;
-    --color-burn: #0f8f80;
-    --color-protein: #0b7fb8;
+    --color-surface2: #e7e3da;
+    --color-line: #d6d1c6;
+    --color-ink: #121212;
+    --color-dim: #5a5750;
+    --color-eat: #d9480f;
+    --color-burn: #2743f5;
+    --color-protein: #121212;
     --color-body: #a21caf;
     --color-bodyfat: #f0abfc;
     --color-attn: #b7791f;
     --color-pain: #d14343;
-    --color-ok: #15803d;
+    --color-ok: #1f9d55;
+    --color-cta: #121212;
+    --color-on-cta: #f1eee7;
     color-scheme: light;
   }
 
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
-      --color-bg: #f6f7f9;
+    --color-bg: #f1eee7;
       --color-surface: #ffffff;
-      --color-surface2: #eef0f3;
-      --color-line: #e1e4e9;
-      --color-ink: #111318;
-      --color-dim: #5f6672;
-      --color-eat: #4f53cf;
-      --color-burn: #0f8f80;
-      --color-protein: #0b7fb8;
+      --color-surface2: #e7e3da;
+      --color-line: #d6d1c6;
+      --color-ink: #121212;
+      --color-dim: #5a5750;
+      --color-eat: #d9480f;
+      --color-burn: #2743f5;
+      --color-protein: #121212;
       --color-body: #a21caf;
       --color-bodyfat: #f0abfc;
       --color-attn: #b7791f;
       --color-pain: #d14343;
-      --color-ok: #15803d;
+      --color-ok: #1f9d55;
+      --color-cta: #121212;
+      --color-on-cta: #f1eee7;
       color-scheme: light;
     }
   }
@@ -98,6 +107,25 @@
   button {
     cursor: pointer;
   }
+}
+
+/* Rótulo de placar: maiúsculas estreitas e espaçadas. */
+@utility label {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+
+/* Número de placar. */
+@utility num {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
 /* Excesso acima do plano: tracejado, para não depender só da cor. */

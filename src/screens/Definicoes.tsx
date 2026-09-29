@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { toCsv, downloadCsv } from '../lib/csv'
-import { clearPin, getPinMode, hasPin, setPinMode, type PinMode } from '../lib/pin'
 import type { Profile } from '../lib/types'
 
 interface Field {
@@ -91,7 +90,6 @@ export default function Definicoes() {
     Object.fromEntries(fields.map((f) => [f.key, profile[f.key] != null ? String(profile[f.key]) : '']))
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial(GOALS), ...initial(BIKE) }))
   const [watts, setWatts] = useState((profile.bike_watts_options ?? []).join(' · '))
-  const [pinMode, setPinModeState] = useState<PinMode>(getPinMode())
   const [busy, setBusy] = useState(false)
 
   async function saveFields(fields: Field[]) {
@@ -223,37 +221,11 @@ export default function Definicoes() {
         />
       </Section>
 
-      <Section title="Privacidade">
-        <p className="text-[15px]">Pedir o PIN</p>
-        <Choice
-          options={[
-            ['off', 'Nunca'],
-            ['12h', 'Após 12 h'],
-            ['always', 'Sempre'],
-          ]}
-          value={pinMode}
-          onChange={(mode) => {
-            setPinMode(mode)
-            setPinModeState(mode)
-            void update({ pin_mode: mode })
-            if (mode !== 'off' && !hasPin()) window.location.reload()
-          }}
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => {
-              clearPin()
-              if (getPinMode() === 'off') setPinMode('12h')
-              window.location.reload()
-            }}
-            className="min-h-12 rounded-xl bg-surface2 text-[15px]"
-          >
-            {hasPin() ? 'Trocar PIN' : 'Criar PIN'}
-          </button>
-          <button onClick={() => void supabase.auth.signOut()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
-            Terminar sessão
-          </button>
-        </div>
+      <Section title="Sessão">
+        <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
+        <button onClick={() => void supabase.auth.signOut()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
+          Terminar sessão
+        </button>
       </Section>
 
       <Section title="Os meus dados">

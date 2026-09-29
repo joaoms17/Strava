@@ -40,6 +40,16 @@ const AnalyseSchema = MealIdSchema.extend({
   force: z.boolean().optional(), // «Analisar esta mesmo assim» (acima do limite)
 })
 
+// Juntar fotos a uma refeição que já existe (não carregou, erro ou faltava a
+// foto do rótulo): ficam todas e a refeição volta a ser analisada.
+const AttachSchema = MealIdSchema.extend({
+  photo_paths: z.array(z.string().min(3)).min(1).max(4),
+  thumb_paths: z.array(z.string().min(3)).max(4).default([]),
+  image_hashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(4).default([]),
+})
+
+export const MAX_MEAL_PHOTOS = 4
+
 const CorrectSchema = MealIdSchema.extend({ text: z.string().trim().min(1).max(500) })
 
 const UpdateSchema = MealIdSchema.extend({
@@ -192,6 +202,56 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   }
   const result = await claimAndAnalyse(admin, meal.id, reset)
   res.status(200).json({ meal: result ?? (await ownMeal(db, input.meal_id)) })
+})
+
+export const attach = post(async ({ db, userId, body, res }) => {
+  const input = parse(AttachSchema, body)
+  const meal = await ownMeal(db, input.meal_id)
+  if (meal.deleted_at) throw new HttpError(404, 'Refeição apagada.')
+  const startedAt = meal.analysis_started_at ? Date.parse(meal.analysis_started_at as string) : NaN
+  if (meal.status === 'a_analisar' && Date.now() - startedAt < 90_000) {
+    throw new HttpError(409, 'Ainda a analisar. Espera uns segundos e tenta outra vez.')
+  }
+  // As fotos são lidas com a service role: têm de estar na pasta desta refeição.
+  const prefix = `${userId}/${(meal.client_id as string | null) ?? meal.id}/`
+  if ([...input.photo_paths, ...input.thumb_paths].some((p) => !p.startsWith(prefix) || p.includes('..'))) {
+    throw new HttpError(403, 'Fotografia inválida.')
+  }
+  const current = (meal.photo_paths ?? []) as string[]
+  const added = input.photo_paths.filter((p) => !current.includes(p))
+  if (added.length === 0) {
+    res.status(200).json({ meal })
+    return
+  }
+  if (current.length + added.length > MAX_MEAL_PHOTOS) {
+    throw new HttpError(422, `Cada refeição leva no máximo ${MAX_MEAL_PHOTOS} fotos.`)
+  }
+  const thumbs = (meal.thumb_paths ?? []) as string[]
+  const hashes = (meal.image_hashes ?? []) as string[]
+  const photoPaths = [...current, ...added]
+  const admin = adminClient()
+  const overLimit = await aiLimitReached(admin, userId, true)
+  const { data, error } = await db
+    .from('meals')
+    .update({
+      photo_paths: photoPaths,
+      photo_path: photoPaths[0],
+      thumb_paths: [...thumbs, ...input.thumb_paths.filter((p) => !thumbs.includes(p))],
+      image_hashes: [...hashes, ...input.image_hashes.filter((h) => !hashes.includes(h))],
+      input_type: 'photo',
+      is_estimate: true,
+      status: overLimit ? 'sem_analise' : 'a_analisar',
+      analysis_attempts: 0,
+      analysis_started_at: null,
+      analysis_error: null,
+      confirmed_at: null,
+    })
+    .eq('id', meal.id)
+    .select()
+    .single()
+  if (error) throw new HttpError(500, error.message)
+  if (data.status === 'a_analisar') inBackground(claimAndAnalyse(admin, meal.id))
+  res.status(202).json({ meal: data })
 })
 
 export const correct = post(async ({ db, userId, body, res }) => {

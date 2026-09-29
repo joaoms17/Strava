@@ -35,7 +35,9 @@ export default function Login() {
         <h1 className="text-center font-display text-2xl">A Época do Regresso</h1>
         <input
           type="email"
-          autoComplete="email"
+          name="email"
+          autoComplete="username"
+          autoCapitalize="none"
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -43,6 +45,7 @@ export default function Login() {
         />
         <input
           type="password"
+          name="password"
           autoComplete="current-password"
           placeholder="Palavra-passe"
           value={password}

@@ -7,6 +7,7 @@ import { fmtInt, fmtKcal } from '../lib/format'
 import { logFavorite } from '../lib/meal-actions'
 import { SLOTS, SLOT_LABEL } from '../../api/_lib/rules/momentos'
 import type { Favorite, Food, Slot } from '../lib/types'
+import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
 
 type Segment = 'refeicoes' | 'alimentos'
@@ -95,7 +96,7 @@ export default function Favoritos() {
                       <img src={photo} alt="" className="h-28 w-full object-cover" />
                     ) : (
                       <div className="flex h-28 items-center justify-center bg-surface2 text-3xl" aria-hidden>
-                        🍽
+                        <Icon name="plate" />
                       </div>
                     )}
                     <div className="space-y-0.5 px-3 pt-2">

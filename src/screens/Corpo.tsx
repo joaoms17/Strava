@@ -113,8 +113,8 @@ export default function Corpo() {
         ) : (
           lastTrend && (
             <div className="space-y-1">
-              <p className="text-[15px] text-dim">Peso médio</p>
-              <p className="text-[48px] leading-none font-bold tracking-tight tabular-nums text-body">
+              <p className="label">Peso médio</p>
+              <p className="num text-[64px] leading-none font-extrabold text-body">
                 {fmt1(lastTrend.value)} <span className="text-[22px] font-semibold">kg</span>
               </p>
               {rate != null && <p className="text-[15px]">{rateText(rate)}</p>}

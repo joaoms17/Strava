@@ -22,10 +22,12 @@ import {
   type NudgeState,
 } from '../../api/_lib/rules/proximo-passo'
 import type { DayRow, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
-import Bar from '../components/ui/Bar'
+import Segments from '../components/ui/Segments'
+import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
 import KneePicker from '../components/ui/KneePicker'
 import PhotoButton from '../components/ui/PhotoButton'
+import AttachPhotoButton from '../components/ui/AttachPhotoButton'
 import WeekStrip from '../components/ui/WeekStrip'
 
 interface DayData {
@@ -58,7 +60,7 @@ const WORKOUT_AFTER: Record<Workout['type'], string> = {
   strength: 'do ginásio',
   other: 'do treino',
 }
-const WORKOUT_ICON: Record<Workout['type'], string> = { bike: '🚲', strength: '🏋', other: '🏃' }
+const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as const
 const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
 
 function minutesOf(time: string): number {
@@ -314,12 +316,12 @@ export default function Hoje() {
           onClick={() => sheet.open('peso', { data: w.date, valor: fmt1(w.kg) })}
           className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
         >
-          <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(at)}</span>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2" aria-hidden>
-            ⚖
+          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(at)}</span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 text-body">
+            <Icon name="scale" />
           </span>
-          <span className="flex-1 text-[15px]">Peso</span>
-          <span className="text-[15px] tabular-nums text-body">
+          <span className="flex-1 text-[16px] font-semibold">Peso</span>
+          <span className="num text-[22px] text-body">
             {profile.calm_mode ? '✓' : `${fmt1(w.kg)} kg`}
           </span>
         </button>
@@ -338,7 +340,7 @@ export default function Hoje() {
       meal.status === 'a_analisar'
         ? 'A analisar…'
         : meal.status === 'erro'
-          ? 'Não consegui ler · toca para tentar de novo'
+          ? 'Não carregou · junta outra foto'
           : meal.status === 'sem_analise'
             ? 'Sem análise (limite da IA)'
             : fromFavorite
@@ -354,7 +356,7 @@ export default function Hoje() {
               onClick={() => sheet.open('refeicao', { id: meal.id })}
               className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-left"
             >
-              <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
+              <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
               {thumb ? (
                 <img
                   src={thumb}
@@ -363,25 +365,28 @@ export default function Hoje() {
                 />
               ) : (
                 <span
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 ${meal.status === 'a_analisar' ? 'animate-pulse' : ''}`}
-                  aria-hidden
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
+                    meal.status === 'erro'
+                      ? 'border-[1.5px] border-dashed border-eat text-eat'
+                      : 'bg-surface2 text-dim'
+                  } ${meal.status === 'a_analisar' ? 'animate-pulse' : ''}`}
                 >
-                  🍽
+                  <Icon name={meal.status === 'erro' ? 'alert' : meal.input_type === 'barcode' ? 'barcode' : 'plate'} />
                 </span>
               )}
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[15px]">
+                <span className="block truncate text-[16px] font-semibold">
                   {title}
                   {meal.favorite_id && <span className="ml-1 text-attn">★</span>}
                 </span>
                 <span
-                  className={`block truncate text-[13px] ${meal.status === 'erro' ? 'text-pain' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
+                  className={`block truncate text-[14px] ${meal.status === 'erro' ? 'text-eat' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
                 >
                   {subtitle}
                 </span>
               </span>
               {analysed && (
-                <span className="flex shrink-0 items-center gap-1.5 text-[15px] tabular-nums">
+                <span className="num flex shrink-0 items-center gap-1.5 text-[22px]">
                   {meal.status === 'por_rever' && (
                     <span className="h-2 w-2 rounded-full bg-attn" aria-label="por confirmar" />
                   )}
@@ -418,19 +423,19 @@ export default function Hoje() {
       key: `c-${capture.client_id}`,
       node: (
         <div className="flex min-h-14 items-center gap-3 px-2 py-1">
-          <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">
+          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">
             {timeOf(capture.taken_at ?? capture.created_at)}
           </span>
           {capture.preview ? (
             <img src={capture.preview} alt="" className="h-12 w-12 shrink-0 animate-pulse rounded-xl object-cover" />
           ) : (
-            <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-surface2" aria-hidden>
-              ✎
+            <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-surface2 text-dim">
+              <Icon name="pencil" />
             </span>
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[15px]">{capture.text ?? 'Foto'}</span>
-            <span className={`block truncate text-[13px] ${capture.state === 'erro' ? 'text-pain' : 'text-dim'}`}>
+            <span className="block truncate text-[16px] font-semibold">{capture.text ?? 'Foto'}</span>
+            <span className={`block truncate text-[14px] ${capture.state === 'erro' ? 'text-eat' : 'text-dim'}`}>
               {capture.state === 'erro'
                 ? (capture.error ?? 'Não consegui enviar.')
                 : navigator.onLine
@@ -461,11 +466,11 @@ export default function Hoje() {
           onClick={() => navigate('/treino')}
           className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
         >
-          <span className="w-12 shrink-0 text-[13px] text-dim tabular-nums">{timeOf(workout.created_at)}</span>
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2" aria-hidden>
-            {WORKOUT_ICON[workout.type]}
+          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(workout.created_at)}</span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-burn text-bg">
+            <Icon name={WORKOUT_ICON[workout.type]} size={26} />
           </span>
-          <span className="flex-1 text-[15px]">
+          <span className="flex-1 text-[16px] font-semibold">
             {WORKOUT_LABEL[workout.type]}
             {workout.minutes != null && ` · ${workout.minutes} min`}
             {(workout.status === 'yellow' || workout.status === 'red') && (
@@ -475,7 +480,7 @@ export default function Hoje() {
               />
             )}
           </span>
-          {kcal > 0 && <span className="text-[15px] tabular-nums text-burn">+{fmtKcal(kcal)}</span>}
+          {kcal > 0 && <span className="num text-[22px] text-burn">+{fmtKcal(kcal)}</span>}
         </button>
       ),
     })
@@ -500,58 +505,70 @@ export default function Hoje() {
         </p>
       )}
 
-      <button onClick={() => setPlanOpen(true)} className="block w-full space-y-3 rounded-3xl bg-surface p-5 text-left">
-        {isToday ? (
-          over ? (
-            <>
-              <p className="text-[40px] leading-none font-bold tracking-tight text-attn tabular-nums">
-                Passaste {fmtKcal(-left)}
-              </p>
-              <p className="text-[15px] text-dim">
-                do plano de hoje.{' '}
-                {underSpend ? 'Mas continuas a comer menos do que gastas.' : 'A semana conta mais do que o dia.'}
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-[15px] text-dim">
-                {counted.length === 0 ? 'Podes comer' : 'Podes comer mais'}
-                {stillCounting > 0 && ' cerca de'}
-              </p>
-              <p
-                className={`text-[56px] leading-none font-bold tracking-tight tabular-nums ${stillCounting ? 'opacity-50' : ''}`}
-              >
-                {fmtKcal(left)}
-              </p>
-              <p className="text-[15px] text-dim">
-                de {fmtKcal(plan)} do plano de hoje
-                {kcalExercise > 0 && !maintenance && (
-                  <span className="text-burn"> · +{fmtKcal(kcalExercise)} do treino</span>
-                )}
-              </p>
-            </>
-          )
-        ) : (
-          <>
-            <p className="text-[15px] text-dim">Comeste</p>
-            <p className="text-[48px] leading-none font-bold tracking-tight tabular-nums">{fmtKcal(kcalIn)}</p>
-            <p className="text-[15px] text-dim">de {fmtKcal(plan)} do plano desse dia</p>
-          </>
+      <button
+        onClick={() => setPlanOpen(true)}
+        className="block w-full rounded-[18px] border border-line bg-surface px-[18px] pt-4 pb-4 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <p className="label">
+            {!isToday
+              ? 'Comeste'
+              : over
+                ? 'Passaste o plano'
+                : `${counted.length === 0 ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 ? ' cerca de' : ''}`}
+          </p>
+          <p className="label">Ver o plano ›</p>
+        </div>
+        <p className="mt-0.5 flex items-baseline gap-2">
+          <span
+            className={`num text-[96px] leading-[0.92] font-extrabold ${
+              !isToday ? 'text-ink' : over ? 'text-attn' : 'text-eat'
+            } ${isToday && stillCounting ? 'opacity-50' : ''}`}
+          >
+            {!isToday ? fmtKcal(kcalIn) : over ? `+${fmtKcal(-left)}` : fmtKcal(left)}
+          </span>
+          <span className="num text-[22px] text-dim">KCAL</span>
+        </p>
+        {isToday && over && (
+          <p className="mt-1 text-[15px] text-dim">
+            {underSpend ? 'Mas continuas a comer menos do que gastas.' : 'A semana conta mais do que o dia.'}
+          </p>
         )}
         {stillCounting > 0 && (
-          <p className="text-[13px] text-dim">
+          <p className="mt-1 text-[14px] text-dim">
             ainda a contar {stillCounting} {stillCounting === 1 ? 'foto' : 'fotos'}
           </p>
         )}
-        <Bar value={kcalIn} max={plan} tone="eat" label="Comer" />
-        <div className="space-y-1.5">
-          <Bar value={proteinIn} max={profile.protein_g} tone="protein" label="Proteína" />
-          <p className="text-[13px] text-dim tabular-nums">
-            <span className="text-protein">Proteína</span> {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g
+        <div className="mt-3">
+          <Segments value={kcalIn} max={plan} tone="eat" label="Comer" />
+        </div>
+        <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-line pt-3">
+          <div>
+            <p className="label text-[12px]">Comido</p>
+            <p className="num text-[26px] leading-tight">{fmtKcal(kcalIn)}</p>
+          </div>
+          <div>
+            <p className="label text-[12px]">Treino</p>
+            <p className={`num text-[26px] leading-tight ${kcalExercise > 0 && !maintenance ? 'text-burn' : 'text-dim'}`}>
+              {kcalExercise > 0 && !maintenance ? `+${fmtKcal(kcalExercise)}` : '—'}
+            </p>
+          </div>
+          <div>
+            <p className="label text-[12px]">Plano</p>
+            <p className="num text-[26px] leading-tight">{fmtKcal(plan)}</p>
+          </div>
+        </div>
+        <div className="mt-3.5 flex items-baseline justify-between">
+          <p className="label text-[12px]">Proteína</p>
+          <p className="num text-[18px]">
+            {fmtInt(proteinIn)} <span className="text-dim">/ {fmtInt(profile.protein_g)} g</span>
           </p>
         </div>
+        <div className="mt-1.5">
+          <Segments value={proteinIn} max={profile.protein_g} count={14} height={6} tone="protein" label="Proteína" />
+        </div>
         {maintenance && (
-          <span className="inline-block rounded-full bg-surface2 px-3 py-1 text-[13px] text-burn">
+          <span className="mt-3 inline-block rounded-lg border border-line px-3 py-1 font-display text-[13px] font-semibold tracking-[0.1em] text-burn uppercase">
             Semana de pausa da dieta
           </span>
         )}
@@ -645,7 +662,10 @@ export default function Hoje() {
           )}
         </div>
       ) : (
-        <div className="-mx-2 space-y-1">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
+        <div>
+          <p className="label mb-1">O dia</p>
+          <div className="-mx-2 divide-y divide-line/60">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
+        </div>
       )}
 
       {gapFavorite && (
@@ -657,8 +677,8 @@ export default function Hoje() {
           >
             {gapFavorite.name}
           </button>
-          <PhotoButton source="camera" className="rounded-full bg-surface2 px-3 py-1.5">
-            📷
+          <PhotoButton source="camera" className="flex min-h-9 items-center rounded-full bg-surface2 px-3" aria-label="Fotografar">
+            <Icon name="camera" size={20} />
           </PhotoButton>
           <button onClick={() => void dismissHint('lacuna')} className="px-1 text-[13px] text-dim" aria-label="Não mostrar isto">
             ✕
@@ -879,21 +899,35 @@ function NextStepCard({
   )
 
   return (
-    <div className="space-y-3 rounded-2xl bg-surface p-4">
+    <div
+      className={`space-y-3 rounded-[18px] border p-4 ${
+        id === 'erro' ? 'border-eat/40 bg-eat/10' : 'border-line bg-surface'
+      }`}
+    >
       {id === 'erro' && errorMeal && (
         <>
-          <p className="text-[17px]">Não consegui ler a refeição das {timeOf(errorMeal.logged_at)}.</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => void onAnalyse(errorMeal.id, { reset: true })}
-              className="min-h-12 rounded-xl bg-eat font-semibold text-bg"
+          <p className="font-display text-[12px] font-bold tracking-[0.16em] text-eat uppercase">Falta 1 foto</p>
+          <p className="-mt-2 text-[17px] font-medium">
+            A refeição das {timeOf(errorMeal.logged_at)} não carregou.
+          </p>
+          <div className="flex gap-2">
+            <AttachPhotoButton
+              meal={errorMeal}
+              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-eat font-display text-[17px] font-bold tracking-[0.04em] text-bg uppercase"
             >
-              Tentar de novo
-            </button>
-            <button onClick={() => onOpenMeal(errorMeal.id)} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
-              Escrever o que era
+              <Icon name="camera" size={20} />
+              Juntar outra foto
+            </AttachPhotoButton>
+            <button
+              onClick={() => onOpenMeal(errorMeal.id)}
+              className="min-h-12 rounded-xl border border-line px-3 font-display text-[17px] font-semibold tracking-[0.04em] uppercase"
+            >
+              Escrever
             </button>
           </div>
+          <button onClick={() => void onAnalyse(errorMeal.id, { reset: true })} className="text-[15px] text-dim">
+            Ou tentar ler a mesma foto outra vez
+          </button>
         </>
       )}
       {id === 'limite' && limitMeal && (

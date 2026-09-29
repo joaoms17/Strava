@@ -8,6 +8,7 @@ import { enqueueCapture } from '../../lib/capture-queue'
 import { exifDateTimeOf } from '../../lib/exif'
 import { nutritionalDay } from '../../lib/day'
 import { photoInstant } from '../../../api/_lib/rules/captura'
+import Icon from '../ui/Icon'
 import type { Slot } from '../../lib/types'
 
 // Escrever ou ditar (microfone do teclado), com foto opcional: texto e foto
@@ -95,7 +96,7 @@ export default function WriteSheet() {
             </>
           ) : (
             <button onClick={() => fileInput.current?.click()} className="min-h-11 rounded-xl bg-surface2 px-3 text-[15px]">
-              📷 Juntar foto
+              <Icon name="camera" size={18} className="mr-1 inline" /> Juntar foto
             </button>
           )}
           <input

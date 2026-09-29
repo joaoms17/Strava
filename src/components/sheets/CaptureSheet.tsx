@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'wouter'
 import BottomSheet from '../ui/BottomSheet'
 import PhotoButton from '../ui/PhotoButton'
+import Icon from '../ui/Icon'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
@@ -65,7 +66,7 @@ export default function CaptureSheet() {
   }
 
   const big =
-    'flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-2xl bg-surface2 text-[15px] font-semibold'
+    'flex min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-2xl font-display text-[19px] font-bold tracking-[0.06em] uppercase'
 
   return (
     <BottomSheet onClose={sheet.close}>
@@ -105,30 +106,26 @@ export default function CaptureSheet() {
         ) : null}
 
         <div className="grid grid-cols-2 gap-3">
-          <PhotoButton source="camera" date={dateParam} className={big} onDone={sheet.close}>
-            <span className="text-2xl" aria-hidden>
-              📷
-            </span>
+          <PhotoButton source="camera" date={dateParam} className={`${big} bg-eat text-bg`} onDone={sheet.close}>
+            <Icon name="camera" size={30} />
             Fotografar
           </PhotoButton>
-          <PhotoButton source="gallery" date={dateParam} className={big}>
-            <span className="text-2xl" aria-hidden>
-              🖼
-            </span>
+          <PhotoButton source="gallery" date={dateParam} className={`${big} border border-line bg-surface2`}>
+            <Icon name="gallery" size={30} />
             Galeria
           </PhotoButton>
         </div>
 
         <button
           onClick={() => sheet.open('escrever', dateParam ? { data: dateParam } : {})}
-          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-surface2 text-[15px] font-semibold"
+          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface2 font-display text-[18px] font-bold tracking-[0.06em] uppercase"
         >
-          <span aria-hidden>✎</span> Escrever ou ditar
+          <Icon name="pencil" size={20} /> Escrever ou ditar
         </button>
 
         <div className="space-y-2">
           <div className="flex items-baseline justify-between">
-            <h3 className="text-[13px] font-semibold text-dim">Favoritos</h3>
+            <h3 className="label">Favoritos</h3>
             <button onClick={() => go('/favoritos')} className="text-[13px] text-eat">
               Todos ›
             </button>
@@ -180,16 +177,16 @@ export default function CaptureSheet() {
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => sheet.open('peso', dateParam ? { data: dateParam } : {})}
-            className="relative flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface2 text-[15px]"
+            className="relative flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
           >
-            <span aria-hidden>⚖</span> Peso
+            <Icon name="scale" size={20} /> Peso
             {weighDot && <span className="absolute top-2 right-3 h-2 w-2 rounded-full bg-eat" aria-label="por fazer hoje" />}
           </button>
           <button
             onClick={() => go('/treino')}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface2 text-[15px]"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
           >
-            <span aria-hidden>🚲</span> Treino
+            <Icon name="bike" size={20} /> Treino
           </button>
         </div>
       </div>

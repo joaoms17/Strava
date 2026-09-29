@@ -118,7 +118,7 @@ export default function BarcodeSheet() {
               <button onClick={() => setGrams(Math.max(5, grams - 10))} className="h-12 w-12 rounded-xl bg-surface2 text-[17px]">
                 −
               </button>
-              <p className="flex-1 text-center text-[28px] font-semibold tabular-nums">{fmtInt(grams)} g</p>
+              <p className="num flex-1 text-center text-[32px]">{fmtInt(grams)} g</p>
               <button onClick={() => setGrams(grams + 10)} className="h-12 w-12 rounded-xl bg-surface2 text-[17px]">
                 +
               </button>

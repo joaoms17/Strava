@@ -22,12 +22,12 @@ export default function WeekStrip({
     <div className="flex items-center gap-1">
       <button
         onClick={() => setMonday(shiftDate(monday, -7))}
-        className="h-11 w-8 shrink-0 text-xl text-dim"
+        className="h-11 w-7 shrink-0 text-xl text-dim"
         aria-label="Semana anterior"
       >
         ‹
       </button>
-      <div className="grid flex-1 grid-cols-7 gap-1">
+      <div className="grid flex-1 grid-cols-7 gap-1.5">
         {days.map((date) => {
           const future = date > today
           const isSelected = date === selected
@@ -36,15 +36,17 @@ export default function WeekStrip({
               key={date}
               disabled={future}
               onClick={() => onPick(date)}
-              className={`flex flex-col items-center rounded-xl py-1.5 text-[13px] disabled:opacity-30 ${
-                isSelected ? 'bg-eat text-bg' : date === today ? 'text-ink' : 'text-dim'
+              className={`flex h-[58px] flex-col items-center justify-center gap-0.5 rounded-xl border font-display disabled:opacity-30 ${
+                isSelected
+                  ? 'border-cta bg-cta text-on-cta'
+                  : date === today
+                    ? 'border-line bg-surface text-ink'
+                    : 'border-line bg-surface text-dim'
               }`}
               aria-current={isSelected ? 'date' : undefined}
             >
-              <span>{weekdayLetter(date)}</span>
-              <span className={`text-[15px] tabular-nums ${date === today && !isSelected ? 'font-semibold' : ''}`}>
-                {Number(date.slice(8))}
-              </span>
+              <span className="text-[12px] font-semibold tracking-[0.1em] opacity-80">{weekdayLetter(date)}</span>
+              <span className="text-[20px] leading-none font-bold tabular-nums">{Number(date.slice(8))}</span>
             </button>
           )
         })}
@@ -52,7 +54,7 @@ export default function WeekStrip({
       <button
         disabled={!canGoForward}
         onClick={() => setMonday(shiftDate(monday, 7))}
-        className="h-11 w-8 shrink-0 text-xl text-dim disabled:opacity-30"
+        className="h-11 w-7 shrink-0 text-xl text-dim disabled:opacity-30"
         aria-label="Semana seguinte"
       >
         ›

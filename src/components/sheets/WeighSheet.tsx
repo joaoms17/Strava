@@ -279,7 +279,7 @@ export default function WeighSheet() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submit()
               }}
-              className="h-16 w-full rounded-2xl border border-line bg-bg text-center text-[40px] font-semibold tabular-nums placeholder:text-dim/60 focus:border-eat focus:outline-none"
+              className="h-16 w-full rounded-2xl border border-line bg-bg text-center font-display text-[44px] font-bold tabular-nums placeholder:text-dim/60 focus:border-eat focus:outline-none"
               aria-label="Peso em kg"
             />
             <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-[15px] text-dim">
