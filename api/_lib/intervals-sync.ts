@@ -53,6 +53,8 @@ export async function testKey(key: string): Promise<{ id: string | null; name: s
 
 export interface SyncResult {
   activities: number // atividades que o intervals.icu devolveu (novas ou não)
+  known: number // dessas, as que já estavam na app
+  weightDays: number // dias com peso no intervals.icu (entrados ou não)
   inserted: number
   merged: number
   weights: number
@@ -122,6 +124,8 @@ export async function syncIntervals(
 
   const result: SyncResult = {
     activities: Array.isArray(activities) ? activities.length : 0,
+    known: 0,
+    weightDays: 0,
     inserted: 0,
     merged: 0,
     weights: 0,
@@ -155,6 +159,7 @@ export async function syncIntervals(
       .in('external_id', mapped.map((m) => m.a.external_id))
     const known = new Set((knownRows ?? []).map((r) => r.external_id as string))
     const fresh = mapped.filter((m) => !known.has(m.a.external_id))
+    result.known = mapped.length - fresh.length
 
     const dates = [...new Set(fresh.map((m) => m.date))]
     const { data: sameDayRows } = dates.length
@@ -286,6 +291,7 @@ export async function syncIntervals(
       admin.from('health_daily').select('*').eq('user_id', userId).gte('date', first).lte('date', last),
     ])
 
+    result.weightDays = days.filter((m) => m.weightKg != null).length
     // Peso: só em dias sem pesagem do João (nunca substitui).
     const weighed = new Set((weightRows ?? []).map((r) => r.date as string))
     const newWeights = days

@@ -15,6 +15,8 @@ import {
 
 export interface SyncResult {
   activities?: number
+  known?: number
+  weightDays?: number
   inserted: number
   merged: number
   weights: number
@@ -78,6 +80,8 @@ export interface HistoryTotals {
   treinos: number
   pesagens: number
   noites: number
+  jaNaApp?: number // treinos que já estavam na app
+  diasComPeso?: number // dias com peso no intervals.icu
   oldestChanged: string | null
   blocks: number
   stoppedEarly: boolean
@@ -204,6 +208,8 @@ export async function importHistory(
     totals.treinos += r.inserted + r.merged
     totals.pesagens += r.weights
     totals.noites += r.nights ?? 0
+    totals.jaNaApp = (totals.jaNaApp ?? 0) + (r.known ?? 0)
+    totals.diasComPeso = (totals.diasComPeso ?? 0) + (r.weightDays ?? 0)
     if (r.oldestChanged && (!totals.oldestChanged || r.oldestChanged < totals.oldestChanged)) {
       totals.oldestChanged = r.oldestChanged
     }
@@ -220,11 +226,14 @@ export async function importHistory(
 }
 
 export function historySummary(t: HistoryTotals): string {
-  const parts = [
-    t.treinos ? `${t.treinos} ${t.treinos === 1 ? 'treino' : 'treinos'}` : null,
-    t.pesagens ? `${t.pesagens} ${t.pesagens === 1 ? 'pesagem' : 'pesagens'}` : null,
-    t.noites ? `${t.noites} ${t.noites === 1 ? 'noite de sono' : 'noites de sono'}` : null,
-  ].filter(Boolean)
   const head = t.stoppedEarly ? 'Importação parada' : 'Histórico importado'
-  return parts.length ? `${head}: ${parts.join(' · ')}.` : `${head}. Não havia nada de novo.`
+  const treinos = t.treinos ? `${t.treinos} ${t.treinos === 1 ? 'treino novo' : 'treinos novos'}` : 'nenhum treino novo'
+  const ja = t.jaNaApp ? ` (${t.jaNaApp} já estavam na app)` : ''
+  const pesos = t.pesagens
+    ? `${t.pesagens} ${t.pesagens === 1 ? 'pesagem' : 'pesagens'}`
+    : t.diasComPeso
+      ? 'nenhuma pesagem nova (nesses dias já tinhas pesagem tua)'
+      : 'sem pesos (o intervals.icu não tem pesos do teu relógio)'
+  const noites = t.noites ? ` · sono de ${t.noites} ${t.noites === 1 ? 'noite' : 'noites'}` : ''
+  return `${head}: ${treinos}${ja} · ${pesos}${noites}.`
 }
