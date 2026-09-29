@@ -18,6 +18,7 @@ describe('próximo passo', () => {
   it('de manhã sem pesagem pede para pesar', () => {
     expect(nextStep({ ...base, minutesOfDay: 8 * 60, weighedToday: false })).toBe('pesar')
     expect(nextStep({ ...base, minutesOfDay: 11 * 60, weighedToday: false })).toBeNull()
+    expect(nextStep({ ...base, minutesOfDay: 1 * 60 + 30, weighedToday: false })).toBeNull()
   })
 
   it('ontem com 1 ou 2 refeições pergunta se foi tudo, até haver resposta', () => {
@@ -61,5 +62,21 @@ describe('«Agora não»', () => {
     expect(isNudgeHidden(twice, 'pesar', '2026-10-01')).toBe(true)
     expect(isNudgeHidden(twice, 'pesar', '2026-10-02')).toBe(true)
     expect(isNudgeHidden(twice, 'pesar', '2026-10-03')).toBe(false)
+  })
+})
+
+describe('próximo passo com fotos', () => {
+  it('uma refeição com erro vem antes de tudo e não se esconde', () => {
+    const hidden = dismissNudge({}, 'erro' as never, base.today)
+    expect(nextStep({ ...base, minutesOfDay: 8 * 60, weighedToday: false, mealsWithError: 1, nudges: hidden })).toBe('erro')
+  })
+
+  it('o limite da IA vem a seguir', () => {
+    expect(nextStep({ ...base, mealsOverLimit: 1 })).toBe('limite')
+  })
+
+  it('depois das 20:00 com refeições por confirmar: rever', () => {
+    expect(nextStep({ ...base, minutesOfDay: 20 * 60 + 5, kcalToday: 1500, mealsToReview: 2 })).toBe('rever')
+    expect(nextStep({ ...base, minutesOfDay: 19 * 60, kcalToday: 1500, proteinToday: 120, mealsToReview: 2 })).toBeNull()
   })
 })

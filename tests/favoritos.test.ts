@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { favoriteName, rankFavorites, rescaleItems, scaleItems } from '../api/_lib/rules/favoritos'
+import {
+  favoriteName,
+  itemNameSet,
+  jaccard,
+  patternKey,
+  rankFavorites,
+  rescaleItems,
+  scaleItems,
+  similarCount,
+} from '../api/_lib/rules/favoritos'
 import { mealTotals } from '../api/_lib/rules/meal-totals'
 
 const item = (name: string, grams: number, kcal: number, protein: number) => ({
@@ -62,5 +71,24 @@ describe('nome de um favorito novo', () => {
       'a + b + c + …',
     )
     expect(favoriteName([])).toBe('Refeição')
+  })
+})
+
+
+describe('sugestão de favorito', () => {
+  it('Jaccard sobre os nomes, sem acentos nem maiúsculas', () => {
+    expect(jaccard(itemNameSet([{ name: 'Iogurte' }, { name: 'Aveia' }]), itemNameSet([{ name: 'iogurte' }, { name: 'aveia' }]))).toBe(1)
+    expect(jaccard(itemNameSet([{ name: 'Pão' }]), itemNameSet([{ name: 'pao' }, { name: 'manteiga' }]))).toBe(0.5)
+  })
+
+  it('a 3.ª refeição parecida dispara a sugestão', () => {
+    const today = [{ name: 'Iogurte grego' }, { name: 'Aveia' }, { name: 'Banana' }]
+    const others = [
+      [{ name: 'iogurte grego' }, { name: 'aveia' }, { name: 'banana' }],
+      [{ name: 'Iogurte grego' }, { name: 'Aveia' }, { name: 'Banana' }, { name: 'Mel' }],
+      [{ name: 'Frango' }, { name: 'Arroz' }],
+    ]
+    expect(similarCount(today, others)).toBe(3)
+    expect(patternKey(today)).toBe(patternKey(others[0]!))
   })
 })

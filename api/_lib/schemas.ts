@@ -30,6 +30,34 @@ export type ParsedItem = z.infer<typeof ParsedItemSchema>
 export type ParsedMeal = z.infer<typeof ParsedMealSchema>
 export type ParsedPhotoMeal = z.infer<typeof ParsedPhotoMealSchema>
 
+// Análise em segundo plano (Fase 2): confiança por item e referências curtas
+// aos alimentos pessoais (a1…a40) em vez de UUIDs.
+export const Confidence = z.enum(['alta', 'media', 'baixa'])
+
+export const AnalysedItemSchema = z.object({
+  name: z.string(),
+  grams: z.number(),
+  kcal: z.number(),
+  protein: z.number(),
+  carbs: z.number(),
+  fat: z.number(),
+  confidence: Confidence,
+  food_ref: z.string().nullable(),
+})
+
+export const MealAnalysisSchema = z.object({
+  title: z.string(),
+  items: z.array(AnalysedItemSchema),
+  meal_confidence: Confidence,
+})
+
+export type MealAnalysis = z.infer<typeof MealAnalysisSchema>
+
+// Item de refeição vindo do telemóvel (edições, correções, anular).
+export const MealItemInputSchema = ParsedItemSchema.extend({
+  confidence: Confidence.optional(),
+})
+
 // Corpo do POST /api/meal/save — validado no servidor antes de gravar.
 export const SaveMealSchema = z.object({
   input_type: z.enum(['text', 'photo', 'barcode', 'manual']),

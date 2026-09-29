@@ -48,3 +48,40 @@ export function favoriteName(items: { name: string }[]): string {
   const shown = names.slice(0, 3).join(' + ')
   return names.length > 3 ? `${shown} + …` : shown
 }
+
+// Sugestão de favorito: a 3.ª refeição parecida no mesmo momento do dia em
+// 30 dias (Jaccard ≥ 70 % nos nomes dos itens).
+export const SIMILAR_THRESHOLD = 0.7
+export const SIMILAR_MIN_COUNT = 3
+
+function normalize(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+export function itemNameSet(items: { name: string }[]): Set<string> {
+  return new Set(items.map((i) => normalize(i.name)).filter(Boolean))
+}
+
+export function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0
+  let common = 0
+  for (const x of a) if (b.has(x)) common++
+  return common / (a.size + b.size - common)
+}
+
+// Quantas refeições (a própria incluída) se parecem com esta.
+export function similarCount(target: { name: string }[], others: { name: string }[][]): number {
+  const set = itemNameSet(target)
+  return 1 + others.filter((items) => jaccard(set, itemNameSet(items)) >= SIMILAR_THRESHOLD).length
+}
+
+// Chave estável do padrão, para «Não voltar a perguntar».
+export function patternKey(items: { name: string }[]): string {
+  return `fav:${[...itemNameSet(items)].sort().join('|')}`
+}

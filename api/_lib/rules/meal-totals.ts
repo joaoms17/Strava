@@ -7,6 +7,8 @@ export interface MealItem {
   fat: number
   food_id: string | null
   estimated: boolean
+  // análise por foto ou texto (Fase 2): «baixa» mostra «confirma a porção»
+  confidence?: 'alta' | 'media' | 'baixa'
 }
 
 export interface MealTotals {

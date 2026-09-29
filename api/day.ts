@@ -1,10 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import health from './_day/health.js'
+import recompute from './_day/recompute.js'
 
 // Endpoints do dia (e o estado do deploy) numa só função, por causa do limite
 // do Hobby; caminhos preservados por rewrite (/api/day/:action).
 const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<void> | void> = {
   health,
+  recompute,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

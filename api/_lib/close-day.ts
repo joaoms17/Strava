@@ -64,7 +64,7 @@ export async function closeDay(
 ) {
   const userId = profile.user_id
 
-  const [mealsRes, workoutsRes, weightRes, existingRes, weightsRes, recentDaysRes] =
+  const [mealsRes, workoutsRes, weightRes, existingRes, weightsRes, recentDaysRes, pendingRes] =
     await Promise.all([
       admin.from('meals_counted').select('kcal,protein,carbs,fat').eq('user_id', userId).eq('date', date),
       admin
@@ -87,6 +87,14 @@ export async function closeDay(
         .lt('date', date)
         .order('date', { ascending: false })
         .limit(21),
+      // Fotos ainda por contar (a analisar ou acima do limite da IA).
+      admin
+        .from('meals')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('date', date)
+        .is('deleted_at', null)
+        .in('status', ['a_analisar', 'sem_analise']),
     ])
   for (const res of [mealsRes, workoutsRes]) {
     if (res.error) throw new Error(`leitura (${date}): ${res.error.message}`)
@@ -176,6 +184,7 @@ export async function closeDay(
       weight_kg: weightRes.data ? Number(weightRes.data.kg) : null,
       weight_trend: weightTrend,
       flags: [...flags],
+      meals_pending: pendingRes.count ?? 0,
       dirty: false,
     },
     { onConflict: 'user_id,date' },

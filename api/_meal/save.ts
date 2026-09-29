@@ -5,6 +5,7 @@ import { SaveMealSchema } from '../_lib/schemas.js'
 import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { mealTotals } from '../_lib/rules/meal-totals.js'
 import { learnFoods } from '../_lib/foods.js'
+import { slotOf } from '../_lib/rules/momentos.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -35,9 +36,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user_id: user.id,
         date,
         logged_at: loggedAt.toISOString(),
+        slot: slotOf(loggedAt),
+        status: 'ok',
+        confirmed_at: new Date().toISOString(),
         input_type: meal.input_type,
         raw_text: meal.raw_text ?? null,
         photo_path: meal.photo_path ?? null,
+        photo_paths: meal.photo_path ? [meal.photo_path] : [],
         items: meal.items,
         kcal: totals.kcal,
         protein: totals.protein,

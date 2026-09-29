@@ -1,8 +1,10 @@
 // Cartão «Próximo passo» do Hoje: no máximo um, com regras fixas e sem IA.
-// Fase 1: pesar (4), ontem (5), pouco (7) e proteína (8).
-// «Agora não» esconde o cartão até ao dia seguinte; ignorado 2 vezes, pausa 3 dias.
+// Por ordem: refeição com erro (1), limite da IA (2), pesar (4), ontem (5),
+// rever à noite (6), pouco (7) e proteína (8). Os cartões 1 e 2 resolvem-se
+// com a ação; os outros têm «Agora não», que esconde até ao dia seguinte e,
+// ignorado 2 vezes, pausa 3 dias.
 
-export type NextStepId = 'pesar' | 'ontem' | 'pouco' | 'proteina'
+export type NextStepId = 'erro' | 'limite' | 'pesar' | 'ontem' | 'rever' | 'pouco' | 'proteina'
 
 export interface NudgeEntry {
   ignored: number
@@ -22,6 +24,9 @@ export interface NextStepInput {
   kcalToday: number
   proteinToday: number
   proteinTarget: number
+  mealsWithError?: number
+  mealsOverLimit?: number
+  mealsToReview?: number
   nudges: NudgeState
 }
 
@@ -50,11 +55,15 @@ export function dismissNudge(nudges: NudgeState, id: NextStepId, today: string):
 export function nextStep(input: NextStepInput): NextStepId | null {
   const hidden = (id: NextStepId) => isNudgeHidden(input.nudges, id, input.today)
   const candidates: [NextStepId, boolean][] = [
-    ['pesar', input.minutesOfDay < 11 * 60 && !input.weighedToday],
+    ['erro', (input.mealsWithError ?? 0) > 0],
+    ['limite', (input.mealsOverLimit ?? 0) > 0],
+    // Só de manhã (04:00–11:00): depois da meia-noite ainda é o dia anterior.
+    ['pesar', input.minutesOfDay >= 4 * 60 && input.minutesOfDay < 11 * 60 && !input.weighedToday],
     [
       'ontem',
       input.yesterdayMeals >= 1 && input.yesterdayMeals <= 2 && !input.yesterdayAnswered,
     ],
+    ['rever', input.minutesOfDay >= 20 * 60 && (input.mealsToReview ?? 0) > 0],
     ['pouco', input.minutesOfDay >= 20 * 60 && input.mealsToday >= 1 && input.kcalToday < LOW_DAY_KCAL],
     [
       'proteina',
@@ -64,7 +73,8 @@ export function nextStep(input: NextStepInput): NextStepId | null {
     ],
   ]
   for (const [id, applies] of candidates) {
-    if (applies && !hidden(id)) return id
+    const dismissible = id !== 'erro' && id !== 'limite'
+    if (applies && !(dismissible && hidden(id))) return id
   }
   return null
 }

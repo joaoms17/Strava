@@ -92,14 +92,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!count) throw new Error('Sem perfil — corre os seeds no Supabase.')
       return `${count} perfil`
     }),
-    // Migração 1 (Fase 1): favoritos e as vistas das linhas contadas.
+    // Migrações 1 e 2: favoritos, vistas e as colunas da análise.
     timed(async () => {
       const admin = adminClient()
       for (const table of ['favorites', 'meals_counted', 'workouts_active']) {
         const { error } = await admin.from(table).select('*', { count: 'exact', head: true })
         if (error) throw new Error(`falta ${table}: corre a migração 20260928000000_fase1.sql`)
       }
-      return 'migração 1'
+      const { error } = await admin.from('meals').select('status,photo_paths,note', { head: true })
+      if (error) throw new Error('faltam colunas: corre a migração 20260929000000_fase2.sql')
+      return 'migrações 1 e 2'
     }),
     timed(async () => {
       await anthropic().models.retrieve(MODELS.text, {}, aiOptions)
@@ -119,7 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (missing.length) problems.push(`faltam variáveis: ${missing.join(', ')}`)
   if (!promptsOk) problems.push('os prompts não foram incluídos no deploy')
   if (!supabase.ok) problems.push('o Supabase não responde')
-  else if (!schema.ok) problems.push('falta correr a migração da Fase 1 no Supabase')
+  else if (!schema.ok) problems.push(`falta uma migração no Supabase (${schema.detail ?? ''})`)
   if (!haiku.ok || !sonnet.ok) problems.push('a Anthropic não responde (chave ou modelos)')
 
   res.setHeader('Cache-Control', 'no-store')
