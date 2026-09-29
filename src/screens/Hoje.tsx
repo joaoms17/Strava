@@ -21,6 +21,7 @@ import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
 import { analysisStalled, analysisStuck } from '../../api/_lib/rules/analise'
+import { fmtSleep, hasSleep, poorNight, sleepDetail, type NightSleep } from '../../api/_lib/rules/sono'
 import { splitStoredError } from '../../api/_lib/rules/resposta-ia'
 import {
   dismissNudge,
@@ -49,6 +50,7 @@ interface DayData {
   favorites: Favorite[]
   photos: Record<string, string>
   weighedToday: boolean
+  sleep: NightSleep | null
   importsToConfirm: string[]
   weightCount: number
   lastMeasureDate: string | null
@@ -113,6 +115,7 @@ export default function Hoje() {
       { count: mealCount },
       { data: imports },
       { data: lastMeasure },
+      { data: health },
       expenditure,
     ] = await Promise.all([
       supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
@@ -147,6 +150,8 @@ export default function Hoje() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),
+      // O sono da noite que acabou neste dia (Garmin via intervals.icu).
+      supabase.from('health_daily').select('*').eq('date', date).maybeSingle(),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
@@ -170,6 +175,7 @@ export default function Hoje() {
       importsToConfirm: (imports ?? []).map((i) => i.id as string),
       weightCount: weightCount ?? 0,
       lastMeasureDate: (lastMeasure?.[0]?.date as string | undefined) ?? null,
+      sleep: hasSleep(health as Partial<NightSleep> | null) ? (health as NightSleep) : null,
       expenditure,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
@@ -351,6 +357,33 @@ export default function Hoje() {
 
   type Entry = { at: string; key: string; node: React.ReactNode }
   const entries: Entry[] = []
+  // O sono da noite abre o dia (antes da pesagem e das refeições).
+  if (data.sleep) {
+    const night = data.sleep
+    entries.push({
+      at: `${date}T00:00:00Z`,
+      key: 'sono',
+      node: (
+        <div className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2">
+          <span className="w-12 shrink-0 font-display text-[15px] font-semibold tracking-[0.04em] text-dim uppercase">
+            Noite
+          </span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim">
+            <Icon name="moon" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-semibold">Sono</span>
+            <span className={`block truncate text-[14px] ${poorNight(night) ? 'text-attn' : 'text-dim'}`}>
+              {sleepDetail(night) || 'do relógio'}
+            </span>
+          </span>
+          {night.sleep_minutes != null && (
+            <span className="num shrink-0 text-[22px]">{fmtSleep(night.sleep_minutes)}</span>
+          )}
+        </div>
+      ),
+    })
+  }
   for (const w of data.weights) {
     const at = w.measured_at ?? w.created_at ?? `${w.date}T07:00:00Z`
     entries.push({
@@ -548,7 +581,9 @@ export default function Hoje() {
     })
   }
   entries.sort((a, b) => a.at.localeCompare(b.at))
-  const empty = entries.length === 0
+  // O sono sozinho não conta como dia registado: continua o convite a começar.
+  const empty = entries.every((e) => e.key === 'sono')
+  const sleepEntry = entries.find((e) => e.key === 'sono')
 
   return (
     <div className="space-y-4 pt-1">
@@ -704,6 +739,7 @@ export default function Hoje() {
         />
       )}
 
+      {empty && sleepEntry && <div className="-mx-2">{sleepEntry.node}</div>}
       {empty ? (
         <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
           <p className="text-[15px] text-dim">

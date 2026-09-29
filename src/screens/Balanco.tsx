@@ -43,6 +43,7 @@ interface WeekData {
   completeDays: number
   steps: number | null
   sleep: number | null
+  sleepScore: number | null
   expenditure: ExpenditureContext
   firstDate: string | null
   review: string | null
@@ -100,7 +101,7 @@ export default function Balanco() {
         .order('date', { ascending: false })
         .limit(1),
       supabase.from('days').select('date', { count: 'exact', head: true }).eq('is_complete', true),
-      supabase.from('health_daily').select('steps,sleep_minutes').gte('date', monday).lte('date', sunday),
+      supabase.from('health_daily').select('*').gte('date', monday).lte('date', sunday),
       supabase.from('days').select('date').order('date').limit(1),
       supabase.from('weekly_reviews').select('text').eq('week_start', monday).eq('kind', 'neutro').limit(1),
       // Para o gasto medido contra a fórmula nas últimas 3 semanas.
@@ -179,6 +180,7 @@ export default function Balanco() {
       completeDays: completeCount ?? 0,
       steps: avgOf(healthRows.map((h) => h.steps as number | null)),
       sleep: avgOf(healthRows.map((h) => h.sleep_minutes as number | null)),
+      sleepScore: avgOf(healthRows.map((h) => (h.sleep_score as number | null | undefined) ?? null)),
       expenditure,
       firstDate: (first?.[0]?.date as string | undefined) ?? null,
       review: (reviews?.[0]?.text as string | undefined) ?? null,
@@ -442,10 +444,15 @@ export default function Balanco() {
                   </span>
                 </label>
               )}
-              {data.steps != null && (
+              {(data.steps != null || data.sleep != null) && (
                 <p className="text-dim">
-                  Passos: {fmtInt(data.steps)} por dia
-                  {data.sleep != null && ` · Sono: ${fmt1(data.sleep / 60)} h`}
+                  {[
+                    data.steps != null ? `Passos: ${fmtInt(data.steps)} por dia` : null,
+                    data.sleep != null ? `Sono: ${fmt1(data.sleep / 60)} h` : null,
+                    data.sleepScore != null ? `qualidade ${Math.round(data.sleepScore)}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
               )}
             </section>

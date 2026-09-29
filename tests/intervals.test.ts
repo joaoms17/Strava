@@ -102,7 +102,22 @@ describe('bem-estar', () => {
       weightKg: 84.6,
       restingHr: 52,
       sleepMinutes: 420,
+      sleepScore: null,
+      sleepQuality: null,
+      hrv: null,
+      avgSleepHr: null,
       steps: 8421,
+    })
+  })
+
+  it('sono do Garmin: pontuação, qualidade, HRV e FC durante o sono', () => {
+    expect(
+      mapWellness({ id: '2026-09-29', sleepSecs: 26100, sleepScore: 78, sleepQuality: 2, hrv: 47.64, avgSleepingHR: 54 }),
+    ).toMatchObject({ sleepMinutes: 435, sleepScore: 78, sleepQuality: 2, hrv: 47.6, avgSleepHr: 54 })
+    expect(mapWellness({ id: '2026-09-29', sleepScore: 0, sleepQuality: 7, hrv: 900 })).toMatchObject({
+      sleepScore: null,
+      sleepQuality: null,
+      hrv: null,
     })
   })
 

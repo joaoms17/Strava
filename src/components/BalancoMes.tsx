@@ -15,6 +15,7 @@ interface Week {
   tdee: number | null
   steps: number | null
   sleep: number | null
+  sleepScore: number | null
 }
 
 function mean(values: number[]): number | null {
@@ -43,7 +44,7 @@ export default function BalancoMes({ today }: { today: string }) {
         .gte('date', first)
         .lte('date', today)
         .order('date'),
-      supabase.from('health_daily').select('date,steps,sleep_minutes').gte('date', first).lte('date', today),
+      supabase.from('health_daily').select('*').gte('date', first).lte('date', today),
       supabase.from('meals_counted').select('items').gte('date', shiftDate(today, -30)).lte('date', today),
     ])
     const list: Week[] = []
@@ -61,6 +62,7 @@ export default function BalancoMes({ today }: { today: string }) {
         tdee: tdees.length ? tdees[tdees.length - 1]! : null,
         steps: mean(h.filter((x) => x.steps != null).map((x) => Number(x.steps))),
         sleep: mean(h.filter((x) => x.sleep_minutes != null).map((x) => Number(x.sleep_minutes))),
+        sleepScore: mean(h.filter((x) => x.sleep_score != null).map((x) => Number(x.sleep_score))),
       })
     }
     setWeeks(list)
@@ -142,6 +144,7 @@ export default function BalancoMes({ today }: { today: string }) {
                 {w.steps != null ? `${fmtInt(w.steps)} passos` : ''}
                 {w.steps != null && w.sleep != null ? ' · ' : ''}
                 {w.sleep != null ? `${fmt1(w.sleep / 60)} h de sono` : ''}
+                {w.sleepScore != null ? ` (${Math.round(w.sleepScore)})` : ''}
               </span>
             </p>
           ))}

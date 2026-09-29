@@ -8,6 +8,7 @@ import { fmtKcal, weekdayShort } from '../lib/format'
 import { workoutTitle } from '../lib/workout-actions'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { bikeSuggestion, nextBikeTarget } from '../../api/_lib/rules/progressao-bike'
+import { fmtSleep, hasSleep, poorNight, type NightSleep } from '../../api/_lib/rules/sono'
 import type { ExerciseLogRow, Favorite, Workout, WorkoutImport } from '../lib/types'
 import Icon from '../components/ui/Icon'
 import ShotButton from '../components/ui/ShotButton'
@@ -37,6 +38,7 @@ interface TreinoData {
   favorites: Favorite[]
   pending: WorkoutImport[]
   logs: ExerciseLogRow[]
+  sleep: NightSleep | null
 }
 
 // Treino: registar em poucos toques (Bicicleta habitual, Já fiz, print do
@@ -56,7 +58,7 @@ export default function Treino() {
   const icu = profile.integration_status?.intervals
 
   const load = useCallback(async () => {
-    const [{ data: workouts }, { data: favorites }, { data: pending }, { data: logs }] = await Promise.all([
+    const [{ data: workouts }, { data: favorites }, { data: pending }, { data: logs }, { data: health }] = await Promise.all([
       supabase
         .from('workouts_active')
         .select('*')
@@ -80,12 +82,14 @@ export default function Treino() {
         .select('workout_id,exercise,set_index,reps,load_kg,rpe,created_at')
         .order('created_at')
         .limit(600),
+      supabase.from('health_daily').select('*').eq('date', today).maybeSingle(),
     ])
     setData({
       workouts: (workouts ?? []) as Workout[],
       favorites: (favorites ?? []) as Favorite[],
       pending: (pending ?? []) as WorkoutImport[],
       logs: (logs ?? []) as ExerciseLogRow[],
+      sleep: hasSleep(health as Partial<NightSleep> | null) ? (health as NightSleep) : null,
     })
   }, [today])
 
@@ -253,6 +257,17 @@ export default function Treino() {
       <div className="rounded-[18px] border border-line bg-surface p-4">
         <p className="font-display text-[12px] font-bold tracking-[0.16em] text-burn uppercase">Próxima bicicleta</p>
         <p className="mt-1 text-[17px] font-medium">{suggestion}</p>
+        {data.sleep && poorNight(data.sleep) && (
+          <p className="mt-2 text-[15px] text-attn">
+            Dormiste mal esta noite
+            {data.sleep.sleep_score != null
+              ? ` (sono ${data.sleep.sleep_score})`
+              : data.sleep.sleep_minutes != null
+                ? ` (${fmtSleep(data.sleep.sleep_minutes)})`
+                : ''}
+            . Hoje não subas: repete os watts da última vez ou faz menos tempo.
+          </p>
+        )}
       </div>
 
       {workouts.length === 0 ? (

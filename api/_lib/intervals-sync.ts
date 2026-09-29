@@ -72,7 +72,8 @@ export async function setStatus(
 
 // Sincroniza os últimos `days` dias: atividades (fusão silenciosa com uma
 // sessão já registada ou treino novo) e bem-estar (peso só em dias sem
-// pesagem do João; sono, FC em repouso e passos em health_daily).
+// pesagem do João; sono (horas, pontuação, HRV), FC em repouso e passos em
+// health_daily).
 export async function syncIntervals(
   admin: SupabaseClient,
   userId: string,
@@ -236,25 +237,39 @@ export async function syncIntervals(
         }
       }
     }
-    if (m.restingHr != null || m.sleepMinutes != null || m.steps != null) {
+    const sleepExtras = {
+      sleep_score: m.sleepScore,
+      sleep_quality: m.sleepQuality,
+      hrv: m.hrv,
+      avg_sleep_hr: m.avgSleepHr,
+    }
+    const hasSleepExtras = Object.values(sleepExtras).some((v) => v != null)
+    if (m.restingHr != null || m.sleepMinutes != null || m.steps != null || hasSleepExtras) {
       const { data: health } = await admin
         .from('health_daily')
-        .select('steps,sleep_minutes,resting_hr')
+        .select('*')
         .eq('user_id', userId)
         .eq('date', m.date)
         .maybeSingle()
-      await admin.from('health_daily').upsert(
-        {
-          user_id: userId,
-          date: m.date,
-          // O Atalho do iPhone, quando existe, manda nos campos que já preencheu.
-          steps: health?.steps ?? m.steps,
-          sleep_minutes: health?.sleep_minutes ?? m.sleepMinutes,
-          resting_hr: health?.resting_hr ?? m.restingHr,
-          ...(health ? {} : { source: 'intervals' }),
-        },
-        { onConflict: 'user_id,date' },
+      const row = {
+        user_id: userId,
+        date: m.date,
+        // O Atalho do iPhone, quando existe, manda nos campos que já preencheu.
+        steps: health?.steps ?? m.steps,
+        sleep_minutes: health?.sleep_minutes ?? m.sleepMinutes,
+        resting_hr: health?.resting_hr ?? m.restingHr,
+        ...(health ? {} : { source: 'intervals' }),
+      }
+      // A pontuação, a qualidade, o HRV e a FC do sono só vêm do relógio: o
+      // valor mais recente do intervals.icu manda (a Garmin revê a noite).
+      const extras = Object.fromEntries(
+        Object.entries(sleepExtras).map(([k, v]) => [k, v ?? (health as Record<string, unknown> | null)?.[k] ?? null]),
       )
+      const { error } = await admin.from('health_daily').upsert({ ...row, ...extras }, { onConflict: 'user_id,date' })
+      // Antes da migração 9 as colunas do sono não existem: grava o resto.
+      if (error && /sleep_score|sleep_quality|hrv|avg_sleep_hr|column/i.test(error.message)) {
+        await admin.from('health_daily').upsert(row, { onConflict: 'user_id,date' })
+      }
     }
   }
 

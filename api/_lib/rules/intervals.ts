@@ -29,10 +29,14 @@ export interface IcuActivity {
 }
 
 export interface IcuWellness {
-  id: string // AAAA-MM-DD
+  id: string // AAAA-MM-DD (o dia em que acordou)
   weight?: number | null
   restingHR?: number | null
   sleepSecs?: number | null
+  sleepScore?: number | null // 0–100 (Garmin)
+  sleepQuality?: number | null // 1 ótima … 4 fraca
+  hrv?: number | null // rMSSD da noite, ms
+  avgSleepingHR?: number | null
   steps?: number | null
 }
 
@@ -145,23 +149,36 @@ export function syncMatch<T extends { type: WorkoutType; date: string; minutes: 
   return null
 }
 
-// Bem-estar: peso (só em dias sem pesagem do João), sono, FC em repouso e passos.
+// Bem-estar: peso (só em dias sem pesagem do João), sono (horas, pontuação,
+// qualidade, HRV e FC durante o sono), FC em repouso e passos.
 export function mapWellness(w: IcuWellness): {
   date: string
   weightKg: number | null
   restingHr: number | null
   sleepMinutes: number | null
+  sleepScore: number | null
+  sleepQuality: number | null
+  hrv: number | null
+  avgSleepHr: number | null
   steps: number | null
 } {
   const weight = num(w.weight)
   const rhr = int(w.restingHR)
   const sleep = num(w.sleepSecs)
+  const score = int(w.sleepScore)
+  const quality = int(w.sleepQuality)
+  const hrv = num(w.hrv)
+  const sleepHr = int(w.avgSleepingHR)
   const steps = int(w.steps)
   return {
     date: w.id,
     weightKg: weight != null && weight >= 30 && weight <= 300 ? Math.round(weight * 10) / 10 : null,
     restingHr: rhr != null && rhr >= 20 && rhr <= 150 ? rhr : null,
     sleepMinutes: sleep != null && sleep > 0 && sleep <= 86_400 ? Math.round(sleep / 60) : null,
+    sleepScore: score != null && score >= 1 && score <= 100 ? score : null,
+    sleepQuality: quality != null && quality >= 1 && quality <= 4 ? quality : null,
+    hrv: hrv != null && hrv >= 5 && hrv <= 300 ? Math.round(hrv * 10) / 10 : null,
+    avgSleepHr: sleepHr != null && sleepHr >= 25 && sleepHr <= 150 ? sleepHr : null,
     steps: steps != null && steps >= 0 && steps <= 200_000 ? steps : null,
   }
 }
