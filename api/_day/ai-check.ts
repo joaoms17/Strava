@@ -70,14 +70,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ping(user.id, MODELS.vision, 'Fotos', true),
     ])
     const ok = models.every((m) => m.ok)
-    const prefix = provider === 'gemini' ? 'AIza' : 'sk-ant-'
+    const prefixes = provider === 'gemini' ? ['AIza', 'AQ.'] : ['sk-ant-']
+    const prefix = prefixes.find((p) => key.startsWith(p))
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json({
       ok,
       key: true,
       provider: providerName,
       // Só o formato (nunca a chave): ajuda a ver se foi colada outra coisa.
-      key_shape: key.startsWith(prefix) ? `${prefix}…` : `formato inesperado (devia começar por ${prefix})`,
+      key_shape: prefix ? `${prefix}…` : `formato inesperado (devia começar por ${prefixes.join(' ou ')})`,
       resumo: ok ? 'A IA está a funcionar.' : (models.find((m) => !m.ok)?.message ?? 'A IA não responde.'),
       models,
     })

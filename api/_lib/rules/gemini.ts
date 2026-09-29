@@ -147,7 +147,12 @@ export function geminiError(status: number, body: unknown): AiError & { fallback
   const detail = `${status} ${reason}: ${message}`.slice(0, 300)
   const make = (text: string, transient: boolean, fallback: boolean) =>
     Object.assign(new AiError(text, detail, transient), { fallback })
-  if (reason === 'API_KEY_INVALID' || /api key not valid|api key expired/i.test(message)) {
+  // Chaves novas «AQ.»: com um erro conhecido da Google, algumas são tratadas
+  // como tokens OAuth e recusadas. Uma chave clássica «AIza…» resolve.
+  if (reason === 'ACCESS_TOKEN_TYPE_UNSUPPORTED') {
+    return make('A Google recusou esta chave «AQ.» (erro conhecido da Google). Cria uma chave «AIza…».', false, false)
+  }
+  if (reason === 'API_KEY_INVALID' || status === 401 || /api key not valid|api key expired/i.test(message)) {
     return make('A chave do Gemini não é válida (GEMINI_API_KEY no Vercel).', false, false)
   }
   if (status === 429) {

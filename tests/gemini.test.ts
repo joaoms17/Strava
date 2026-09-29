@@ -101,3 +101,14 @@ describe('erros', () => {
     expect(geminiError(503, { error: { message: 'The model is overloaded.' } })).toMatchObject({ fallback: true, transient: true })
   })
 })
+
+describe('chaves «AQ.»', () => {
+  it('o erro conhecido da Google diz para criar uma chave AIza', () => {
+    const e = geminiError(401, {
+      error: { code: 401, message: 'Request had invalid authentication credentials.', status: 'UNAUTHENTICATED', details: [{ reason: 'ACCESS_TOKEN_TYPE_UNSUPPORTED' }] },
+    })
+    expect(e.message).toMatch(/AQ\..*AIza/)
+    expect(e).toMatchObject({ transient: false, fallback: false })
+    expect(geminiError(401, { error: { status: 'UNAUTHENTICATED', message: 'x' } }).message).toMatch(/não é válida/)
+  })
+})
