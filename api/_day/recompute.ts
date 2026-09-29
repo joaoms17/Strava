@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
-import { closeDay, type CloseDayProfile } from '../_lib/close-day.js'
+import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, type CloseDayProfile } from '../_lib/close-day.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 
 // Recalcula os dias a partir de uma data (pesagem num dia passado, refeição
@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const admin = adminClient()
     const { data: profile } = await admin
       .from('profile')
-      .select('user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour,maintenance_enabled,maintenance_anchor')
+      .select(CLOSE_DAY_PROFILE_COLUMNS)
       .eq('user_id', user.id)
       .single()
     if (!profile) throw new HttpError(404, 'Perfil não encontrado.')

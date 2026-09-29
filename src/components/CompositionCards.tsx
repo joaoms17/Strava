@@ -17,6 +17,7 @@ import {
   scaleFatAverage,
   targetWaist,
 } from '../../api/_lib/rules/composicao'
+import { lossQuality } from '../../api/_lib/rules/gasto'
 import type { BodyMeasurement } from '../lib/types'
 import { TARGET_BODY_FAT_PCT } from './sheets/MedidasSheet'
 import Icon from './ui/Icon'
@@ -108,6 +109,8 @@ export default function CompositionCards() {
   const scaleAvg = scaleFatAverage(scale)
   const lastWaist = rows[rows.length - 1]!
   const bmi = last ? Number(last.m.weight_used_kg) / (height / 100) ** 2 : null
+  // Que parte do peso perdido foi gordura (3 medições ou mais, 3 kg ou mais).
+  const quality = lossQuality(withComp.map((x) => ({ weight_used_kg: Number(x.m.weight_used_kg), fatKg: x.c.fatKg })))
 
   return (
     <>
@@ -138,6 +141,12 @@ export default function CompositionCards() {
             </p>
           ) : (
             <p className="text-[14px] text-dim">Na próxima medição mostro o que mudou.</p>
+          )}
+          {quality && quality.weightKg < 0 && firstOne && (
+            <p className="text-[15px]">
+              Dos {fmt1(Math.abs(quality.weightKg))} kg que perdeste desde {fmtDayMonth(firstOne.m.date)}, cerca de{' '}
+              {Math.max(0, Math.min(100, quality.fatShare))} % foram gordura.
+            </p>
           )}
           {earlyDietWeeks(profile.maintenance_anchor ?? null, today) && (
             <p className="text-[14px] text-dim">Nas primeiras semanas perdes água e glicogénio, não músculo.</p>

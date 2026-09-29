@@ -11,7 +11,9 @@ import {
   YAxis,
 } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { useReadyProfile } from '../lib/profile'
+import { useProfile, useReadyProfile } from '../lib/profile'
+import { useToast } from '../lib/toast'
+import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { useDataVersion } from '../lib/events'
 import { useThemeColors } from '../lib/colors'
 import { nutritionalDay, shiftDate } from '../lib/day'
@@ -19,18 +21,31 @@ import { fmt1, fmtInt, fmtKcal, fmtRange, weekdayLetter } from '../lib/format'
 import { mondayOf, isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { MIN_COMPLETE_DAYS } from '../../api/_lib/rules/adaptativo'
+import {
+  COHERENCE_TEXT,
+  baseSuggestion,
+  coherence,
+  kcalOut,
+  measuredVsFormula,
+  persistentGap,
+  weekSentence,
+} from '../../api/_lib/rules/gasto'
 import { weeklyRate } from '../../api/_lib/rules/weight'
 import { belowFloor, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
 import type { Meal, Workout } from '../lib/types'
 
 interface WeekData {
-  days: BalanceDay[]
+  days: (BalanceDay & { out: number })[]
   workouts: Workout[]
   rate: number | null
   tdee: number | null
   completeDays: number
   steps: number | null
   sleep: number | null
+  expenditure: ExpenditureContext
+  firstDate: string | null
+  review: string | null
+  weeklyGaps: number[]
 }
 
 // «Estou a comer menos do que gasto, e o peso confirma?» — uma frase e um gráfico.
@@ -43,6 +58,9 @@ export default function Balanco() {
   const [monday, setMonday] = useState(() => mondayOf(today))
   const [data, setData] = useState<WeekData | null>(null)
   const [details, setDetails] = useState(false)
+  const [birthYear, setBirthYear] = useState('')
+  const { update } = useProfile()
+  const toast = useToast()
   const sunday = shiftDate(monday, 6)
 
   const load = useCallback(async () => {
@@ -54,6 +72,10 @@ export default function Balanco() {
       { data: tdeeRows },
       { count: completeCount },
       { data: health },
+      { data: first },
+      { data: reviews },
+      { data: history },
+      expenditure,
     ] = await Promise.all([
       supabase
         .from('meals_counted')
@@ -61,7 +83,7 @@ export default function Balanco() {
         .gte('date', monday)
         .lte('date', sunday),
       supabase.from('workouts_active').select('*').gte('date', monday).lte('date', sunday),
-      supabase.from('days').select('date,flags').gte('date', monday).lte('date', sunday),
+      supabase.from('days').select('date,flags,kcal_out_est').gte('date', monday).lte('date', sunday),
       supabase
         .from('weights')
         .select('date,kg')
@@ -77,13 +99,24 @@ export default function Balanco() {
         .limit(1),
       supabase.from('days').select('date', { count: 'exact', head: true }).eq('is_complete', true),
       supabase.from('health_daily').select('steps,sleep_minutes').gte('date', monday).lte('date', sunday),
+      supabase.from('days').select('date').order('date').limit(1),
+      supabase.from('weekly_reviews').select('text').eq('week_start', monday).eq('kind', 'neutro').limit(1),
+      // Para o gasto medido contra a fórmula nas últimas 3 semanas.
+      supabase
+        .from('days')
+        .select('date,tdee_est,formula_base,kcal_exercise,is_complete')
+        .gte('date', shiftDate(monday, -35))
+        .lt('date', monday)
+        .order('date'),
+      loadExpenditure(profile, monday),
     ])
     const latestTdee = tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null
     const workoutRows = (workouts ?? []) as Workout[]
     const flagsByDate = new Map(
       (dayRows ?? []).map((d) => [d.date as string, (d.flags ?? []) as string[]]),
     )
-    const days: BalanceDay[] = Array.from({ length: 7 }, (_, i) => {
+    const outByDate = new Map((dayRows ?? []).map((d) => [d.date as string, d.kcal_out_est as number | null]))
+    const days = Array.from({ length: 7 }, (_, i) => {
       const date = shiftDate(monday, i)
       const ofDay = ((meals ?? []) as Pick<Meal, 'date' | 'kcal' | 'protein' | 'carbs' | 'fat'>[]).filter(
         (m) => m.date === date,
@@ -113,8 +146,24 @@ export default function Balanco() {
         meals: ofDay.length,
         plan: maintenance ? maintenanceTarget(latestTdee) : profile.base_kcal + exercise,
         missingSomething: (flagsByDate.get(date) ?? []).includes('faltou_algo'),
+        // Gasto do dia: o guardado pelo fecho do dia ou, na semana em curso, o mesmo cálculo aqui.
+        out: outByDate.get(date) ?? kcalOut(expenditure.base, exercise),
       }
     })
+    // Gasto medido contra a fórmula, visto em cada uma das últimas 3 segundas-feiras.
+    const hist = (history ?? []) as { date: string; tdee_est: number | null; formula_base: number | null; kcal_exercise: number | null; is_complete: boolean }[]
+    const weeklyGaps: number[] = []
+    for (const back of [14, 7, 0]) {
+      const cut = shiftDate(monday, -back)
+      const before = hist.filter((d) => d.date < cut)
+      const tdee = [...before].reverse().find((d) => d.tdee_est != null)?.tdee_est
+      const formula = [...before].reverse().find((d) => d.formula_base != null)?.formula_base
+      const trainings = before.filter((d) => d.is_complete).slice(-14).map((d) => Number(d.kcal_exercise ?? 0))
+      if (tdee != null && formula != null) {
+        const avg = trainings.length ? trainings.reduce((a, b) => a + b, 0) / trainings.length : 0
+        weeklyGaps.push(measuredVsFormula(Number(tdee), Number(formula), avg))
+      }
+    }
     const healthRows = health ?? []
     const avgOf = (values: (number | null)[]) => {
       const known = values.filter((v): v is number => v != null)
@@ -128,6 +177,10 @@ export default function Balanco() {
       completeDays: completeCount ?? 0,
       steps: avgOf(healthRows.map((h) => h.steps as number | null)),
       sleep: avgOf(healthRows.map((h) => h.sleep_minutes as number | null)),
+      expenditure,
+      firstDate: (first?.[0]?.date as string | undefined) ?? null,
+      review: (reviews?.[0]?.text as string | undefined) ?? null,
+      weeklyGaps,
     })
   }, [monday, sunday, profile])
 
@@ -162,25 +215,34 @@ export default function Balanco() {
   }
 
   const averages = weekAverages(data.days, today)
+  const counted = data.days.filter((d) => d.date < today && d.meals > 0 && !d.missingSomething)
+  const avgOut = counted.length ? counted.reduce((a, d) => a + d.out, 0) / counted.length : null
   const hasAny = data.days.some((d) => d.meals > 0)
   const rate = data.rate
-  const weightSentence =
-    rate == null
-      ? null
-      : Math.abs(rate) < 0.05
-        ? 'O peso médio está estável.'
-        : `O peso médio está a ${rate < 0 ? 'descer' : 'subir'} ${fmt1(Math.abs(rate))} kg por semana.`
+  const exp = data.expenditure
   const sessions = data.workouts.length
   const minutes = data.workouts.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const trainingKcal = data.workouts.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
   const missingComplete = Math.max(0, MIN_COMPLETE_DAYS - data.completeDays)
+  // A partir da 3.ª semana com dados, a coerência usa o gasto medido até antes da semana.
+  const thirdWeek = data.firstDate != null && data.firstDate <= shiftDate(monday, -14)
+  const coherent =
+    thirdWeek && averages && exp.tdeeFrozen != null && rate != null ? coherence(averages.eaten, exp.tdeeFrozen, rate) : null
+  const suggestion = exp.tdeeFrozen != null && !exp.learning ? baseSuggestion(exp.tdeeFrozen, exp.avgTraining, profile.base_kcal) : null
+  const gapNote = persistentGap(data.weeklyGaps)
   const chart = data.days.map((d) => ({
     date: d.date,
     label: weekdayLetter(d.date),
     eaten: d.meals > 0 ? Math.round(d.eaten) : null,
-    plan: d.plan,
+    out: d.date <= today ? d.out : null,
     today: d.date === today,
   }))
+
+  async function applyBase(value: number) {
+    const previous = profile.base_kcal
+    await update({ base_kcal: value })
+    toast(`Plano base: ${fmtInt(value)}`, [{ label: 'Anular', run: () => void update({ base_kcal: previous }) }])
+  }
 
   return (
     <div className="space-y-4 pt-1">
@@ -192,26 +254,31 @@ export default function Balanco() {
         </p>
       ) : (
         <>
-          <section className="space-y-2 rounded-3xl bg-surface p-5">
-            {averages ? (
-              <p className="text-[20px] leading-snug font-semibold">
-                Esta semana comeste em média {fmtKcal(averages.eaten)} por dia; o plano era{' '}
-                {fmtKcal(averages.plan)}.
-              </p>
+          <section className="space-y-2 rounded-[18px] border border-line bg-surface p-5">
+            {averages && avgOut != null ? (
+              <p className="text-[20px] leading-snug font-semibold">{weekSentence(averages.eaten, avgOut, rate)}</p>
             ) : (
               <p className="text-[17px] text-dim">A semana começou agora. A média aparece amanhã.</p>
             )}
-            {weightSentence && <p className="text-[17px]">{weightSentence}</p>}
+            {coherent && (
+              <p className={`text-[16px] ${coherent === 'bate_certo' ? 'text-burn' : 'text-dim'}`}>{COHERENCE_TEXT[coherent]}</p>
+            )}
+            {exp.learning && (
+              <p className="text-[14px] text-dim">
+                Gasto (a aprender): mais {missingComplete} {missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo
+                a medir o teu gasto pelo peso. Até lá uso uma fórmula.
+              </p>
+            )}
           </section>
 
           {belowFloor(averages, profile.kcal_floor_week) && (
-            <p className="rounded-2xl bg-surface px-4 py-3 text-[15px] text-attn">
+            <p className="rounded-2xl border border-attn/40 bg-attn/10 px-4 py-3 text-[15px] text-attn">
               Esta semana comeste menos de {fmtInt(profile.kcal_floor_week)} por dia em média. Come um pouco mais:
               perder devagar protege o músculo e o joelho.
             </p>
           )}
 
-          <section className="space-y-2 rounded-3xl bg-surface p-4">
+          <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
             <div className="h-48">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={chart} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
@@ -226,7 +293,7 @@ export default function Balanco() {
                   />
                   <RBar
                     dataKey="eaten"
-                    radius={[6, 6, 0, 0]}
+                    radius={[4, 4, 0, 0]}
                     onClick={(entry: unknown) => {
                       const date = (entry as { payload?: { date?: string } }).payload?.date
                       if (date) navigate(date === today ? '/hoje' : `/hoje/${date}`)
@@ -239,13 +306,12 @@ export default function Balanco() {
                     ))}
                   </RBar>
                   <Line
-                    dataKey="plan"
-                    stroke={colors.dim}
-                    strokeDasharray="4 4"
-                    strokeWidth={2}
-                    dot={false}
+                    dataKey="out"
+                    stroke={colors.burn}
+                    strokeWidth={2.5}
+                    dot={{ r: 3, fill: colors.burn, stroke: 'none' }}
                     activeDot={false}
-                    type="step"
+                    connectNulls
                     isAnimationActive={false}
                   />
                 </ComposedChart>
@@ -256,22 +322,31 @@ export default function Balanco() {
                 <span className="inline-block h-2.5 w-2.5 rounded-sm bg-eat" /> o que comeste
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-dim" /> plano
+                <span className="inline-block h-0.5 w-4 bg-burn" /> gasto{exp.learning ? ' (a aprender)' : ''}
               </span>
             </div>
           </section>
 
-          <button onClick={() => setDetails(!details)} className="text-[15px] text-eat">
+          {data.review && (
+            <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
+              <p className="label">Resumo da semana</p>
+              {data.review.split('\n').map((line, i) => (
+                <p key={i} className="text-[15px]">
+                  {line}
+                </p>
+              ))}
+            </section>
+          )}
+
+          <button onClick={() => setDetails(!details)} className="text-[15px] text-dim">
             {details ? 'Esconder detalhes' : 'Ver detalhes ›'}
           </button>
 
           {details && (
-            <section className="space-y-3 rounded-3xl bg-surface p-5 text-[15px]">
+            <section className="space-y-3 rounded-[18px] border border-line bg-surface p-5 text-[15px]">
               {averages && (
                 <>
-                  <p>
-                    <span className="text-protein">Proteína média {fmtInt(averages.protein)} g</span> por dia
-                  </p>
+                  <p>Proteína média {fmtInt(averages.protein)} g por dia (meta {fmtInt(profile.protein_g)} g)</p>
                   <p className="text-dim">
                     Hidratos {fmtInt(averages.carbs)} g · Gordura {fmtInt(averages.fat)} g por dia (média)
                   </p>
@@ -281,16 +356,58 @@ export default function Balanco() {
                 Treino: {sessions} {sessions === 1 ? 'sessão' : 'sessões'} · {fmtInt(minutes)} min
                 {trainingKcal > 0 && <span className="text-burn"> · +{fmtKcal(trainingKcal)} no plano</span>}
               </p>
-              {data.tdee != null && missingComplete === 0 ? (
+              {exp.tdeeFrozen != null && !exp.learning ? (
                 <p>
-                  Gasto medido pelo teu peso: cerca de {fmtKcal(data.tdee)} por dia. A previsão inicial dizia{' '}
-                  {fmtKcal(profile.expected_tdee)}.
+                  Gasto medido pelo teu peso: cerca de {fmtKcal(exp.tdeeFrozen)} por dia. A fórmula dizia{' '}
+                  {fmtKcal(exp.formula + exp.avgTraining)}.
                 </p>
               ) : (
                 <p className="text-dim">
                   Mais {missingComplete} {missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo a medir o
-                  teu gasto pelo peso. Até lá uso uma previsão.
+                  teu gasto pelo peso. Até lá uso uma fórmula ({fmtKcal(exp.formula)} por dia sem treino).
                 </p>
+              )}
+              {gapNote && (
+                <p className="text-dim">
+                  Pode ser porções maiores do que as fotos mostram, ou um gasto mais baixo do que o normal. A app já usa o
+                  valor medido, por isso o plano continua certo.
+                </p>
+              )}
+              {suggestion != null && (
+                <div className="space-y-2 rounded-xl bg-surface2 p-3">
+                  <p>
+                    Para perderes cerca de 0,5 kg por semana, o plano base podia ser {fmtInt(suggestion)} (hoje é{' '}
+                    {fmtInt(profile.base_kcal)}).
+                  </p>
+                  <button
+                    onClick={() => void applyBase(suggestion)}
+                    className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              )}
+              {profile.birth_year == null && (
+                <label className="block space-y-1">
+                  <span>Em que ano nasceste? (opcional, para a fórmula do gasto)</span>
+                  <span className="flex gap-2">
+                    <input
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={birthYear}
+                      onChange={(e) => setBirthYear(e.target.value.replace(/\D/g, ''))}
+                      placeholder="1986"
+                      className="h-11 w-28 rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums"
+                    />
+                    <button
+                      disabled={birthYear.length !== 4 || Number(birthYear) < 1920 || Number(birthYear) > 2015}
+                      onClick={() => void update({ birth_year: Number(birthYear) })}
+                      className="min-h-11 rounded-xl border border-line px-4 disabled:opacity-40"
+                    >
+                      Guardar
+                    </button>
+                  </span>
+                </label>
               )}
               {data.steps != null && (
                 <p className="text-dim">

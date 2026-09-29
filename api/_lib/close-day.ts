@@ -4,11 +4,16 @@ import { round1 } from './rules/meal-totals.js'
 import { kcalTarget, storedExerciseKcal, type WorkoutType } from './rules/targets.js'
 import { floorWarning, isDayComplete } from './rules/day-close.js'
 import { tdeeRaw, smoothTdee } from './rules/adaptativo.js'
-import { isMaintenanceWeek, maintenanceTarget } from './rules/manutencao.js'
+import { isMaintenanceWeek, maintenanceTarget, mondayOf } from './rules/manutencao.js'
+import { dailyBase, formulaBase, kcalOut } from './rules/gasto.js'
 
 // Fecho de um dia nutricional: kcal e macros das refeições contadas, kcal
 // guardadas dos treinos, meta (plano ou semana de pausa), dia completo,
 // peso médio, aviso do mínimo e gasto medido. Usado pela cron.
+
+// Colunas do perfil de que o fecho do dia precisa (cron e recálculo).
+export const CLOSE_DAY_PROFILE_COLUMNS =
+  'user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour,maintenance_enabled,maintenance_anchor,height_cm,birth_year,sex,expected_tdee'
 
 export interface CloseDayProfile {
   user_id: string
@@ -17,6 +22,77 @@ export interface CloseDayProfile {
   nutrition_day_cutoff_hour: number
   maintenance_enabled?: boolean | null
   maintenance_anchor?: string | null
+  // Fase 6: para a fórmula do gasto (Mifflin × 1,2)
+  height_cm?: number | null
+  birth_year?: number | null
+  sex?: string | null
+  expected_tdee?: number | null
+}
+
+// Gasto de um dia (Fase 6, só para mostrar): base sem treino + treino. A
+// base usa o gasto medido congelado antes da segunda-feira da semana e a
+// média das kcal de treino dos dias completos dessa janela; com menos de 10
+// dias completos, a fórmula.
+async function dayExpenditure(
+  admin: SupabaseClient,
+  profile: CloseDayProfile,
+  date: string,
+  weightTrend: number | null,
+  kcalExercise: number,
+) {
+  const userId = profile.user_id
+  const monday = mondayOf(date)
+  const [{ data: frozen }, { data: window }, { count }, { data: lastTrend }] = await Promise.all([
+    admin
+      .from('days')
+      .select('tdee_est')
+      .eq('user_id', userId)
+      .lt('date', monday)
+      .not('tdee_est', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1),
+    admin
+      .from('days')
+      .select('kcal_exercise')
+      .eq('user_id', userId)
+      .eq('is_complete', true)
+      .lt('date', monday)
+      .order('date', { ascending: false })
+      .limit(14),
+    admin
+      .from('days')
+      .select('date', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_complete', true)
+      .lt('date', monday),
+    weightTrend == null
+      ? admin
+          .from('days')
+          .select('weight_trend')
+          .eq('user_id', userId)
+          .lte('date', date)
+          .not('weight_trend', 'is', null)
+          .order('date', { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: [{ weight_trend: weightTrend }] }),
+  ])
+  const trainings = (window ?? []).map((d) => Number(d.kcal_exercise ?? 0))
+  const avgTraining = trainings.length ? trainings.reduce((a, b) => a + b, 0) / trainings.length : 0
+  const formula = formulaBase({
+    weightKg: lastTrend?.[0]?.weight_trend != null ? Number(lastTrend[0].weight_trend) : null,
+    heightCm: profile.height_cm ?? null,
+    birthYear: profile.birth_year ?? null,
+    sex: profile.sex ?? 'm',
+    date,
+    fallback: Number(profile.expected_tdee ?? 2200),
+  })
+  const base = dailyBase({
+    completeDays: count ?? 0,
+    tdeeFrozen: frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null,
+    avgTrainingKcal: avgTraining,
+    formula,
+  })
+  return { formula_base: formula, daily_base_est: base.base, kcal_out_est: kcalOut(base.base, kcalExercise) }
 }
 
 function round2(n: number): number {
@@ -170,8 +246,11 @@ export async function closeDay(
   if (maintenance) flags.add('manutencao')
   else flags.delete('manutencao')
 
+  const expenditure = await dayExpenditure(admin, profile, date, weightTrend, kcalExercise)
+
   const { error } = await admin.from('days').upsert(
     {
+      ...expenditure,
       user_id: userId,
       date,
       kcal_in: kcalIn,

@@ -14,8 +14,10 @@ import { workoutTitle } from '../lib/workout-actions'
 import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
 import { recomputeFrom } from '../lib/recompute'
 import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
+import { kcalOut, paceFromDiff, round10 } from '../../api/_lib/rules/gasto'
+import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
-import { isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
+import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
 import {
   dismissNudge,
@@ -46,6 +48,7 @@ interface DayData {
   importsToConfirm: string[]
   weightCount: number
   lastMeasureDate: string | null
+  expenditure: ExpenditureContext | null
   hasAnyWeight: boolean
   hasAnyMeal: boolean
 }
@@ -103,6 +106,7 @@ export default function Hoje() {
       { count: mealCount },
       { data: imports },
       { data: lastMeasure },
+      expenditure,
     ] = await Promise.all([
       supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
       supabase
@@ -136,6 +140,7 @@ export default function Hoje() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),
+      loadExpenditure(profile, mondayOf(date)).catch(() => null),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
     const photos = await signedUrls(
@@ -158,6 +163,7 @@ export default function Hoje() {
       importsToConfirm: (imports ?? []).map((i) => i.id as string),
       weightCount: weightCount ?? 0,
       lastMeasureDate: (lastMeasure?.[0]?.date as string | undefined) ?? null,
+      expenditure,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
     })
@@ -227,7 +233,9 @@ export default function Hoje() {
   const plan = maintenance ? maintenanceTarget(data.latestTdee) : profile.base_kcal + kcalExercise
   const left = plan - kcalIn
   const over = left < 0
-  const underSpend = data.latestTdee != null && kcalIn < data.latestTdee
+  // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
+  const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
+  const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
 
   // Linhas do joelho: nunca na fila do Próximo passo; ficam até haver resposta (48 h).
   const kneeRows = isToday
@@ -742,6 +750,20 @@ export default function Hoje() {
       {planOpen && (
         <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)}>
           <div className="space-y-4 pb-2 text-[15px]">
+            {outToday != null && (
+              <div className="space-y-1">
+                <p className="text-[17px]">
+                  Gastas cerca de {fmtKcal(round10(outToday))} {isToday ? 'hoje' : 'nesse dia'}
+                  {data.expenditure?.learning ? ' (a aprender)' : ''}.
+                </p>
+                {!maintenance && paceFromDiff(plan - outToday) < 0 && (
+                  <p>
+                    O plano deixa-te comer {fmtKcal(plan)} para perderes cerca de{' '}
+                    {fmt1(Math.abs(paceFromDiff(plan - outToday)))} kg por semana.
+                  </p>
+                )}
+              </div>
+            )}
             {maintenance ? (
               <p>
                 Esta semana o plano é comer o que gastas ({fmtInt(plan)}) para o corpo descansar da dieta.
@@ -785,6 +807,13 @@ export default function Hoje() {
             {kcalExercise === 0 && !maintenance && (
               <p className="text-dim">Um treino aumenta o que podes comer.</p>
             )}
+            <details className="text-dim">
+              <summary className="cursor-pointer">Como sei quanto gastas?</summary>
+              <p className="mt-1">
+                Primeiro por uma fórmula com a tua altura, peso e idade. Depois de 10 dias completos, pelo que comes e pelo
+                que o teu peso faz.
+              </p>
+            </details>
           </div>
         </BottomSheet>
       )}

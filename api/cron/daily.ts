@@ -2,15 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminClient } from '../_lib/supabase.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { mondayOf } from '../_lib/rules/manutencao.js'
-import { closeDay, recomputeRange, type CloseDayProfile } from '../_lib/close-day.js'
+import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, recomputeRange, type CloseDayProfile } from '../_lib/close-day.js'
 import { generateWeeklyReview } from '../_lib/review.js'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
 // marca análises presas como erro; recalcula, por ordem, os dias alterados
 // (marcados pelo trigger mark_day_dirty) e sempre os últimos 3 — no máximo 21
 // por noite, a noite seguinte continua —, com o gasto adaptativo e a semana de
-// pausa da dieta; à segunda, o review da semana anterior; ao domingo, limpa
-// refeições apagadas há mais de 7 dias e fotos sem dono.
+// pausa da dieta; o resumo neutro da semana anterior, na primeira noite em
+// que falte; ao domingo, limpa refeições apagadas há mais de 7 dias e fotos
+// sem dono.
 
 const MAX_DAYS_PER_NIGHT = 21
 const TIME_BUDGET_MS = 45_000
@@ -27,9 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { data: profiles, error } = await admin
       .from('profile')
-      .select(
-        'user_id,base_kcal,kcal_floor_week,nutrition_day_cutoff_hour,maintenance_enabled,maintenance_anchor',
-      )
+      .select(CLOSE_DAY_PROFILE_COLUMNS)
     if (error) throw new Error(error.message)
 
     const startedAt = Date.now()
@@ -90,14 +89,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .upsert({ user_id: profile.user_id, date: stoppedAt, dirty: true }, { onConflict: 'user_id,date' })
       }
 
-      // À segunda-feira, o review da semana que terminou.
-      if (new Date(`${today}T00:00:00Z`).getUTCDay() === 1) {
+      // O gasto previsto (Mifflin × 1,2) passa a ser escrito pelo servidor,
+      // a partir do dia mais recente fechado, quando há ano de nascimento.
+      if (profile.birth_year != null) {
+        const { data: lastDay } = await admin
+          .from('days')
+          .select('formula_base')
+          .eq('user_id', profile.user_id)
+          .lt('date', today)
+          .not('formula_base', 'is', null)
+          .order('date', { ascending: false })
+          .limit(1)
+        const formula = lastDay?.[0]?.formula_base
+        if (formula != null && Number(formula) !== Number(profile.expected_tdee)) {
+          await admin.from('profile').update({ expected_tdee: formula }).eq('user_id', profile.user_id)
+        }
+      }
+
+      // O resumo da semana que terminou, na primeira noite em que falte.
+      if (Date.now() - startedAt < TIME_BUDGET_MS) {
         try {
           if (await generateWeeklyReview(admin, profile.user_id, mondayOf(shiftDate(today, -7)))) {
             reviews++
           }
         } catch (err) {
-          console.error('Review semanal falhou:', err)
+          console.error('Resumo semanal falhou:', err)
         }
       }
     }
