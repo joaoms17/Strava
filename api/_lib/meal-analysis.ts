@@ -44,7 +44,7 @@ export interface MealRow {
   deleted_at: string | null
 }
 
-const VISION_KINDS = ['meal_photo', 'meal_parse_photo']
+const VISION_KINDS = ['meal_photo', 'meal_parse_photo', 'workout_shot']
 const ANALYSIS_BUDGET_MS = 50_000
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'

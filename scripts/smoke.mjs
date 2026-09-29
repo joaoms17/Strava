@@ -22,6 +22,8 @@ const probes = [
   ['POST', '/api/day/recompute'],
   ['GET', '/api/food/barcode/5601234567890'],
   ['POST', '/api/workout/manual'],
+  ['POST', '/api/workout/save'],
+  ['POST', '/api/workout/shot'],
   ['POST', '/api/plan/generate'],
   ['GET', '/api/calendar'],
   ['POST', '/api/health/daily'],

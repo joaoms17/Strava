@@ -15,6 +15,13 @@ const base: NextStepInput = {
 }
 
 describe('próximo passo', () => {
+  it('um print lido à espera de confirmação vem logo a seguir aos erros da comida', () => {
+    const morning = { ...base, minutesOfDay: 8 * 60, weighedToday: false }
+    expect(nextStep({ ...morning, workoutsToConfirm: 1 })).toBe('treino')
+    expect(nextStep({ ...morning, workoutsToConfirm: 1, mealsWithError: 1 })).toBe('erro')
+    expect(nextStep({ ...morning, workoutsToConfirm: 0 })).toBe('pesar')
+  })
+
   it('de manhã sem pesagem pede para pesar', () => {
     expect(nextStep({ ...base, minutesOfDay: 8 * 60, weighedToday: false })).toBe('pesar')
     expect(nextStep({ ...base, minutesOfDay: 11 * 60, weighedToday: false })).toBeNull()

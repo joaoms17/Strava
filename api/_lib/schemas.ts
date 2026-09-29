@@ -157,3 +157,88 @@ export function validatePlan(plan: GeneratedPlan, catalogNames: string[]): strin
   }
   return errors
 }
+
+// ---------------------------------------------------------------------
+// Leitura dos prints de treino (Fase 3). Sem mapas abertos nem limites
+// numéricos: os structured outputs não os aceitam; o servidor verifica
+// os intervalos depois (rules/treino.ts).
+// ---------------------------------------------------------------------
+export const SHOT_FIELDS = [
+  'sport',
+  'date',
+  'start_time',
+  'total_time_s',
+  'moving_time_s',
+  'distance_km',
+  'avg_hr',
+  'max_hr',
+  'avg_power_w',
+  'max_power_w',
+  'np_w',
+  'avg_cadence',
+  'max_cadence',
+  'calories_device',
+  'training_load',
+] as const
+
+const n = () => z.number().nullable()
+
+export const WorkoutShotSchema = z.object({
+  images: z.array(
+    z.object({
+      index: z.number().int(),
+      app: z.enum(['garmin_connect', 'strava', 'bike_console', 'apple_fitness', 'other', 'not_workout']),
+      screen: z.enum(['summary', 'stats', 'laps', 'zones', 'sets', 'charts', 'share_card', 'console', 'other']),
+      date_shown: z.string().nullable(),
+    }),
+  ),
+  same_activity: z.boolean(),
+  mismatch_reason: z.string().nullable(),
+  activity: z.object({
+    sport: z.enum(['indoor_bike', 'outdoor_bike', 'strength', 'walk', 'run', 'elliptical', 'swim', 'other']),
+    sport_label_raw: z.string().nullable(),
+    title: z.string().nullable(),
+    date: z.string().nullable(),
+    start_time: z.string().nullable(),
+    total_time_s: n(),
+    moving_time_s: n(),
+    distance_km: n(),
+    avg_hr: n(),
+    max_hr: n(),
+    avg_power_w: n(),
+    max_power_w: n(),
+    np_w: n(),
+    avg_cadence: n(),
+    max_cadence: n(),
+    calories_device: n(),
+    elevation_gain_m: n(),
+    aerobic_te: n(),
+    anaerobic_te: n(),
+    training_load: n(),
+    training_load_kind: z.enum(['garmin_exercise_load', 'strava_relative_effort', 'tss', 'other']).nullable(),
+    rpe: n(),
+    hr_zones: z.array(z.object({ zone: z.number().int(), seconds: z.number() })),
+    laps: z.array(
+      z.object({
+        n: z.number().int(),
+        time_s: n(),
+        avg_hr: n(),
+        avg_power_w: n(),
+        avg_cadence: n(),
+      }),
+    ),
+    strength_sets: z.array(
+      z.object({ exercise_raw: z.string(), reps: n(), weight_kg: n() }),
+    ),
+  }),
+  field_confidence: z.array(
+    z.object({
+      field: z.enum(SHOT_FIELDS),
+      confidence: z.enum(['alta', 'media', 'baixa']),
+      image_index: z.number().int().nullable(),
+    }),
+  ),
+  notes: z.string().nullable(),
+})
+
+export type WorkoutShot = z.infer<typeof WorkoutShotSchema>

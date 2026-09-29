@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import manual from './_workout/manual.js'
 import checkin from './_workout/checkin.js'
 import session from './_workout/session.js'
+import { discard, parseShot, remove, restore, save, shot, update } from './_workout/actions.js'
 
 // Consolidado numa função (limite de 12 do Hobby); caminhos originais
 // preservados por rewrites no vercel.json.
@@ -9,6 +10,13 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   manual,
   checkin,
   session,
+  save,
+  update,
+  delete: remove,
+  restore,
+  shot,
+  'parse-shot': parseShot,
+  discard,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

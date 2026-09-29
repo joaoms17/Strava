@@ -7,6 +7,10 @@ import {
   PROMPT_MEAL_TEXT,
   PROMPT_PLAN,
   PROMPT_REVIEW,
+  PROMPT_MEAL_PHOTO_V2,
+  PROMPT_MEAL_TEXT_V2,
+  PROMPT_MEAL_CORRECT,
+  PROMPT_WORKOUT_SHOT,
   readPrompt,
 } from '../_lib/prompts.js'
 
@@ -73,7 +77,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const env = Object.fromEntries(ENV_VARS.map((name) => [name, Boolean(process.env[name])]))
 
   const prompts = Object.fromEntries(
-    [PROMPT_MEAL_TEXT, PROMPT_MEAL_PHOTO, PROMPT_PLAN, PROMPT_REVIEW].map((file) => {
+    [
+      PROMPT_MEAL_TEXT,
+      PROMPT_MEAL_PHOTO,
+      PROMPT_PLAN,
+      PROMPT_REVIEW,
+      PROMPT_MEAL_PHOTO_V2,
+      PROMPT_MEAL_TEXT_V2,
+      PROMPT_MEAL_CORRECT,
+      PROMPT_WORKOUT_SHOT,
+    ].map((file) => {
       try {
         return [file, readPrompt(file).length > 0]
       } catch {
@@ -92,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!count) throw new Error('Sem perfil — corre os seeds no Supabase.')
       return `${count} perfil`
     }),
-    // Migrações 1 e 2: favoritos, vistas e as colunas da análise.
+    // Migrações 1, 2 e 4: favoritos, vistas, colunas da análise e treino.
     timed(async () => {
       const admin = adminClient()
       for (const table of ['favorites', 'meals_counted', 'workouts_active']) {
@@ -101,7 +114,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const { error } = await admin.from('meals').select('status,photo_paths,note', { head: true })
       if (error) throw new Error('faltam colunas: corre a migração 20260929000000_fase2.sql')
-      return 'migrações 1 e 2'
+      const { error: fase3 } = await admin.from('workout_imports').select('*', { count: 'exact', head: true })
+      if (fase3) throw new Error('falta workout_imports: corre a migração 20260930000000_fase3.sql')
+      return 'migrações 1, 2 e 4'
     }),
     timed(async () => {
       await anthropic().models.retrieve(MODELS.text, {}, aiOptions)

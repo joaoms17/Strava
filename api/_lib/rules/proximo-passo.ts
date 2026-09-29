@@ -1,10 +1,11 @@
 // Cartão «Próximo passo» do Hoje: no máximo um, com regras fixas e sem IA.
-// Por ordem: refeição com erro (1), limite da IA (2), pesar (4), ontem (5),
+// Por ordem: refeição com erro (1), limite da IA (2), treino por confirmar
+// (3, um print lido à espera de «Guardar»), pesar (4), ontem (5),
 // rever à noite (6), pouco (7) e proteína (8). Os cartões 1 e 2 resolvem-se
 // com a ação; os outros têm «Agora não», que esconde até ao dia seguinte e,
 // ignorado 2 vezes, pausa 3 dias.
 
-export type NextStepId = 'erro' | 'limite' | 'pesar' | 'ontem' | 'rever' | 'pouco' | 'proteina'
+export type NextStepId = 'erro' | 'limite' | 'treino' | 'pesar' | 'ontem' | 'rever' | 'pouco' | 'proteina'
 
 export interface NudgeEntry {
   ignored: number
@@ -27,6 +28,7 @@ export interface NextStepInput {
   mealsWithError?: number
   mealsOverLimit?: number
   mealsToReview?: number
+  workoutsToConfirm?: number
   nudges: NudgeState
 }
 
@@ -57,6 +59,7 @@ export function nextStep(input: NextStepInput): NextStepId | null {
   const candidates: [NextStepId, boolean][] = [
     ['erro', (input.mealsWithError ?? 0) > 0],
     ['limite', (input.mealsOverLimit ?? 0) > 0],
+    ['treino', (input.workoutsToConfirm ?? 0) > 0],
     // Só de manhã (04:00–11:00): depois da meia-noite ainda é o dia anterior.
     ['pesar', input.minutesOfDay >= 4 * 60 && input.minutesOfDay < 11 * 60 && !input.weighedToday],
     [
