@@ -10,6 +10,8 @@ import { onDuplicate, useCaptureSync } from './lib/capture-queue'
 import { fmtDayShort } from './lib/format'
 import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
+import RecoverPassword from './components/RecoverPassword'
+import { bootUrl } from './lib/boot-url'
 import TabBar from './components/TabBar'
 import CaptureSheet from './components/sheets/CaptureSheet'
 import WeighSheet from './components/sheets/WeighSheet'
@@ -237,11 +239,16 @@ function Shell() {
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
+  // Aberta pelo link «Recuperar palavra-passe» do email.
+  const [recovering, setRecovering] = useState(bootUrl.recovery)
 
   useEffect(() => {
     if (!supabaseConfigured) return
     supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => setSession(next))
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      setSession(next)
+    })
     return () => sub.subscription.unsubscribe()
   }, [])
 
@@ -251,6 +258,16 @@ export default function App() {
         Faltam as variáveis <code>VITE_SUPABASE_URL</code> e <code>VITE_SUPABASE_ANON_KEY</code>.
         Configura o ambiente e volta a abrir a app.
       </Centered>
+    )
+  }
+  if (recovering) {
+    return (
+      <RecoverPassword
+        onDone={() => {
+          window.history.replaceState(null, '', '/hoje')
+          setRecovering(false)
+        }}
+      />
     )
   }
   if (session === undefined) return <div className="min-h-dvh bg-bg" />

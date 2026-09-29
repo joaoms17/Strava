@@ -1,4 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
+// Primeiro: guarda o #hash do link de recuperação antes de o supabase-js o ler.
+import './boot-url'
 
 // Aceita o URL mesmo que venha colado com um caminho a mais
 // (ex.: copiado da barra de endereço) — só a origem interessa.

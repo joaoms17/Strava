@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { useProfile, useReadyProfile } from '../lib/profile'
@@ -6,6 +6,7 @@ import { useToast } from '../lib/toast'
 import { toCsv, downloadCsv } from '../lib/csv'
 import type { Profile } from '../lib/types'
 import IntervalsSettings from '../components/IntervalsSettings'
+import NewPasswordForm from '../components/NewPasswordForm'
 
 interface Field {
   key: keyof Profile & string
@@ -52,6 +53,38 @@ const EXPORT_TABLES: [string, string][] = [
   ['foods', 'alimentos'],
   ['health_daily', 'saude'],
 ]
+
+// Mudar a palavra-passe com a sessão iniciada (sem email).
+function ChangePassword() {
+  const toast = useToast()
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState<string | null>(null)
+  useEffect(() => {
+    if (open) void supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null))
+  }, [open])
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px]">
+        Mudar palavra-passe
+      </button>
+    )
+  }
+  return (
+    <div className="space-y-2">
+      <NewPasswordForm
+        email={email}
+        submitLabel="Guardar palavra-passe"
+        onDone={() => {
+          setOpen(false)
+          toast('Palavra-passe mudada.')
+        }}
+      />
+      <button onClick={() => setOpen(false)} className="min-h-11 w-full text-[15px] text-dim">
+        Cancelar
+      </button>
+    </div>
+  )
+}
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -248,6 +281,7 @@ export default function Definicoes() {
 
       <Section title="Sessão">
         <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
+        <ChangePassword />
         <button onClick={() => void supabase.auth.signOut()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
           Terminar sessão
         </button>
