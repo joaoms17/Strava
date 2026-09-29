@@ -247,27 +247,27 @@ export async function closeDay(
   else flags.delete('manutencao')
 
   const expenditure = await dayExpenditure(admin, profile, date, weightTrend, kcalExercise)
-
-  const { error } = await admin.from('days').upsert(
-    {
-      ...expenditure,
-      user_id: userId,
-      date,
-      kcal_in: kcalIn,
-      protein,
-      carbs,
-      fat,
-      kcal_exercise: kcalExercise,
-      kcal_target: target,
-      is_complete: complete,
-      weight_kg: weightRes.data ? Number(weightRes.data.kg) : null,
-      weight_trend: weightTrend,
-      flags: [...flags],
-      meals_pending: pendingRes.count ?? 0,
-      dirty: false,
-    },
-    { onConflict: 'user_id,date' },
-  )
+  const row = {
+    user_id: userId,
+    date,
+    kcal_in: kcalIn,
+    protein,
+    carbs,
+    fat,
+    kcal_exercise: kcalExercise,
+    kcal_target: target,
+    is_complete: complete,
+    weight_kg: weightRes.data ? Number(weightRes.data.kg) : null,
+    weight_trend: weightTrend,
+    flags: [...flags],
+    meals_pending: pendingRes.count ?? 0,
+    dirty: false,
+  }
+  let { error } = await admin.from('days').upsert({ ...row, ...expenditure }, { onConflict: 'user_id,date' })
+  // Antes da migração 7 as colunas do gasto não existem: fecha o dia sem elas.
+  if (error && /kcal_out_est|daily_base_est|formula_base/.test(error.message)) {
+    ;({ error } = await admin.from('days').upsert(row, { onConflict: 'user_id,date' }))
+  }
   if (error) throw new Error(`days upsert (${date}): ${error.message}`)
 
   await computeAdaptive(admin, userId, date)
