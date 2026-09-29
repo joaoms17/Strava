@@ -224,7 +224,7 @@ export default function Avancado() {
           em Definições › Calendário › Contas › Calendários subscritos.
         </p>
         <h2 className="pt-2 text-[15px] font-semibold text-ink">Versão</h2>
-        <p>Regresso · redesenho fase 5 · 5 funções no Vercel</p>
+        <p>Daily Track · 5 funções no Vercel</p>
       </section>
     </div>
   )

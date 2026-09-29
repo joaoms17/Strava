@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useLocation } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { emitDataChanged, useDataVersion } from '../lib/events'
@@ -11,8 +12,6 @@ import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
 import { chip } from '../components/ui/Chips'
 import { useSheet } from '../lib/sheet'
-import { useReadyProfile } from '../lib/profile'
-import { workoutKcal } from '../../api/_lib/rules/targets'
 
 type Segment = 'refeicoes' | 'treinos' | 'alimentos'
 
@@ -28,8 +27,8 @@ export default function Favoritos() {
   const [editing, setEditing] = useState<Favorite | null>(null)
   const [editingFood, setEditingFood] = useState<Food | null>(null)
   const [workoutFavs, setWorkoutFavs] = useState<Favorite[]>([])
-  const [editingWorkout, setEditingWorkout] = useState<Favorite | null>(null)
   const sheet = useSheet()
+  const [, navigate] = useLocation()
 
   const load = useCallback(async () => {
     const [{ data: favRows }, { data: foodRows }, { data: workoutRows }] = await Promise.all([
@@ -138,9 +137,15 @@ export default function Favoritos() {
 
       {segment === 'treinos' && (
         <div className="space-y-2">
+          <button
+            onClick={() => sheet.open('meu-treino')}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+          >
+            <Icon name="plus" size={18} /> Novo treino
+          </button>
           {workoutFavs.length === 0 && (
             <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
-              Ainda sem treinos favoritos. A Bicicleta habitual aparece aqui depois da migração da Fase 3.
+              Define os teus treinos (ginásio com os exercícios, corrida, padel…) para os registares com um toque.
             </p>
           )}
           {workoutFavs.map((favorite) => (
@@ -151,19 +156,26 @@ export default function Favoritos() {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[16px] font-semibold">{favorite.name}</span>
                 <span className="block text-[14px] text-dim tabular-nums">
+                  {favorite.workout?.type === 'strength'
+                    ? `${favorite.workout.exercises?.length ?? 0} exercícios · `
+                    : ''}
                   {favorite.workout?.minutes} min
                   {favorite.workout?.watts ? ` · ${favorite.workout.watts} W` : ''}
                   {favorite.kcal ? ` · +${fmtKcal(favorite.kcal)}` : ''}
                 </span>
               </span>
               <button
-                onClick={() => sheet.open('joelho', { fav: favorite.id })}
+                onClick={() =>
+                  favorite.workout?.type === 'strength'
+                    ? navigate(`/treino/ginasio?fav=${favorite.id}`)
+                    : sheet.open('joelho', { fav: favorite.id })
+                }
                 className="min-h-10 rounded-xl bg-cta px-3 font-semibold text-on-cta"
               >
                 Registar
               </button>
               <button
-                onClick={() => setEditingWorkout(favorite)}
+                onClick={() => sheet.open('meu-treino', { id: favorite.id })}
                 className="min-h-10 px-2 text-[17px] text-dim"
                 aria-label={`Editar ${favorite.name}`}
               >
@@ -172,17 +184,6 @@ export default function Favoritos() {
             </div>
           ))}
         </div>
-      )}
-
-      {editingWorkout && (
-        <WorkoutFavoriteSheet
-          favorite={editingWorkout}
-          onClose={() => setEditingWorkout(null)}
-          onSaved={() => {
-            setEditingWorkout(null)
-            emitDataChanged()
-          }}
-        />
       )}
 
       {segment === 'alimentos' && (
@@ -382,76 +383,3 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
   )
 }
 
-// Editar um treino favorito: a duração e a potência de sempre.
-function WorkoutFavoriteSheet({
-  favorite,
-  onClose,
-  onSaved,
-}: {
-  favorite: Favorite
-  onClose: () => void
-  onSaved: () => void
-}) {
-  const profile = useReadyProfile()
-  const toast = useToast()
-  const workout = favorite.workout
-  const [minutes, setMinutes] = useState(workout?.minutes ?? 45)
-  const [watts, setWatts] = useState<number | null>(workout?.watts ?? null)
-  if (!workout) return null
-  const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
-
-  async function save() {
-    const next = { ...workout!, minutes, watts: workout!.type === 'bike' ? watts : null }
-    const kcal = workoutKcal({ type: next.type, minutes, watts: next.watts ?? null, deviceCalories: null })
-    const { error } = await supabase
-      .from('favorites')
-      .update({ workout: next, kcal, updated_at: new Date().toISOString() })
-      .eq('id', favorite.id)
-    if (error) {
-      toast('Não consegui gravar.')
-      return
-    }
-    toast(`${favorite.name} · ${minutes} min${next.watts ? ` · ${next.watts} W` : ''}`)
-    onSaved()
-  }
-
-  return (
-    <BottomSheet
-      title={favorite.name}
-      onClose={onClose}
-      footer={
-        <button
-          onClick={() => void save()}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase"
-        >
-          Guardar
-        </button>
-      }
-    >
-      <div className="space-y-4 pb-2">
-        <div className="space-y-2">
-          <p className="label">Duração</p>
-          <div className="flex flex-wrap gap-2">
-            {[30, 45, 60, 90].map((m) => (
-              <button key={m} onClick={() => setMinutes(m)} className={chip(minutes === m)}>
-                {m} min
-              </button>
-            ))}
-          </div>
-        </div>
-        {workout.type === 'bike' && (
-          <div className="space-y-2">
-            <p className="label">Potência</p>
-            <div className="flex flex-wrap gap-2">
-              {wattsOptions.map((w) => (
-                <button key={w} onClick={() => setWatts(w)} className={chip(watts === w)}>
-                  {w} W
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    </BottomSheet>
-  )
-}

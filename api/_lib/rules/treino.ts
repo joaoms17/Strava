@@ -1,6 +1,6 @@
 // Fase 3 — treino: de onde vêm os watts, que regra dá as kcal, quando um
 // print é da mesma sessão que já está registada e como se juntam os dois.
-import { NET_METS, workoutKcal, type OtherSport, type WorkoutType } from './targets.js'
+import { NET_METS, isOtherSport, workoutKcal, type OtherSport, type WorkoutType } from './targets.js'
 
 export type WattsSource = 'device' | 'console' | 'manual' | 'favorite' | 'prefill'
 export type KcalRule = 'watts' | 'watts_prefill' | 'strength_flat' | 'device_x0.7' | 'met'
@@ -61,7 +61,7 @@ export function exerciseKcal(w: KcalInput): { kcal: number; rule: KcalRule; esti
         kcal:
           w.weightKg == null || w.minutes == null
             ? 0
-            : Math.round(NET_METS[w.sport ?? 'outro'] * w.weightKg * (w.minutes / 60)),
+            : Math.round(NET_METS[isOtherSport(w.sport) ? w.sport : 'outro'] * w.weightKg * (w.minutes / 60)),
         rule: 'met',
         estimated: true,
       }
@@ -248,6 +248,8 @@ export function typeOfSport(sport: ShotSport): { type: WorkoutType; sport: Other
       return { type: 'strength', sport: null }
     case 'walk':
       return { type: 'other', sport: 'caminhada' }
+    case 'run':
+      return { type: 'other', sport: 'corrida' }
     case 'elliptical':
       return { type: 'other', sport: 'eliptica' }
     case 'swim':

@@ -5,13 +5,56 @@
 
 export type WorkoutType = 'bike' | 'strength' | 'other'
 
-export type OtherSport = 'caminhada' | 'eliptica' | 'natacao' | 'outro'
+// Desportos além da bicicleta e do ginásio (ordem dos botões).
+export const OTHER_SPORTS = [
+  'corrida',
+  'caminhada',
+  'eliptica',
+  'natacao',
+  'remo',
+  'futebol',
+  'padel',
+  'tenis',
+  'aula',
+  'yoga',
+  'pilates',
+  'outro',
+] as const
+export type OtherSport = (typeof OTHER_SPORTS)[number]
 
-// METs líquidos (acima do repouso): o gasto em repouso já está no gasto medido.
+export const SPORT_LABEL: Record<OtherSport, string> = {
+  corrida: 'Corrida',
+  caminhada: 'Caminhada',
+  eliptica: 'Elíptica',
+  natacao: 'Natação',
+  remo: 'Remo',
+  futebol: 'Futebol',
+  padel: 'Padel',
+  tenis: 'Ténis',
+  aula: 'Aula (HIIT, cycling…)',
+  yoga: 'Yoga',
+  pilates: 'Pilates',
+  outro: 'Outro',
+}
+
+export function isOtherSport(value: unknown): value is OtherSport {
+  return typeof value === 'string' && (OTHER_SPORTS as readonly string[]).includes(value)
+}
+
+// METs líquidos (acima do repouso, intensidade moderada, Compêndio de
+// Atividades Físicas − 1): o gasto em repouso já está no gasto medido.
 export const NET_METS: Record<OtherSport, number> = {
+  corrida: 7.5,
   caminhada: 2.5,
   eliptica: 4,
   natacao: 5,
+  remo: 5,
+  futebol: 6,
+  padel: 5,
+  tenis: 6,
+  aula: 5,
+  yoga: 1.5,
+  pilates: 2,
   outro: 3,
 }
 
@@ -34,7 +77,7 @@ export function workoutKcal(w: WorkoutForKcal): number {
     case 'other':
       if (w.deviceCalories != null) return Math.round(w.deviceCalories * 0.7)
       if (w.weightKg == null || w.minutes == null) return 0
-      return Math.round(NET_METS[w.sport ?? 'outro'] * w.weightKg * (w.minutes / 60))
+      return Math.round(NET_METS[isOtherSport(w.sport) ? w.sport : 'outro'] * w.weightKg * (w.minutes / 60))
   }
 }
 

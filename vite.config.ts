@@ -37,9 +37,9 @@ export default defineConfig(({ mode }) => ({
       // As letras (Barlow) ficam no telemóvel para a app abrir igual sem rede.
       workbox: { globPatterns: ['**/*.{js,css,html,woff2,png,svg}'] },
       manifest: {
-        name: 'A Época do Regresso',
-        short_name: 'Regresso',
-        description: 'Nutrição, treino e peso',
+        name: 'Daily Track',
+        short_name: 'Daily Track',
+        description: 'Comida, treino, peso e sono, todos os dias',
         lang: 'pt-PT',
         display: 'standalone',
         orientation: 'portrait',

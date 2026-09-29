@@ -9,6 +9,7 @@ import { workoutTitle } from '../lib/workout-actions'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { bikeSuggestion, nextBikeTarget } from '../../api/_lib/rules/progressao-bike'
 import { fmtSleep, hasSleep, poorNight, type NightSleep } from '../../api/_lib/rules/sono'
+import { SPORT_LABEL, isOtherSport } from '../../api/_lib/rules/targets'
 import type { ExerciseLogRow, Favorite, Workout, WorkoutImport } from '../lib/types'
 import Icon from '../components/ui/Icon'
 import ShotButton from '../components/ui/ShotButton'
@@ -39,6 +40,17 @@ interface TreinoData {
   pending: WorkoutImport[]
   logs: ExerciseLogRow[]
   sleep: NightSleep | null
+}
+
+function templateSummary(f: Favorite): string {
+  const w = f.workout
+  if (!w) return ''
+  if (w.type === 'strength') {
+    const n = w.exercises?.length ?? 0
+    return `Ginásio · ${n} ${n === 1 ? 'exercício' : 'exercícios'} · ${w.minutes} min`
+  }
+  if (w.type === 'bike') return `Bicicleta · ${w.minutes} min${w.watts ? ` · ${w.watts} W` : ''}`
+  return `${SPORT_LABEL[isOtherSport(w.sport) ? w.sport : 'outro']} · ${w.minutes} min`
 }
 
 // Treino: registar em poucos toques (Bicicleta habitual, Já fiz, print do
@@ -109,7 +121,6 @@ export default function Treino() {
   const weekKnee = week.filter((w) => w.status === 'yellow' || w.status === 'red').length
 
   const habitual = favorites.find((f) => f.name === 'Bicicleta habitual') ?? favorites.find((f) => f.workout?.type === 'bike')
-  const others = favorites.filter((f) => f !== habitual)
   // Um favorito de ginásio abre a Sessão de ginásio; os outros, a folha Joelho.
   const openFavorite = (f: Favorite) =>
     f.workout?.type === 'strength' ? navigate(`/treino/ginasio?fav=${f.id}`) : sheet.open('joelho', { fav: f.id })
@@ -117,6 +128,12 @@ export default function Treino() {
     w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
       ? navigate(`/treino/ginasio?id=${w.id}`)
       : sheet.open('confirmar-treino', { id: w.id })
+
+  // Treinos do relógio das últimas 2 semanas ainda sem um dos teus treinos.
+  const unassigned = workouts
+    .filter((w) => w.source === 'intervals' && !w.favorite_id && w.date >= shiftDate(today, -14))
+    .slice()
+    .reverse()
 
   const bikes = workouts.filter((w) => w.type === 'bike')
   const target = nextBikeTarget(
@@ -250,20 +267,61 @@ export default function Treino() {
         </div>
       )}
 
-      {others.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {others.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => openFavorite(f)}
-              className="min-h-10 rounded-full border border-line px-3 text-[15px]"
-            >
-              {f.name}
-              {f.workout?.type !== 'strength' && ` · ${f.workout?.minutes} min`}
-            </button>
-          ))}
-        </div>
+      {unassigned.length > 0 && favorites.length > 0 && (
+        <button
+          onClick={() => sheet.open('confirmar-treino', { id: unassigned[0]!.id })}
+          className="flex w-full items-center gap-3 rounded-[18px] border border-line bg-surface p-4 text-left"
+        >
+          <Icon name="watch" />
+          <span className="flex-1 text-[15px]">
+            {unassigned.length === 1
+              ? `Treino do relógio de ${weekdayShort(unassigned[0]!.date)}: qual dos teus treinos foi?`
+              : `${unassigned.length} treinos do relógio sem nome: diz qual dos teus treinos foi cada um.`}
+          </span>
+          <Icon name="chevron" size={20} />
+        </button>
       )}
+
+      <section className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="label">Os meus treinos</p>
+          <button onClick={() => sheet.open('meu-treino')} className="min-h-10 px-2 text-[15px] text-eat">
+            ＋ Novo treino
+          </button>
+        </div>
+        {favorites.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-line p-4 text-[15px] text-dim">
+            Define os teus 4 ou 5 treinos (ginásio com os exercícios, corrida, padel…). Depois registas cada um com um
+            toque, ou dizes qual foi quando o treino chega do relógio.
+          </p>
+        ) : (
+          <div className="divide-y divide-line/60 rounded-2xl border border-line bg-surface">
+            {favorites.map((f) => (
+              <div key={f.id} className="flex items-center gap-2 px-3">
+                <button onClick={() => openFavorite(f)} className="flex min-h-16 min-w-0 flex-1 items-center gap-3 text-left">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim">
+                    <Icon
+                      name={f.workout?.type === 'bike' ? 'bike' : f.workout?.type === 'strength' ? 'dumbbell' : 'walk'}
+                      size={20}
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[16px] font-semibold">{f.name}</span>
+                    <span className="block truncate text-[13px] text-dim">{templateSummary(f)}</span>
+                  </span>
+                </button>
+                <button
+                  onClick={() => sheet.open('meu-treino', { id: f.id })}
+                  aria-label={`Editar ${f.name}`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-dim"
+                >
+                  <Icon name="pencil" size={18} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <div className="rounded-[18px] border border-line bg-surface p-4">
         <p className="font-display text-[12px] font-bold tracking-[0.16em] text-burn uppercase">Próxima bicicleta</p>

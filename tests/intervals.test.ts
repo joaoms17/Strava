@@ -41,7 +41,7 @@ describe('tipos', () => {
     expect(mapIcuType('WeightTraining', false).type).toBe('strength')
     expect(mapIcuType('Walk', false)).toEqual({ type: 'other', sport: 'caminhada' })
     expect(mapIcuType('Swim', false)).toEqual({ type: 'other', sport: 'natacao' })
-    expect(mapIcuType('Rowing', false)).toEqual({ type: 'other', sport: 'outro' })
+    expect(mapIcuType('Kayaking', false)).toEqual({ type: 'other', sport: 'outro' })
     expect(mapIcuType(null, true).type).toBe('bike')
   })
 })
@@ -167,5 +167,17 @@ describe('importação resistente', () => {
     expect(retryableImportError(new Error('O intervals.icu respondeu com erro (429).'))).toBe(true)
     expect(retryableImportError(new Error('A chave do intervals.icu não é válida.'))).toBe(false)
     expect(retryableImportError(new Error('Pedido inválido.'))).toBe(false)
+  })
+})
+
+describe('mais desportos', () => {
+  it('corrida, remo, futebol, ténis, yoga e aulas têm o seu desporto', () => {
+    expect(mapIcuType('Run', false)).toEqual({ type: 'other', sport: 'corrida' })
+    expect(mapIcuType('VirtualRun', false)).toEqual({ type: 'other', sport: 'corrida' })
+    expect(mapIcuType('Rowing', false)).toEqual({ type: 'other', sport: 'remo' })
+    expect(mapIcuType('Soccer', false)).toEqual({ type: 'other', sport: 'futebol' })
+    expect(mapIcuType('Tennis', false)).toEqual({ type: 'other', sport: 'tenis' })
+    expect(mapIcuType('Yoga', false)).toEqual({ type: 'other', sport: 'yoga' })
+    expect(mapIcuType('HighIntensityIntervalTraining', false)).toEqual({ type: 'other', sport: 'aula' })
   })
 })

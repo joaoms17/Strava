@@ -53,8 +53,16 @@ export function mapIcuType(type: string | null | undefined, trainer: boolean | n
     return { type: 'bike', sport: null }
   }
   if (t.includes('walk') || t.includes('hike')) return { type: 'other', sport: 'caminhada' }
+  if (t.includes('run')) return { type: 'other', sport: 'corrida' }
   if (t.includes('elliptical')) return { type: 'other', sport: 'eliptica' }
   if (t.includes('swim')) return { type: 'other', sport: 'natacao' }
+  if (t.includes('row')) return { type: 'other', sport: 'remo' }
+  if (t.includes('soccer') || t.includes('football')) return { type: 'other', sport: 'futebol' }
+  if (t.includes('padel')) return { type: 'other', sport: 'padel' }
+  if (t.includes('tennis') || t.includes('squash') || t.includes('badminton')) return { type: 'other', sport: 'tenis' }
+  if (t.includes('yoga')) return { type: 'other', sport: 'yoga' }
+  if (t.includes('pilates')) return { type: 'other', sport: 'pilates' }
+  if (t.includes('hiit') || t.includes('crossfit') || t.includes('highintensity')) return { type: 'other', sport: 'aula' }
   return { type: 'other', sport: 'outro' }
 }
 

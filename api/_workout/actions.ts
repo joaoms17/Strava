@@ -7,7 +7,7 @@ import { respondError } from '../_lib/http.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { painStatus } from '../_lib/rules/semaforo.js'
 import { estimatedStart, exerciseKcal, mergePatch, type WattsSource } from '../_lib/rules/treino.js'
-import type { OtherSport, WorkoutType } from '../_lib/rules/targets.js'
+import { OTHER_SPORTS, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { claimAndParse, type ImportRow } from '../_lib/workout-shot.js'
 
@@ -16,7 +16,7 @@ import { claimAndParse, type ImportRow } from '../_lib/workout-shot.js'
 // apagar com Anular e ler os prints em segundo plano.
 
 const TYPE = z.enum(['bike', 'strength', 'other'])
-const SPORT = z.enum(['caminhada', 'eliptica', 'natacao', 'outro'])
+const SPORT = z.enum(OTHER_SPORTS)
 const WATTS_SOURCE = z.enum(['device', 'console', 'manual', 'favorite', 'prefill'])
 const int = (min: number, max: number) => z.number().int().min(min).max(max)
 
@@ -52,6 +52,10 @@ const UpdateSchema = z.object({
   pain_during: int(0, 10).nullable().optional(),
   pain_next_day: int(0, 10).nullable().optional(),
   note: z.string().max(500).nullable().optional(),
+  // «Que treino foi?»: liga a sessão (do relógio, por exemplo) a um dos
+  // teus treinos; o nome passa a ser o desse treino.
+  favorite_id: z.string().uuid().nullable().optional(),
+  name: z.string().trim().max(80).nullable().optional(),
 })
 
 const ShotSchema = z.object({
@@ -219,15 +223,17 @@ export const save = post(async ({ db, userId, body, res }) => {
 
   // Favorito: os valores dele, a não ser que o João os tenha mudado.
   let favoriteWatts: number | null = null
+  let favoriteName: string | null = null
   if (input.favorite_id) {
     const { data: favorite } = await db
       .from('favorites')
-      .select('id,workout,use_count')
+      .select('id,name,workout,use_count')
       .eq('id', input.favorite_id)
       .eq('kind', 'workout')
       .maybeSingle()
     if (!favorite) throw new HttpError(404, 'Favorito não encontrado.')
     favoriteWatts = (favorite.workout as { watts?: number } | null)?.watts ?? null
+    favoriteName = (favorite.name as string | null) ?? null
     await db
       .from('favorites')
       .update({ use_count: (favorite.use_count ?? 0) + 1, last_used_at: now.toISOString() })
@@ -331,6 +337,8 @@ export const save = post(async ({ db, userId, body, res }) => {
       pain_during: input.pain_during ?? null,
       status: painStatus(input.pain_during ?? null, null),
       favorite_id: input.favorite_id ?? null,
+      // O nome do teu treino («Pernas A»), ou o do print.
+      ...(favoriteName ? { name: favoriteName } : {}),
       source_paths: importRow?.source_paths ?? [],
       image_hashes: importRow?.image_hashes ?? [],
       note: input.note?.trim() || null,
@@ -370,6 +378,15 @@ export const strength = post(async ({ db, userId, body, res }) => {
       rpe: s.rpe,
     }))
 
+  // O teu treino («Pernas A»): dá o nome à sessão.
+  const favorite = input.favorite_id
+    ? ((await db.from('favorites').select('id,name,use_count').eq('id', input.favorite_id).maybeSingle()).data as {
+        id: string
+        name: string
+        use_count: number | null
+      } | null)
+    : null
+
   if (input.workout_id) {
     const target = await ownWorkout(db, input.workout_id)
     const patch: Record<string, unknown> = {
@@ -378,6 +395,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
       kcal_rule: kcal.rule,
       kcal_estimated: false,
     }
+    if (favorite) Object.assign(patch, { favorite_id: favorite.id, name: favorite.name })
     if (input.pain_during !== undefined) {
       patch.pain_during = input.pain_during
       patch.status = painStatus(input.pain_during, (target.pain_next_day as number | null) ?? null)
@@ -402,14 +420,11 @@ export const strength = post(async ({ db, userId, body, res }) => {
   const now = new Date()
   const startedAt = instantOrNow(input.started_at, new Date(estimatedStart(now, input.minutes)))
   const date = nutritionalDay(startedAt, await cutoffHour(db))
-  if (input.favorite_id) {
-    const { data: favorite } = await db.from('favorites').select('id,use_count').eq('id', input.favorite_id).maybeSingle()
-    if (favorite) {
-      await db
-        .from('favorites')
-        .update({ use_count: (favorite.use_count ?? 0) + 1, last_used_at: now.toISOString() })
-        .eq('id', favorite.id)
-    }
+  if (favorite) {
+    await db
+      .from('favorites')
+      .update({ use_count: (favorite.use_count ?? 0) + 1, last_used_at: now.toISOString() })
+      .eq('id', favorite.id)
   }
   const { data: workout, error } = await db
     .from('workouts')
@@ -426,7 +441,8 @@ export const strength = post(async ({ db, userId, body, res }) => {
       kcal_estimated: false,
       pain_during: input.pain_during ?? null,
       status: painStatus(input.pain_during ?? null, null),
-      favorite_id: input.favorite_id ?? null,
+      favorite_id: favorite?.id ?? null,
+      ...(favorite ? { name: favorite.name } : {}),
       note: input.note?.trim() || null,
     })
     .select()
@@ -461,6 +477,25 @@ export const update = post(async ({ db, body, res }) => {
     if (input[key] !== undefined) patch[key] = input[key]
   }
   if (input.note !== undefined) patch.note = input.note?.trim() || null
+  if (input.favorite_id !== undefined) {
+    if (input.favorite_id) {
+      const { data: fav } = await db
+        .from('favorites')
+        .select('id,name,kind,use_count')
+        .eq('id', input.favorite_id)
+        .maybeSingle()
+      if (!fav || fav.kind !== 'workout') throw new HttpError(404, 'Treino não encontrado.')
+      patch.favorite_id = fav.id
+      patch.name = input.name ?? fav.name
+      await db
+        .from('favorites')
+        .update({ use_count: Number(fav.use_count ?? 0) + 1, last_used_at: new Date().toISOString() })
+        .eq('id', fav.id)
+    } else {
+      patch.favorite_id = null
+    }
+  }
+  if (input.name !== undefined && patch.name === undefined) patch.name = input.name || null
   if (input.watts !== undefined) {
     patch.watts = input.watts
     patch.watts_source = input.watts == null ? null : 'manual'

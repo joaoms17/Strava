@@ -8,19 +8,18 @@ import { fmtKcal } from '../../lib/format'
 import { saveWorkout } from '../../lib/workout-actions'
 import { instantInNutritionalDay, lisbonInstant } from '../../../api/_lib/rules/momentos'
 import { exerciseKcal } from '../../../api/_lib/rules/treino'
+import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, type OtherSport } from '../../../api/_lib/rules/targets'
 import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import KneePicker from '../ui/KneePicker'
 import { DayChips, chip } from '../ui/Chips'
 
-type Kind = 'bike' | 'strength' | 'caminhada' | 'eliptica' | 'outro'
+type Kind = 'bike' | 'strength' | OtherSport
 
 const KINDS: [Kind, string][] = [
   ['bike', 'Bicicleta'],
   ['strength', 'Ginásio'],
-  ['caminhada', 'Caminhada'],
-  ['eliptica', 'Elíptica'],
-  ['outro', 'Outro'],
+  ...OTHER_SPORTS.map((s): [Kind, string] => [s, SPORT_LABEL[s]]),
 ]
 
 const DURATIONS = [30, 45, 60, 90]
@@ -28,7 +27,7 @@ const DURATIONS = [30, 45, 60, 90]
 function kindOf(w: { type: Workout['type']; sport?: string | null; raw?: { sport?: string } | null }): Kind {
   if (w.type !== 'other') return w.type
   const sport = w.sport ?? w.raw?.sport
-  return sport === 'caminhada' || sport === 'eliptica' ? sport : 'outro'
+  return isOtherSport(sport) ? sport : 'outro'
 }
 
 const toInt = (text: string): number | null => {
@@ -97,7 +96,7 @@ export default function JaFizSheet() {
     watts: type === 'bike' ? watts : null,
     wattsSource: 'manual',
     deviceCalories: type === 'other' ? toInt(deviceKcal) : null,
-    sport: type === 'other' ? (kind as 'caminhada' | 'eliptica' | 'outro') : null,
+    sport: type === 'other' ? (kind as OtherSport) : null,
     weightKg,
   })
 

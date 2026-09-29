@@ -18,6 +18,7 @@ export type SheetName =
   | 'confirmar-treino'
   | 'medidas'
   | 'como-medir'
+  | 'meu-treino'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

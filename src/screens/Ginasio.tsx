@@ -13,7 +13,8 @@ import {
   type ExerciseSuggestion,
   type LoggedSet,
 } from '../../api/_lib/rules/progressao-forca'
-import type { ExerciseLogRow, Favorite, Workout } from '../lib/types'
+import type { ExerciseLogRow, Favorite, TemplateExercise, Workout } from '../lib/types'
+import ExercisePicker from '../components/ExercisePicker'
 import KneePicker from '../components/ui/KneePicker'
 import Icon from '../components/ui/Icon'
 
@@ -64,7 +65,6 @@ export default function Ginasio() {
   const editId = params.get('id')
   const favParam = params.get('fav')
   const toast = useToast()
-  const [catalog, setCatalog] = useState<string[]>([])
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [history, setHistory] = useState<Record<string, LoggedSet[][]>>({})
   const [editing, setEditing] = useState<Workout | null>(null)
@@ -85,8 +85,7 @@ export default function Ginasio() {
 
   useEffect(() => {
     void (async () => {
-      const [{ data: cat }, { data: favs }, { data: logs }, { data: strengthWorkouts }] = await Promise.all([
-        supabase.from('exercise_catalog').select('name,pattern,knee_safe').eq('knee_safe', true).order('name'),
+      const [{ data: favs }, { data: logs }, { data: strengthWorkouts }] = await Promise.all([
         supabase
           .from('favorites')
           .select('*')
@@ -100,9 +99,6 @@ export default function Ginasio() {
           .limit(600),
         supabase.from('workouts_active').select('id,date').eq('type', 'strength'),
       ])
-      setCatalog(
-        ((cat ?? []) as { name: string; pattern: string }[]).filter((c) => c.pattern !== 'bike').map((c) => c.name),
-      )
       const strengthFavs = ((favs ?? []) as Favorite[]).filter((f) => f.workout?.type === 'strength')
       setFavorites(strengthFavs)
 
@@ -138,10 +134,15 @@ export default function Ginasio() {
           ex.sets.push({ reps: s.reps ?? 0, load: s.load_kg != null ? Number(s.load_kg) : null, done: true })
           byName.set(s.exercise, ex)
         }
+        // Sessão sem séries (veio do relógio): começa com o teu treino.
+        const template = strengthFavs.find((f) => f.id === (favParam ?? workout?.favorite_id))
         setDraft({
           startedAt: Date.parse(workout?.started_at ?? workout?.created_at ?? new Date().toISOString()),
-          favoriteId: workout?.favorite_id ?? null,
-          exercises: [...byName.values()],
+          favoriteId: template?.id ?? workout?.favorite_id ?? null,
+          exercises:
+            byName.size > 0 || !template
+              ? [...byName.values()]
+              : (template.workout?.exercises ?? []).map((e) => newExercise(e, hist[e.name] ?? [])),
         })
         return
       }
@@ -154,7 +155,7 @@ export default function Ginasio() {
       setDraft({
         startedAt: Date.now(),
         favoriteId: fav?.id ?? null,
-        exercises: fav ? (fav.workout?.exercises ?? []).map((e) => newExercise(e.name, e.sets, hist[e.name] ?? [])) : [],
+        exercises: fav ? (fav.workout?.exercises ?? []).map((e) => newExercise(e, hist[e.name] ?? [])) : [],
       })
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,7 +189,7 @@ export default function Ginasio() {
     setDraft({
       startedAt: Date.now(),
       favoriteId: fav.id,
-      exercises: (fav.workout?.exercises ?? []).map((e) => newExercise(e.name, e.sets, history[e.name] ?? [])),
+      exercises: (fav.workout?.exercises ?? []).map((e) => newExercise(e, history[e.name] ?? [])),
     })
   }
 
@@ -446,28 +447,14 @@ export default function Ginasio() {
       })}
 
       {picking ? (
-        <div className="space-y-2 rounded-[18px] border border-line bg-surface p-3">
-          <p className="label">Exercícios seguros para o joelho</p>
-          <div className="flex flex-wrap gap-2">
-            {catalog
-              .filter((name) => !used.has(name))
-              .map((name) => (
-                <button
-                  key={name}
-                  onClick={() => {
-                    setExercises([...d.exercises, newExercise(name, 3, history[name] ?? [])])
-                    setPicking(false)
-                  }}
-                  className="min-h-10 rounded-full border border-line px-3 text-[15px]"
-                >
-                  {name}
-                </button>
-              ))}
-          </div>
-          <button onClick={() => setPicking(false)} className="text-[14px] text-dim">
-            Fechar
-          </button>
-        </div>
+        <ExercisePicker
+          exclude={[...used]}
+          onPick={(name) => {
+            setExercises([...d.exercises, newExercise({ name, sets: 3, rep_min: 8, rep_max: 12 }, history[name] ?? [])])
+            setPicking(false)
+          }}
+          onClose={() => setPicking(false)}
+        />
       ) : (
         <button
           onClick={() => setPicking(true)}
@@ -500,18 +487,19 @@ export default function Ginasio() {
   )
 }
 
-// Um exercício novo na sessão: as séries da última vez (ou 3 × 10 sem carga).
-function newExercise(name: string, sets: number, history: LoggedSet[][]): DraftExercise {
+// Um exercício novo na sessão: as séries e cargas da última vez; sem
+// histórico, as do teu treino (repetições mínimas e carga, se tiver).
+function newExercise(template: TemplateExercise, history: LoggedSet[][]): DraftExercise {
   const sug = suggestExercise(history)
-  const count = Math.max(sets, sug.lastSets.length || sets)
+  const count = Math.max(template.sets, sug.lastSets.length || template.sets)
   return {
-    name,
+    name: template.name,
     rpe: null,
     sets: Array.from({ length: count }, (_, i) => {
       const last = sug.lastSets[i] ?? sug.lastSets[sug.lastSets.length - 1]
       return {
-        reps: last?.reps ?? 10,
-        load: sug.today ?? last?.load_kg ?? null,
+        reps: last?.reps ?? template.rep_min ?? 10,
+        load: sug.today ?? last?.load_kg ?? template.load_kg ?? null,
         done: false,
       }
     }),

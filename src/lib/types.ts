@@ -124,7 +124,16 @@ export interface FavoriteWorkout {
   minutes: number
   watts?: number | null
   sport?: string | null
-  exercises?: { name: string; sets: number; rep_min: number; rep_max: number }[]
+  exercises?: TemplateExercise[]
+}
+
+// Um exercício de um treino teu: séries, repetições (ou alvo) e carga opcional.
+export interface TemplateExercise {
+  name: string
+  sets: number
+  rep_min: number
+  rep_max: number
+  load_kg?: number | null
 }
 
 export interface DayRow {

@@ -19,21 +19,20 @@ import {
   typeOfSport,
   type WattsSource,
 } from '../../../api/_lib/rules/treino'
-import type { Workout, WorkoutImport } from '../../lib/types'
+import type { Favorite, Workout, WorkoutImport } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
+import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, type OtherSport } from '../../../api/_lib/rules/targets'
 import KneePicker from '../ui/KneePicker'
 import ShotButton from '../ui/ShotButton'
 import Icon from '../ui/Icon'
 import { DayChips, chip } from '../ui/Chips'
 import ErrorReason from '../ui/ErrorReason'
 
-type Kind = 'bike' | 'strength' | 'caminhada' | 'eliptica' | 'outro'
+type Kind = 'bike' | 'strength' | OtherSport
 const KINDS: [Kind, string][] = [
   ['bike', 'Bicicleta'],
   ['strength', 'Ginásio'],
-  ['caminhada', 'Caminhada'],
-  ['eliptica', 'Elíptica'],
-  ['outro', 'Outro'],
+  ...OTHER_SPORTS.map((s): [Kind, string] => [s, SPORT_LABEL[s]]),
 ]
 
 const toInt = (text: string): number | null => {
@@ -151,7 +150,7 @@ function ImportConfirm({ id }: { id: string }) {
     if (draft || !row || row.status !== 'por_confirmar' || !row.parsed) return
     const a = row.parsed.activity
     const { type, sport } = typeOfSport(a.sport)
-    const kind: Kind = type === 'other' ? ((sport as Kind | null) ?? 'outro') : type
+    const kind: Kind = type === 'other' ? (isOtherSport(sport) ? sport : 'outro') : type
     const fromConsole = row.parsed.images.some((i) => i.app === 'bike_console')
     const watts = a.avg_power_w ?? null
     const time = a.start_time ? a.start_time.padStart(5, '0') : ''
@@ -339,7 +338,7 @@ function ImportConfirm({ id }: { id: string }) {
     watts,
     wattsSource: draft.wattsSource,
     deviceCalories: type === 'other' ? toInt(draft.kcalDevice) : null,
-    sport: type === 'other' ? (draft.kind as 'caminhada' | 'eliptica' | 'outro') : null,
+    sport: type === 'other' ? (draft.kind as OtherSport) : null,
     weightKg: null,
   })
   const kneeNeeded = !merging && type !== 'other'
@@ -567,6 +566,14 @@ function ImportConfirm({ id }: { id: string }) {
   )
 }
 
+// Os teus treinos pela ordem mais provável: o mesmo tipo (e desporto) primeiro.
+function sortTemplates(templates: Favorite[], w: Workout): Favorite[] {
+  const sport = w.sport ?? w.raw?.sport ?? null
+  const score = (f: Favorite) =>
+    f.workout?.type === w.type ? (w.type !== 'other' || f.workout?.sport === sport ? 2 : 1) : 0
+  return templates.slice().sort((a, b) => score(b) - score(a))
+}
+
 function WorkoutDetail({ id }: { id: string }) {
   const sheet = useSheet()
   const [, navigate] = useLocation()
@@ -578,12 +585,20 @@ function WorkoutDetail({ id }: { id: string }) {
   const [avgHr, setAvgHr] = useState('')
   const [maxHr, setMaxHr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [templates, setTemplates] = useState<Favorite[]>([])
 
   const load = useCallback(async () => {
-    const [{ data }, { data: imports }] = await Promise.all([
+    const [{ data }, { data: imports }, { data: favs }] = await Promise.all([
       supabase.from('workouts').select('*').eq('id', id).maybeSingle(),
       supabase.from('workout_imports').select('thumb_paths').eq('workout_id', id),
+      supabase
+        .from('favorites')
+        .select('*')
+        .eq('kind', 'workout')
+        .eq('archived', false)
+        .order('use_count', { ascending: false }),
     ])
+    setTemplates(((favs ?? []) as Favorite[]).filter((f) => f.workout))
     const w = (data ?? null) as Workout | null
     setWorkout(w)
     setThumbs((imports ?? []).flatMap((i) => (i.thumb_paths as string[]) ?? []))
@@ -699,6 +714,26 @@ function WorkoutDetail({ id }: { id: string }) {
           </p>
         </div>
 
+        {!w.deleted_at && templates.length > 0 && (
+          <div className="space-y-2">
+            <p className="label">{w.favorite_id ? 'Treino' : 'Qual dos teus treinos foi?'}</p>
+            <div className="flex flex-wrap gap-2">
+              {sortTemplates(templates, w).map((f) => (
+                <button
+                  key={f.id}
+                  disabled={busy}
+                  onClick={() =>
+                    void patch({ favorite_id: w.favorite_id === f.id ? null : f.id }, w.favorite_id === f.id ? 'Tirado.' : `Agora é «${f.name}».`)
+                  }
+                  className={chip(w.favorite_id === f.id)}
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {w.deleted_at ? (
           <div className="space-y-2">
             <p className="text-[15px] text-dim">Apagado — não conta para as contas.</p>
@@ -753,13 +788,14 @@ function WorkoutDetail({ id }: { id: string }) {
 
             {w.type === 'strength' && (
               <button
-                onClick={() => {
-                  sheet.close()
-                  setTimeout(() => navigate(`/treino/ginasio?id=${w.id}`), 0)
-                }}
+                onClick={() =>
+                  // Substitui o endereço da folha: fechar e navegar ao mesmo
+                  // tempo corria o risco de o «voltar» desfazer a navegação.
+                  navigate(`/treino/ginasio?id=${w.id}${w.favorite_id ? `&fav=${w.favorite_id}` : ''}`, { replace: true })
+                }
                 className="min-h-12 w-full rounded-xl border border-line text-[15px]"
               >
-                Ver e corrigir as séries
+                {w.source === 'intervals' ? 'Registar as séries' : 'Ver e corrigir as séries'}
               </button>
             )}
             <div className="grid grid-cols-2 gap-2">

@@ -25,6 +25,7 @@ import ReviewSheet from './components/sheets/ReviewSheet'
 import TreinoSheet from './components/sheets/TreinoSheet'
 import KneeSheet from './components/sheets/KneeSheet'
 import JaFizSheet from './components/sheets/JaFizSheet'
+import TemplateSheet from './components/sheets/TemplateSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
 import MedidasSheet, { ComoMedirSheet } from './components/sheets/MedidasSheet'
 import Hoje from './screens/Hoje'
@@ -134,6 +135,7 @@ function Sheets() {
   if (sheet.name === 'confirmar-treino') return <ConfirmWorkoutSheet />
   if (sheet.name === 'medidas') return <MedidasSheet key={sheet.params.get('id') ?? ''} />
   if (sheet.name === 'como-medir') return <ComoMedirSheet />
+  if (sheet.name === 'meu-treino') return <TemplateSheet key={sheet.params.get('id') ?? 'novo'} />
   return null
 }
 

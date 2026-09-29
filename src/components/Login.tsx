@@ -71,7 +71,7 @@ export default function Login() {
       {mode === 'entrar' && (
         <form onSubmit={submit} className="w-full max-w-sm space-y-4">
           <h1 className="text-center font-display text-[28px] font-bold tracking-[0.02em] uppercase">
-            A Época do Regresso
+            Daily Track
           </h1>
           {emailField}
           <input

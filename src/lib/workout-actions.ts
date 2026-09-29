@@ -1,3 +1,4 @@
+import { SPORT_LABEL as SPORT_LABELS } from '../../api/_lib/rules/targets'
 import { postApi } from './api'
 import { supabase } from './supabase'
 import { emitDataChanged } from './events'
@@ -14,14 +15,11 @@ export const WORKOUT_LABEL: Record<Workout['type'], string> = {
   other: 'Treino',
 }
 
-export const SPORT_LABEL: Record<string, string> = {
-  caminhada: 'Caminhada',
-  eliptica: 'Elíptica',
-  natacao: 'Natação',
-  outro: 'Outro',
-}
+export const SPORT_LABEL: Record<string, string> = SPORT_LABELS
 
-export function workoutTitle(w: Pick<Workout, 'type' | 'sport' | 'raw'>): string {
+// O nome do treino (o teu treino, «Pernas A»; ou o nome do relógio) ou o tipo.
+export function workoutTitle(w: Pick<Workout, 'type' | 'sport' | 'raw'> & { name?: string | null; favorite_id?: string | null }): string {
+  if (w.favorite_id && w.name) return w.name
   if (w.type !== 'other') return WORKOUT_LABEL[w.type]
   const sport = w.sport ?? w.raw?.sport ?? 'outro'
   return SPORT_LABEL[sport] ?? 'Treino'
