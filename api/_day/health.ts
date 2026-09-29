@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { timingSafeEqual } from 'node:crypto'
 import { adminClient } from '../_lib/supabase.js'
-import { anthropic, MODELS } from '../_lib/anthropic.js'
+import { aiProvider, anthropic, MODELS } from '../_lib/anthropic.js'
+import { geminiModels } from '../_lib/rules/gemini.js'
 import {
   PROMPT_MEAL_PHOTO,
   PROMPT_MEAL_TEXT,
@@ -23,12 +24,13 @@ const ENV_VARS = [
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
   'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
   'CRON_SECRET',
   'ICS_TOKEN',
   'HEALTH_INGEST_TOKEN',
 ] as const
 
-const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'ANTHROPIC_API_KEY']
+const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']
 
 interface Check {
   ok: boolean
@@ -96,6 +98,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   )
 
   const aiOptions = { maxRetries: 0, timeout: 8_000 }
+  // A IA em uso (Claude ou Gemini): a chave dá acesso aos dois modelos?
+  const provider = aiProvider()
+  const keyName = provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'
+  const textModel = provider === 'gemini' ? geminiModels('text', process.env)[0]! : MODELS.text
+  const visionModel = provider === 'gemini' ? geminiModels('vision', process.env)[0]! : MODELS.vision
+  async function modelExists(model: string): Promise<undefined> {
+    if (provider === 'anthropic') {
+      await anthropic().models.retrieve(model, {}, aiOptions)
+      return undefined
+    }
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}`, {
+      headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' },
+      signal: AbortSignal.timeout(8_000),
+    })
+    if (!res.ok) throw new Error(`Gemini ${res.status}: ${((await res.json().catch(() => ({}))) as { error?: { message?: string } }).error?.message ?? ''}`)
+    return undefined
+  }
   const [supabase, schema, haiku, sonnet] = await Promise.all([
     timed(async () => {
       const { count, error } = await adminClient()
@@ -118,17 +137,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (fase3) throw new Error('falta workout_imports: corre a migração 20260930000000_fase3.sql')
       return 'migrações 1, 2 e 4'
     }),
-    timed(async () => {
-      await anthropic().models.retrieve(MODELS.text, {}, aiOptions)
-      return undefined
-    }),
-    timed(async () => {
-      await anthropic().models.retrieve(MODELS.vision, {}, aiOptions)
-      return undefined
-    }),
+    timed(async () => modelExists(textModel)),
+    timed(async () => modelExists(visionModel)),
   ])
 
-  const missing = REQUIRED_ENV.filter((name) => !env[name])
+  const missing = [...REQUIRED_ENV, keyName].filter((name) => !env[name])
   const promptsOk = Object.values(prompts).every(Boolean)
   const ok = missing.length === 0 && promptsOk && supabase.ok && schema.ok && haiku.ok && sonnet.ok
 
@@ -137,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!promptsOk) problems.push('os prompts não foram incluídos no deploy')
   if (!supabase.ok) problems.push('o Supabase não responde')
   else if (!schema.ok) problems.push(`falta uma migração no Supabase (${schema.detail ?? ''})`)
-  if (!haiku.ok || !sonnet.ok) problems.push('a Anthropic não responde (chave ou modelos)')
+  if (!haiku.ok || !sonnet.ok) problems.push(`a IA (${provider}) não responde (chave ou modelos)`)
 
   res.setHeader('Cache-Control', 'no-store')
   res.status(ok ? 200 : 503).json({
@@ -149,6 +162,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     prompts,
     supabase,
     schema,
-    anthropic: { [MODELS.text]: haiku, [MODELS.vision]: sonnet },
+    ia: { provider, [textModel]: haiku, [visionModel]: sonnet },
   })
 }

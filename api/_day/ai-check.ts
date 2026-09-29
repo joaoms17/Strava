@@ -2,13 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
-import { MODELS, NO_THINKING, structuredCall } from '../_lib/anthropic.js'
+import { aiProvider, MODELS, NO_THINKING, structuredCall } from '../_lib/anthropic.js'
+import { geminiModels } from '../_lib/rules/gemini.js'
 import { describeAiError } from '../_lib/rules/resposta-ia.js'
 
 // «Verificar a IA» (Definições › Avançado): uma chamada mínima a cada modelo,
-// com o mesmo caminho das refeições (JSON estrito). Diz se a chave existe,
-// se é válida, se há crédito e se os dois modelos respondem. Custa menos de
-// uma décima de cêntimo e fica em api_calls como 'ai_check'.
+// com o mesmo caminho das refeições (JSON estrito). Diz que IA está em uso
+// (Claude ou Gemini), se a chave existe, se é válida, se há crédito ou limite
+// gratuito e se os dois modelos respondem. Fica em api_calls como 'ai_check'.
 
 const PingSchema = z.object({ ok: z.boolean() })
 
@@ -23,10 +24,11 @@ interface ModelCheck {
 
 async function ping(userId: string, model: string, label: string, vision: boolean): Promise<ModelCheck> {
   const started = Date.now()
+  const planned = aiProvider() === 'gemini' ? geminiModels(vision ? 'vision' : 'text', process.env)[0]! : model
   try {
-    await structuredCall(
+    const result = await structuredCall(
       adminClient(),
-      { userId, kind: 'ai_check', request: { maxRetries: 0, timeout: 20_000 } },
+      { userId, kind: 'ai_check', request: { maxRetries: 0, timeout: 25_000 } },
       {
         model,
         max_tokens: 50,
@@ -35,10 +37,10 @@ async function ping(userId: string, model: string, label: string, vision: boolea
       },
       PingSchema,
     )
-    return { model, label, ok: true, ms: Date.now() - started, message: 'Responde.', detail: null }
+    return { model: result.model || planned, label, ok: true, ms: Date.now() - started, message: 'Responde.', detail: null }
   } catch (err) {
     const error = describeAiError(err)
-    return { model, label, ok: false, ms: Date.now() - started, message: error.message, detail: error.detail }
+    return { model: planned, label, ok: false, ms: Date.now() - started, message: error.message, detail: error.detail }
   }
 }
 
@@ -49,12 +51,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
     const { user } = await requireUser(req)
-    const key = process.env.ANTHROPIC_API_KEY ?? ''
+    const provider = aiProvider()
+    const keyName = provider === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY'
+    const providerName = provider === 'gemini' ? 'Gemini (Google)' : 'Claude (Anthropic)'
+    const key = process.env[keyName] ?? ''
     if (!key.trim()) {
       res.status(200).json({
         ok: false,
         key: false,
-        resumo: 'Falta a chave da IA no Vercel (ANTHROPIC_API_KEY). Junta-a e volta a publicar.',
+        provider: providerName,
+        resumo: `Falta a chave da IA no Vercel (${keyName}). Junta-a e volta a publicar.`,
         models: [],
       })
       return
@@ -64,12 +70,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ping(user.id, MODELS.vision, 'Fotos', true),
     ])
     const ok = models.every((m) => m.ok)
+    const prefix = provider === 'gemini' ? 'AIza' : 'sk-ant-'
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json({
       ok,
       key: true,
+      provider: providerName,
       // Só o formato (nunca a chave): ajuda a ver se foi colada outra coisa.
-      key_shape: key.startsWith('sk-ant-') ? 'sk-ant-…' : 'formato inesperado (devia começar por sk-ant-)',
+      key_shape: key.startsWith(prefix) ? `${prefix}…` : `formato inesperado (devia começar por ${prefix})`,
       resumo: ok ? 'A IA está a funcionar.' : (models.find((m) => !m.ok)?.message ?? 'A IA não responde.'),
       models,
     })

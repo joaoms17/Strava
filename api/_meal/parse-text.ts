@@ -32,6 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let parsed: ParsedMeal | null = null
     let cost = 0
+    let usedModel: string = MODELS.text
     const startedAt = Date.now()
     // JSON estrito; uma segunda tentativa só se o erro for passageiro e couber
     // no tempo da função
@@ -52,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         )
         parsed = result.output
         cost += result.cost
+        usedModel = result.model
       } catch (err) {
         const error = describeAiError(err)
         if (!error.transient || attempt > 0) throw new HttpError(502, `${error.message} Tenta outra vez.`)
@@ -65,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       questions: parsed.questions,
       is_estimate: mealIsEstimate('text', jantarFora, parsed.items),
       prompt_version: promptVersion(PROMPT_MEAL_TEXT),
-      model: MODELS.text,
+      model: usedModel,
       cost_usd: cost,
     })
   } catch (err) {

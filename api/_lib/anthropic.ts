@@ -3,6 +3,8 @@ import type { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resource
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { z } from 'zod'
 import { AiError, describeAiError, outputSchema, parseStructured } from './rules/resposta-ia.js'
+import { geminiModels, type AiRole } from './rules/gemini.js'
+import { geminiCall } from './gemini.js'
 
 // IDs confirmados na documentação da API (skill claude-api, docs.claude.com).
 export const MODELS = {
@@ -14,6 +16,19 @@ export const MODELS = {
 const PRICES: Record<string, { input: number; output: number }> = {
   'claude-haiku-4-5': { input: 1, output: 5 },
   'claude-sonnet-5': { input: 2, output: 10 },
+}
+
+// Que IA usar: AI_PROVIDER=gemini|anthropic; sem isso, o Gemini quando há
+// GEMINI_API_KEY (plano gratuito) e o Claude no resto.
+export type AiProvider = 'anthropic' | 'gemini'
+export function aiProvider(env: Record<string, string | undefined> = process.env): AiProvider {
+  const chosen = env.AI_PROVIDER?.trim().toLowerCase()
+  if (chosen === 'gemini' || chosen === 'anthropic') return chosen
+  return env.GEMINI_API_KEY?.trim() ? 'gemini' : 'anthropic'
+}
+
+function roleOf(model: string): AiRole {
+  return model === MODELS.vision ? 'vision' : 'text'
 }
 
 let client: Anthropic | null = null
@@ -66,14 +81,35 @@ export async function logApiCall(
 
 // Uma chamada com resposta em JSON estrito. O custo regista-se sempre (mesmo
 // quando a resposta não serve); os erros chegam como AiError, com uma frase
-// para a app e o detalhe para diagnóstico.
+// para a app e o detalhe para diagnóstico. As chamadas escrevem-se no formato
+// do Claude (MODELS.text / MODELS.vision); com o Gemini, o mesmo pedido vai
+// para o modelo Gemini desse papel. `model` é o modelo que respondeu.
 export async function structuredCall<T>(
   admin: SupabaseClient,
   meta: { userId: string; kind: string; request: { maxRetries: number; timeout: number } },
   params: Omit<MessageCreateParamsNonStreaming, 'output_config' | 'stream'>,
   schema: z.ZodType<T>,
-): Promise<{ output: T; cost: number; usage: Usage }> {
+): Promise<{ output: T; cost: number; usage: Usage; model: string }> {
   const json = outputSchema(schema)
+  if (aiProvider() === 'gemini') {
+    let result
+    try {
+      result = await geminiCall(geminiModels(roleOf(params.model), process.env), params, json, meta.request.timeout)
+    } catch (err) {
+      const error = describeAiError(err)
+      console.error(`IA (${meta.kind}, Gemini) falhou:`, error.message, '|', error.detail)
+      throw error
+    }
+    const cost = await logApiCall(admin, { user_id: meta.userId, kind: meta.kind, model: result.model ?? '', usage: result.usage })
+    try {
+      return { output: parseStructured(result.text, schema, json), cost, usage: result.usage, model: result.model ?? '' }
+    } catch (err) {
+      const error = describeAiError(err)
+      console.error(`IA (${meta.kind}, Gemini) resposta inválida:`, error.detail)
+      throw error
+    }
+  }
+
   let response: Anthropic.Message
   try {
     response = await anthropic().messages.create(
@@ -94,7 +130,7 @@ export async function structuredCall<T>(
     .map((block) => (block.type === 'text' ? block.text : ''))
     .join('')
   try {
-    return { output: parseStructured(text, schema, json), cost, usage: response.usage }
+    return { output: parseStructured(text, schema, json), cost, usage: response.usage, model: params.model }
   } catch (err) {
     const error = describeAiError(err)
     console.error(`IA (${meta.kind}) resposta inválida:`, error.detail)

@@ -14,6 +14,7 @@ interface ModelCheck {
 interface AiCheckResult {
   ok: boolean
   key: boolean
+  provider?: string
   key_shape?: string
   resumo: string
   models: ModelCheck[]
@@ -55,6 +56,7 @@ export default function AiCheck({ compact = false }: { compact?: boolean }) {
       {result && (
         <div className="space-y-1.5 rounded-xl bg-surface2 p-3 text-[14px]">
           <p className={`font-semibold ${result.ok ? 'text-burn' : 'text-eat'}`}>{result.resumo}</p>
+          {result.provider && <p className="text-[13px] text-dim">IA em uso: {result.provider}</p>}
           {result.models.map((m) => (
             <div key={m.model}>
               <p className="flex justify-between gap-2">

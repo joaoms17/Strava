@@ -168,7 +168,7 @@ async function runModel(
         }
       }),
     )
-    const { output: analysis, cost } = await structuredCall(
+    const { output: analysis, cost, model } = await structuredCall(
       admin,
       { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION },
       {
@@ -181,10 +181,10 @@ async function runModel(
       MealAnalysisSchema,
     )
     if (analysis.items.length === 0) throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
-    return { analysis, refs, model: MODELS.vision, prompt: promptVersion(PROMPT_MEAL_PHOTO_V2), cost }
+    return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_PHOTO_V2), cost }
   }
 
-  const { output: analysis, cost } = await structuredCall(
+  const { output: analysis, cost, model } = await structuredCall(
     admin,
     { userId: meal.user_id, kind: 'meal_text', request: REQUEST_TEXT },
     {
@@ -197,7 +197,7 @@ async function runModel(
     MealAnalysisSchema,
   )
   if (analysis.items.length === 0) throw new AiError('Não percebi o que comeste. Escreve de outra forma.', 'análise sem itens')
-  return { analysis, refs, model: MODELS.text, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost }
+  return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost }
 }
 
 // Analisa uma refeição já reivindicada (claim_meal_analysis) e grava o

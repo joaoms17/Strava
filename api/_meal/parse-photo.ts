@@ -53,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let parsed: ParsedPhotoMeal | null = null
     let cost = 0
+    let usedModel: string = MODELS.vision
     const startedAt = Date.now()
     // JSON estrito; uma segunda tentativa só se o erro for passageiro e couber
     // no tempo da função (Sonnet 5 não aceita temperature)
@@ -88,6 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         )
         parsed = result.output
         cost += result.cost
+        usedModel = result.model
       } catch (err) {
         const error = describeAiError(err)
         if (!error.transient || attempt > 0) throw new HttpError(502, `${error.message} Tenta outra vez.`)
@@ -103,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Regra 12: fotografia é sempre estimativa
       is_estimate: mealIsEstimate('photo', jantarFora, parsed.items),
       prompt_version: promptVersion(PROMPT_MEAL_PHOTO),
-      model: MODELS.vision,
+      model: usedModel,
       cost_usd: cost,
     })
   } catch (err) {
