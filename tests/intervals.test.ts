@@ -7,6 +7,9 @@ import {
   syncMatch,
   syncedAgo,
   historyWindows,
+  retryableImportError,
+  splitWindow,
+  windowDays,
 } from '../api/_lib/rules/intervals'
 
 // Fase 7 — intervals.icu: mapeamento defensivo das atividades e do bem-estar.
@@ -145,5 +148,24 @@ describe('importar o histórico', () => {
       new Date(Date.parse(`${w[i - 1]!.oldest}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10),
     )
     for (const x of w) expect(Date.parse(x.newest) - Date.parse(x.oldest)).toBeLessThanOrEqual(31 * 86_400_000)
+  })
+})
+
+describe('importação resistente', () => {
+  it('um bloco divide-se ao meio sem buracos', () => {
+    const w = { oldest: '2025-12-26', newest: '2026-01-25' }
+    expect(windowDays(w)).toBe(31)
+    const [newer, older] = splitWindow(w)
+    expect(newer).toEqual({ oldest: '2026-01-11', newest: '2026-01-25' })
+    expect(older).toEqual({ oldest: '2025-12-26', newest: '2026-01-10' })
+    expect(windowDays(newer) + windowDays(older)).toBe(31)
+  })
+
+  it('«Load failed» e erros do servidor repetem-se; uma chave errada não', () => {
+    expect(retryableImportError(new TypeError('Load failed'))).toBe(true)
+    expect(retryableImportError(new Error('Erro 504'))).toBe(true)
+    expect(retryableImportError(new Error('O intervals.icu respondeu com erro (429).'))).toBe(true)
+    expect(retryableImportError(new Error('A chave do intervals.icu não é válida.'))).toBe(false)
+    expect(retryableImportError(new Error('Pedido inválido.'))).toBe(false)
   })
 })

@@ -223,3 +223,26 @@ export function historyWindows(from: string, today: string): { oldest: string; n
   }
   return windows
 }
+
+export function windowDays(w: { oldest: string; newest: string }): number {
+  return Math.round((Date.parse(`${w.newest}T12:00:00Z`) - Date.parse(`${w.oldest}T12:00:00Z`)) / 86_400_000) + 1
+}
+
+// Um bloco que o servidor não aguenta divide-se ao meio (o mais recente primeiro).
+export function splitWindow(w: { oldest: string; newest: string }): [{ oldest: string; newest: string }, { oldest: string; newest: string }] {
+  const half = Math.floor(windowDays(w) / 2)
+  const cut = shiftIso(w.newest, -(half - 1))
+  return [
+    { oldest: cut, newest: w.newest },
+    { oldest: w.oldest, newest: shiftIso(cut, -1) },
+  ]
+}
+
+// Erro que vale a pena repetir na importação: rede cortada («Load failed» no
+// iPhone quando a app vai para segundo plano), servidor ocupado ou lento,
+// limite do intervals.icu.
+export function retryableImportError(err: unknown): boolean {
+  if (err instanceof TypeError) return true
+  const message = err instanceof Error ? err.message : String(err)
+  return /load failed|failed to fetch|networkerror|network|erro 5\d\d|demorou|timeout|\(429\)|\(5\d\d\)|não consegui falar/i.test(message)
+}

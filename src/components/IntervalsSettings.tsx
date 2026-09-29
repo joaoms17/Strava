@@ -4,7 +4,15 @@ import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { recomputeFrom } from '../lib/recompute'
 import { nutritionalDay } from '../lib/day'
-import { historySummary, importHistory, syncNow, syncSummary } from '../lib/intervals'
+import {
+  historySummary,
+  importHistory,
+  loadImportState,
+  newImport,
+  syncNow,
+  syncSummary,
+  type ImportState,
+} from '../lib/intervals'
 import { shiftDate } from '../lib/day'
 import { fmtDayMonth } from '../lib/format'
 import { syncedAgo } from '../../api/_lib/rules/intervals'
@@ -43,14 +51,32 @@ export default function IntervalsSettings() {
   const [history, setHistory] = useState<{ done: number; total: number; label: string; open: boolean } | null>(null)
   const [choosing, setChoosing] = useState(false)
   const stop = useRef(false)
-  async function runHistory(days: number | null) {
+  // Ponto guardado de uma importação que parou (corte de rede, app fechada).
+  const [paused, setPaused] = useState<ImportState | null>(() => loadImportState())
+
+  async function runImport(state: ImportState) {
     setChoosing(false)
     setBusy(true)
     stop.current = false
-    const from = days == null ? '2012-01-01' : shiftDate(today, -days)
+    // Ecrã sempre ligado durante a importação (o iPhone corta os pedidos
+    // quando a app vai para segundo plano); volta a pedir ao regressar.
+    type Lock = { release(): Promise<void> }
+    const wakeLock = (navigator as Navigator & { wakeLock?: { request(type: 'screen'): Promise<Lock> } }).wakeLock
+    let lock: Lock | null = null
+    const acquire = async () => {
+      try {
+        lock = (await wakeLock?.request('screen')) ?? null
+      } catch {
+        lock = null
+      }
+    }
+    const onVisible = () => {
+      if (!document.hidden) void acquire()
+    }
+    await acquire()
+    document.addEventListener('visibilitychange', onVisible)
     try {
-      const totals = await importHistory(from, today, {
-        untilEmpty: days == null,
+      const totals = await importHistory(state, {
         cancelled: () => stop.current,
         onProgress: (done, total, window) => {
           setHistory({
@@ -58,19 +84,26 @@ export default function IntervalsSettings() {
             total,
             label: `${fmtDayMonth(window.oldest)} ${window.oldest.slice(0, 4)} a ${fmtDayMonth(window.newest)} ${window.newest.slice(0, 4)}`,
             // «Tudo» não sabe onde acaba: pára depois de um ano sem dados.
-            open: days == null,
+            open: state.untilEmpty,
           })
         },
       })
       if (totals.oldestChanged) recomputeFrom(totals.oldestChanged, today)
       toast(historySummary(totals))
     } catch (err) {
-      toast(err instanceof Error ? `A importação parou: ${err.message}` : 'A importação parou.')
+      const message = err instanceof Error ? err.message : String(err)
+      toast(`A importação parou (${message}). O que já entrou está guardado: carrega em «Continuar».`)
     }
+    document.removeEventListener('visibilitychange', onVisible)
+    await (lock as Lock | null)?.release().catch(() => undefined)
+    setPaused(loadImportState())
     setHistory(null)
     await reload()
     setBusy(false)
   }
+
+  const runHistory = (days: number | null) =>
+    runImport(newImport(days == null ? '2012-01-01' : shiftDate(today, -days), today, days == null))
 
   const sync = (days: number) =>
     run('sincronizar', async () => {
@@ -143,6 +176,35 @@ export default function IntervalsSettings() {
           Importar histórico
         </button>
       </div>
+      {paused && !busy && (
+        <div className="space-y-2 rounded-xl bg-surface2 p-3">
+          <p className="text-[14px]">
+            A importação do histórico parou em {fmtDayMonth(paused.nextNewest)} {paused.nextNewest.slice(0, 4)}. O que
+            já entrou está guardado.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => void runImport(paused)}
+              className="min-h-11 rounded-lg bg-cta font-semibold text-on-cta"
+            >
+              Continuar
+            </button>
+            <button
+              onClick={() => {
+                try {
+                  localStorage.removeItem('regresso.importacao')
+                } catch {
+                  // nada
+                }
+                setPaused(null)
+              }}
+              className="min-h-11 rounded-lg border border-line text-[14px]"
+            >
+              Esquecer
+            </button>
+          </div>
+        </div>
+      )}
       {choosing && !busy && (
         <div className="space-y-2 rounded-xl bg-surface2 p-3">
           <p className="text-[14px] text-dim">
