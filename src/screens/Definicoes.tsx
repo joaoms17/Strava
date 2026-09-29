@@ -31,6 +31,10 @@ const GOALS: Field[] = [
   { key: 'protein_per_meal_g', label: 'Proteína por refeição principal', unit: 'g', min: 10, max: 80 },
 ]
 
+const BODY: Field[] = [
+  { key: 'measure_interval_days', label: 'Medir cintura e pescoço a cada', unit: 'dias', min: 7, max: 60 },
+]
+
 const BIKE: Field[] = [
   { key: 'bike_hr_avg_cap', label: 'Batimentos médios máximos', unit: 'bpm', min: 80, max: 200 },
   { key: 'bike_hr_max_cap', label: 'Batimentos máximos', unit: 'bpm', min: 90, max: 220 },
@@ -88,7 +92,7 @@ export default function Definicoes() {
   const toast = useToast()
   const initial = (fields: Field[]) =>
     Object.fromEntries(fields.map((f) => [f.key, profile[f.key] != null ? String(profile[f.key]) : '']))
-  const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial(GOALS), ...initial(BIKE) }))
+  const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial(GOALS), ...initial(BIKE), ...initial(BODY) }))
   const [watts, setWatts] = useState((profile.bike_watts_options ?? []).join(' · '))
   const [busy, setBusy] = useState(false)
 
@@ -206,7 +210,9 @@ export default function Definicoes() {
         />
       </Section>
 
-      <Section title="Balança">
+      <Section title="Corpo e balança">
+        {BODY.map(numberInput)}
+        {saveButton(BODY)}
         <Toggle
           label="A minha balança mede gordura"
           help="Mostra um campo opcional na pesagem. É outra forma de medir; não se mistura com a fita."

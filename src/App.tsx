@@ -24,6 +24,7 @@ import TreinoSheet from './components/sheets/TreinoSheet'
 import KneeSheet from './components/sheets/KneeSheet'
 import JaFizSheet from './components/sheets/JaFizSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
+import MedidasSheet, { ComoMedirSheet } from './components/sheets/MedidasSheet'
 import Hoje from './screens/Hoje'
 import Favoritos from './screens/Favoritos'
 import Definicoes from './screens/Definicoes'
@@ -34,6 +35,7 @@ const Corpo = lazy(() => import('./screens/Corpo'))
 const Treino = lazy(() => import('./screens/Treino'))
 const Avancado = lazy(() => import('./screens/Avancado'))
 const Arquivo = lazy(() => import('./screens/Arquivo'))
+const MedidasHistorico = lazy(() => import('./screens/MedidasHistorico'))
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -44,6 +46,7 @@ function Centered({ children }: { children: ReactNode }) {
 }
 
 const PARENT: [RegExp, string][] = [
+  [/^\/corpo\/.+/, '/corpo'],
   [/^\/definicoes\/arquivo\/.+/, '/definicoes/arquivo'],
   [/^\/definicoes\/.+/, '/definicoes'],
   [/^\/(definicoes|favoritos)/, '/hoje'],
@@ -52,6 +55,7 @@ const PARENT: [RegExp, string][] = [
 const TITLES: [RegExp, string][] = [
   [/^\/balanco/, 'Balanço'],
   [/^\/treino/, 'Treino'],
+  [/^\/corpo\/medidas/, 'Medidas'],
   [/^\/corpo/, 'Corpo'],
   [/^\/favoritos/, 'Favoritos'],
   [/^\/definicoes\/avancado/, 'Avançado'],
@@ -123,6 +127,8 @@ function Sheets() {
   if (sheet.name === 'joelho') return <KneeSheet key={sheet.params.get('fav') ?? ''} />
   if (sheet.name === 'ja-fiz') return <JaFizSheet key={sheet.params.get('fav') ?? ''} />
   if (sheet.name === 'confirmar-treino') return <ConfirmWorkoutSheet />
+  if (sheet.name === 'medidas') return <MedidasSheet key={sheet.params.get('id') ?? ''} />
+  if (sheet.name === 'como-medir') return <ComoMedirSheet />
   return null
 }
 
@@ -205,6 +211,7 @@ function Shell() {
             <Route path="/balanco" component={Balanco} />
             <Route path="/treino" component={Treino} />
             <Route path="/corpo" component={Corpo} />
+            <Route path="/corpo/medidas" component={MedidasHistorico} />
             <Route path="/favoritos" component={Favoritos} />
             <Route path="/definicoes" component={Definicoes} />
             <Route path="/definicoes/avancado" component={Avancado} />

@@ -13,6 +13,7 @@ import { deleteMeal, logFavorite } from '../lib/meal-actions'
 import { workoutTitle } from '../lib/workout-actions'
 import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
 import { recomputeFrom } from '../lib/recompute'
+import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
@@ -43,6 +44,8 @@ interface DayData {
   photos: Record<string, string>
   weighedToday: boolean
   importsToConfirm: string[]
+  weightCount: number
+  lastMeasureDate: string | null
   hasAnyWeight: boolean
   hasAnyMeal: boolean
 }
@@ -99,6 +102,7 @@ export default function Hoje() {
       { count: weightCount },
       { count: mealCount },
       { data: imports },
+      { data: lastMeasure },
     ] = await Promise.all([
       supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
       supabase
@@ -131,6 +135,7 @@ export default function Hoje() {
         .gte('created_at', weekAgo)
         .order('created_at', { ascending: false })
         .limit(5),
+      supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
     const photos = await signedUrls(
@@ -151,6 +156,8 @@ export default function Hoje() {
       photos,
       weighedToday: (todayWeights ?? []).length > 0,
       importsToConfirm: (imports ?? []).map((i) => i.id as string),
+      weightCount: weightCount ?? 0,
+      lastMeasureDate: (lastMeasure?.[0]?.date as string | undefined) ?? null,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
     })
@@ -253,6 +260,9 @@ export default function Hoje() {
         mealsOverLimit: limitMeals.length,
         mealsToReview: reviewMeals.length,
         workoutsToConfirm: data.importsToConfirm.length,
+        measureDaysSince: daysSinceMeasure(data.lastMeasureDate, today),
+        measureIntervalDays: profile.measure_interval_days ?? 14,
+        weighings: data.weightCount,
         nudges,
       })
     : null
@@ -646,6 +656,8 @@ export default function Hoje() {
           onReview={() => sheet.open('rever')}
           onRaiseLimit={() => navigate('/definicoes/avancado')}
           onConfirmWorkout={() => sheet.open('confirmar-treino', { import: data.importsToConfirm[0]! })}
+          measureDaysSince={daysSinceMeasure(data.lastMeasureDate, today)}
+          onMeasure={() => sheet.open('medidas')}
         />
       )}
 
@@ -879,6 +891,8 @@ function NextStepCard({
   onReview,
   onRaiseLimit,
   onConfirmWorkout,
+  measureDaysSince,
+  onMeasure,
 }: {
   id: NextStepId
   yesterdayMeals: number
@@ -895,6 +909,8 @@ function NextStepCard({
   onReview: () => void
   onRaiseLimit: () => void
   onConfirmWorkout: () => void
+  measureDaysSince: number | null
+  onMeasure: () => void
 }) {
   const later = (
     <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
@@ -984,6 +1000,21 @@ function NextStepCard({
           <div className="flex items-center gap-2">
             <button onClick={onReview} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
               Rever
+            </button>
+            {later}
+          </div>
+        </>
+      )}
+      {id === 'medir' && (
+        <>
+          <p className="text-[17px]">
+            {measureDaysSince == null
+              ? 'Mede a cintura e o pescoço: 2 minutos com uma fita métrica chegam para estimar a gordura e a massa magra.'
+              : `Medições: há ${measureDaysSince} dias · 2 minutos.`}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={onMeasure} className="min-h-12 flex-1 rounded-xl bg-cta font-semibold text-on-cta">
+              Medir
             </button>
             {later}
           </div>

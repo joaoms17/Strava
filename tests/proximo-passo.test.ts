@@ -15,6 +15,16 @@ const base: NextStepInput = {
 }
 
 describe('próximo passo', () => {
+  it('medições: de manhã, a cada 14 dias; a primeira depois de 3 pesagens', () => {
+    const morning = { ...base, minutesOfDay: 9 * 60 }
+    expect(nextStep({ ...morning, measureDaysSince: 15, measureIntervalDays: 14 })).toBe('medir')
+    expect(nextStep({ ...morning, measureDaysSince: 10, measureIntervalDays: 14 })).toBeNull()
+    expect(nextStep({ ...morning, measureDaysSince: null, weighings: 3 })).toBe('medir')
+    expect(nextStep({ ...morning, measureDaysSince: null, weighings: 2 })).toBeNull()
+    expect(nextStep({ ...base, minutesOfDay: 18 * 60, measureDaysSince: 30 })).toBeNull()
+    expect(nextStep({ ...morning, measureDaysSince: 30, nudges: { medir: { ignored: 1, hiddenOn: base.today } } })).toBeNull()
+  })
+
   it('um print lido à espera de confirmação vem logo a seguir aos erros da comida', () => {
     const morning = { ...base, minutesOfDay: 8 * 60, weighedToday: false }
     expect(nextStep({ ...morning, workoutsToConfirm: 1 })).toBe('treino')

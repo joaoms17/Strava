@@ -20,6 +20,8 @@ const PATHS = {
   alert: 'M12 8v5M12 16.5h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
   barcode: 'M4 6v12M7 6v12M10 6v12M14 6v12M17 6v12M20 6v12',
   close: 'M6 6l12 12M18 6 6 18',
+  ruler: 'M3 17 17 3l4 4L7 21zM7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2',
+  info: 'M12 11v5M12 8h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
 } as const
 
 export type IconName = keyof typeof PATHS

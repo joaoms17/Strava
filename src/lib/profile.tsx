@@ -56,6 +56,7 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       ...(migration.error || !('pin_mode' in data) ? ['20260928000000_fase1.sql'] : []),
       ...(!('ai_monthly_cap_eur' in data) ? ['20260929000000_fase2.sql'] : []),
       ...(!('has_garmin_watch' in data) ? ['20260930000000_fase3.sql'] : []),
+      ...(!('measure_interval_days' in data) ? ['20261001000000_fase4.sql'] : []),
     ]
     if (missing.length) {
       setProfile(data as Profile)

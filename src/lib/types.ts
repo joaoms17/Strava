@@ -55,6 +55,8 @@ export interface Profile {
   ai_daily_vision_cap: number
   has_garmin_watch: boolean | null
   console_shows_watts: boolean | null
+  measure_interval_days?: number
+  thigh_landmark_cm?: number
 }
 
 export interface Meal {
@@ -286,4 +288,24 @@ export interface CatalogExercise {
   rep_min: number | null
   rep_max: number | null
   notes: string | null
+}
+
+export interface BodyMeasurement {
+  id: string
+  date: string
+  measured_at: string
+  method: 'tape'
+  neck_cm: number | null
+  waist_cm: number | null
+  chest_cm: number | null
+  hips_cm: number | null
+  arm_cm: number | null
+  thigh_cm: number | null
+  calf_cm: number | null
+  readings: Record<string, number[]> | null
+  weight_used_kg: number
+  fasted: boolean
+  flags: string[]
+  note: string | null
+  created_at: string
 }

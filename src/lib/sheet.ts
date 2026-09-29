@@ -16,6 +16,8 @@ export type SheetName =
   | 'joelho'
   | 'ja-fiz'
   | 'confirmar-treino'
+  | 'medidas'
+  | 'como-medir'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

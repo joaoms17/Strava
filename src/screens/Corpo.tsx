@@ -24,6 +24,7 @@ import {
   weeklyRate,
 } from '../../api/_lib/rules/weight'
 import type { WeightRow } from '../lib/types'
+import CompositionCards from '../components/CompositionCards'
 
 type Range = '1M' | '3M' | 'Tudo'
 const RANGE_DAYS: Record<Range, number | null> = { '1M': 30, '3M': 91, Tudo: null }
@@ -34,8 +35,8 @@ function rateText(rate: number): string {
   return rate < 0 ? `a descer ${abs} kg por semana` : `a subir ${abs} kg por semana`
 }
 
-// O resultado: peso médio e gráfico. Gordura, massa magra e cintura chegam
-// com as medidas (Fase 4).
+// O resultado em 3 cartões: peso médio (com o gráfico), gordura e massa
+// magra, e cintura.
 export default function Corpo() {
   const profile = useReadyProfile()
   const sheet = useSheet()
@@ -231,6 +232,7 @@ export default function Corpo() {
           <p className="text-[13px] text-dim">O peso de cada dia varia ±1 kg com água e sal. Olha para a linha.</p>
         </section>
       )}
+      <CompositionCards />
     </div>
   )
 }
