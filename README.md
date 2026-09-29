@@ -2,7 +2,7 @@
 
 App pessoal de nutrição, treino e peso. Utilizador único. PWA mobile-first, dark mode, interface em PT-PT. Cada bloco de 4 semanas é um capítulo com um patrono que voltou de uma lesão grave.
 
-**Estado atual: M1–M6 completos e em produção; em curso o redesenho para centro de fitness** ([plano](docs/redesenho-2026-09.md)). Fase 0 feita: deploy estável, 7 funções, estado do deploy em `/api/day/health`. Fase 1 feita: casca nova (Hoje · Balanço · (+) · Treino · Corpo), pesagem em 2 toques, favoritos e «Igual a ontem» sem IA. Fase 2 feita: fotos analisadas em segundo plano (sem esperar), galeria com a hora certa, notas, correções por texto, fila sem rede. Migrações 1 e 2 aplicadas no Supabase; falta a 3 (correção de permissões, passo 2b do Setup). As 12 regras de negócio têm todas testes, mais guardas do deploy em `tests/guardas.test.ts`.
+**Estado atual: M1–M6 completos e em produção; em curso o redesenho para centro de fitness** ([plano](docs/redesenho-2026-09.md)). Fase 0 feita: deploy estável, 7 funções, estado do deploy em `/api/day/health`. Fase 1 feita: casca nova (Hoje · Balanço · (+) · Treino · Corpo), pesagem em 2 toques, favoritos e «Igual a ontem» sem IA. Fase 2 feita: fotos analisadas em segundo plano (sem esperar), galeria com a hora certa, notas, correções por texto, fila sem rede. Migrações 1, 2 e 3 aplicadas no Supabase (passo 2b do Setup). As 12 regras de negócio têm todas testes, mais guardas do deploy em `tests/guardas.test.ts`.
 
 ## Stack
 
