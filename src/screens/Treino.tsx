@@ -50,6 +50,8 @@ export default function Treino() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [data, setData] = useState<TreinoData | null>(null)
   const [showAll, setShowAll] = useState(false)
+  // Treinos com mais de 12 semanas (histórico importado): só a pedido.
+  const [older, setOlder] = useState<Workout[] | null>(null)
   const [, navigate] = useLocation()
   const { reload } = useProfile()
   const toast = useToast()
@@ -132,7 +134,16 @@ export default function Treino() {
   const lastBike = bikes[bikes.length - 1]
   const suggestion = bikeSuggestion(target, lastBike == null || lastBike.status != null)
 
-  const history = workouts.slice().reverse()
+  const history = [...workouts.slice().reverse(), ...(older ?? [])]
+  async function loadOlder() {
+    const { data: rows } = await supabase
+      .from('workouts_active')
+      .select('*')
+      .lt('date', shiftDate(today, -83))
+      .order('date', { ascending: false })
+      .limit(500)
+    setOlder((rows ?? []) as Workout[])
+  }
   const shown = showAll ? history : history.slice(0, 8)
   const kneeDots = workouts.filter((w) => w.type !== 'other').slice(-12)
 
@@ -318,6 +329,14 @@ export default function Treino() {
             <button onClick={() => setShowAll(true)} className="mt-2 text-[15px] text-dim">
               Ver mais ({history.length - shown.length})
             </button>
+          )}
+          {history.length <= shown.length && older == null && (
+            <button onClick={() => void loadOlder()} className="mt-2 text-[15px] text-dim">
+              Ver treinos mais antigos
+            </button>
+          )}
+          {older != null && older.length === 0 && (
+            <p className="mt-2 text-[14px] text-dim">Não há treinos com mais de 12 semanas.</p>
           )}
         </section>
       )}

@@ -102,7 +102,8 @@ export default function Balanco() {
         .limit(1),
       supabase.from('days').select('date', { count: 'exact', head: true }).eq('is_complete', true),
       supabase.from('health_daily').select('*').gte('date', monday).lte('date', sunday),
-      supabase.from('days').select('date').order('date').limit(1),
+      // Primeira refeição (o histórico importado do relógio cria dias sem comida).
+      supabase.from('meals_counted').select('date').order('date').limit(1),
       supabase.from('weekly_reviews').select('text').eq('week_start', monday).eq('kind', 'neutro').limit(1),
       // Para o gasto medido contra a fórmula nas últimas 3 semanas.
       supabase

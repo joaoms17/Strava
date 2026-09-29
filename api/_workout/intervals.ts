@@ -9,7 +9,18 @@ import { IntervalsError, setStatus, syncUser, testKey } from '../_lib/intervals-
 // desligar. A chave nunca volta ao telemóvel.
 
 const ConnectSchema = z.object({ api_key: z.string().trim().min(8).max(200) })
-const SyncSchema = z.object({ days: z.number().int().min(1).max(30).default(3) })
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+// Os últimos `days` dias, ou um bloco do histórico (até 31 dias por pedido:
+// o telemóvel pede o histórico bloco a bloco, do mais recente para trás).
+const SyncSchema = z.union([
+  z
+    .object({ oldest: DATE, newest: DATE })
+    .refine(
+      (r) => r.oldest <= r.newest && Date.parse(r.newest) - Date.parse(r.oldest) <= 31 * 86_400_000 && r.oldest >= '2010-01-01',
+      'Intervalo inválido.',
+    ),
+  z.object({ days: z.number().int().min(1).max(30).default(3) }),
+])
 
 type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void>
 
@@ -59,8 +70,11 @@ export const disconnect = post(async ({ userId, res }) => {
 export const sync = post(async ({ userId, body, res }) => {
   const parsed = SyncSchema.safeParse(body ?? {})
   if (!parsed.success) throw new HttpError(400, 'Pedido inválido.')
-  const days = parsed.data.days
-  const result = await syncUser(adminClient(), userId, { days, timeoutMs: days > 7 ? 25_000 : 10_000 })
+  const window =
+    'oldest' in parsed.data
+      ? { oldest: parsed.data.oldest, newest: parsed.data.newest, timeoutMs: 25_000 }
+      : { days: parsed.data.days, timeoutMs: parsed.data.days > 7 ? 25_000 : 10_000 }
+  const result = await syncUser(adminClient(), userId, window)
   if (!result) throw new HttpError(404, 'O intervals.icu não está ligado.')
   res.status(200).json(result)
 })

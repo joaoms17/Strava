@@ -6,6 +6,7 @@ import {
   mapWellness,
   syncMatch,
   syncedAgo,
+  historyWindows,
 } from '../api/_lib/rules/intervals'
 
 // Fase 7 — intervals.icu: mapeamento defensivo das atividades e do bem-estar.
@@ -100,6 +101,7 @@ describe('bem-estar', () => {
     expect(mapWellness({ id: '2026-09-29', weight: 84.63, restingHR: 52, sleepSecs: 25200, steps: 8421 })).toEqual({
       date: '2026-09-29',
       weightKg: 84.6,
+      bodyFatPct: null,
       restingHr: 52,
       sleepMinutes: 420,
       sleepScore: null,
@@ -130,5 +132,18 @@ describe('bem-estar', () => {
     expect(syncedAgo('2026-09-29T09:56:00Z', now)).toBe('há 4 min')
     expect(syncedAgo('2026-09-29T07:00:00Z', now)).toBe('há 3 h')
     expect(syncedAgo(null, now)).toBeNull()
+  })
+})
+
+describe('importar o histórico', () => {
+  it('blocos de 30 dias, do mais recente para trás, sem buracos nem sobreposições', () => {
+    const w = historyWindows('2026-06-01', '2026-09-29')
+    expect(w[0]).toEqual({ oldest: '2026-08-31', newest: '2026-09-30' })
+    expect(w[1]).toEqual({ oldest: '2026-07-31', newest: '2026-08-30' })
+    expect(w[w.length - 1]!.oldest).toBe('2026-06-01')
+    for (let i = 1; i < w.length; i++) expect(w[i]!.newest).toBe(
+      new Date(Date.parse(`${w[i - 1]!.oldest}T12:00:00Z`) - 86_400_000).toISOString().slice(0, 10),
+    )
+    for (const x of w) expect(Date.parse(x.newest) - Date.parse(x.oldest)).toBeLessThanOrEqual(31 * 86_400_000)
   })
 })

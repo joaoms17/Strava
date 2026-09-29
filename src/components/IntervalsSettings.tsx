@@ -1,14 +1,24 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { postApi } from '../lib/api'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { recomputeFrom } from '../lib/recompute'
 import { nutritionalDay } from '../lib/day'
-import { syncNow, syncSummary } from '../lib/intervals'
+import { historySummary, importHistory, syncNow, syncSummary } from '../lib/intervals'
+import { shiftDate } from '../lib/day'
+import { fmtDayMonth } from '../lib/format'
 import { syncedAgo } from '../../api/_lib/rules/intervals'
 
-// Definições › Ligações › Treinos automáticos (intervals.icu). Só com relógio
-// Garmin. A chave vai para o servidor e nunca volta ao telemóvel.
+// Definições › Ligações › Treinos automáticos (intervals.icu), com qualquer
+// relógio que o intervals.icu receba (Garmin, Amazfit…). A chave vai para o
+// servidor e nunca volta ao telemóvel.
+
+const HISTORY_RANGES: { label: string; days: number | null }[] = [
+  { label: '3 meses', days: 92 },
+  { label: '1 ano', days: 366 },
+  { label: '3 anos', days: 1096 },
+  { label: 'Tudo', days: null },
+]
 export default function IntervalsSettings() {
   const profile = useReadyProfile()
   const { reload } = useProfile()
@@ -25,6 +35,37 @@ export default function IntervalsSettings() {
     } catch (err) {
       toast(err instanceof Error ? err.message : `Não consegui ${label}.`)
     }
+    await reload()
+    setBusy(false)
+  }
+
+  // Importar o histórico: bloco a bloco, com progresso e «Parar».
+  const [history, setHistory] = useState<{ done: number; total: number; label: string } | null>(null)
+  const [choosing, setChoosing] = useState(false)
+  const stop = useRef(false)
+  async function runHistory(days: number | null) {
+    setChoosing(false)
+    setBusy(true)
+    stop.current = false
+    const from = days == null ? '2012-01-01' : shiftDate(today, -days)
+    try {
+      const totals = await importHistory(from, today, {
+        untilEmpty: days == null,
+        cancelled: () => stop.current,
+        onProgress: (done, total, window) => {
+          setHistory({
+            done,
+            total,
+            label: `${fmtDayMonth(window.oldest)} a ${fmtDayMonth(window.newest)} de ${window.oldest.slice(0, 4)}`,
+          })
+        },
+      })
+      if (totals.oldestChanged) recomputeFrom(totals.oldestChanged, today)
+      toast(historySummary(totals))
+    } catch (err) {
+      toast(err instanceof Error ? `A importação parou: ${err.message}` : 'A importação parou.')
+    }
+    setHistory(null)
     await reload()
     setBusy(false)
   }
@@ -92,10 +133,49 @@ export default function IntervalsSettings() {
         <button disabled={busy} onClick={() => void sync(3)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-40">
           Sincronizar agora
         </button>
-        <button disabled={busy} onClick={() => void sync(30)} className="min-h-12 rounded-xl border border-line disabled:opacity-40">
-          Importar 30 dias
+        <button
+          disabled={busy}
+          onClick={() => setChoosing((c) => !c)}
+          className="min-h-12 rounded-xl border border-line disabled:opacity-40"
+        >
+          Importar histórico
         </button>
       </div>
+      {choosing && !busy && (
+        <div className="space-y-2 rounded-xl bg-surface2 p-3">
+          <p className="text-[14px] text-dim">
+            Treinos, pesos, sono e passos que o intervals.icu tem do teu relógio. Os treinos que já registaste juntam-se;
+            as tuas pesagens nunca são substituídas.
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {HISTORY_RANGES.map((r) => (
+              <button
+                key={r.label}
+                onClick={() => void runHistory(r.days)}
+                className="min-h-11 rounded-lg border border-line text-[14px]"
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {history && (
+        <div className="space-y-2 rounded-xl bg-surface2 p-3" role="status">
+          <p className="text-[14px]">
+            A importar {history.label}… ({history.done} de {history.total})
+          </p>
+          <div className="h-2 overflow-hidden rounded-full bg-line">
+            <div
+              className="h-full rounded-full bg-cta transition-all"
+              style={{ width: `${Math.round((history.done / Math.max(1, history.total)) * 100)}%` }}
+            />
+          </div>
+          <button onClick={() => (stop.current = true)} className="text-[14px] text-dim underline underline-offset-2">
+            Parar
+          </button>
+        </div>
+      )}
       <button
         disabled={busy}
         onClick={() => void run('desligar', async () => (await postApi('/api/workout/disconnect', {}), 'Desligado.'))}

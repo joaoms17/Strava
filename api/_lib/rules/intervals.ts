@@ -31,6 +31,7 @@ export interface IcuActivity {
 export interface IcuWellness {
   id: string // AAAA-MM-DD (o dia em que acordou)
   weight?: number | null
+  bodyFat?: number | null // %
   restingHR?: number | null
   sleepSecs?: number | null
   sleepScore?: number | null // 0–100 (Garmin)
@@ -154,6 +155,7 @@ export function syncMatch<T extends { type: WorkoutType; date: string; minutes: 
 export function mapWellness(w: IcuWellness): {
   date: string
   weightKg: number | null
+  bodyFatPct: number | null
   restingHr: number | null
   sleepMinutes: number | null
   sleepScore: number | null
@@ -163,6 +165,7 @@ export function mapWellness(w: IcuWellness): {
   steps: number | null
 } {
   const weight = num(w.weight)
+  const fat = num(w.bodyFat)
   const rhr = int(w.restingHR)
   const sleep = num(w.sleepSecs)
   const score = int(w.sleepScore)
@@ -173,6 +176,7 @@ export function mapWellness(w: IcuWellness): {
   return {
     date: w.id,
     weightKg: weight != null && weight >= 30 && weight <= 300 ? Math.round(weight * 10) / 10 : null,
+    bodyFatPct: fat != null && fat >= 3 && fat <= 60 ? Math.round(fat * 10) / 10 : null,
     restingHr: rhr != null && rhr >= 20 && rhr <= 150 ? rhr : null,
     sleepMinutes: sleep != null && sleep > 0 && sleep <= 86_400 ? Math.round(sleep / 60) : null,
     sleepScore: score != null && score >= 1 && score <= 100 ? score : null,
@@ -196,3 +200,26 @@ export function syncedAgo(lastSyncAt: string | null | undefined, now: Date): str
 }
 
 export const AUTO_SYNC_AFTER_MIN = 20
+
+// Importar o histórico: blocos de 30 dias, do mais recente para trás, até à
+// data escolhida (o servidor aceita no máximo 31 dias por pedido).
+export const HISTORY_WINDOW_DAYS = 30
+// Em «Tudo»: pára depois de um ano seguido sem nada (antes do relógio).
+export const HISTORY_EMPTY_WINDOWS_TO_STOP = 12
+
+function shiftIso(date: string, days: number): string {
+  const d = new Date(`${date}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+export function historyWindows(from: string, today: string): { oldest: string; newest: string }[] {
+  const windows: { oldest: string; newest: string }[] = []
+  let newest = shiftIso(today, 1)
+  while (newest >= from) {
+    const oldest = shiftIso(newest, -HISTORY_WINDOW_DAYS)
+    windows.push({ oldest: oldest < from ? from : oldest, newest })
+    newest = shiftIso(oldest, -1)
+  }
+  return windows
+}
