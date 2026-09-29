@@ -55,3 +55,21 @@ export async function toJpeg(file: File, maxDim = 1600, quality = 0.85): Promise
     return file
   }
 }
+
+// Prints do relógio: no tamanho nativo até 2576 px no lado maior (JPEG
+// q0,9) para os números pequenos se lerem, e miniatura de 256 px.
+export async function prepareShot(file: Blob): Promise<{ full: Blob; thumb: Blob }> {
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch {
+    throw new Error('Este formato de imagem não é suportado. Tenta outra.')
+  }
+  try {
+    const full = await toJpegBlob(bitmap, 2576, 0.9)
+    const thumb = await toJpegBlob(bitmap, 256, 0.7)
+    return { full, thumb }
+  } finally {
+    bitmap.close()
+  }
+}

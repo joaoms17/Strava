@@ -183,7 +183,7 @@ export default function CaptureSheet() {
             {weighDot && <span className="absolute top-2 right-3 h-2 w-2 rounded-full bg-eat" aria-label="por fazer hoje" />}
           </button>
           <button
-            onClick={() => go('/treino')}
+            onClick={() => sheet.open('treino', dateParam ? { data: dateParam } : {})}
             className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
           >
             <Icon name="bike" size={20} /> Treino

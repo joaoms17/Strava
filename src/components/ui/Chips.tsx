@@ -11,7 +11,7 @@ export const TAG_LABEL: Record<string, string> = {
 }
 
 // Por escolher, os chips têm contorno: ficam visíveis em cima de qualquer fundo.
-const chip = (active: boolean) =>
+export const chip = (active: boolean) =>
   `min-h-9 rounded-full border px-3 py-1.5 text-[15px] ${
     active ? 'border-eat bg-eat text-bg' : 'border-line bg-transparent'
   }`

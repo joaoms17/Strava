@@ -20,6 +20,10 @@ import NoteSheet from './components/sheets/NoteSheet'
 import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
 import ReviewSheet from './components/sheets/ReviewSheet'
+import TreinoSheet from './components/sheets/TreinoSheet'
+import KneeSheet from './components/sheets/KneeSheet'
+import JaFizSheet from './components/sheets/JaFizSheet'
+import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
 import Hoje from './screens/Hoje'
 import Favoritos from './screens/Favoritos'
 import Definicoes from './screens/Definicoes'
@@ -115,6 +119,10 @@ function Sheets() {
   if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />
   if (sheet.name === 'rever') return <ReviewSheet />
+  if (sheet.name === 'treino') return <TreinoSheet />
+  if (sheet.name === 'joelho') return <KneeSheet key={sheet.params.get('fav') ?? ''} />
+  if (sheet.name === 'ja-fiz') return <JaFizSheet key={sheet.params.get('fav') ?? ''} />
+  if (sheet.name === 'confirmar-treino') return <ConfirmWorkoutSheet />
   return null
 }
 

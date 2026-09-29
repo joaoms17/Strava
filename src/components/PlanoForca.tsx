@@ -4,11 +4,9 @@ import { postApi } from '../lib/api'
 import { localCalendarDate, shiftDate } from '../lib/day'
 import { useDataVersion, emitDataChanged } from '../lib/events'
 import { useToast } from '../lib/toast'
-import KneePicker from '../components/ui/KneePicker'
-import BikeHrChart from '../components/BikeHrChart'
-import LoadChart from '../components/LoadChart'
+import KneePicker from './ui/KneePicker'
+import LoadChart from './LoadChart'
 import { blockWeekOf, sessionDate } from '../../api/_lib/rules/plan-dates'
-import { nextBikeTarget, type BikeTarget } from '../../api/_lib/rules/progressao-bike'
 import { readyForIncrease } from '../../api/_lib/rules/progressao-forca'
 import type { Semaforo } from '../../api/_lib/rules/semaforo'
 import type {
@@ -18,7 +16,7 @@ import type {
   Profile,
   Workout,
 } from '../lib/types'
-import StrengthLogger, { type ExerciseSuggestion } from '../components/StrengthLogger'
+import StrengthLogger, { type ExerciseSuggestion } from './StrengthLogger'
 
 type ManualType = Workout['type']
 
@@ -26,28 +24,6 @@ const TYPE_LABEL: Record<ManualType, string> = {
   bike: 'Bicicleta',
   strength: 'Ginásio',
   other: 'Outro',
-}
-
-const SPORTS = [
-  ['caminhada', 'Caminhada'],
-  ['eliptica', 'Elíptica'],
-  ['natacao', 'Natação'],
-  ['outro', 'Outro'],
-] as const
-type Sport = (typeof SPORTS)[number][0]
-
-const TARGET_LABEL: Record<BikeTarget['kind'], string> = {
-  start: 'primeira sessão',
-  'progress-time': 'sobe o tempo',
-  'validate-next-watts': 'experimenta a potência seguinte',
-  hold: 'mantém',
-  ease: 'bicicleta leve (joelho)',
-}
-
-const STATUS_DOT: Record<NonNullable<Workout['status']>, string> = {
-  green: 'bg-ok',
-  yellow: 'bg-attn',
-  red: 'bg-pain',
 }
 
 interface TreinoData {
@@ -58,16 +34,15 @@ interface TreinoData {
   logs: ExerciseLogRow[]
 }
 
-export default function Treino() {
+// Plano de força de 4 semanas (gerado pela IA). Fica no separador Treino até
+// a Fase 5 trazer o ginásio livre; o registo rápido e a bicicleta vivem no
+// Treino novo.
+export default function PlanoForca() {
   const version = useDataVersion()
   const toast = useToast()
   const [data, setData] = useState<TreinoData | null>(null)
-  const [sport, setSport] = useState<Sport>('caminhada')
   const [kneeFor, setKneeFor] = useState<Workout | null>(null)
   const [logging, setLogging] = useState<string | null>(null) // planned_session_id
-  const [manualType, setManualType] = useState<ManualType | null>(null)
-  const [minutes, setMinutes] = useState<number | null>(null)
-  const [watts, setWatts] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,13 +96,7 @@ export default function Treino() {
 
   const derived = useMemo(() => {
     if (!data) return null
-    const { profile, sessions, workouts, logs } = data
-
-    const bikeTarget = nextBikeTarget(
-      workouts.filter((w) => w.type === 'bike'),
-      profile.bike_watts_options ?? [130, 140, 150],
-      { avgHr: profile.bike_hr_avg_cap, maxHr: profile.bike_hr_max_cap },
-    )
+    const { sessions, workouts, logs } = data
 
     // sugestões de força (regra 11) a partir do exercise_log
     const workoutDate = new Map(workouts.map((w) => [w.id, w.date]))
@@ -179,31 +148,8 @@ export default function Treino() {
     const nextSession = sessions.find((s) => s.date > today && s.status === 'planned') ?? null
     const done = sessions.filter((s) => s.status === 'done').length
 
-    return { bikeTarget, suggestions, advisory, todaySessions, nextSession, done }
+    return { suggestions, advisory, todaySessions, nextSession, done }
   }, [data, today])
-
-  async function saveManual() {
-    if (!manualType || !minutes) return
-    setBusy(true)
-    setError(null)
-    try {
-      const { workout } = await postApi<{ workout: Workout }>('/api/workout/manual', {
-        type: manualType,
-        minutes,
-        watts: manualType === 'bike' ? watts : null,
-        ...(manualType === 'other' ? { sport } : {}),
-      })
-      setManualType(null)
-      setMinutes(null)
-      setWatts(null)
-      emitDataChanged()
-      setKneeFor(workout)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao guardar a sessão.')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function markBikeDone(session: PlannedSession) {
     setBusy(true)
@@ -250,27 +196,6 @@ export default function Treino() {
     }
   }
 
-  async function removeWorkout(workout: Workout) {
-    const { error: deleteError } = await supabase
-      .from('workouts')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', workout.id)
-    if (deleteError) {
-      toast('Não consegui apagar.')
-      return
-    }
-    emitDataChanged()
-    toast('Treino apagado', [
-      {
-        label: 'Anular',
-        run: async () => {
-          await supabase.from('workouts').update({ deleted_at: null }).eq('id', workout.id)
-          emitDataChanged()
-        },
-      },
-    ])
-  }
-
   if (!data || !derived) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
 
   if (kneeFor) {
@@ -291,7 +216,7 @@ export default function Treino() {
   }
 
   const { profile, block, workouts } = data
-  const { bikeTarget, suggestions, advisory, todaySessions, nextSession, done } = derived
+  const { suggestions, advisory, todaySessions, nextSession, done } = derived
   const week = block ? Math.min(Math.max(blockWeekOf(block.start_date, today), 1), 4) : 0
   const loggingSession = todaySessions.find((s) => s.id === logging)
 
@@ -312,66 +237,8 @@ export default function Treino() {
     )
   }
 
-  const recent = workouts.filter((w) => w.date >= shiftDate(today, -13)).slice().reverse()
-  const chip = (active: boolean) =>
-    `min-h-11 rounded-xl text-[15px] ${active ? 'bg-eat text-bg font-semibold' : 'bg-surface2'}`
-
   return (
     <div className="space-y-4 pt-1">
-      <section className="space-y-3 rounded-3xl bg-surface p-5">
-        <h2 className="text-[17px] font-semibold">Já fiz</h2>
-        <div className="grid grid-cols-3 gap-2">
-          {(Object.keys(TYPE_LABEL) as ManualType[]).map((type) => (
-            <button key={type} onClick={() => setManualType(manualType === type ? null : type)} className={chip(manualType === type)}>
-              {TYPE_LABEL[type]}
-            </button>
-          ))}
-        </div>
-        {manualType === 'other' && (
-          <div className="grid grid-cols-4 gap-2">
-            {SPORTS.map(([id, label]) => (
-              <button key={id} onClick={() => setSport(id)} className={`${chip(sport === id)} text-[13px]`}>
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
-        {manualType && (
-          <div className="grid grid-cols-4 gap-2">
-            {[30, 45, 60, 90].map((option) => (
-              <button key={option} onClick={() => setMinutes(minutes === option ? null : option)} className={chip(minutes === option)}>
-                {option} min
-              </button>
-            ))}
-          </div>
-        )}
-        {manualType === 'bike' && minutes && (
-          <div className="grid grid-cols-3 gap-2">
-            {(profile.bike_watts_options ?? [130, 140, 150]).map((option) => (
-              <button key={option} onClick={() => setWatts(watts === option ? null : option)} className={chip(watts === option)}>
-                {option} W
-              </button>
-            ))}
-          </div>
-        )}
-        {manualType && minutes && (
-          <button
-            disabled={busy}
-            onClick={() => void saveManual()}
-            className="min-h-14 w-full rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
-          >
-            {busy
-              ? 'A guardar…'
-              : `Guardar ${TYPE_LABEL[manualType]} · ${minutes} min${manualType === 'bike' && watts ? ` · ${watts} W` : ''}`}
-          </button>
-        )}
-        {!manualType && (
-          <p className="text-[13px] text-dim">
-            Escolhe o tipo, a duração e (na bicicleta) a potência. A seguir pergunto pelo joelho.
-          </p>
-        )}
-      </section>
-
       {error && <p className="text-[15px] text-pain">{error}</p>}
 
       {advisory && (
@@ -385,13 +252,6 @@ export default function Treino() {
             : 'O joelho deu sinal: a próxima sessão de pernas passa a tronco ou bicicleta leve.'}
         </p>
       )}
-
-      <div className="rounded-2xl bg-surface px-4 py-3">
-        <p className="text-[13px] text-dim">Sugestão seguinte na bicicleta ({TARGET_LABEL[bikeTarget.kind]})</p>
-        <p className="text-[17px] font-semibold tabular-nums">
-          {bikeTarget.watts} W · {bikeTarget.minutes} min · {profile.bike_min_cadence} rpm ou mais
-        </p>
-      </div>
 
       {todaySessions.map((session) => (
         <div key={session.id} className="space-y-3 rounded-2xl bg-surface p-4">
@@ -464,42 +324,8 @@ export default function Treino() {
         </button>
       )}
 
-      <section className="space-y-2">
-        <h2 className="text-[15px] font-semibold text-dim">Últimas 2 semanas</h2>
-        {recent.length === 0 && <p className="text-[15px] text-dim">Ainda sem treinos.</p>}
-        {recent.map((workout) => (
-          <div key={workout.id} className="flex items-center gap-3 rounded-2xl bg-surface px-4 py-3">
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ${workout.status ? STATUS_DOT[workout.status] : 'bg-line'}`}
-              aria-label={workout.status ? `joelho ${workout.status}` : 'joelho sem resposta'}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-[15px] tabular-nums">
-                {TYPE_LABEL[workout.type]}
-                {workout.minutes != null && ` · ${workout.minutes} min`}
-                {workout.watts != null && ` · ${workout.watts} W`}
-              </p>
-              <p className="text-[13px] text-dim tabular-nums">
-                {workout.date.split('-').reverse().slice(0, 2).join('/')}
-                {workout.avg_hr != null && ` · ${workout.avg_hr} bpm`}
-                {workout.planned_session_id != null && ' · do plano'}
-              </p>
-            </div>
-            <p className="shrink-0 text-[15px] text-burn tabular-nums">+{workout.kcal_est ?? 0}</p>
-            <button
-              onClick={() => void removeWorkout(workout)}
-              className="shrink-0 px-1 text-[13px] text-dim"
-              aria-label="Apagar treino"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </section>
-
       <section className="space-y-3">
-        <h2 className="text-[15px] font-semibold text-dim">Progressão</h2>
-        <BikeHrChart workouts={workouts} capAvg={profile.bike_hr_avg_cap} />
+        <h2 className="label">Cargas no ginásio</h2>
         <LoadChart logs={data.logs} workoutDates={new Map(workouts.map((w) => [w.id, w.date]))} />
       </section>
     </div>

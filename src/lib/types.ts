@@ -53,6 +53,8 @@ export interface Profile {
   // Migração 2 (Fase 2)
   ai_monthly_cap_eur: number
   ai_daily_vision_cap: number
+  has_garmin_watch: boolean | null
+  console_shows_watts: boolean | null
 }
 
 export interface Meal {
@@ -103,6 +105,14 @@ export interface Favorite {
   use_count: number
   last_used_at: string | null
   archived: boolean
+  workout: FavoriteWorkout | null
+}
+
+export interface FavoriteWorkout {
+  type: 'bike' | 'strength' | 'other'
+  minutes: number
+  watts?: number | null
+  sport?: string | null
 }
 
 export interface DayRow {
@@ -147,7 +157,7 @@ export interface WeightRow {
 export interface Workout {
   id: string
   date: string
-  source: 'strava' | 'manual'
+  source: 'strava' | 'manual' | 'screenshot' | 'intervals' | 'health' | 'fit'
   strava_id: number | null
   type: 'bike' | 'strength' | 'other'
   minutes: number | null
@@ -163,6 +173,44 @@ export interface Workout {
   raw: { calories?: number; sport?: string } | null
   created_at: string
   deleted_at: string | null
+  // Fase 3
+  client_id?: string | null
+  started_at?: string | null
+  sport?: string | null
+  name?: string | null
+  moving_s?: number | null
+  elapsed_s?: number | null
+  distance_km?: number | null
+  np_w?: number | null
+  max_w?: number | null
+  max_cadence?: number | null
+  kcal_device?: number | null
+  kcal_rule?: string | null
+  kcal_estimated?: boolean
+  watts_source?: 'device' | 'console' | 'manual' | 'favorite' | 'prefill' | null
+  training_load?: number | null
+  aerobic_te?: number | null
+  anaerobic_te?: number | null
+  source_paths?: string[]
+  image_hashes?: string[]
+  merged_from?: unknown[] | null
+  note?: string | null
+  favorite_id?: string | null
+}
+
+export interface WorkoutImport {
+  id: string
+  client_id: string
+  status: 'a_ler' | 'por_confirmar' | 'guardado' | 'descartado' | 'erro'
+  source_paths: string[]
+  thumb_paths: string[]
+  image_hashes: string[]
+  parsed: (import('../../api/_lib/schemas').WorkoutShot & { low_fields: string[] }) | null
+  edited_fields: string[]
+  analysis_started_at: string | null
+  analysis_error: string | null
+  workout_id: string | null
+  created_at: string
 }
 
 export interface PlanExercise {

@@ -12,6 +12,10 @@ export type SheetName =
   | 'numeros'
   | 'barras'
   | 'rever'
+  | 'treino'
+  | 'joelho'
+  | 'ja-fiz'
+  | 'confirmar-treino'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

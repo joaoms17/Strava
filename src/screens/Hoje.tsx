@@ -10,6 +10,7 @@ import { signedUrls } from '../lib/photos'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite } from '../lib/meal-actions'
+import { workoutTitle } from '../lib/workout-actions'
 import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
 import { recomputeFrom } from '../lib/recompute'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
@@ -41,15 +42,11 @@ interface DayData {
   favorites: Favorite[]
   photos: Record<string, string>
   weighedToday: boolean
+  importsToConfirm: string[]
   hasAnyWeight: boolean
   hasAnyMeal: boolean
 }
 
-const WORKOUT_LABEL: Record<Workout['type'], string> = {
-  bike: 'Bicicleta',
-  strength: 'Ginásio',
-  other: 'Treino',
-}
 const WORKOUT_OF: Record<Workout['type'], string> = {
   bike: 'a bicicleta',
   strength: 'o ginásio',
@@ -101,6 +98,7 @@ export default function Hoje() {
       { data: todayWeights },
       { count: weightCount },
       { count: mealCount },
+      { data: imports },
     ] = await Promise.all([
       supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
       supabase
@@ -125,6 +123,14 @@ export default function Hoje() {
       supabase.from('weights').select('date').eq('date', localCalendarDate()),
       supabase.from('weights').select('date', { count: 'exact', head: true }),
       supabase.from('meals_counted').select('id', { count: 'exact', head: true }),
+      // Prints lidos à espera de «Guardar» (a tabela só existe com a migração 4).
+      supabase
+        .from('workout_imports')
+        .select('id')
+        .eq('status', 'por_confirmar')
+        .gte('created_at', weekAgo)
+        .order('created_at', { ascending: false })
+        .limit(5),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
     const photos = await signedUrls(
@@ -144,6 +150,7 @@ export default function Hoje() {
       favorites: (favorites ?? []) as Favorite[],
       photos,
       weighedToday: (todayWeights ?? []).length > 0,
+      importsToConfirm: (imports ?? []).map((i) => i.id as string),
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
     })
@@ -245,6 +252,7 @@ export default function Hoje() {
         mealsWithError: errorMeals.length,
         mealsOverLimit: limitMeals.length,
         mealsToReview: reviewMeals.length,
+        workoutsToConfirm: data.importsToConfirm.length,
         nudges,
       })
     : null
@@ -459,19 +467,21 @@ export default function Hoje() {
   }
   for (const { workout, kcal } of workoutKcals) {
     entries.push({
-      at: workout.created_at,
+      at: workout.started_at ?? workout.created_at,
       key: `t-${workout.id}`,
       node: (
         <button
-          onClick={() => navigate('/treino')}
+          onClick={() => sheet.open('confirmar-treino', { id: workout.id })}
           className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
         >
-          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(workout.created_at)}</span>
+          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">
+            {timeOf(workout.started_at ?? workout.created_at)}
+          </span>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-burn text-bg">
             <Icon name={WORKOUT_ICON[workout.type]} size={26} />
           </span>
           <span className="flex-1 text-[16px] font-semibold">
-            {WORKOUT_LABEL[workout.type]}
+            {workoutTitle(workout)}
             {workout.minutes != null && ` · ${workout.minutes} min`}
             {(workout.status === 'yellow' || workout.status === 'red') && (
               <span
@@ -635,6 +645,7 @@ export default function Hoje() {
           }}
           onReview={() => sheet.open('rever')}
           onRaiseLimit={() => navigate('/definicoes/avancado')}
+          onConfirmWorkout={() => sheet.open('confirmar-treino', { import: data.importsToConfirm[0]! })}
         />
       )}
 
@@ -747,7 +758,7 @@ export default function Hoje() {
               <ul className="space-y-1 text-dim">
                 {workoutKcals.map(({ workout, kcal }) => (
                   <li key={workout.id} className="tabular-nums">
-                    {WORKOUT_LABEL[workout.type]} · +{fmtInt(kcal)}{' '}
+                    {workoutTitle(workout)} · +{fmtInt(kcal)}{' '}
                     {workout.type === 'bike' && workout.watts != null
                       ? `pela potência (${workout.watts} W × ${workout.minutes} min)`
                       : workout.type === 'strength'
@@ -867,6 +878,7 @@ function NextStepCard({
   onAnalyse,
   onReview,
   onRaiseLimit,
+  onConfirmWorkout,
 }: {
   id: NextStepId
   yesterdayMeals: number
@@ -882,6 +894,7 @@ function NextStepCard({
   onAnalyse: (id: string, body: Record<string, boolean>) => Promise<void>
   onReview: () => void
   onRaiseLimit: () => void
+  onConfirmWorkout: () => void
 }) {
   const later = (
     <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
@@ -927,6 +940,17 @@ function NextStepCard({
           </div>
           <button onClick={() => void onAnalyse(errorMeal.id, { reset: true })} className="text-[15px] text-dim">
             Ou tentar ler a mesma foto outra vez
+          </button>
+        </>
+      )}
+      {id === 'treino' && (
+        <>
+          <p className="text-[17px]">Li o print do relógio. Falta confirmar o treino.</p>
+          <button
+            onClick={onConfirmWorkout}
+            className="min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase"
+          >
+            Confirmar treino
           </button>
         </>
       )}

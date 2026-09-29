@@ -192,6 +192,18 @@ export default function Definicoes() {
         </label>
         {BIKE.map(numberInput)}
         {saveButton(BIKE)}
+        <Toggle
+          label="Gravo os treinos num relógio Garmin"
+          help="O print do relógio junta os batimentos às sessões. Os treinos automáticos (intervals.icu) vêm mais tarde."
+          value={profile.has_garmin_watch ?? false}
+          onChange={(v) => void update({ has_garmin_watch: v })}
+        />
+        <Toggle
+          label="A consola da bicicleta mostra os watts"
+          help="Sem watts, a app usa os da última sessão (≈), que não contam para subir a potência."
+          value={profile.console_shows_watts ?? false}
+          onChange={(v) => void update({ console_shows_watts: v })}
+        />
       </Section>
 
       <Section title="Balança">
