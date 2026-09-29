@@ -5,6 +5,7 @@ import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { toCsv, downloadCsv } from '../lib/csv'
 import type { Profile } from '../lib/types'
+import IntervalsSettings from '../components/IntervalsSettings'
 
 interface Field {
   key: keyof Profile & string
@@ -209,6 +210,12 @@ export default function Definicoes() {
           onChange={(v) => void update({ console_shows_watts: v })}
         />
       </Section>
+
+      {profile.has_garmin_watch && (
+        <Section title="Ligações · treinos automáticos">
+          <IntervalsSettings />
+        </Section>
+      )}
 
       <Section title="Corpo e balança">
         {BODY.map(numberInput)}

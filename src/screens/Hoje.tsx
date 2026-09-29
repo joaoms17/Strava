@@ -16,6 +16,7 @@ import { recomputeFrom } from '../lib/recompute'
 import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
 import { kcalOut, paceFromDiff, round10 } from '../../api/_lib/rules/gasto'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
+import { useAutoSync } from '../lib/intervals'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
@@ -73,6 +74,7 @@ function minutesOf(time: string): number {
 
 export default function Hoje() {
   const profile = useReadyProfile()
+  useAutoSync()
   const { update } = useProfile()
   const params = useParams<{ date?: string }>()
   const [, navigate] = useLocation()

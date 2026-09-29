@@ -1,0 +1,181 @@
+// Fase 7 — intervals.icu (relógio Garmin): de uma atividade ou de um registo
+// de bem-estar para as linhas da app. Defensivo: os campos em falta ficam a
+// null e uma atividade vinda do Strava (vazia por causa dos termos do
+// Strava) não entra.
+import { countedMinutes, durationsMatch, type WattsSource } from './treino.js'
+import type { OtherSport, WorkoutType } from './targets.js'
+
+export interface IcuActivity {
+  id: string | number
+  name?: string | null
+  type?: string | null
+  start_date?: string | null // UTC
+  start_date_local?: string | null // hora local, sem fuso
+  moving_time?: number | null
+  elapsed_time?: number | null
+  distance?: number | null // metros
+  average_heartrate?: number | null
+  max_heartrate?: number | null
+  icu_average_watts?: number | null
+  average_watts?: number | null
+  icu_weighted_avg_watts?: number | null
+  max_watts?: number | null
+  average_cadence?: number | null
+  max_cadence?: number | null
+  calories?: number | null
+  icu_training_load?: number | null
+  trainer?: boolean | null
+  source?: string | null
+}
+
+export interface IcuWellness {
+  id: string // AAAA-MM-DD
+  weight?: number | null
+  restingHR?: number | null
+  sleepSecs?: number | null
+  steps?: number | null
+}
+
+// Ride, VirtualRide ou trainer=true → bicicleta; WeightTraining → ginásio;
+// o resto → outro.
+export function mapIcuType(type: string | null | undefined, trainer: boolean | null | undefined): {
+  type: WorkoutType
+  sport: OtherSport | null
+} {
+  const t = (type ?? '').toLowerCase()
+  if (t === 'weighttraining' || t === 'workout' || t.includes('strength')) return { type: 'strength', sport: null }
+  if (t.includes('ride') || t === 'cycling' || (trainer && !t.includes('run') && !t.includes('walk'))) {
+    return { type: 'bike', sport: null }
+  }
+  if (t.includes('walk') || t.includes('hike')) return { type: 'other', sport: 'caminhada' }
+  if (t.includes('elliptical')) return { type: 'other', sport: 'eliptica' }
+  if (t.includes('swim')) return { type: 'other', sport: 'natacao' }
+  return { type: 'other', sport: 'outro' }
+}
+
+// As atividades importadas do Strava chegam vazias (sem tempo nem dados).
+export function isEmptyStravaCopy(a: IcuActivity): boolean {
+  return (a.source ?? '').toUpperCase() === 'STRAVA' && !a.moving_time && !a.elapsed_time
+}
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+const int = (v: unknown): number | null => {
+  const n = num(v)
+  return n == null ? null : Math.round(n)
+}
+
+export interface MappedActivity {
+  external_id: string
+  type: WorkoutType
+  sport: OtherSport | null
+  sport_raw: string | null
+  name: string | null
+  started_at: string | null // instante UTC
+  started_local: string | null // AAAA-MM-DDTHH:MM (Lisboa)
+  minutes: number | null
+  moving_s: number | null
+  elapsed_s: number | null
+  distance_km: number | null
+  avg_hr: number | null
+  max_hr: number | null
+  watts: number | null
+  watts_source: WattsSource | null
+  np_w: number | null
+  max_w: number | null
+  cadence: number | null
+  max_cadence: number | null
+  kcal_device: number | null
+  training_load: number | null
+}
+
+export function mapActivity(a: IcuActivity): MappedActivity {
+  const { type, sport } = mapIcuType(a.type, a.trainer)
+  const moving = int(a.moving_time)
+  const elapsed = int(a.elapsed_time)
+  const watts = int(a.icu_average_watts ?? a.average_watts)
+  const hr = int(a.average_heartrate)
+  const maxHr = int(a.max_heartrate)
+  const distance = num(a.distance)
+  return {
+    external_id: String(a.id),
+    type,
+    sport,
+    sport_raw: a.type ?? null,
+    name: a.name ?? null,
+    started_at: a.start_date ? new Date(a.start_date).toISOString() : null,
+    started_local: a.start_date_local ? a.start_date_local.slice(0, 16) : null,
+    minutes: countedMinutes(type, elapsed, moving),
+    moving_s: moving,
+    elapsed_s: elapsed,
+    distance_km: distance == null || distance <= 0 ? null : Math.round(distance / 10) / 100,
+    avg_hr: hr != null && hr >= 35 && hr <= 220 ? hr : null,
+    max_hr: maxHr != null && maxHr >= 35 && maxHr <= 230 ? maxHr : null,
+    watts: type === 'bike' && watts != null && watts >= 20 && watts <= 700 ? watts : null,
+    watts_source: type === 'bike' && watts != null && watts >= 20 && watts <= 700 ? 'device' : null,
+    np_w: int(a.icu_weighted_avg_watts),
+    max_w: int(a.max_watts),
+    cadence: int(a.average_cadence),
+    max_cadence: int(a.max_cadence),
+    kcal_device: int(a.calories),
+    training_load: num(a.icu_training_load),
+  }
+}
+
+// Fusão silenciosa com uma sessão já registada (Bicicleta habitual, foto da
+// consola, «Já fiz»): mesmo tipo e dia, início a ±15 min quando os dois têm
+// hora e duração a ±5 % (no mínimo ±2 min).
+export const SYNC_START_WINDOW_MIN = 15
+
+export function syncMatch<T extends { type: WorkoutType; date: string; minutes: number | null; started_at: string | null }>(
+  activity: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null },
+  sessions: T[],
+): T | null {
+  for (const s of sessions) {
+    if (s.type !== activity.type || s.date !== activity.date) continue
+    if (s.minutes != null && activity.minutes != null) {
+      const tolerance = Math.max(2, 0.05 * Math.max(s.minutes, activity.minutes))
+      if (Math.abs(s.minutes - activity.minutes) > tolerance) continue
+    } else if (!durationsMatch(s.minutes, activity.minutes)) continue
+    if (s.started_at && activity.started_at) {
+      const gap = Math.abs(Date.parse(s.started_at) - Date.parse(activity.started_at)) / 60_000
+      if (gap > SYNC_START_WINDOW_MIN) continue
+    }
+    return s
+  }
+  return null
+}
+
+// Bem-estar: peso (só em dias sem pesagem do João), sono, FC em repouso e passos.
+export function mapWellness(w: IcuWellness): {
+  date: string
+  weightKg: number | null
+  restingHr: number | null
+  sleepMinutes: number | null
+  steps: number | null
+} {
+  const weight = num(w.weight)
+  const rhr = int(w.restingHR)
+  const sleep = num(w.sleepSecs)
+  const steps = int(w.steps)
+  return {
+    date: w.id,
+    weightKg: weight != null && weight >= 30 && weight <= 300 ? Math.round(weight * 10) / 10 : null,
+    restingHr: rhr != null && rhr >= 20 && rhr <= 150 ? rhr : null,
+    sleepMinutes: sleep != null && sleep > 0 && sleep <= 86_400 ? Math.round(sleep / 60) : null,
+    steps: steps != null && steps >= 0 && steps <= 200_000 ? steps : null,
+  }
+}
+
+// «Sincronizado há 4 min»
+export function syncedAgo(lastSyncAt: string | null | undefined, now: Date): string | null {
+  if (!lastSyncAt) return null
+  const minutes = Math.max(0, Math.round((now.getTime() - Date.parse(lastSyncAt)) / 60_000))
+  if (minutes < 1) return 'agora mesmo'
+  if (minutes < 60) return `há ${minutes} min`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `há ${hours} h`
+  const days = Math.round(hours / 24)
+  return `há ${days} ${days === 1 ? 'dia' : 'dias'}`
+}
+
+export const AUTO_SYNC_AFTER_MIN = 20

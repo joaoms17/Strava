@@ -4,6 +4,7 @@ import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { mondayOf } from '../_lib/rules/manutencao.js'
 import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, recomputeRange, type CloseDayProfile } from '../_lib/close-day.js'
 import { generateWeeklyReview } from '../_lib/review.js'
+import { syncUser } from '../_lib/intervals-sync.js'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
 // marca análises presas como erro; recalcula, por ordem, os dias alterados
@@ -49,8 +50,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update(stuckMessage)
       .eq('status', 'a_analisar')
       .lt('created_at', new Date(Date.now() - 86_400_000).toISOString())
+    let synced = 0
     for (const profile of (profiles ?? []) as CloseDayProfile[]) {
       const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+
+      // Passo 1: treinos do relógio (intervals.icu), últimos 3 dias, no máximo 8 s.
+      try {
+        if (await syncUser(admin, profile.user_id, { days: 3, timeoutMs: 8_000 })) synced++
+      } catch {
+        // o erro fica no estado da ligação; o fecho do dia continua
+      }
 
       // Âncora da regra 7: fixa no perfil; sem ela, a semana do primeiro dia registado.
       let anchor = profile.maintenance_anchor ?? null
@@ -143,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         else orphans = names.length
       }
     }
-    res.status(200).json({ ok: true, closed, reviews, purged, orphans })
+    res.status(200).json({ ok: true, synced, closed, reviews, purged, orphans })
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Falha no fecho do dia.' })

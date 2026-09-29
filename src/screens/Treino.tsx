@@ -13,6 +13,10 @@ import Icon from '../components/ui/Icon'
 import ShotButton from '../components/ui/ShotButton'
 import BikeHrChart from '../components/BikeHrChart'
 import LoadChart from '../components/LoadChart'
+import { syncNow, useAutoSync } from '../lib/intervals'
+import { syncedAgo } from '../../api/_lib/rules/intervals'
+import { useProfile } from '../lib/profile'
+import { useToast } from '../lib/toast'
 import { useLocation } from 'wouter'
 
 const KNEE_DOT: Record<NonNullable<Workout['status']>, string> = {
@@ -45,6 +49,11 @@ export default function Treino() {
   const [data, setData] = useState<TreinoData | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [, navigate] = useLocation()
+  const { reload } = useProfile()
+  const toast = useToast()
+  const [syncing, setSyncing] = useState(false)
+  useAutoSync()
+  const icu = profile.integration_status?.intervals
 
   const load = useCallback(async () => {
     const [{ data: workouts }, { data: favorites }, { data: pending }, { data: logs }] = await Promise.all([
@@ -200,6 +209,31 @@ export default function Treino() {
           <Icon name="watch" size={20} /> Print do relógio
         </ShotButton>
       </div>
+
+      {icu?.connected && (
+        <div className="flex items-center justify-between gap-2 text-[14px] text-dim">
+          <span>
+            Garmin (intervals.icu){icu.last_sync_at ? ` · sincronizado ${syncedAgo(icu.last_sync_at, new Date())}` : ''}
+            {icu.last_error ? ` · ${icu.last_error}` : ''}
+          </span>
+          <button
+            disabled={syncing}
+            onClick={() => {
+              setSyncing(true)
+              void syncNow(3)
+                .then((r) => toast(r.inserted || r.merged ? 'Treinos do relógio atualizados.' : 'Nada de novo no relógio.'))
+                .catch((err) => toast(err instanceof Error ? err.message : 'Não consegui sincronizar.'))
+                .finally(() => {
+                  setSyncing(false)
+                  void reload()
+                })
+            }}
+            className="min-h-10 shrink-0 rounded-xl border border-line px-3 text-ink disabled:opacity-40"
+          >
+            {syncing ? 'A sincronizar…' : 'Sincronizar agora'}
+          </button>
+        </div>
+      )}
 
       {others.length > 0 && (
         <div className="flex flex-wrap gap-2">
