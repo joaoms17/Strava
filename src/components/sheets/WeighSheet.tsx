@@ -124,7 +124,7 @@ export default function WeighSheet() {
       }
       emitDataChanged()
     }
-    const text = `Guardado${trend != null && series.length >= 3 ? ` · peso médio ${fmt1(trend)}` : ''}`
+    const text = `Guardado · ${fmt1(kg)} kg`
     toast(text, [{ label: 'Anular', run: undo }])
     if (pendingKnee && date === today) {
       setStage({ kind: 'saved', trend, kg })
@@ -174,8 +174,8 @@ export default function WeighSheet() {
         <div className="space-y-4 pb-2">
           {aboveTrend && (
             <p className="text-[15px] text-dim">
-              Subida de água, normal depois de refeições mais salgadas ou de treino de força. Olha
-              para o peso médio.
+              Mais de 1 kg acima dos últimos dias: é água, normal depois de refeições mais salgadas ou de
+              treino de força.
             </p>
           )}
           {pendingKnee && (

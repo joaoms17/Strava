@@ -642,7 +642,7 @@ export default function Hoje() {
             <>
               <p className="text-[17px] font-semibold">Pesa-te</p>
               <p className="text-[15px] text-dim">
-                De manhã, antes de comer. Com 3 pesagens mostro o teu peso médio.
+                De manhã, antes de comer.
               </p>
               <div className="flex gap-2">
                 <button onClick={() => sheet.open('peso')} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">

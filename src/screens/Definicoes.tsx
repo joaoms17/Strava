@@ -273,7 +273,7 @@ export default function Definicoes() {
         />
         <Toggle
           label="Modo calmo"
-          help="Esconde o peso de cada dia; fica só o peso médio."
+          help="Esconde o peso de cada dia; no Corpo mostra só a média da semana."
           value={profile.calm_mode}
           onChange={(v) => void update({ calm_mode: v })}
         />

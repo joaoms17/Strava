@@ -15,7 +15,7 @@ import { useSheet } from '../lib/sheet'
 import { useDataVersion } from '../lib/events'
 import { useThemeColors } from '../lib/colors'
 import { localCalendarDate, shiftDate } from '../lib/day'
-import { fmt1, fmtDayMonth, monthLong } from '../lib/format'
+import { fmt1, fmtDayMonth, fmtDayShort, monthLong } from '../lib/format'
 import {
   FAST_LOSS_KG_WEEK,
   MIN_WEIGHINGS_FOR_TREND,
@@ -77,18 +77,16 @@ export default function Corpo() {
   const { trend, rate, projection, stable } = derived
   const target = Number(profile.target_weight_kg)
   const lastTrend = trend[trend.length - 1]
-  const todayWeight = weights.find((w) => w.date === today)
+  const latest = weights[weights.length - 1]
+  const previous = weights[weights.length - 2]
   const enough = weights.length >= MIN_WEIGHINGS_FOR_TREND
+  const when = (date: string) =>
+    date === today ? 'hoje' : date === shiftDate(today, -1) ? 'ontem' : fmtDayShort(date)
+  const diff = latest && previous ? Math.round((latest.kg - previous.kg) * 10) / 10 : null
 
   const from = RANGE_DAYS[range] != null ? shiftDate(today, -RANGE_DAYS[range]!) : null
-  const points = weights
-    .filter((w) => from == null || w.date >= from)
-    .map((w) => ({
-      date: w.date,
-      kg: w.kg,
-      trend: trend.find((t) => t.date === w.date)?.value,
-    }))
-  const values = points.flatMap((p) => [p.kg, p.trend ?? p.kg])
+  const points = weights.filter((w) => from == null || w.date >= from)
+  const values = points.map((p) => p.kg)
   const showTarget = values.length > 0 && Math.min(...values) - target < 4
   const yMin = Math.floor(Math.min(...values, showTarget ? target : Infinity) - 0.5)
   const yMax = Math.ceil(Math.max(...values) + 0.5)
@@ -104,26 +102,32 @@ export default function Corpo() {
   return (
     <div className="space-y-4 pt-1">
       <section className="space-y-4 rounded-3xl bg-surface p-5">
-        {weights.length === 0 ? (
-          <p className="text-[15px] text-dim">Pesa-te de manhã. Com 3 pesagens mostro o teu peso médio.</p>
-        ) : !enough ? (
-          <p className="text-[15px] text-dim">
-            Mais {MIN_WEIGHINGS_FOR_TREND - weights.length}{' '}
-            {MIN_WEIGHINGS_FOR_TREND - weights.length === 1 ? 'pesagem' : 'pesagens'} e mostro o teu peso médio.
-          </p>
+        {!latest ? (
+          <p className="text-[15px] text-dim">Pesa-te de manhã, antes de comer.</p>
+        ) : profile.calm_mode && enough && lastTrend ? (
+          // Modo calmo: sem o peso de cada dia, só a média da semana.
+          <div className="space-y-1">
+            <p className="label">Peso médio</p>
+            <p className="num text-[64px] leading-none font-extrabold text-body">
+              {fmt1(lastTrend.value)} <span className="text-[22px] font-semibold">kg</span>
+            </p>
+            {rate != null && <p className="text-[15px]">{rateText(rate)}</p>}
+          </div>
         ) : (
-          lastTrend && (
-            <div className="space-y-1">
-              <p className="label">Peso médio</p>
-              <p className="num text-[64px] leading-none font-extrabold text-body">
-                {fmt1(lastTrend.value)} <span className="text-[22px] font-semibold">kg</span>
+          <div className="space-y-1">
+            <p className="label">Último peso · {when(latest.date)}</p>
+            <p className="num text-[64px] leading-none font-extrabold text-body">
+              {fmt1(latest.kg)} <span className="text-[22px] font-semibold">kg</span>
+            </p>
+            {diff != null && previous && (
+              <p className="text-[15px] tabular-nums">
+                {diff === 0
+                  ? `Igual a ${when(previous.date)}`
+                  : `${diff < 0 ? '−' : '+'}${fmt1(Math.abs(diff))} kg desde ${when(previous.date)}`}
               </p>
-              {rate != null && <p className="text-[15px]">{rateText(rate)}</p>}
-              {todayWeight && !profile.calm_mode && (
-                <p className="text-[13px] text-dim tabular-nums">Hoje {fmt1(todayWeight.kg)}</p>
-              )}
-            </div>
-          )
+            )}
+            {rate != null && <p className="text-[13px] text-dim">{rateText(rate)}</p>}
+          </div>
         )}
 
         {rate != null && rate < -FAST_LOSS_KG_WEEK && (
@@ -185,7 +189,7 @@ export default function Corpo() {
                 <Tooltip
                   cursor={{ stroke: colors.line }}
                   content={({ active, payload }) => {
-                    const point = payload?.[0]?.payload as { date: string; kg: number; trend?: number } | undefined
+                    const point = payload?.[0]?.payload as { date: string; kg: number } | undefined
                     if (!active || !point) return null
                     return (
                       <div
@@ -193,8 +197,7 @@ export default function Corpo() {
                         style={{ background: colors.surface, border: `1px solid ${colors.line}`, color: colors.ink }}
                       >
                         <p className="text-dim">{fmtDayMonth(point.date)}</p>
-                        <p>pesagem {fmt1(point.kg)} kg</p>
-                        {enough && point.trend != null && <p style={{ color: colors.body }}>peso médio {fmt1(point.trend)} kg</p>}
+                        <p>{fmt1(point.kg)} kg</p>
                       </div>
                     )
                   }}
@@ -209,27 +212,17 @@ export default function Corpo() {
                 )}
                 <Line
                   dataKey="kg"
-                  stroke="none"
+                  stroke={colors.body}
+                  strokeWidth={2.5}
                   isAnimationActive={false}
-                  dot={{ r: 3, fill: colors.body, fillOpacity: 0.3, stroke: 'none' }}
-                  activeDot={{ r: 4, fill: colors.body, fillOpacity: 0.6, stroke: 'none' }}
+                  dot={{ r: 3, fill: colors.body, stroke: 'none' }}
+                  activeDot={{ r: 5, fill: colors.body, stroke: 'none' }}
                 />
-                {enough && (
-                  <Line
-                    dataKey="trend"
-                    stroke={colors.body}
-                    strokeWidth={2.5}
-                    dot={false}
-                    activeDot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           {goalText && <p className="text-[15px]">{goalText}</p>}
-          <p className="text-[13px] text-dim">O peso de cada dia varia ±1 kg com água e sal. Olha para a linha.</p>
+          <p className="text-[13px] text-dim">O peso varia ±1 kg de um dia para o outro com água e sal.</p>
         </section>
       )}
       <CompositionCards />
