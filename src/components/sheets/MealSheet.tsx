@@ -11,6 +11,8 @@ import { signedUrls } from '../../lib/photos'
 import { MAX_MEAL_PHOTOS } from '../../lib/capture'
 import AttachPhotoButton from '../ui/AttachPhotoButton'
 import Icon from '../ui/Icon'
+import ErrorReason from '../ui/ErrorReason'
+import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
@@ -113,6 +115,8 @@ export default function MealSheet() {
   const current = meal
   const mealSlot = current.slot ?? slotOf(new Date(current.logged_at))
   const analysed = current.status === 'ok' || current.status === 'por_rever'
+  const stuck = analysisStuck(current, Date.now())
+  const failed = current.status === 'erro' || stuck
   const dirty = JSON.stringify(items) !== JSON.stringify(current.items)
   const totals = mealTotals(items)
   const proteinOk = MAIN_SLOTS.includes(mealSlot) && totals.protein >= profile.protein_per_meal_g
@@ -392,7 +396,7 @@ export default function MealSheet() {
         )}
         {current.note && <p className="text-[15px]">Nota: {current.note}</p>}
 
-        {current.status === 'a_analisar' && (
+        {current.status === 'a_analisar' && !stuck && (
           <div className="space-y-3">
             <p className="animate-pulse text-[17px]">A analisar…</p>
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
@@ -402,36 +406,49 @@ export default function MealSheet() {
           </div>
         )}
 
-        {(current.status === 'erro' || current.status === 'sem_analise') && current.deleted_at == null && (
+        {(failed || current.status === 'sem_analise') && current.deleted_at == null && (
           <div className="space-y-3">
-            <p className="text-[17px]">
-              {current.status === 'erro'
-                ? (current.analysis_error ?? 'Não consegui ler esta refeição.')
-                : 'Chegaste ao limite da IA que definiste. A foto está guardada.'}
-            </p>
-            {current.status === 'erro' && (current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
-              <AttachPhotoButton
-                meal={current}
-                onDone={() => void load()}
-                className={`${primary} flex items-center justify-center gap-2`}
-              >
-                <Icon name="camera" size={20} />
-                Juntar outra foto
-              </AttachPhotoButton>
+            {failed ? (
+              <ErrorReason
+                stored={stuck ? null : current.analysis_error}
+                fallback={stuck ? 'A análise parou a meio.' : 'Não consegui analisar esta refeição.'}
+              />
+            ) : (
+              <p className="text-[17px]">Chegaste ao limite da IA que definiste. A foto está guardada.</p>
             )}
-            <div className="grid grid-cols-2 gap-2">
+            {failed && (
               <button
                 disabled={busy}
-                onClick={() =>
-                  void analyse(
-                    current.status === 'erro' ? { reset: true } : { force: true },
-                    'A analisar outra vez…',
-                  )
-                }
-                className={secondary}
+                onClick={() => void analyse({ reset: true }, 'A analisar outra vez…')}
+                className={`${primary} flex items-center justify-center gap-2`}
               >
-                {current.status === 'erro' ? 'Tentar de novo' : 'Analisar esta mesmo assim'}
+                <Icon name="retry" size={20} />
+                Tentar outra vez
               </button>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              {failed ? (
+                (current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS ? (
+                  <AttachPhotoButton
+                    meal={current}
+                    onDone={() => void load()}
+                    className={`${secondary} flex items-center justify-center gap-2`}
+                  >
+                    <Icon name="camera" size={18} />
+                    Juntar foto
+                  </AttachPhotoButton>
+                ) : (
+                  <span />
+                )
+              ) : (
+                <button
+                  disabled={busy}
+                  onClick={() => void analyse({ force: true }, 'A analisar outra vez…')}
+                  className={secondary}
+                >
+                  Analisar esta mesmo assim
+                </button>
+              )}
               <button onClick={() => setMode('write')} className={secondary}>
                 Escrever o que era
               </button>

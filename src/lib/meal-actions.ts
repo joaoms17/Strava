@@ -96,3 +96,19 @@ export async function deleteMeal(mealId: string, toast: ShowToast) {
     toast(errorText(err))
   }
 }
+
+// «Tentar outra vez» numa refeição que falhou ou parou: a análise recomeça
+// do zero (3 tentativas novas). Devolve false se o servidor recusou.
+export async function retryAnalysis(mealId: string, toast: ShowToast): Promise<boolean> {
+  try {
+    const result = await postApi<{ meal: Meal; limit?: boolean }>('/api/meal/analyse', { meal_id: mealId, reset: true })
+    emitDataChanged()
+    if (result.limit) toast('Chegaste ao limite da IA. Abre a refeição para analisar mesmo assim.')
+    else if (result.meal.status === 'erro') toast(result.meal.analysis_error?.split('\n')[0] ?? 'Voltou a falhar.')
+    return true
+  } catch (err) {
+    emitDataChanged()
+    toast(errorText(err))
+    return false
+  }
+}

@@ -1,14 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import {
-  anthropic,
-  MODELS,
-  NO_THINKING,
-  REQUEST_TEXT,
-  REQUEST_VISION,
-  logApiCall,
-  usableOutput,
-} from './anthropic.js'
+import { MODELS, NO_THINKING, REQUEST_TEXT, REQUEST_VISION, structuredCall } from './anthropic.js'
+import { AiError, describeAiError, errorForStorage } from './rules/resposta-ia.js'
 import { MealAnalysisSchema, type MealAnalysis } from './schemas.js'
 import {
   PROMPT_MEAL_CORRECT,
@@ -125,20 +117,19 @@ export async function correctItems(
     correcao: correction,
     alimentos: forPrompt,
   })
-  const response = await anthropic().messages.parse(
+  const { output: parsed } = await structuredCall(
+    admin,
+    { userId, kind: 'meal_correct', request: REQUEST_TEXT },
     {
       model: MODELS.text,
       max_tokens: 4096,
       temperature: 0,
       system: readPrompt(PROMPT_MEAL_CORRECT),
       messages: [{ role: 'user', content: payload }],
-      output_config: { format: zodOutputFormat(MealAnalysisSchema) },
     },
-    REQUEST_TEXT,
+    MealAnalysisSchema,
   )
-  await logApiCall(admin, { user_id: userId, kind: 'meal_correct', model: MODELS.text, usage: response.usage })
-  const parsed = usableOutput(response)
-  if (!parsed || parsed.items.length === 0) throw new Error('Não consegui aplicar a correção.')
+  if (parsed.items.length === 0) throw new AiError('Não consegui aplicar a correção.', 'correção sem itens')
   // Os itens que a correção não tocou mantêm o food_id original.
   const corrected = toMealItems(parsed.items, refs).map((item) => {
     const same = items.find((i) => i.name === item.name && i.food_id)
@@ -166,7 +157,7 @@ async function runModel(
     const images = await Promise.all(
       photos.slice(0, 4).map(async (path) => {
         const { data, error } = await admin.storage.from('meal-photos').download(path)
-        if (error || !data) throw new Error('Fotografia não encontrada.')
+        if (error || !data) throw new AiError('Uma das fotos não foi encontrada. Junta-a outra vez.', `storage: ${path}: ${error?.message ?? 'sem dados'}`)
         return {
           type: 'image' as const,
           source: {
@@ -177,47 +168,35 @@ async function runModel(
         }
       }),
     )
-    const response = await anthropic().messages.parse(
+    const { output: analysis, cost } = await structuredCall(
+      admin,
+      { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION },
       {
         model: MODELS.vision,
         max_tokens: 4096,
         thinking: NO_THINKING,
         system: readPrompt(PROMPT_MEAL_PHOTO_V2),
         messages: [{ role: 'user', content: [...images, { type: 'text', text: payload }] }],
-        output_config: { format: zodOutputFormat(MealAnalysisSchema) },
       },
-      REQUEST_VISION,
+      MealAnalysisSchema,
     )
-    const cost = await logApiCall(admin, {
-      user_id: meal.user_id,
-      kind: 'meal_photo',
-      model: MODELS.vision,
-      usage: response.usage,
-    })
-    const analysis = usableOutput(response)
-    if (!analysis) throw new Error('Não consegui ler esta foto.')
+    if (analysis.items.length === 0) throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
     return { analysis, refs, model: MODELS.vision, prompt: promptVersion(PROMPT_MEAL_PHOTO_V2), cost }
   }
 
-  const response = await anthropic().messages.parse(
+  const { output: analysis, cost } = await structuredCall(
+    admin,
+    { userId: meal.user_id, kind: 'meal_text', request: REQUEST_TEXT },
     {
       model: MODELS.text,
       max_tokens: 4096,
       temperature: 0,
       system: readPrompt(PROMPT_MEAL_TEXT_V2),
       messages: [{ role: 'user', content: payload }],
-      output_config: { format: zodOutputFormat(MealAnalysisSchema) },
     },
-    REQUEST_TEXT,
+    MealAnalysisSchema,
   )
-  const cost = await logApiCall(admin, {
-    user_id: meal.user_id,
-    kind: 'meal_text',
-    model: MODELS.text,
-    usage: response.usage,
-  })
-  const analysis = usableOutput(response)
-  if (!analysis) throw new Error('Não consegui perceber o que comeste.')
+  if (analysis.items.length === 0) throw new AiError('Não percebi o que comeste. Escreve de outra forma.', 'análise sem itens')
   return { analysis, refs, model: MODELS.text, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost }
 }
 
@@ -277,12 +256,16 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
     })
   } catch (err) {
     console.error('Análise falhou:', err)
-    const message = err instanceof Error && err.message.length < 120 ? err.message : 'Não consegui ler esta refeição.'
+    // Um erro passageiro (demora, sobrecarga) solta a análise para o telemóvel
+    // pedir outra tentativa já; um erro que se ia repetir (chave, pedido
+    // recusado, foto em falta) ou a 3.ª tentativa passam logo a «erro», com o
+    // motivo e o botão «Tentar outra vez».
+    const retry = describeAiError(err).transient && meal.analysis_attempts < 3
     await admin
       .from('meals')
       .update({
-        analysis_error: message,
-        ...(meal.analysis_attempts >= 3 ? { status: 'erro' } : {}),
+        analysis_error: errorForStorage(err),
+        ...(retry ? { analysis_started_at: null } : { status: 'erro' }),
       })
       .eq('id', meal.id)
       .eq('analysis_started_at', claimedAt)
@@ -291,14 +274,26 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
 }
 
 // Reivindica e analisa (usado em segundo plano pelo capture e pelo analyse).
+// Um erro passageiro rápido (sobrecarga, formato) tenta outra vez na mesma
+// função, enquanto houver tempo para uma segunda chamada.
+const SECOND_TRY_BEFORE_MS = 15_000
+
 export async function claimAndAnalyse(
   admin: SupabaseClient,
   mealId: string,
   reset = false,
 ): Promise<Record<string, unknown> | null> {
-  const { data, error } = await admin.rpc('claim_meal_analysis', { p_meal_id: mealId, p_reset: reset })
-  if (error) throw new Error(error.message)
-  const claimed = (Array.isArray(data) ? data[0] : data) as MealRow | undefined
-  if (!claimed) return null
-  return analyseClaimed(admin, claimed)
+  const startedAt = Date.now()
+  for (let round = 0; round < 2; round++) {
+    const { data, error } = await admin.rpc('claim_meal_analysis', {
+      p_meal_id: mealId,
+      p_reset: reset && round === 0,
+    })
+    if (error) throw new Error(error.message)
+    const claimed = (Array.isArray(data) ? data[0] : data) as MealRow | undefined
+    if (!claimed) return null
+    const result = await analyseClaimed(admin, claimed)
+    if (result || Date.now() - startedAt > SECOND_TRY_BEFORE_MS) return result
+  }
+  return null
 }

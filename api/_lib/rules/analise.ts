@@ -82,3 +82,30 @@ export async function guardedWrite<T>(
   }
   return null
 }
+
+// Análise parada: a reivindicação (90 s no servidor) expirou ou nem começou.
+// O telemóvel pede outra tentativa sozinho até à 3.ª; depois disso, ou se já
+// passou muito tempo, a linha mostra «Tentar outra vez».
+export const ANALYSIS_LEASE_MS = 95_000
+export const ANALYSIS_START_GRACE_MS = 25_000
+export const ANALYSIS_SHOW_RETRY_AFTER_MS = 150_000
+
+export interface AnalysisProgress {
+  status: string
+  analysis_started_at: string | null
+  analysis_attempts: number
+  created_at: string
+}
+
+export function analysisStalled(meal: AnalysisProgress, now: number): boolean {
+  if (meal.status !== 'a_analisar') return false
+  const started = meal.analysis_started_at ? Date.parse(meal.analysis_started_at) : null
+  return started == null ? now - Date.parse(meal.created_at) > ANALYSIS_START_GRACE_MS : now - started > ANALYSIS_LEASE_MS
+}
+
+// Já não há tentativa automática: a análise parou a meio.
+export function analysisStuck(meal: AnalysisProgress, now: number): boolean {
+  if (!analysisStalled(meal, now)) return false
+  const since = Date.parse(meal.analysis_started_at ?? meal.created_at)
+  return meal.analysis_attempts >= 3 || now - since > ANALYSIS_SHOW_RETRY_AFTER_MS
+}

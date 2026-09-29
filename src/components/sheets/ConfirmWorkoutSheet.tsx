@@ -25,6 +25,7 @@ import KneePicker from '../ui/KneePicker'
 import ShotButton from '../ui/ShotButton'
 import Icon from '../ui/Icon'
 import { DayChips, chip } from '../ui/Chips'
+import ErrorReason from '../ui/ErrorReason'
 
 type Kind = 'bike' | 'strength' | 'caminhada' | 'eliptica' | 'outro'
 const KINDS: [Kind, string][] = [
@@ -299,7 +300,7 @@ function ImportConfirm({ id }: { id: string }) {
       <BottomSheet title="Print do relógio" onClose={sheet.close}>
         <div className="space-y-4 pb-2">
           <Thumbs paths={row.thumb_paths} />
-          <p className="text-[17px]">{row.analysis_error ?? 'Não consegui ler este print.'}</p>
+          <ErrorReason stored={row.analysis_error} fallback="Não consegui ler este print." />
           <div className="grid grid-cols-2 gap-2">
             <button
               disabled={busy}

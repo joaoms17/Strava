@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, NO_THINKING, REQUEST_VISION, logApiCall, usableOutput } from './anthropic.js'
+import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from './anthropic.js'
+import { AiError, errorForStorage } from './rules/resposta-ia.js'
 import { WorkoutShotSchema, type WorkoutShot } from './schemas.js'
 import { PROMPT_WORKOUT_SHOT, readPrompt } from './prompts.js'
 import { lisbonClock } from './rules/momentos.js'
@@ -67,7 +67,7 @@ async function readShot(admin: SupabaseClient, row: ImportRow): Promise<StoredSh
   const images = await Promise.all(
     row.source_paths.slice(0, 4).map(async (path) => {
       const { data, error } = await admin.storage.from('workout-shots').download(path)
-      if (error || !data) throw new Error('Print não encontrado.')
+      if (error || !data) throw new AiError('Print não encontrado. Junta-o outra vez.', `storage: ${path}: ${error?.message ?? 'sem dados'}`)
       return {
         type: 'image' as const,
         source: {
@@ -84,22 +84,20 @@ async function readShot(admin: SupabaseClient, row: ImportRow): Promise<StoredSh
     valores_atuais: row.parsed?.activity ?? null,
     campos_editados: row.edited_fields ?? [],
   })
-  const response = await anthropic().messages.parse(
+  const { output: shot } = await structuredCall(
+    admin,
+    { userId: row.user_id, kind: 'workout_shot', request: REQUEST_VISION },
     {
       model: MODELS.vision,
       max_tokens: 4096,
       thinking: NO_THINKING,
       system: readPrompt(PROMPT_WORKOUT_SHOT),
       messages: [{ role: 'user', content: [...images, { type: 'text', text: payload }] }],
-      output_config: { format: zodOutputFormat(WorkoutShotSchema) },
     },
-    REQUEST_VISION,
+    WorkoutShotSchema,
   )
-  await logApiCall(admin, { user_id: row.user_id, kind: 'workout_shot', model: MODELS.vision, usage: response.usage })
-  const shot = usableOutput(response)
-  if (!shot) throw new Error('Não consegui ler este print.')
   if (shot.images.length > 0 && shot.images.every((i) => i.app === 'not_workout')) {
-    throw new Error('Isto não parece um treino.')
+    throw new AiError('Isto não parece um treino.', 'todas as imagens: not_workout')
   }
   return checkShot(shot, today)
 }
@@ -120,12 +118,11 @@ async function parseClaimed(admin: SupabaseClient, row: ImportRow): Promise<Impo
       .maybeSingle()
     return (data as ImportRow | null) ?? null
   } catch (err) {
-    const message = err instanceof Error && /print|treino/i.test(err.message) ? err.message : 'Não consegui ler este print.'
     console.error('Leitura do print falhou:', err)
-    // Falhou: fica 'erro' com «Tentar de novo» e «Preencher à mão».
+    // Falhou: fica 'erro' com o motivo, «Tentar de novo» e «Preencher à mão».
     const { data } = await admin
       .from('workout_imports')
-      .update({ status: 'erro', analysis_error: message })
+      .update({ status: 'erro', analysis_error: errorForStorage(err) })
       .eq('id', row.id)
       .eq('analysis_started_at', claimedAt)
       .select()

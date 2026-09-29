@@ -1,15 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import {
-  anthropic,
-  MODELS,
-  NO_THINKING,
-  REQUEST_VISION,
-  logApiCall,
-  timeLeftForRetry,
-  usableOutput,
-  type Usage,
-} from '../_lib/anthropic.js'
+import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall, timeLeftForRetry } from '../_lib/anthropic.js'
+import { describeAiError } from '../_lib/rules/resposta-ia.js'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { ParsedPhotoMealSchema, type ParsedPhotoMeal } from '../_lib/schemas.js'
@@ -60,46 +51,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       alimentos_pessoais: foods ?? [],
     })
 
-    const usage: Usage = { input_tokens: 0, output_tokens: 0 }
     let parsed: ParsedPhotoMeal | null = null
+    let cost = 0
     const startedAt = Date.now()
-    // JSON estrito; uma segunda tentativa só se couber no tempo da função
-    // (Sonnet 5 não aceita temperature)
+    // JSON estrito; uma segunda tentativa só se o erro for passageiro e couber
+    // no tempo da função (Sonnet 5 não aceita temperature)
     for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
-      if (attempt > 0 && !timeLeftForRetry(startedAt, 20_000)) break
-      const response = await anthropic().messages.parse({
-        model: MODELS.vision,
-        max_tokens: 4096,
-        thinking: NO_THINKING,
-        system,
-        messages: [
+      if (attempt > 0 && !timeLeftForRetry(startedAt, 12_000)) break
+      try {
+        const result = await structuredCall(
+          adminClient(),
+          { userId: user.id, kind: 'meal_parse_photo', request: REQUEST_VISION },
           {
-            role: 'user',
-            content: [
+            model: MODELS.vision,
+            max_tokens: 4096,
+            thinking: NO_THINKING,
+            system,
+            messages: [
               {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mediaTypeFor(photoPath),
-                  data: base64,
-                },
+                role: 'user',
+                content: [
+                  {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: mediaTypeFor(photoPath),
+                      data: base64,
+                    },
+                  },
+                  { type: 'text', text: payload },
+                ],
               },
-              { type: 'text', text: payload },
             ],
           },
-        ],
-        output_config: { format: zodOutputFormat(ParsedPhotoMealSchema) },
-      }, REQUEST_VISION)
-      usage.input_tokens += response.usage.input_tokens
-      usage.output_tokens += response.usage.output_tokens
-      parsed = usableOutput(response)
+          ParsedPhotoMealSchema,
+        )
+        parsed = result.output
+        cost += result.cost
+      } catch (err) {
+        const error = describeAiError(err)
+        if (!error.transient || attempt > 0) throw new HttpError(502, `${error.message} Tenta outra vez.`)
+      }
     }
-    const cost = await logApiCall(adminClient(), {
-      user_id: user.id,
-      kind: 'meal_parse_photo',
-      model: MODELS.vision,
-      usage,
-    })
     if (!parsed) throw new HttpError(502, 'Não consegui analisar a fotografia. Tenta outra vez.')
 
     res.status(200).json({

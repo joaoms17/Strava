@@ -9,7 +9,7 @@ import { emitDataChanged, useDataVersion } from '../lib/events'
 import { signedUrls } from '../lib/photos'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
-import { deleteMeal, logFavorite } from '../lib/meal-actions'
+import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
 import { workoutTitle } from '../lib/workout-actions'
 import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
 import { recomputeFrom } from '../lib/recompute'
@@ -20,6 +20,8 @@ import { useAutoSync } from '../lib/intervals'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
+import { analysisStalled, analysisStuck } from '../../api/_lib/rules/analise'
+import { splitStoredError } from '../../api/_lib/rules/resposta-ia'
 import {
   dismissNudge,
   nextStep,
@@ -33,6 +35,7 @@ import BottomSheet from '../components/ui/BottomSheet'
 import KneePicker from '../components/ui/KneePicker'
 import PhotoButton from '../components/ui/PhotoButton'
 import AttachPhotoButton from '../components/ui/AttachPhotoButton'
+import { MAX_MEAL_PHOTOS } from '../lib/capture'
 import WeekStrip from '../components/ui/WeekStrip'
 
 interface DayData {
@@ -90,6 +93,8 @@ export default function Hoje() {
   const [showDeleted, setShowDeleted] = useState(false)
   const captures = useCaptures()
   const retried = useRef(new Set<string>())
+  // Refeições com «Tentar outra vez» em curso (mostram «A analisar…» já).
+  const [retrying, setRetrying] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
@@ -186,10 +191,8 @@ export default function Hoje() {
       if (!document.hidden) void load()
     }, now - oldest > 120_000 ? 15_000 : 3_000)
     for (const meal of analysing) {
-      const started = meal.analysis_started_at ? Date.parse(meal.analysis_started_at) : null
-      const stalled = started == null ? now - Date.parse(meal.created_at) > 25_000 : now - started > 95_000
-      const key = `${meal.id}:${meal.analysis_started_at ?? '-'}`
-      if (stalled && meal.analysis_attempts < 3 && !retried.current.has(key)) {
+      const key = `${meal.id}:${meal.analysis_started_at ?? '-'}:${meal.analysis_attempts}`
+      if (analysisStalled(meal, now) && meal.analysis_attempts < 3 && !retried.current.has(key)) {
         retried.current.add(key)
         void postApi('/api/meal/analyse', { meal_id: meal.id })
           .then(() => load())
@@ -207,12 +210,16 @@ export default function Hoje() {
   const proteinIn = counted.reduce((acc, m) => acc + Number(m.protein), 0)
   const carbsIn = counted.reduce((acc, m) => acc + Number(m.carbs), 0)
   const fatIn = counted.reduce((acc, m) => acc + Number(m.fat), 0)
-  const errorMeals = data.meals.filter((m) => m.status === 'erro')
+  const nowMs = Date.now()
+  const errorMeals = data.meals.filter(
+    (m) => !retrying.has(m.id) && (m.status === 'erro' || analysisStuck(m, nowMs)),
+  )
   const limitMeals = data.meals.filter((m) => m.status === 'sem_analise')
   const reviewMeals = data.meals.filter((m) => m.status === 'por_rever')
   const localCaptures = captures.filter((c) => (c.date ?? today) === date)
   const stillCounting =
-    data.meals.filter((m) => m.status === 'a_analisar').length + localCaptures.filter((c) => c.state === 'pendente').length
+    data.meals.filter((m) => m.status === 'a_analisar' && !analysisStuck(m, nowMs)).length +
+    localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
   // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa.
   const workoutKcals = data.workouts.map((w) => ({
@@ -302,6 +309,16 @@ export default function Hoje() {
           .sort((a, b) => b.use_count - a.use_count)[0] ?? null)
       : null
 
+  async function retry(mealId: string) {
+    setRetrying((prev) => new Set(prev).add(mealId))
+    await retryAnalysis(mealId, toast)
+    setRetrying((prev) => {
+      const next = new Set(prev)
+      next.delete(mealId)
+      return next
+    })
+  }
+
   async function dismiss(id: NextStepId) {
     await update({ nudge_state: dismissNudge(nudges, id, today) as Record<string, unknown> })
   }
@@ -364,16 +381,23 @@ export default function Hoje() {
     const fromFavorite = meal.input_type === 'favorite' && meal.raw_text
     const title = fromFavorite ? meal.raw_text! : SLOT_LABEL[slot]
     const analysed = meal.status === 'ok' || meal.status === 'por_rever'
-    const subtitle =
-      meal.status === 'a_analisar'
-        ? 'A analisar…'
-        : meal.status === 'erro'
-          ? 'Não carregou · junta outra foto'
-          : meal.status === 'sem_analise'
-            ? 'Sem análise (limite da IA)'
-            : fromFavorite
-              ? SLOT_LABEL[slot]
-              : meal.items.map((i) => i.name).join(', ')
+    const isRetrying = retrying.has(meal.id)
+    const stuck = !isRetrying && analysisStuck(meal, Date.now())
+    const failed = !isRetrying && (meal.status === 'erro' || stuck)
+    const pending = isRetrying || (meal.status === 'a_analisar' && !stuck)
+    const subtitle = isRetrying
+      ? 'A analisar outra vez…'
+      : meal.status === 'erro'
+        ? (splitStoredError(meal.analysis_error).message ?? 'Não consegui analisar')
+        : stuck
+          ? 'Parou a meio'
+          : meal.status === 'a_analisar'
+            ? 'A analisar…'
+            : meal.status === 'sem_analise'
+              ? 'Sem análise (limite da IA)'
+              : fromFavorite
+                ? SLOT_LABEL[slot]
+                : meal.items.map((i) => i.name).join(', ')
     entries.push({
       at: meal.logged_at,
       key: `m-${meal.id}`,
@@ -389,17 +413,15 @@ export default function Hoje() {
                 <img
                   src={thumb}
                   alt=""
-                  className={`h-12 w-12 shrink-0 rounded-xl object-cover ${meal.status === 'a_analisar' ? 'animate-pulse' : ''}`}
+                  className={`h-12 w-12 shrink-0 rounded-xl object-cover ${pending ? 'animate-pulse' : ''} ${failed ? 'opacity-60' : ''}`}
                 />
               ) : (
                 <span
                   className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-                    meal.status === 'erro'
-                      ? 'border-[1.5px] border-dashed border-eat text-eat'
-                      : 'bg-surface2 text-dim'
-                  } ${meal.status === 'a_analisar' ? 'animate-pulse' : ''}`}
+                    failed ? 'border-[1.5px] border-dashed border-eat text-eat' : 'bg-surface2 text-dim'
+                  } ${pending ? 'animate-pulse' : ''}`}
                 >
-                  <Icon name={meal.status === 'erro' ? 'alert' : meal.input_type === 'barcode' ? 'barcode' : 'plate'} />
+                  <Icon name={failed ? 'alert' : meal.input_type === 'barcode' ? 'barcode' : 'plate'} />
                 </span>
               )}
               <span className="min-w-0 flex-1">
@@ -408,7 +430,7 @@ export default function Hoje() {
                   {meal.favorite_id && <span className="ml-1 text-attn">★</span>}
                 </span>
                 <span
-                  className={`block truncate text-[14px] ${meal.status === 'erro' ? 'text-eat' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
+                  className={`block truncate text-[14px] ${failed ? 'text-eat' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
                 >
                   {subtitle}
                 </span>
@@ -423,7 +445,17 @@ export default function Hoje() {
                 </span>
               )}
             </button>
-            {meal.status === 'a_analisar' && (
+            {failed && (
+              <button
+                onClick={() => void retry(meal.id)}
+                aria-label="Tentar outra vez"
+                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-eat/50 px-3 font-display text-[15px] font-semibold tracking-[0.04em] text-eat uppercase"
+              >
+                <Icon name="retry" size={18} />
+                Tentar
+              </button>
+            )}
+            {pending && !isRetrying && (
               <button
                 onClick={() => sheet.open('nota', { id: meal.id })}
                 className="min-h-11 shrink-0 rounded-xl px-3 text-[13px] text-eat"
@@ -651,7 +683,8 @@ export default function Hoje() {
           onYesterday={(flag) => void answerYesterday(flag)}
           onFavorite={(fav) => void logFavorite(fav, null, toast)}
           onDismiss={() => void dismiss(step)}
-          errorMeal={errorMeals[0] ?? null}
+          errorMeals={errorMeals}
+          onRetry={(id) => void retry(id)}
           limitMeal={limitMeals[0] ?? null}
           reviewCount={reviewMeals.length}
           onOpenMeal={(id) => sheet.open('refeicao', { id })}
@@ -914,7 +947,8 @@ function NextStepCard({
   onYesterday,
   onFavorite,
   onDismiss,
-  errorMeal,
+  errorMeals,
+  onRetry,
   limitMeal,
   reviewCount,
   onOpenMeal,
@@ -932,7 +966,8 @@ function NextStepCard({
   onYesterday: (flag: 'dia_fechado' | 'faltou_algo') => void
   onFavorite: (favorite: Favorite) => void
   onDismiss: () => void
-  errorMeal: Meal | null
+  errorMeals: Meal[]
+  onRetry: (id: string) => void
   limitMeal: Meal | null
   reviewCount: number
   onOpenMeal: (id: string) => void
@@ -943,6 +978,7 @@ function NextStepCard({
   measureDaysSince: number | null
   onMeasure: () => void
 }) {
+  const errorMeal = errorMeals[0] ?? null
   const later = (
     <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
       Agora não
@@ -966,28 +1002,43 @@ function NextStepCard({
     >
       {id === 'erro' && errorMeal && (
         <>
-          <p className="font-display text-[12px] font-bold tracking-[0.16em] text-eat uppercase">Falta 1 foto</p>
-          <p className="-mt-2 text-[17px] font-medium">
-            A refeição das {timeOf(errorMeal.logged_at)} não carregou.
+          <p className="font-display text-[12px] font-bold tracking-[0.16em] text-eat uppercase">
+            {errorMeals.length > 1 ? `${errorMeals.length} refeições por analisar` : 'Não consegui analisar'}
           </p>
-          <div className="flex gap-2">
-            <AttachPhotoButton
-              meal={errorMeal}
-              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-eat font-display text-[17px] font-bold tracking-[0.04em] text-bg uppercase"
-            >
-              <Icon name="camera" size={20} />
-              Juntar outra foto
-            </AttachPhotoButton>
+          <div className="-mt-2">
+            <p className="text-[17px] font-medium">A refeição das {timeOf(errorMeal.logged_at)} ficou sem números.</p>
+            <p className="text-[14px] text-dim">
+              {errorMeal.status === 'erro'
+                ? (splitStoredError(errorMeal.analysis_error).message ?? 'A análise falhou.')
+                : 'A análise parou a meio.'}
+            </p>
+          </div>
+          <button
+            onClick={() => errorMeals.forEach((m) => onRetry(m.id))}
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-eat font-display text-[17px] font-bold tracking-[0.04em] text-bg uppercase"
+          >
+            <Icon name="retry" size={20} />
+            {errorMeals.length > 1 ? `Tentar as ${errorMeals.length} outra vez` : 'Tentar outra vez'}
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            {(errorMeal.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS ? (
+              <AttachPhotoButton
+                meal={errorMeal}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line font-display text-[15px] font-semibold tracking-[0.04em] uppercase"
+              >
+                <Icon name="camera" size={18} />
+                Juntar foto
+              </AttachPhotoButton>
+            ) : (
+              <span />
+            )}
             <button
               onClick={() => onOpenMeal(errorMeal.id)}
-              className="min-h-12 rounded-xl border border-line px-3 font-display text-[17px] font-semibold tracking-[0.04em] uppercase"
+              className="min-h-12 rounded-xl border border-line px-3 font-display text-[15px] font-semibold tracking-[0.04em] uppercase"
             >
               Escrever
             </button>
           </div>
-          <button onClick={() => void onAnalyse(errorMeal.id, { reset: true })} className="text-[15px] text-dim">
-            Ou tentar ler a mesma foto outra vez
-          </button>
         </>
       )}
       {id === 'treino' && (

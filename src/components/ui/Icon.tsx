@@ -22,6 +22,7 @@ const PATHS = {
   close: 'M6 6l12 12M18 6 6 18',
   ruler: 'M3 17 17 3l4 4L7 21zM7.5 12.5l2 2M10.5 9.5l2 2M13.5 6.5l2 2',
   info: 'M12 11v5M12 8h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
+  retry: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5',
 } as const
 
 export type IconName = keyof typeof PATHS

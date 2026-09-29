@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-import { anthropic, MODELS, logApiCall, usableOutput } from './anthropic.js'
+import { MODELS, structuredCall } from './anthropic.js'
 import { PROMPT_REVIEW_NEUTRAL, readPrompt } from './prompts.js'
 import { shiftDate } from './rules/nutritional-day.js'
 
@@ -74,19 +73,19 @@ export async function generateWeeklyReview(
   }
 
   // Corre dentro da cron (60 s no total): uma só chamada.
-  const response = await anthropic().messages.parse(
+  const { output } = await structuredCall(
+    admin,
+    { userId, kind: 'weekly_review', request: { maxRetries: 0, timeout: 20_000 } },
     {
       model: MODELS.text,
       max_tokens: 1200,
       temperature: 0.2,
       system: readPrompt(PROMPT_REVIEW_NEUTRAL),
       messages: [{ role: 'user', content: JSON.stringify(payload) }],
-      output_config: { format: zodOutputFormat(ReviewSchema) },
     },
-    { maxRetries: 0, timeout: 20_000 },
+    ReviewSchema,
   )
-  await logApiCall(admin, { user_id: userId, kind: 'weekly_review', model: MODELS.text, usage: response.usage })
-  const text = usableOutput(response)?.text?.trim() || null
+  const text = output.text?.trim() || null
   if (!text) throw new Error('Resumo semanal sem texto válido.')
 
   const { error } = await admin.from('weekly_reviews').upsert(
