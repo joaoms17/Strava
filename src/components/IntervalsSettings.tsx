@@ -40,7 +40,7 @@ export default function IntervalsSettings() {
   }
 
   // Importar o histórico: bloco a bloco, com progresso e «Parar».
-  const [history, setHistory] = useState<{ done: number; total: number; label: string } | null>(null)
+  const [history, setHistory] = useState<{ done: number; total: number; label: string; open: boolean } | null>(null)
   const [choosing, setChoosing] = useState(false)
   const stop = useRef(false)
   async function runHistory(days: number | null) {
@@ -56,7 +56,9 @@ export default function IntervalsSettings() {
           setHistory({
             done,
             total,
-            label: `${fmtDayMonth(window.oldest)} a ${fmtDayMonth(window.newest)} de ${window.oldest.slice(0, 4)}`,
+            label: `${fmtDayMonth(window.oldest)} ${window.oldest.slice(0, 4)} a ${fmtDayMonth(window.newest)} ${window.newest.slice(0, 4)}`,
+            // «Tudo» não sabe onde acaba: pára depois de um ano sem dados.
+            open: days == null,
           })
         },
       })
@@ -163,14 +165,21 @@ export default function IntervalsSettings() {
       {history && (
         <div className="space-y-2 rounded-xl bg-surface2 p-3" role="status">
           <p className="text-[14px]">
-            A importar {history.label}… ({history.done} de {history.total})
+            A importar {history.label}…{' '}
+            {history.open
+              ? `(${history.done} ${history.done === 1 ? 'mês feito' : 'meses feitos'})`
+              : `(${history.done} de ${history.total})`}
           </p>
-          <div className="h-2 overflow-hidden rounded-full bg-line">
-            <div
-              className="h-full rounded-full bg-cta transition-all"
-              style={{ width: `${Math.round((history.done / Math.max(1, history.total)) * 100)}%` }}
-            />
-          </div>
+          {history.open ? (
+            <p className="text-[13px] text-dim">Pára sozinho quando passar um ano sem dados. Deixa a app aberta.</p>
+          ) : (
+            <div className="h-2 overflow-hidden rounded-full bg-line">
+              <div
+                className="h-full rounded-full bg-cta transition-all"
+                style={{ width: `${Math.round((history.done / Math.max(1, history.total)) * 100)}%` }}
+              />
+            </div>
+          )}
           <button onClick={() => (stop.current = true)} className="text-[14px] text-dim underline underline-offset-2">
             Parar
           </button>
