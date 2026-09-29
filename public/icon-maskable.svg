@@ -1,5 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0a0a0b"/>
-  <text x="256" y="315" font-family="Georgia, 'Times New Roman', serif" font-size="220" font-weight="bold" fill="#f59e0b" text-anchor="middle">R</text>
-  <rect x="166" y="360" width="180" height="8" rx="4" fill="#3f3f46"/>
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="22%" r="95%">
+      <stop offset="0" stop-color="#1f2b23"/>
+      <stop offset="0.55" stop-color="#111813"/>
+      <stop offset="1" stop-color="#080c0a"/>
+    </radialGradient>
+    <linearGradient id="arc" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#e2ff6b"/>
+      <stop offset="1" stop-color="#a6d91a"/>
+    </linearGradient>
+    <radialGradient id="dot" cx="38%" cy="32%" r="75%">
+      <stop offset="0" stop-color="#ffa06b"/>
+      <stop offset="1" stop-color="#f2621f"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g transform="translate(256 256) scale(0.8) translate(-256 -256)">
+
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#26332b" stroke-width="46"/>
+  <path d="M256 108 A148 148 0 1 1 108 256" fill="none" stroke="url(#arc)" stroke-width="46" stroke-linecap="round"/>
+  <circle cx="108" cy="256" r="33" fill="url(#dot)" stroke="#0e1411" stroke-width="10"/>
+  <path d="M198 262 L240 302 L318 212" fill="none" stroke="#eef2e8" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>
