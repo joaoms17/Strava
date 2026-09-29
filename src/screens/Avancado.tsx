@@ -5,6 +5,7 @@ import { useReadyProfile, useProfile } from '../lib/profile'
 import { fmtInt } from '../lib/format'
 import { USD_TO_EUR, nearMonthlyCap } from '../../api/_lib/rules/custos'
 import type { CatalogExercise } from '../lib/types'
+import AiCheck from '../components/AiCheck'
 
 const KIND_LABEL: Record<string, string> = {
   meal_parse_text: 'refeições por texto',
@@ -12,6 +13,8 @@ const KIND_LABEL: Record<string, string> = {
   meal_photo: 'fotos',
   meal_text: 'refeições por texto',
   meal_correct: 'correções',
+  workout_shot: 'prints do relógio',
+  ai_check: 'verificações',
   plan_generate: 'planos',
   weekly_review: 'resumos',
 }
@@ -72,6 +75,14 @@ export default function Avancado() {
 
   return (
     <div className="space-y-6 pt-1 pb-4">
+      <section className="space-y-2 rounded-2xl bg-surface p-4">
+        <h2 className="text-[15px] font-semibold">A IA está a funcionar?</h2>
+        <p className="text-[14px] text-dim">
+          Faz uma chamada mínima a cada modelo com a chave que está no Vercel (menos de 0,1 cêntimo).
+        </p>
+        <AiCheck />
+      </section>
+
       <section className="space-y-2 rounded-2xl bg-surface p-4">
         <h2 className="text-[15px] font-semibold">Custos da IA</h2>
         {costs ? (

@@ -1,6 +1,7 @@
 import type { VercelResponse } from '@vercel/node'
 import Anthropic from '@anthropic-ai/sdk'
 import { HttpError } from './supabase.js'
+import { AiError } from './rules/resposta-ia.js'
 
 export function respondError(res: VercelResponse, err: unknown): void {
   if (err instanceof HttpError) {
@@ -8,6 +9,10 @@ export function respondError(res: VercelResponse, err: unknown): void {
     return
   }
   console.error(err)
+  if (err instanceof AiError) {
+    res.status(502).json({ error: err.message })
+    return
+  }
   if (err instanceof Anthropic.APIConnectionTimeoutError) {
     res.status(504).json({ error: 'A IA demorou demasiado a responder. Tenta outra vez.' })
     return

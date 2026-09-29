@@ -12,6 +12,7 @@ import { MAX_MEAL_PHOTOS } from '../../lib/capture'
 import AttachPhotoButton from '../ui/AttachPhotoButton'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
+import AiCheck from '../AiCheck'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
@@ -453,6 +454,7 @@ export default function MealSheet() {
                 Escrever o que era
               </button>
             </div>
+            {failed && <AiCheck compact />}
             {mode === 'write' && (
               <div className="space-y-2">
                 <textarea
