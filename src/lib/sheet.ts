@@ -11,6 +11,7 @@ export type SheetName =
   | 'repetir'
   | 'nova-favorita'
   | 'dieta'
+  | 'pessoa'
   | 'nota'
   | 'numeros'
   | 'barras'

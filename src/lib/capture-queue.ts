@@ -23,9 +23,15 @@ export interface CaptureEntry {
   slot: Slot | null
   state: 'pendente' | 'erro'
   error: string | null
+  user_id?: string | null // de quem é (várias pessoas no mesmo telemóvel)
 }
 
-export type NewCapture = Omit<CaptureEntry, 'client_id' | 'created_at' | 'state' | 'error'>
+export type NewCapture = Omit<CaptureEntry, 'client_id' | 'created_at' | 'state' | 'error' | 'user_id'>
+
+// Só as da pessoa que está a usar a app (as antigas, sem dono, contam para todas).
+export function ownCapture(entry: CaptureEntry, userId: string | null): boolean {
+  return !entry.user_id || !userId || entry.user_id === userId
+}
 
 const EVENT = 'regresso:captures'
 const DUPLICATE_EVENT = 'regresso:duplicate'
@@ -53,8 +59,12 @@ export async function discardCapture(clientId: string): Promise<void> {
 }
 
 export async function enqueueCapture(capture: NewCapture): Promise<string> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
   const entry: CaptureEntry = {
     ...capture,
+    user_id: session?.user.id ?? null,
     client_id: crypto.randomUUID(),
     created_at: new Date().toISOString(),
     state: 'pendente',
@@ -125,31 +135,41 @@ async function send(entry: CaptureEntry, userId: string) {
 }
 
 let running: Promise<void> | null = null
+let again = false
 
+// Uma de cada vez; o que entrar na fila a meio de um envio vai na volta
+// seguinte (antes ficava à espera da próxima abertura da app).
 export function processCaptures(): Promise<void> {
-  running ??= (async () => {
+  if (running) {
+    again = true
+    return running
+  }
+  running = (async () => {
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-      if (!session) return
-      for (const entry of await listCaptures()) {
-        if (entry.state !== 'pendente') continue
-        if (!navigator.onLine) return
-        try {
-          await send(entry, session.user.id)
-          await discardCapture(entry.client_id)
-          emitDataChanged()
-        } catch (err) {
-          if (isNetworkError(err)) return // sem rede: fica para depois
-          await putCapture({
-            ...entry,
-            state: 'erro',
-            error: err instanceof Error ? err.message : 'Não consegui enviar.',
-          })
-          changed()
+      do {
+        again = false
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        if (!session) return
+        for (const entry of await listCaptures()) {
+          if (entry.state !== 'pendente' || !ownCapture(entry, session.user.id)) continue
+          if (!navigator.onLine) return
+          try {
+            await send(entry, session.user.id)
+            await discardCapture(entry.client_id)
+            emitDataChanged()
+          } catch (err) {
+            if (isNetworkError(err)) return // sem rede: fica para depois
+            await putCapture({
+              ...entry,
+              state: 'erro',
+              error: err instanceof Error ? err.message : 'Não consegui enviar.',
+            })
+            changed()
+          }
         }
-      }
+      } while (again)
     } finally {
       running = null
     }
@@ -167,7 +187,10 @@ export function onDuplicate(listener: (meal: { id: string; date: string }) => vo
 export function useCaptures(): (CaptureEntry & { preview: string | null })[] {
   const [entries, setEntries] = useState<(CaptureEntry & { preview: string | null })[]>([])
   const refresh = useCallback(async () => {
-    const list = await listCaptures()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const list = (await listCaptures()).filter((e) => ownCapture(e, session?.user.id ?? null))
     setEntries((previous) => {
       for (const old of previous) if (old.preview) URL.revokeObjectURL(old.preview)
       return list.map((e) => ({ ...e, preview: e.files[0] ? URL.createObjectURL(e.files[0]) : null }))

@@ -7,6 +7,8 @@ import { toCsv, downloadCsv } from '../lib/csv'
 import type { Profile } from '../lib/types'
 import IntervalsSettings from '../components/IntervalsSettings'
 import NewPasswordForm from '../components/NewPasswordForm'
+import PeopleSettings from '../components/PeopleSettings'
+import { signOutCurrent } from '../lib/accounts'
 
 interface Field {
   key: keyof Profile & string
@@ -205,6 +207,10 @@ export default function Definicoes() {
 
   return (
     <div className="space-y-6 pt-1 pb-4">
+      <Section title="Pessoas">
+        <PeopleSettings />
+      </Section>
+
       <Section title="Perfil e metas">
         {GOALS.map(numberInput)}
         <Toggle
@@ -282,7 +288,7 @@ export default function Definicoes() {
       <Section title="Sessão">
         <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
         <ChangePassword />
-        <button onClick={() => void supabase.auth.signOut()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
+        <button onClick={() => void signOutCurrent()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
           Terminar sessão
         </button>
       </Section>

@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { scopedKey } from './scoped'
 import { cleanDietMeals, type DietMeals } from '../../api/_lib/rules/dieta'
 import type { Diet } from './types'
 
@@ -101,7 +102,7 @@ export interface DietDraft {
 
 export function saveDietDraft(draft: DietDraft): void {
   try {
-    sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+    sessionStorage.setItem(scopedKey(DRAFT_KEY), JSON.stringify(draft))
   } catch {
     // sem armazenamento: perde-se só o rascunho
   }
@@ -109,7 +110,7 @@ export function saveDietDraft(draft: DietDraft): void {
 
 export function peekDietDraft(): DietDraft | null {
   try {
-    const raw = sessionStorage.getItem(DRAFT_KEY)
+    const raw = sessionStorage.getItem(scopedKey(DRAFT_KEY))
     return raw ? (JSON.parse(raw) as DietDraft) : null
   } catch {
     return null
@@ -118,7 +119,7 @@ export function peekDietDraft(): DietDraft | null {
 
 export function clearDietDraft(): void {
   try {
-    sessionStorage.removeItem(DRAFT_KEY)
+    sessionStorage.removeItem(scopedKey(DRAFT_KEY))
   } catch {
     // nada a fazer
   }

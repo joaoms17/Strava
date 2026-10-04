@@ -9,6 +9,7 @@ import {
   importHistory,
   loadImportState,
   newImport,
+  saveImportState,
   syncNow,
   syncSummary,
   type ImportState,
@@ -192,7 +193,7 @@ export default function IntervalsSettings() {
             <button
               onClick={() => {
                 try {
-                  localStorage.removeItem('regresso.importacao')
+                  saveImportState(null)
                 } catch {
                   // nada
                 }

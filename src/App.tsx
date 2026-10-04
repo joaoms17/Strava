@@ -10,6 +10,11 @@ import { onDuplicate, useCaptureSync } from './lib/capture-queue'
 import { fmtDayShort } from './lib/format'
 import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
+import Welcome from './components/Welcome'
+import PeopleSwitcher from './components/PeopleSwitcher'
+import { startAccountTracking, useAccounts } from './lib/accounts'
+import { setActiveUser } from './lib/scoped'
+import { initialOf } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
 import { bootUrl } from './lib/boot-url'
 import TabBar from './components/TabBar'
@@ -20,6 +25,7 @@ import GallerySheet from './components/sheets/GallerySheet'
 import RepeatSheet from './components/sheets/RepeatSheet'
 import NewFavoriteSheet from './components/sheets/NewFavoriteSheet'
 import DietSheet from './components/sheets/DietSheet'
+import PersonSheet from './components/sheets/PersonSheet'
 import NoteSheet from './components/sheets/NoteSheet'
 import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
@@ -71,8 +77,10 @@ const TITLES: [RegExp, string][] = [
   [/^\/definicoes/, 'Definições'],
 ]
 
-function Header() {
+function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
   const [location, navigate] = useLocation()
+  const { accounts, currentId } = useAccounts()
+  const me = accounts.find((a) => a.user_id === currentId)
   const { profile } = useProfile()
   const queued = useQueueCount()
   const parent = PARENT.find(([re]) => re.test(location))?.[1]
@@ -83,7 +91,11 @@ function Header() {
     : (TITLES.find(([re]) => re.test(location))?.[1] ?? '')
 
   return (
-    <header className="mx-auto flex max-w-md items-end justify-between gap-3 px-4 pt-[calc(14px+env(safe-area-inset-top))] pb-3">
+    <header
+      className={`mx-auto flex max-w-md items-end justify-between gap-3 px-4 pb-3 ${
+        belowSwitcher ? 'pt-3' : 'pt-[calc(14px+env(safe-area-inset-top))]'
+      }`}
+    >
       <div className="flex min-w-0 items-center gap-1">
         {parent && (
           <button onClick={() => navigate(parent)} className="-ml-2 px-2 py-1 text-[17px] font-medium text-ink">
@@ -110,7 +122,7 @@ function Header() {
             className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface font-display text-[20px] font-bold"
             aria-label="Definições"
           >
-            J
+            {initialOf(me?.name ?? 'J')}
           </Link>
         )}
       </div>
@@ -130,6 +142,7 @@ function Sheets() {
   if (sheet.name === 'repetir') return <RepeatSheet />
   if (sheet.name === 'nova-favorita') return <NewFavoriteSheet key={sheet.params.get('momento') ?? ''} />
   if (sheet.name === 'dieta') return <DietSheet key={sheet.params.get('id') ?? 'nova'} />
+  if (sheet.name === 'pessoa') return <PersonSheet />
   if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
   if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />
@@ -164,16 +177,11 @@ function CaptureSync() {
 
 function Shell() {
   const { status, reload, missingMigrations } = useProfile()
+  const { accounts } = useAccounts()
 
   if (status === 'loading') return <div className="min-h-dvh bg-bg" />
-  if (status === 'no-profile') {
-    return (
-      <Centered>
-        <p className="text-ink">Perfil não encontrado.</p>
-        <p>Corre os seeds no Supabase (SQL Editor): 01_profile.sql, 02_chapters.sql e 03_exercise_catalog.sql.</p>
-      </Centered>
-    )
-  }
+  // Conta nova sem perfil: os dados para começar (alvos calculados).
+  if (status === 'no-profile') return <Welcome onDone={() => void reload()} />
   if (status === 'needs-migration') {
     return (
       <Centered>
@@ -210,7 +218,8 @@ function Shell() {
   const loading = <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
   return (
     <div className="min-h-dvh bg-bg">
-      <Header />
+      <PeopleSwitcher />
+      <Header belowSwitcher={accounts.length >= 2} />
       {/* Espaço em baixo para as últimas linhas nunca ficarem por baixo da barra nem de um aviso. */}
       <main className="mx-auto max-w-md px-4 pb-48">
         <Suspense fallback={loading}>
@@ -251,12 +260,21 @@ export default function App() {
 
   useEffect(() => {
     if (!supabaseConfigured) return
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    // Guarda a sessão de cada pessoa deste telemóvel (para o separador).
+    const stopTracking = startAccountTracking()
+    supabase.auth.getSession().then(({ data }) => {
+      setActiveUser(data.session?.user.id ?? null)
+      setSession(data.session)
+    })
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      setActiveUser(next?.user.id ?? null)
       setSession(next)
     })
-    return () => sub.subscription.unsubscribe()
+    return () => {
+      sub.subscription.unsubscribe()
+      stopTracking()
+    }
   }, [])
 
   if (!supabaseConfigured) {
@@ -281,7 +299,7 @@ export default function App() {
   if (!session) return <Login />
 
   return (
-    <ProfileProvider>
+    <ProfileProvider key={session.user.id}>
       <ToastProvider>
         <Shell />
       </ToastProvider>

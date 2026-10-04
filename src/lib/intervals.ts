@@ -4,6 +4,7 @@ import { emitDataChanged } from './events'
 import { recomputeFrom } from './recompute'
 import { useProfile } from './profile'
 import { nutritionalDay, shiftDate } from './day'
+import { readScoped, writeScoped } from './scoped'
 import {
   AUTO_SYNC_AFTER_MIN,
   HISTORY_EMPTY_WINDOWS_TO_STOP,
@@ -102,19 +103,15 @@ const IMPORT_KEY = 'regresso.importacao'
 
 export function loadImportState(): ImportState | null {
   try {
-    const raw = localStorage.getItem(IMPORT_KEY)
+    const raw = readScoped(localStorage, IMPORT_KEY)
     return raw ? (JSON.parse(raw) as ImportState) : null
   } catch {
     return null
   }
 }
-function saveImportState(state: ImportState | null): void {
-  try {
-    if (state) localStorage.setItem(IMPORT_KEY, JSON.stringify(state))
-    else localStorage.removeItem(IMPORT_KEY)
-  } catch {
-    // sem armazenamento: sem «Continuar», mas a importação segue
-  }
+// Sem armazenamento: sem «Continuar», mas a importação segue.
+export function saveImportState(state: ImportState | null): void {
+  writeScoped(localStorage, IMPORT_KEY, state ? JSON.stringify(state) : null)
 }
 
 export function newImport(from: string, today: string, untilEmpty: boolean): ImportState {

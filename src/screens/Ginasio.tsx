@@ -17,6 +17,7 @@ import type { ExerciseLogRow, Favorite, TemplateExercise, Workout } from '../lib
 import ExercisePicker from '../components/ExercisePicker'
 import KneePicker from '../components/ui/KneePicker'
 import Icon from '../components/ui/Icon'
+import { readScoped, writeScoped } from '../lib/scoped'
 
 interface DraftSet {
   reps: number
@@ -39,7 +40,7 @@ const DRAFT_MAX_AGE_MS = 6 * 3600_000
 
 function readDraft(): Draft | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const raw = readScoped(localStorage, DRAFT_KEY)
     if (!raw) return null
     const draft = JSON.parse(raw) as Draft
     return Date.now() - draft.startedAt < DRAFT_MAX_AGE_MS ? draft : null
@@ -48,12 +49,8 @@ function readDraft(): Draft | null {
   }
 }
 function writeDraft(draft: Draft | null) {
-  try {
-    if (draft) localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
-    else localStorage.removeItem(DRAFT_KEY)
-  } catch {
-    // sem armazenamento local, o rascunho vive só neste ecrã
-  }
+  // Sem armazenamento local, o rascunho vive só neste ecrã.
+  writeScoped(localStorage, DRAFT_KEY, draft ? JSON.stringify(draft) : null)
 }
 
 // Sessão de ginásio livre: séries de 8 a 12 repetições com as cargas da

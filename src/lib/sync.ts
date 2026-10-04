@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { postApi } from './api'
 import { listQueuedMeals, removeQueuedMeal, type QueuedMeal } from './queue'
-import { listCaptures } from './capture-queue'
+import { listCaptures, ownCapture } from './capture-queue'
+import { supabase } from './supabase'
 import { emitDataChanged } from './events'
 import type { Meal, ParsedMealResponse } from './types'
 
@@ -47,8 +48,13 @@ export function useQueueCount(): number {
   const [count, setCount] = useState(0)
   const refresh = useCallback(async () => {
     try {
-      const [legacy, captures] = await Promise.all([listQueuedMeals(), listCaptures()])
-      setCount(legacy.length + captures.filter((c) => c.state === 'pendente').length)
+      const [legacy, captures, { data }] = await Promise.all([
+        listQueuedMeals(),
+        listCaptures(),
+        supabase.auth.getSession(),
+      ])
+      const userId = data.session?.user.id ?? null
+      setCount(legacy.length + captures.filter((c) => c.state === 'pendente' && ownCapture(c, userId)).length)
     } catch {
       setCount(0)
     }

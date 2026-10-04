@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { RECOVERY_PATH } from '../lib/boot-url'
 import { resetRequestError } from '../lib/auth-messages'
+import { listAccounts, switchTo } from '../lib/accounts'
 
 type Mode = 'entrar' | 'recuperar' | 'enviado'
 
@@ -11,6 +12,19 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Outras pessoas que já estão neste telemóvel: entram com um toque.
+  const [saved] = useState(listAccounts)
+
+  async function enterAs(userId: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      await switchTo(userId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não consegui entrar.')
+      setBusy(false)
+    }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -73,6 +87,23 @@ export default function Login() {
           <h1 className="text-center font-display text-[28px] font-bold tracking-[0.02em] uppercase">
             Daily Track
           </h1>
+          {saved.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-center text-[14px] text-dim">Neste telemóvel</p>
+              {saved.map((account) => (
+                <button
+                  key={account.user_id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void enterAs(account.user_id)}
+                  className="min-h-12 w-full rounded-xl border border-line bg-surface text-[17px] disabled:opacity-50"
+                >
+                  Entrar como {account.name}
+                </button>
+              ))}
+              <p className="pt-2 text-center text-[14px] text-dim">ou com email</p>
+            </div>
+          )}
           {emailField}
           <input
             type="password"
