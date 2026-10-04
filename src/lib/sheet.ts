@@ -9,6 +9,8 @@ export type SheetName =
   | 'galeria'
   | 'escrever'
   | 'repetir'
+  | 'nova-favorita'
+  | 'dieta'
   | 'nota'
   | 'numeros'
   | 'barras'

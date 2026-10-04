@@ -40,12 +40,13 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
   return data?.nutrition_day_cutoff_hour ?? 4
 }
 
-// Hora a gravar: agora, ou a hora pedida no dia escolhido (nunca no futuro).
-// Com uma refeição escolhida, a hora habitual dela, também hoje.
+// Hora a gravar: sem dia, agora (mesmo com a refeição escolhida); num dia,
+// a hora habitual da refeição (hoje só quando a refeição foi escolhida),
+// nunca no futuro.
 function resolveLoggedAt(date: string | undefined, time: string, cutoff: number, now: Date, explicit = false): Date {
-  const today = nutritionalDay(now, cutoff)
-  if (!explicit && (!date || date === today)) return now
-  return loggedAtFor(date ?? today, time, cutoff, now)
+  if (!date) return now
+  if (!explicit && date === nutritionalDay(now, cutoff)) return now
+  return loggedAtFor(date, time, cutoff, now)
 }
 
 function post(run: (db: SupabaseClient, userId: string, body: unknown) => Promise<unknown>): Handler {

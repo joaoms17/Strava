@@ -15,6 +15,9 @@ import { logFavorite, repeatMeal } from '../../lib/meal-actions'
 import { enqueueCapture } from '../../lib/capture-queue'
 import { exifDateTimeOf } from '../../lib/exif'
 import { mealName, mealSlot } from '../../lib/repetir'
+import { loadActiveDiet } from '../../lib/diets'
+import { useSignedUrls } from '../../lib/photos'
+import Thumb from '../ui/Thumb'
 import {
   dayLabel,
   needsSlot,
@@ -28,7 +31,7 @@ import {
 import { rankFavorites } from '../../../api/_lib/rules/favoritos'
 import { photoInstant } from '../../../api/_lib/rules/captura'
 import { SLOT_LABEL, lisbonClock } from '../../../api/_lib/rules/momentos'
-import type { Favorite, Meal } from '../../lib/types'
+import type { Diet, Favorite, Meal, Slot } from '../../lib/types'
 
 // Registar: tudo numa folha. Em cima o «Quando» (dia e refeição, com «Agora»
 // por defeito), logo a seguir o campo para escrever o que comeste, depois as
@@ -53,6 +56,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   const [favorites, setFavorites] = useState<Favorite[] | null>(null)
   const [sameAsYesterday, setSameAsYesterday] = useState<Meal | null>(null)
   const [weighedToday, setWeighedToday] = useState(true)
+  const [diet, setDiet] = useState<Diet | null>(null)
   const textBox = useRef<HTMLTextAreaElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const refSlot = slotForRanking(when, now)
@@ -73,10 +77,12 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     void Promise.all([
       supabase.from('favorites').select('*').eq('kind', 'meal').eq('archived', false),
       supabase.from('weights').select('date').eq('date', localCalendarDate()),
-    ]).then(([{ data: favRows }, { data: weights }]) => {
+      loadActiveDiet(),
+    ]).then(([{ data: favRows }, { data: weights }, activeDiet]) => {
       if (!alive) return
       setFavorites((favRows ?? []) as Favorite[])
       setWeighedToday((weights ?? []).length > 0)
+      setDiet(activeDiet)
     })
     return () => {
       alive = false
@@ -102,6 +108,12 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   }, [when.date, refSlot])
 
   const ranked = useMemo(() => rankFavorites(favorites ?? [], refSlot).slice(0, 6), [favorites, refSlot])
+  // A dieta que segues: as favoritas desta refeição (a habitual primeiro).
+  const dietOptions = useMemo(() => {
+    const byId = new Map((favorites ?? []).map((f) => [f.id, f]))
+    return (diet?.meals[refSlot] ?? []).map((id) => byId.get(id)).filter((f): f is Favorite => !!f)
+  }, [diet, favorites, refSlot])
+  const favUrls = useSignedUrls([...ranked, ...dietOptions].map((f) => f.photo_path))
   const weighDot = !weighedToday && lisbonClock(now).hour < 11
   const label = whenLabel(when, today)
 
@@ -150,6 +162,14 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     } finally {
       setBusy(false)
     }
+  }
+
+  // Favorita (ou da dieta) no «Quando» escolhido; da dieta fica na refeição
+  // dela mesmo com «Agora».
+  function pickFavorite(favorite: Favorite, dietSlot: Slot | null = null) {
+    if (!slotChosen()) return
+    sheet.close()
+    void logFavorite(favorite, api.date ?? null, toast, api.slot ?? dietSlot, isNow ? null : label)
   }
 
   function open(name: 'barras' | 'numeros' | 'repetir') {
@@ -271,6 +291,32 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
           </PhotoButton>
         </div>
 
+        {dietOptions.length > 0 && (
+          <div className="space-y-2" aria-label="Da tua dieta">
+            <div className="flex items-baseline justify-between">
+              <h3 className="label">Da tua dieta · {SLOT_LABEL[refSlot].toLowerCase()}</h3>
+              <button onClick={() => navigate('/favoritos?separador=dieta', { replace: true })} className="text-[13px] text-eat">
+                Dieta ›
+              </button>
+            </div>
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+              {dietOptions.map((fav, i) => (
+                <button
+                  key={fav.id}
+                  onClick={() => pickFavorite(fav, refSlot)}
+                  className={`w-36 shrink-0 overflow-hidden rounded-2xl text-left ${i === 0 ? 'border-2 border-eat' : 'border border-line'}`}
+                >
+                  <Thumb url={fav.photo_path ? favUrls[fav.photo_path] : null} fill size={64} className="h-24 w-full rounded-none" />
+                  <span className="block px-2 pt-1.5 text-[14px] leading-tight">
+                    <span className="line-clamp-2">{fav.name}</span>
+                    <span className="block pb-2 text-[12px] text-dim tabular-nums">{fmtKcal(fav.kcal)} kcal</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <button
             onClick={() => open('repetir')}
@@ -313,30 +359,35 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-baseline justify-between">
-            <h3 className="label">Favoritos</h3>
-            <button onClick={() => navigate('/favoritos', { replace: true })} className="text-[13px] text-eat">
-              Todos ›
-            </button>
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="label">Favoritas</h3>
+            <span className="flex gap-4">
+              <button onClick={() => sheet.open('nova-favorita')} className="text-[13px] text-eat">
+                ＋ Nova
+              </button>
+              <button onClick={() => navigate('/favoritos', { replace: true })} className="text-[13px] text-eat">
+                Todas ›
+              </button>
+            </span>
           </div>
           {favorites != null && ranked.length === 0 ? (
             <p className="rounded-xl bg-surface2 px-3 py-3 text-[13px] text-dim">
-              Toca na ☆ de uma refeição para a guardares aqui. Depois registas com 1 toque.
+              Guarda as refeições que repetes em «＋ Nova» (com foto) ou na ☆ de uma refeição. Depois registas com 1
+              toque.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {ranked.map((favorite) => (
                 <button
                   key={favorite.id}
-                  onClick={() => {
-                    if (!slotChosen()) return
-                    sheet.close()
-                    void logFavorite(favorite, api.date ?? null, toast, api.slot ?? null, isNow ? null : label)
-                  }}
-                  className="flex min-h-12 flex-col justify-center rounded-xl bg-surface2 px-3 py-2 text-left"
+                  onClick={() => pickFavorite(favorite)}
+                  className="flex min-h-14 items-center gap-2 rounded-xl bg-surface2 p-1.5 pr-3 text-left"
                 >
-                  <span className="truncate text-[15px]">{favorite.name}</span>
-                  <span className="text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
+                  <Thumb url={favorite.photo_path ? favUrls[favorite.photo_path] : null} size={42} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px]">{favorite.name}</span>
+                    <span className="block text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
+                  </span>
                 </button>
               ))}
             </div>

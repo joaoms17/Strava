@@ -7,6 +7,8 @@ import { useSheet } from '../lib/sheet'
 import { useToast } from '../lib/toast'
 import { emitDataChanged, useDataVersion } from '../lib/events'
 import { signedUrls } from '../lib/photos'
+import { loadActiveDiet } from '../lib/diets'
+import DietToday from '../components/DietToday'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
@@ -29,7 +31,7 @@ import {
   type NextStepId,
   type NudgeState,
 } from '../../api/_lib/rules/proximo-passo'
-import type { DayRow, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
+import type { DayRow, Diet, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
 import Segments from '../components/ui/Segments'
 import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
@@ -48,6 +50,7 @@ interface DayData {
   yesterday: { meals: number; flags: string[] }
   latestTdee: number | null
   favorites: Favorite[]
+  diet: Diet | null
   photos: Record<string, string>
   weighedToday: boolean
   sleep: NightSleep | null
@@ -72,6 +75,14 @@ const WORKOUT_AFTER: Record<Workout['type'], string> = {
 }
 const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as const
 const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
+
+// A foto da refeição; registada de uma favorita sem foto (a foto foi junta
+// depois), a da favorita.
+function mealThumb(meal: Meal, favorites: Favorite[]): string | null {
+  const own = meal.thumb_paths?.[0] ?? meal.photo_path
+  if (own) return own
+  return meal.favorite_id ? (favorites.find((f) => f.id === meal.favorite_id)?.photo_path ?? null) : null
+}
 
 function minutesOf(time: string): number {
   const [h, m] = time.split(':').map(Number) as [number, number]
@@ -125,6 +136,7 @@ export default function Hoje() {
       { data: lastMeasure },
       { data: health },
       expenditure,
+      diet,
     ] = await Promise.all([
       supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
       supabase
@@ -167,10 +179,13 @@ export default function Hoje() {
         .gte('date', shiftDate(date, -3))
         .order('date', { ascending: false }),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
+      // A dieta que segue (migração 10; sem ela fica null).
+      loadActiveDiet(),
     ])
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
+    const favoriteRows = (favorites ?? []) as Favorite[]
     const photos = await signedUrls(
-      mealRows.map((m) => m.thumb_paths?.[0] ?? m.photo_path).filter((p): p is string => !!p),
+      mealRows.map((m) => mealThumb(m, favoriteRows)).filter((p): p is string => !!p),
     )
     setData({
       meals: mealRows,
@@ -183,7 +198,8 @@ export default function Hoje() {
         flags: Array.isArray(yDay?.flags) ? (yDay.flags as string[]) : [],
       },
       latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
-      favorites: (favorites ?? []) as Favorite[],
+      favorites: favoriteRows,
+      diet,
       photos,
       weighedToday: (todayWeights ?? []).length > 0,
       importsToConfirm: (imports ?? []).map((i) => i.id as string),
@@ -322,6 +338,7 @@ export default function Hoje() {
     isToday &&
     GAP_SLOTS.includes(nowSlot) &&
     !hints.includes('lacuna') &&
+    !data.diet &&
     minutesOfDay > minutesOf(SLOT_TIME[nowSlot]) + 30 &&
     !data.meals.some((m) => slotOf(new Date(m.logged_at)) === nowSlot)
       ? (data.favorites
@@ -449,7 +466,7 @@ export default function Hoje() {
   for (const meal of data.meals) {
     const slot = meal.slot ?? slotOf(new Date(meal.logged_at))
     const fresh = Date.now() - Date.parse(meal.created_at) < 60_000
-    const thumbPath = meal.thumb_paths?.[0] ?? meal.photo_path
+    const thumbPath = mealThumb(meal, data.favorites)
     const thumb = thumbPath ? data.photos[thumbPath] : null
     const fromFavorite = meal.input_type === 'favorite' && meal.raw_text
     const title = fromFavorite ? meal.raw_text! : SLOT_LABEL[slot]
@@ -808,6 +825,10 @@ export default function Hoje() {
           <p className="label mb-1">O dia</p>
           <div className="-mx-2 divide-y divide-line/60">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
         </div>
+      )}
+
+      {data.diet && date <= today && (
+        <DietToday diet={data.diet} favorites={data.favorites} meals={data.meals} date={date} today={today} />
       )}
 
       {gapFavorite && (

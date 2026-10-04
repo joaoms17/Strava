@@ -18,6 +18,8 @@ import WeighSheet from './components/sheets/WeighSheet'
 import MealSheet from './components/sheets/MealSheet'
 import GallerySheet from './components/sheets/GallerySheet'
 import RepeatSheet from './components/sheets/RepeatSheet'
+import NewFavoriteSheet from './components/sheets/NewFavoriteSheet'
+import DietSheet from './components/sheets/DietSheet'
 import NoteSheet from './components/sheets/NoteSheet'
 import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
@@ -63,7 +65,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/treino/, 'Treino'],
   [/^\/corpo\/medidas/, 'Medidas'],
   [/^\/corpo/, 'Corpo'],
-  [/^\/favoritos/, 'Favoritos'],
+  [/^\/favoritos/, 'Favoritas'],
   [/^\/definicoes\/avancado/, 'Avançado'],
   [/^\/definicoes\/arquivo/, 'Arquivo'],
   [/^\/definicoes/, 'Definições'],
@@ -126,6 +128,8 @@ function Sheets() {
   if (sheet.name === 'galeria') return <GallerySheet />
   if (sheet.name === 'escrever') return <CaptureSheet key="escrever" focus />
   if (sheet.name === 'repetir') return <RepeatSheet />
+  if (sheet.name === 'nova-favorita') return <NewFavoriteSheet key={sheet.params.get('momento') ?? ''} />
+  if (sheet.name === 'dieta') return <DietSheet key={sheet.params.get('id') ?? 'nova'} />
   if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
   if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />

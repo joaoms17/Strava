@@ -304,6 +304,9 @@ export default function Definicoes() {
       </Section>
 
       <div className="divide-y divide-line rounded-2xl bg-surface">
+        <Link href="/favoritos" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+          Favoritas e dieta <span className="text-dim">›</span>
+        </Link>
         <Link href="/definicoes/avancado" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
           Avançado <span className="text-dim">›</span>
         </Link>

@@ -101,6 +101,17 @@ export interface Meal {
 
 export type Slot = 'pequeno_almoco' | 'almoco' | 'lanche' | 'jantar' | 'ceia'
 
+// Migração 10: dieta feita com as favoritas (meals: refeição → ids).
+export interface Diet {
+  id: string
+  name: string
+  meals: Partial<Record<Slot, string[]>>
+  active: boolean
+  archived: boolean
+  created_at: string
+  updated_at: string
+}
+
 export interface Favorite {
   id: string
   kind: 'meal' | 'workout'

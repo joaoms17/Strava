@@ -20,6 +20,7 @@ import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
 import { deleteMeal, repeatMeal } from '../../lib/meal-actions'
+import { deleteFavorite, favoriteFromMeal } from '../../lib/favorites'
 import { diffText, stepItem } from '../../lib/meal-diff'
 import { favoriteName, patternKey, similarCount, SIMILAR_MIN_COUNT } from '../../../api/_lib/rules/favoritos'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
@@ -230,51 +231,25 @@ export default function MealSheet() {
 
   async function saveFavorite() {
     setBusy(true)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
+    const favName = name.trim() || favoriteName(current.items)
+    let created: { id: string; photoPath: string | null }
+    try {
+      created = await favoriteFromMeal(current, favName, slot)
+    } catch (err) {
       setBusy(false)
+      toast(err instanceof Error ? err.message : 'Não consegui guardar o favorito.')
       return
     }
-    const newId = crypto.randomUUID()
-    let photoPath: string | null = null
-    const source = current.photo_paths?.[0] ?? current.photo_path
-    if (source) {
-      const target = `${user.id}/fav/${newId}.jpg`
-      const { error } = await supabase.storage.from('meal-photos').copy(source, target)
-      if (!error) photoPath = target
-    }
-    const favoriteTotals = mealTotals(current.items)
-    const { error } = await supabase.from('favorites').insert({
-      id: newId,
-      user_id: user.id,
-      kind: 'meal',
-      name: name.trim() || favoriteName(current.items),
-      items: current.items,
-      kcal: Math.round(favoriteTotals.kcal),
-      protein: favoriteTotals.protein,
-      carbs: favoriteTotals.carbs,
-      fat: favoriteTotals.fat,
-      photo_path: photoPath,
-      default_slot: slot,
-      source_meal_id: current.id,
-    })
     setBusy(false)
-    if (error) {
-      toast('Não consegui guardar o favorito.')
-      return
-    }
-    setFavoriteId(newId)
+    setFavoriteId(created.id)
     setSuggest(false)
     setMode('view')
     emitDataChanged()
-    toast(`Guardado nos favoritos · ${name.trim() || favoriteName(current.items)}`, [
+    toast(`Guardado nos favoritos · ${favName}`, [
       {
         label: 'Anular',
         run: async () => {
-          await supabase.from('favorites').delete().eq('id', newId)
-          if (photoPath) await supabase.storage.from('meal-photos').remove([photoPath])
+          await deleteFavorite(created.id, created.photoPath)
           emitDataChanged()
         },
       },
@@ -574,7 +549,7 @@ export default function MealSheet() {
                       <button onClick={() => setMode('copy')} className="text-eat">
                         Copiar para outro dia
                       </button>
-                      {photos.length > 0 && (
+                      {photos.length > 0 && current.input_type !== 'favorite' && (
                         <button
                           disabled={busy}
                           onClick={() => void analyse({ reset: true }, 'A analisar a foto outra vez…')}

@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useLocation } from 'wouter'
+import { useLocation, useSearch } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { emitDataChanged, useDataVersion } from '../lib/events'
-import { signedUrls } from '../lib/photos'
+import { signedUrls, useSignedUrls } from '../lib/photos'
+import { setFavoritePhoto, uploadFavoritePhoto } from '../lib/favorites'
+import Thumb from '../components/ui/Thumb'
+import DietTab from '../components/DietTab'
 import { fmtInt, fmtKcal } from '../lib/format'
 import { logFavorite } from '../lib/meal-actions'
 import { SLOTS, SLOT_LABEL } from '../../api/_lib/rules/momentos'
@@ -13,14 +16,17 @@ import BottomSheet from '../components/ui/BottomSheet'
 import { chip } from '../components/ui/Chips'
 import { useSheet } from '../lib/sheet'
 
-type Segment = 'refeicoes' | 'treinos' | 'alimentos'
+type Segment = 'refeicoes' | 'dieta' | 'treinos' | 'alimentos'
+const SEGMENTS: Segment[] = ['refeicoes', 'dieta', 'treinos', 'alimentos']
 
 // Tudo o que se repete: refeições favoritas (registar com 1 toque), treinos
 // favoritos (a Bicicleta habitual) e a biblioteca de alimentos.
 export default function Favoritos() {
   const toast = useToast()
   const version = useDataVersion()
-  const [segment, setSegment] = useState<Segment>('refeicoes')
+  const search = new URLSearchParams(useSearch())
+  const asked = search.get('separador') as Segment | null
+  const [segment, setSegment] = useState<Segment>(asked && SEGMENTS.includes(asked) ? asked : 'refeicoes')
   const [favorites, setFavorites] = useState<Favorite[] | null>(null)
   const [foods, setFoods] = useState<Food[]>([])
   const [photos, setPhotos] = useState<Record<string, string>>({})
@@ -74,10 +80,11 @@ export default function Favoritos() {
 
   return (
     <div className="space-y-4 pt-1">
-      <div className="grid grid-cols-3 rounded-xl bg-surface2 p-1 text-[15px]">
+      <div className="grid grid-cols-4 rounded-xl bg-surface2 p-1 text-[15px]">
         {(
           [
             ['refeicoes', 'Refeições'],
+            ['dieta', 'Dieta'],
             ['treinos', 'Treinos'],
             ['alimentos', 'Alimentos'],
           ] as const
@@ -92,12 +99,24 @@ export default function Favoritos() {
         ))}
       </div>
 
+      {segment === 'refeicoes' && (
+        <button
+          onClick={() => sheet.open('nova-favorita')}
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+        >
+          <Icon name="plus" size={18} /> Nova favorita
+        </button>
+      )}
+
+      {segment === 'dieta' && <DietTab favorites={favorites ?? []} photos={photos} />}
+
       {segment === 'refeicoes' &&
         (favorites == null ? (
           <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
         ) : favorites.length === 0 ? (
           <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
-            Toca na ☆ de uma refeição para a guardares aqui. Depois registas com 1 toque.
+            Cria uma em «Nova favorita» (escrita, com foto, ou a partir de uma refeição) ou toca na ☆ de uma
+            refeição. Depois registas com 1 toque, sempre com a foto dela.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
@@ -233,9 +252,28 @@ function EditFavorite({
   onClose: () => void
   onArchive: () => void
 }) {
+  const toast = useToast()
   const [name, setName] = useState(favorite.name)
   const [slot, setSlot] = useState<Slot | null>(favorite.default_slot)
   const [busy, setBusy] = useState(false)
+  const [photoPath, setPhotoPath] = useState(favorite.photo_path)
+  const urls = useSignedUrls([photoPath])
+
+  // A foto muda logo (é a que aparece sempre que a favorita é usada).
+  async function changePhoto(file: File | null) {
+    setBusy(true)
+    try {
+      const path = file ? await uploadFavoritePhoto(file, favorite.id) : null
+      await setFavoritePhoto(favorite.id, path)
+      setPhotoPath(path)
+      emitDataChanged()
+      toast(path ? 'Foto guardada.' : 'Foto tirada.')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Não consegui mudar a foto.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function save() {
     setBusy(true)
@@ -268,6 +306,31 @@ function EditFavorite({
       }
     >
       <div className="space-y-4 pb-2">
+        <div className="flex items-center gap-3">
+          <Thumb url={photoPath ? urls[photoPath] : null} size={88} />
+          <div className="flex flex-col items-start gap-1">
+            <label className={`cursor-pointer text-[15px] text-eat ${busy ? 'pointer-events-none opacity-50' : ''}`}>
+              {photoPath ? 'Mudar a foto' : 'Juntar foto'}
+              <input
+                type="file"
+                accept="image/*"
+                aria-label="Foto da favorita"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  e.target.value = ''
+                  if (file) void changePhoto(file)
+                }}
+              />
+            </label>
+            {photoPath && (
+              <button disabled={busy} onClick={() => void changePhoto(null)} className="text-[15px] text-dim">
+                Tirar a foto
+              </button>
+            )}
+            <span className="text-[13px] text-dim">Aparece sempre que registares esta refeição.</span>
+          </div>
+        </div>
         <label className="block space-y-1">
           <span className="text-[13px] text-dim">Nome</span>
           <input
@@ -277,7 +340,7 @@ function EditFavorite({
           />
         </label>
         <div className="space-y-2">
-          <p className="text-[13px] text-dim">Momento habitual</p>
+          <p className="text-[13px] text-dim">Refeição habitual</p>
           <div className="flex flex-wrap gap-2">
             {SLOTS.map((s) => (
               <button

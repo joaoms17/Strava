@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 
 // URLs assinados das fotos privadas, guardados em memória durante 50 min.
@@ -26,4 +27,21 @@ export async function signedUrls(
     }
   }
   return result
+}
+
+// As mesmas fotos num componente: devolve os URLs à medida que chegam.
+export function useSignedUrls(paths: (string | null | undefined)[]): Record<string, string> {
+  const key = [...new Set(paths.filter((p): p is string => !!p))].sort().join('|')
+  const [urls, setUrls] = useState<Record<string, string>>({})
+  useEffect(() => {
+    if (!key) return
+    let alive = true
+    void signedUrls(key.split('|')).then((result) => {
+      if (alive) setUrls((prev) => ({ ...prev, ...result }))
+    })
+    return () => {
+      alive = false
+    }
+  }, [key])
+  return urls
 }
