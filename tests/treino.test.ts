@@ -204,7 +204,7 @@ describe('regra 10 revista', () => {
     const history = [session({ avg_hr: null, max_hr: null }), session({ avg_hr: null, max_hr: null })]
     const target = nextBikeTarget(history, OPTIONS, CAPS)
     expect(target).toEqual({ watts: 130, minutes: 60, kind: 'need-hr' })
-    expect(bikeSuggestion(target, true)).toMatch(/preciso dos batimentos/)
+    expect(bikeSuggestion(target)).toMatch(/preciso dos batimentos/)
   })
 
   it('sem batimentos o tempo continua a subir', () => {
@@ -215,15 +215,14 @@ describe('regra 10 revista', () => {
   })
 
   it('frases da sugestão', () => {
-    expect(bikeSuggestion({ watts: 130, minutes: 30, kind: 'start' }, false)).toBe(
-      'Começa com 30 min a 130 W e diz como ficou o joelho.',
-    )
-    expect(bikeSuggestion({ watts: 140, minutes: 60, kind: 'progress-time' }, true)).toBe(
-      'Próxima bicicleta: 60 min a 140 W.',
-    )
-    expect(bikeSuggestion({ watts: 150, minutes: 30, kind: 'validate-next-watts' }, true)).toBe(
+    expect(bikeSuggestion({ watts: 130, minutes: 30, kind: 'start' })).toBe('Começa com 30 min a 130 W.')
+    expect(bikeSuggestion({ watts: 140, minutes: 60, kind: 'progress-time' })).toBe('Próxima bicicleta: 60 min a 140 W.')
+    expect(bikeSuggestion({ watts: 150, minutes: 30, kind: 'validate-next-watts' })).toBe(
       'Próxima vez: 150 W durante 30 min, para testar.',
     )
-    expect(bikeSuggestion({ watts: 140, minutes: 45, kind: 'hold' }, false)).toMatch(/joelho/)
+    expect(bikeSuggestion({ watts: 130, minutes: 30, kind: 'ease' })).toBe('Bicicleta leve: 30 min a 130 W, para recuperar.')
+    for (const kind of ['start', 'progress-time', 'validate-next-watts', 'hold', 'ease', 'need-hr'] as const) {
+      expect(bikeSuggestion({ watts: 140, minutes: 45, kind })).not.toMatch(/joelho/)
+    }
   })
 })

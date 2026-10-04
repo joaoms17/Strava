@@ -17,7 +17,7 @@ export type SheetName =
   | 'barras'
   | 'rever'
   | 'treino'
-  | 'joelho'
+  | 'registar-treino'
   | 'ja-fiz'
   | 'confirmar-treino'
   | 'medidas'

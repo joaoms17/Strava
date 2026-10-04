@@ -31,7 +31,7 @@ import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
 import ReviewSheet from './components/sheets/ReviewSheet'
 import TreinoSheet from './components/sheets/TreinoSheet'
-import KneeSheet from './components/sheets/KneeSheet'
+import LogWorkoutSheet from './components/sheets/LogWorkoutSheet'
 import JaFizSheet from './components/sheets/JaFizSheet'
 import TemplateSheet from './components/sheets/TemplateSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
@@ -148,7 +148,7 @@ function Sheets() {
   if (sheet.name === 'barras') return <BarcodeSheet />
   if (sheet.name === 'rever') return <ReviewSheet />
   if (sheet.name === 'treino') return <TreinoSheet />
-  if (sheet.name === 'joelho') return <KneeSheet key={sheet.params.get('fav') ?? ''} />
+  if (sheet.name === 'registar-treino') return <LogWorkoutSheet key={sheet.params.get('fav') ?? ''} />
   if (sheet.name === 'ja-fiz') return <JaFizSheet key={sheet.params.get('fav') ?? ''} />
   if (sheet.name === 'confirmar-treino') return <ConfirmWorkoutSheet />
   if (sheet.name === 'medidas') return <MedidasSheet key={sheet.params.get('id') ?? ''} />

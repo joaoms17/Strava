@@ -40,7 +40,7 @@ export async function generateWeeklyReview(
       .lte('date', weekEnd),
     admin
       .from('workouts_active')
-      .select('date,type,minutes,watts,avg_hr,status')
+      .select('date,type,sport,minutes,watts,avg_hr')
       .eq('user_id', userId)
       .gte('date', weekStart)
       .lte('date', weekEnd)

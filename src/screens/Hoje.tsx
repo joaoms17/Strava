@@ -35,7 +35,6 @@ import type { DayRow, Diet, Favorite, Meal, Slot, WeightRow, Workout } from '../
 import Segments from '../components/ui/Segments'
 import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
-import KneePicker from '../components/ui/KneePicker'
 import PhotoButton from '../components/ui/PhotoButton'
 import AttachPhotoButton from '../components/ui/AttachPhotoButton'
 import { MAX_MEAL_PHOTOS } from '../lib/capture'
@@ -63,16 +62,6 @@ interface DayData {
   hasAnyMeal: boolean
 }
 
-const WORKOUT_OF: Record<Workout['type'], string> = {
-  bike: 'a bicicleta',
-  strength: 'o ginásio',
-  other: 'o treino',
-}
-const WORKOUT_AFTER: Record<Workout['type'], string> = {
-  bike: 'da bicicleta',
-  strength: 'do ginásio',
-  other: 'do treino',
-}
 const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as const
 const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
 
@@ -281,18 +270,6 @@ export default function Hoje() {
   // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
   const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
   const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
-
-  // Linhas do joelho: nunca na fila do Próximo passo; ficam até haver resposta (48 h).
-  const kneeRows = isToday
-    ? [
-        ...data.workouts
-          .filter((w) => w.pain_during == null)
-          .map((w) => ({ workout: w, field: 'pain_during' as const })),
-        ...data.yesterdayWorkouts
-          .filter((w) => w.pain_next_day == null)
-          .map((w) => ({ workout: w, field: 'pain_next_day' as const })),
-      ]
-    : []
 
   const clock = lisbonClock(now)
   const minutesOfDay = clock.hour * 60 + clock.minute
@@ -625,12 +602,6 @@ export default function Hoje() {
           <span className="flex-1 text-[16px] font-semibold">
             {workoutTitle(workout)}
             {workout.minutes != null && ` · ${workout.minutes} min`}
-            {(workout.status === 'yellow' || workout.status === 'red') && (
-              <span
-                className={`ml-2 inline-block h-2 w-2 rounded-full ${workout.status === 'red' ? 'bg-pain' : 'bg-attn'}`}
-                aria-label="joelho"
-              />
-            )}
           </span>
           {kcal > 0 && <span className="num text-[22px] text-burn">+{fmtKcal(kcal)}</span>}
         </button>
@@ -755,15 +726,6 @@ export default function Hoje() {
             </>
           )}
         </div>
-      ))}
-
-      {kneeRows.map(({ workout, field }) => (
-        <KneeRow
-          key={`${workout.id}-${field}`}
-          workout={workout}
-          field={field}
-          onDone={() => emitDataChanged()}
-        />
       ))}
 
       {step && (
@@ -949,89 +911,6 @@ export default function Hoje() {
           </div>
         </BottomSheet>
       )}
-    </div>
-  )
-}
-
-function KneeRow({
-  workout,
-  field,
-  onDone,
-}: {
-  workout: Workout
-  field: 'pain_during' | 'pain_next_day'
-  onDone: () => void
-}) {
-  const [busy, setBusy] = useState(false)
-  const [details, setDetails] = useState(false)
-  const [values, setValues] = useState({ watts: '', avg_hr: '', max_hr: '', cadence: '' })
-  const [error, setError] = useState(false)
-  const bikeMissing =
-    workout.type === 'bike' && field === 'pain_during' && (workout.avg_hr == null || workout.watts == null)
-
-  async function answer(pain: number) {
-    setBusy(true)
-    setError(false)
-    const extras: Record<string, number> = {}
-    const limits: Record<string, [number, number]> = {
-      watts: [30, 500],
-      avg_hr: [40, 230],
-      max_hr: [40, 240],
-      cadence: [30, 200],
-    }
-    for (const [key, raw] of Object.entries(values)) {
-      const n = Math.round(Number(raw))
-      const [min, max] = limits[key]!
-      if (raw && Number.isFinite(n) && n >= min && n <= max) extras[key] = n
-    }
-    try {
-      await postApi('/api/workout/checkin', { workout_id: workout.id, [field]: pain, ...extras })
-      onDone()
-    } catch {
-      setError(true)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="space-y-3 rounded-2xl border border-line p-4">
-      <p className="text-[17px]">
-        {field === 'pain_during'
-          ? `Como esteve o joelho durante ${WORKOUT_OF[workout.type]}?`
-          : `Joelho depois ${WORKOUT_AFTER[workout.type]} de ontem?`}
-      </p>
-      {bikeMissing &&
-        (details ? (
-          <div className="grid grid-cols-4 gap-2">
-            {(
-              [
-                ['watts', 'W', workout.watts == null],
-                ['avg_hr', 'bat. méd.', true],
-                ['max_hr', 'bat. máx.', true],
-                ['cadence', 'rpm', workout.cadence == null],
-              ] as const
-            ).map(([key, label, show]) =>
-              show ? (
-                <label key={key} className="space-y-1 text-center text-[13px] text-dim">
-                  <span className="block">{label}</span>
-                  <input
-                    inputMode="numeric"
-                    value={values[key]}
-                    onChange={(e) => setValues({ ...values, [key]: e.target.value.replace(/\D/g, '') })}
-                    className="h-11 w-full rounded-xl border border-line bg-bg text-center text-ink tabular-nums focus:border-eat focus:outline-none"
-                  />
-                </label>
-              ) : null,
-            )}
-          </div>
-        ) : (
-          <button onClick={() => setDetails(true)} className="text-[13px] text-eat">
-            ＋ batimentos e rpm da consola (ajudam a subir a potência)
-          </button>
-        ))}
-      <KneePicker busy={busy} onAnswer={(pain) => void answer(pain)} />
-      {error && <p className="text-[13px] text-pain">Não consegui gravar. Tenta outra vez.</p>}
     </div>
   )
 }
@@ -1227,7 +1106,7 @@ function NextStepCard({
       )}
       {id === 'pouco' && (
         <>
-          <p className="text-[17px]">Hoje comeste pouco. Um lanche com proteína ajuda o músculo e o joelho.</p>
+          <p className="text-[17px]">Hoje comeste pouco. Um lanche com proteína ajuda a manter o músculo.</p>
           {chips}
           <div className="flex justify-end">{later}</div>
         </>

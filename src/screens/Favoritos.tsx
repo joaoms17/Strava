@@ -187,7 +187,7 @@ export default function Favoritos() {
                 onClick={() =>
                   favorite.workout?.type === 'strength'
                     ? navigate(`/treino/ginasio?fav=${favorite.id}`)
-                    : sheet.open('joelho', { fav: favorite.id })
+                    : sheet.open('registar-treino', { fav: favorite.id })
                 }
                 className="min-h-10 rounded-xl bg-cta px-3 font-semibold text-on-cta"
               >

@@ -123,7 +123,7 @@ export default function BikeHrChart({
         </ResponsiveContainer>
       </div>
       <p className="pt-2 text-xs text-dim">
-        Sobe a potência quando 2 sessões seguidas ficam abaixo do limite de batimentos, com o joelho bem.
+        Sobe a potência quando 2 sessões seguidas ficam abaixo do limite de batimentos.
       </p>
     </div>
   )

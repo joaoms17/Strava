@@ -9,7 +9,7 @@ import {
   searchExercises,
 } from '../api/_lib/rules/exercicios'
 
-// O catálogo de exercícios que vem com a app, juntado aos do João.
+// O catálogo de exercícios que vem com a app, juntado aos de cada pessoa.
 describe('catálogo de exercícios', () => {
   it('mais de 100 exercícios, sem repetidos, em todos os grupos', () => {
     expect(DEFAULT_EXERCISES.length).toBeGreaterThan(100)
@@ -18,32 +18,28 @@ describe('catálogo de exercícios', () => {
     for (const g of EXERCISE_GROUPS) expect(DEFAULT_EXERCISES.some((e) => e.group === g)).toBe(true)
   })
 
-  it('os que forçam o joelho estão marcados', () => {
-    const knee = (name: string) => DEFAULT_EXERCISES.find((e) => e.name === name)?.knee_safe
-    expect(knee('Agachamento búlgaro')).toBe(false)
-    expect(knee('Extensão de pernas (máquina)')).toBe(false)
-    expect(knee('Leg press (amplitude curta)')).toBe(true)
-    expect(knee('Hip thrust')).toBe(true)
+  it('sem avisos de joelho: só nome e grupo', () => {
+    for (const e of DEFAULT_EXERCISES) expect(Object.keys(e).sort()).toEqual(['group', 'name'])
+    expect(DEFAULT_EXERCISES.some((e) => e.name === 'Agachamento búlgaro')).toBe(true)
   })
 
-  it('os do João mandam: nome igual fica com o aviso dele; os novos entram no grupo do padrão', () => {
+  it('os da pessoa mandam: nome igual fica com o dela; os novos entram no grupo do padrão', () => {
     const merged = mergeCatalog([
-      { name: 'agachamento goblet', pattern: 'agachamento', knee_safe: true },
-      { name: 'Prensa unilateral', pattern: 'pernas', knee_safe: true },
-      { name: 'Bike zona 2', pattern: 'bike', knee_safe: true },
+      { name: 'agachamento goblet', pattern: 'agachamento' },
+      { name: 'Prensa unilateral', pattern: 'pernas' },
+      { name: 'Bike zona 2', pattern: 'bike' },
     ])
     expect(merged.filter((e) => sameExercise(e.name, 'Agachamento goblet'))).toEqual([
-      { name: 'agachamento goblet', group: 'Pernas e glúteos', knee_safe: true },
+      { name: 'agachamento goblet', group: 'Pernas e glúteos' },
     ])
     expect(merged.find((e) => e.name === 'Prensa unilateral')?.group).toBe('Pernas e glúteos')
     expect(merged.some((e) => e.name === 'Bike zona 2')).toBe(false)
   })
 
-  it('pesquisa sem acentos, por grupo, seguros primeiro', () => {
+  it('pesquisa sem acentos, por grupo, por ordem alfabética', () => {
     const catalog = mergeCatalog([])
     const found = searchExercises(catalog, 'agachamento', null)
-    expect(found[0]!.knee_safe).toBe(true)
-    expect(found.at(-1)!.knee_safe).toBe(false)
+    expect(found.map((e) => e.name)).toEqual([...found.map((e) => e.name)].sort((a, b) => a.localeCompare(b, 'pt')))
     expect(searchExercises(catalog, 'triceps', 'Braços').length).toBeGreaterThan(3)
     expect(searchExercises(catalog, '', 'Costas').every((e) => e.group === 'Costas')).toBe(true)
   })

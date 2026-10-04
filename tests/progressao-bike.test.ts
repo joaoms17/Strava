@@ -31,7 +31,7 @@ describe('nextBikeTarget', () => {
     })
   })
 
-  it('2 sessões seguidas nos caps de FC, verdes e já a 60 min: validação de 30 min no W seguinte', () => {
+  it('2 sessões seguidas nos caps de FC e já a 60 min: validação de 30 min no W seguinte', () => {
     const history = [
       session({ minutes: 60, avg_hr: 110, max_hr: 122 }),
       session({ minutes: 60, avg_hr: 108, max_hr: 120 }),
@@ -69,7 +69,7 @@ describe('nextBikeTarget', () => {
     })
   })
 
-  it('amarelo ou vermelho: bike leve (W mais baixo, 30 min)', () => {
+  it('sessão antiga com incómodo (amarelo ou vermelho): bike leve (W mais baixo, 30 min)', () => {
     expect(nextBikeTarget([session({ status: 'yellow', minutes: 60 })], OPTIONS, CAPS)).toEqual({
       watts: 130,
       minutes: 30,
@@ -88,11 +88,16 @@ describe('nextBikeTarget', () => {
     expect(nextBikeTarget(history, OPTIONS, CAPS)).toMatchObject({ watts: 150, minutes: 60 })
   })
 
-  it('sem check-in repete o alvo', () => {
+  it('sem resposta (já não se pergunta pelo joelho) conta como normal', () => {
     expect(nextBikeTarget([session({ status: null, minutes: 45 })], OPTIONS, CAPS)).toMatchObject({
       watts: 130,
-      minutes: 45,
-      kind: 'hold',
+      minutes: 60,
+      kind: 'progress-time',
     })
+    const history = [
+      session({ status: null, minutes: 60, avg_hr: 110, max_hr: 122 }),
+      session({ status: null, minutes: 60, avg_hr: 108, max_hr: 120 }),
+    ]
+    expect(nextBikeTarget(history, OPTIONS, CAPS)).toEqual({ watts: 140, minutes: 30, kind: 'validate-next-watts' })
   })
 })

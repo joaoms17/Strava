@@ -11,7 +11,6 @@ import { exerciseKcal } from '../../../api/_lib/rules/treino'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, type OtherSport } from '../../../api/_lib/rules/targets'
 import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
-import KneePicker from '../ui/KneePicker'
 import { DayChips, chip } from '../ui/Chips'
 
 type Kind = 'bike' | 'strength' | OtherSport
@@ -51,7 +50,6 @@ export default function JaFizSheet() {
   const [watts, setWatts] = useState<number | null>(null)
   const [avgHr, setAvgHr] = useState('')
   const [deviceKcal, setDeviceKcal] = useState('')
-  const [pain, setPain] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
@@ -88,8 +86,7 @@ export default function JaFizSheet() {
 
   const type: Workout['type'] = kind === 'bike' || kind === 'strength' ? kind : 'other'
   const effectiveMinutes = minutes ?? toInt(otherMinutes)
-  const kneeRequired = type !== 'other'
-  const canSave = effectiveMinutes != null && effectiveMinutes > 0 && (!kneeRequired || pain != null)
+  const canSave = effectiveMinutes != null && effectiveMinutes > 0
   const preview = exerciseKcal({
     type,
     minutes: effectiveMinutes,
@@ -118,7 +115,6 @@ export default function JaFizSheet() {
         watts_source: type === 'bike' && watts != null ? 'manual' : null,
         avg_hr: type === 'bike' ? toInt(avgHr) : null,
         kcal_device: type === 'other' ? toInt(deviceKcal) : null,
-        pain_during: pain,
         favorite_id: favId,
       },
       toast,
@@ -239,11 +235,6 @@ export default function JaFizSheet() {
             <span className="block text-[13px] text-dim">Sem elas, estimo pelo tempo e pelo teu peso.</span>
           </label>
         )}
-
-        <div className="space-y-2">
-          <p className="label">Joelho{kneeRequired ? '' : ' (opcional)'}</p>
-          <KneePicker value={pain} onAnswer={setPain} />
-        </div>
       </div>
     </BottomSheet>
   )

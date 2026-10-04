@@ -142,7 +142,7 @@ export function estimatedStart(loggedAt: Date, minutes: number | null): string {
 
 // ---------------------------------------------------------------------
 // Juntar um print a uma sessão existente: preenche o que falta e nunca
-// mexe no joelho, no favorito, na duração nem em watts que o João deu.
+// mexe no treino escolhido, na duração nem nos watts que a pessoa deu.
 // ---------------------------------------------------------------------
 export const MERGE_FILL_FIELDS = [
   'avg_hr',

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
-import KneePicker from '../ui/KneePicker'
 import { supabase } from '../../lib/supabase'
-import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
@@ -11,18 +9,9 @@ import { recomputeFrom } from '../../lib/recompute'
 import { localCalendarDate, shiftDate } from '../../lib/day'
 import { fmt1, parseDecimal } from '../../lib/format'
 import { checkWeighing, trend7 } from '../../../api/_lib/rules/weight'
-import type { WeightRow, Workout } from '../../lib/types'
+import type { WeightRow } from '../../lib/types'
 
-type Stage =
-  | { kind: 'input' }
-  | { kind: 'check'; value: number; suggestion: number | null }
-  | { kind: 'saved'; trend: number | null; kg: number }
-
-const TYPE_LABEL: Record<Workout['type'], string> = {
-  bike: 'da bicicleta',
-  strength: 'do ginásio',
-  other: 'do treino',
-}
+type Stage = { kind: 'input' } | { kind: 'check'; value: number; suggestion: number | null }
 
 // Pesagem em 2 toques mais o número, sem gravar sem querer o peso de ontem.
 export default function WeighSheet() {
@@ -34,7 +23,6 @@ export default function WeighSheet() {
   const [value, setValue] = useState(sheet.params.get('valor') ?? '')
   const [fatPct, setFatPct] = useState('')
   const [weights, setWeights] = useState<WeightRow[]>([])
-  const [pendingKnee, setPendingKnee] = useState<Workout | null>(null)
   const [stage, setStage] = useState<Stage>({ kind: 'input' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,20 +30,12 @@ export default function WeighSheet() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: rows }, { data: yesterdayWorkouts }] = await Promise.all([
-        supabase
-          .from('weights')
-          .select('date,kg,body_fat_pct')
-          .gte('date', shiftDate(today, -60))
-          .order('date'),
-        supabase
-          .from('workouts_active')
-          .select('*')
-          .eq('date', shiftDate(today, -1))
-          .is('pain_next_day', null),
-      ])
+      const { data: rows } = await supabase
+        .from('weights')
+        .select('date,kg,body_fat_pct')
+        .gte('date', shiftDate(today, -60))
+        .order('date')
       setWeights(((rows ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })))
-      setPendingKnee(((yesterdayWorkouts ?? []) as Workout[])[0] ?? null)
     }
     void load()
   }, [today])
@@ -106,12 +86,6 @@ export default function WeighSheet() {
     // Uma pesagem num dia passado muda o peso médio e o gasto dos dias seguintes.
     recomputeFrom(date, today)
 
-    const series = trend7(
-      [...weights.filter((w) => w.date !== date), { date, kg }]
-        .filter((w) => w.date <= date)
-        .map((w) => ({ date: w.date, value: w.kg })),
-    )
-    const trend = series[series.length - 1]?.value ?? null
     const undo = async () => {
       if (existing) {
         await supabase
@@ -126,11 +100,7 @@ export default function WeighSheet() {
     }
     const text = `Guardado · ${fmt1(kg)} kg`
     toast(text, [{ label: 'Anular', run: undo }])
-    if (pendingKnee && date === today) {
-      setStage({ kind: 'saved', trend, kg })
-    } else {
-      sheet.close()
-    }
+    sheet.close()
   }
 
   function submit() {
@@ -151,43 +121,6 @@ export default function WeighSheet() {
     }
     if (check.kind === 'ok') void save(Math.round(kg * 10) / 10)
     else setStage({ kind: 'check', value: kg, suggestion: null })
-  }
-
-  async function answerKnee(pain: number) {
-    if (!pendingKnee) return
-    setBusy(true)
-    try {
-      await postApi('/api/workout/checkin', { workout_id: pendingKnee.id, pain_next_day: pain })
-      emitDataChanged()
-      sheet.close()
-    } catch {
-      setError('Não consegui gravar o joelho. Tenta outra vez.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (stage.kind === 'saved') {
-    const aboveTrend = stage.trend != null && stage.kg - stage.trend > 1
-    return (
-      <BottomSheet title="Peso guardado" onClose={sheet.close}>
-        <div className="space-y-4 pb-2">
-          {aboveTrend && (
-            <p className="text-[15px] text-dim">
-              Mais de 1 kg acima dos últimos dias: é água, normal depois de refeições mais salgadas ou de
-              treino de força.
-            </p>
-          )}
-          {pendingKnee && (
-            <div className="space-y-2">
-              <p className="text-[17px]">E o joelho depois {TYPE_LABEL[pendingKnee.type]} de ontem?</p>
-              <KneePicker busy={busy} onAnswer={(pain) => void answerKnee(pain)} />
-            </div>
-          )}
-          {error && <p className="text-[15px] text-pain">{error}</p>}
-        </div>
-      </BottomSheet>
-    )
   }
 
   if (stage.kind === 'check') {

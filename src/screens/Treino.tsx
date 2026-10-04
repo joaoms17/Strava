@@ -21,12 +21,6 @@ import { useProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { useLocation } from 'wouter'
 
-const KNEE_DOT: Record<NonNullable<Workout['status']>, string> = {
-  green: 'bg-ok',
-  yellow: 'bg-attn',
-  red: 'bg-pain',
-}
-
 function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
   if (w.source === 'strava') return 'Strava'
@@ -53,8 +47,8 @@ function templateSummary(f: Favorite): string {
   return `${SPORT_LABEL[isOtherSport(w.sport) ? w.sport : 'outro']} · ${w.minutes} min`
 }
 
-// Treino: registar em poucos toques (Bicicleta habitual, Já fiz, print do
-// relógio) e ver o que gastou, como progride e como reage o joelho.
+// Treino: registar em poucos toques (os teus treinos, Já fiz, print do
+// relógio) e ver o que gastou e como progride.
 export default function Treino() {
   const version = useDataVersion()
   const sheet = useSheet()
@@ -118,12 +112,12 @@ export default function Treino() {
   const week = workouts.filter((w) => w.date >= monday && w.date <= today)
   const weekMinutes = week.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const weekKcal = week.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
-  const weekKnee = week.filter((w) => w.status === 'yellow' || w.status === 'red').length
 
-  const habitual = favorites.find((f) => f.name === 'Bicicleta habitual') ?? favorites.find((f) => f.workout?.type === 'bike')
-  // Um favorito de ginásio abre a Sessão de ginásio; os outros, a folha Joelho.
+  // O treino que mais fazes, em grande (o primeiro, por uso).
+  const top = favorites[0]
+  // Um treino de ginásio abre a Sessão de ginásio; os outros confirmam e registam.
   const openFavorite = (f: Favorite) =>
-    f.workout?.type === 'strength' ? navigate(`/treino/ginasio?fav=${f.id}`) : sheet.open('joelho', { fav: f.id })
+    f.workout?.type === 'strength' ? navigate(`/treino/ginasio?fav=${f.id}`) : sheet.open('registar-treino', { fav: f.id })
   const openWorkout = (w: Workout) =>
     w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
       ? navigate(`/treino/ginasio?id=${w.id}`)
@@ -148,8 +142,9 @@ export default function Treino() {
     profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150],
     { avgHr: profile.bike_hr_avg_cap, maxHr: profile.bike_hr_max_cap },
   )
-  const lastBike = bikes[bikes.length - 1]
-  const suggestion = bikeSuggestion(target, lastBike == null || lastBike.status != null)
+  const suggestion = bikeSuggestion(target)
+  // A sugestão da bicicleta só para quem anda de bicicleta.
+  const ridesBike = bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike')
 
   const history = [...workouts.slice().reverse(), ...(older ?? [])]
   async function loadOlder() {
@@ -162,7 +157,6 @@ export default function Treino() {
     setOlder((rows ?? []) as Workout[])
   }
   const shown = showAll ? history : history.slice(0, 8)
-  const kneeDots = workouts.filter((w) => w.type !== 'other').slice(-12)
 
   const secondary =
     'flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-line bg-surface font-display text-[18px] font-bold tracking-[0.06em] uppercase'
@@ -199,31 +193,28 @@ export default function Treino() {
               <p className={`num text-[34px] leading-none font-extrabold ${tone}`}>{value}</p>
             </div>
           ))}
-          <p className="col-span-3 flex items-center gap-2 px-1 text-[15px] text-dim">
-            <span className={`h-2.5 w-2.5 rounded-full ${weekKnee ? 'bg-attn' : 'bg-ok'}`} />
-            {weekKnee === 0
-              ? `Joelho bem ${week.length === 1 ? 'na sessão' : `nas ${week.length} sessões`} desta semana`
-              : `${weekKnee} ${weekKnee === 1 ? 'sessão' : 'sessões'} com incómodo esta semana`}
-          </p>
         </div>
       )}
 
-      {habitual?.workout && (
+      {top?.workout && (
         <button
-          onClick={() => sheet.open('joelho', { fav: habitual.id })}
+          onClick={() => openFavorite(top)}
           className="flex min-h-24 w-full items-center gap-4 rounded-[20px] bg-burn px-4 text-left text-bg active:scale-[0.99]"
         >
           <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-bg text-burn">
-            <Icon name="bike" size={32} stroke={1.8} />
+            <Icon
+              name={top.workout.type === 'bike' ? 'bike' : top.workout.type === 'strength' ? 'dumbbell' : 'walk'}
+              size={32}
+              stroke={1.8}
+            />
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-display text-[26px] leading-none font-extrabold uppercase">
-              {habitual.name}
+              {top.name}
             </span>
-            <span className="mt-1 block font-display text-[18px] font-semibold uppercase">
-              {habitual.workout.minutes} min
-              {habitual.workout.watts ? ` · ${habitual.workout.watts} W` : ''}
-              {habitual.kcal ? ` · +${fmtKcal(habitual.kcal)}` : ''}
+            <span className="mt-1 block truncate font-display text-[18px] font-semibold uppercase">
+              {templateSummary(top)}
+              {top.kcal ? ` · +${fmtKcal(top.kcal)}` : ''}
             </span>
           </span>
           <Icon name="chevron" size={22} stroke={2.4} />
@@ -323,6 +314,7 @@ export default function Treino() {
         )}
       </section>
 
+      {ridesBike && (
       <div className="rounded-[18px] border border-line bg-surface p-4">
         <p className="font-display text-[12px] font-bold tracking-[0.16em] text-burn uppercase">Próxima bicicleta</p>
         <p className="mt-1 text-[17px] font-medium">{suggestion}</p>
@@ -338,11 +330,12 @@ export default function Treino() {
           </p>
         )}
       </div>
+      )}
 
       {workouts.length === 0 ? (
         <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
-          Regista o primeiro treino: toca em Bicicleta habitual ou em Já fiz. Se usas relógio, podes juntar o print
-          depois.
+          Regista o primeiro treino: toca num dos teus treinos ou em Já fiz. Se usas relógio, os treinos chegam
+          sozinhos (Definições › Ligações) ou juntas o print.
         </p>
       ) : (
         <section>
@@ -373,13 +366,7 @@ export default function Treino() {
                       .join(' · ')}
                   </span>
                 </span>
-                <span className="flex flex-col items-end gap-1">
-                  <span className="num text-[22px] text-burn">+{fmtKcal(w.kcal_est ?? 0)}</span>
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${w.status ? KNEE_DOT[w.status] : 'border border-line'}`}
-                    aria-label={w.status ? `joelho ${w.status}` : 'joelho sem resposta'}
-                  />
-                </span>
+                <span className="num text-[22px] text-burn">+{fmtKcal(w.kcal_est ?? 0)}</span>
               </button>
             ))}
           </div>
@@ -396,22 +383,6 @@ export default function Treino() {
           {older != null && older.length === 0 && (
             <p className="mt-2 text-[14px] text-dim">Não há treinos com mais de 12 semanas.</p>
           )}
-        </section>
-      )}
-
-      {kneeDots.length > 0 && (
-        <section className="space-y-2">
-          <p className="label">Joelho</p>
-          <div className="flex flex-wrap gap-1.5">
-            {kneeDots.map((w) => (
-              <span
-                key={w.id}
-                className={`h-4 w-4 rounded-full ${w.status ? KNEE_DOT[w.status] : 'border border-line'}`}
-                title={`${w.date}: ${w.status ?? 'sem resposta'}`}
-              />
-            ))}
-          </div>
-          <p className="text-[13px] text-dim">Verde até 2 · amarelo 3–5 · vermelho 6 ou mais. Só sobes carga com verde.</p>
         </section>
       )}
 

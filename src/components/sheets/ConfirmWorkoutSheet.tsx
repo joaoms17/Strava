@@ -22,7 +22,6 @@ import {
 import type { Favorite, Workout, WorkoutImport } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, type OtherSport } from '../../../api/_lib/rules/targets'
-import KneePicker from '../ui/KneePicker'
 import ShotButton from '../ui/ShotButton'
 import Icon from '../ui/Icon'
 import { DayChips, chip } from '../ui/Chips'
@@ -102,7 +101,6 @@ function ImportConfirm({ id }: { id: string }) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [candidate, setCandidate] = useState<Workout | null>(null)
   const [merge, setMerge] = useState(true)
-  const [pain, setPain] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [lastWatts, setLastWatts] = useState<number | null>(null)
   // O que o João já corrigiu à mão: sobrevive a «Juntar outro print».
@@ -341,8 +339,7 @@ function ImportConfirm({ id }: { id: string }) {
     sport: type === 'other' ? (draft.kind as OtherSport) : null,
     weightKg: null,
   })
-  const kneeNeeded = !merging && type !== 'other'
-  const canSave = minutes != null && minutes > 0 && (!kneeNeeded || pain != null)
+  const canSave = minutes != null && minutes > 0
   const set = (patch: Partial<Draft>) => {
     setDraft({ ...draft, ...patch })
     setEdited({ ...edited, ...patch })
@@ -415,7 +412,6 @@ function ImportConfirm({ id }: { id: string }) {
         max_hr: toInt(draft.maxHr),
         cadence: type === 'bike' ? toInt(draft.cadence) : null,
         kcal_device: toInt(draft.kcalDevice),
-        pain_during: merging ? null : pain,
         import_id: id,
         merge_into: merging ? candidate!.id : null,
       },
@@ -485,7 +481,7 @@ function ImportConfirm({ id }: { id: string }) {
             </div>
             {merging && (
               <p className="text-[13px] text-dim">
-                Junta os batimentos e o resto que faltar. O joelho, a duração e os watts que deste ficam.
+                Junta os batimentos e o resto que faltar. A duração e os watts que deste ficam.
               </p>
             )}
           </div>
@@ -554,13 +550,6 @@ function ImportConfirm({ id }: { id: string }) {
             deviceCalories: toInt(draft.kcalDevice),
           })}
         </p>
-
-        {!merging && (
-          <div className="space-y-2">
-            <p className="label">Joelho durante o treino{kneeNeeded ? '' : ' (opcional)'}</p>
-            <KneePicker value={pain} onAnswer={setPain} />
-          </div>
-        )}
       </div>
     </BottomSheet>
   )
@@ -768,23 +757,6 @@ function WorkoutDetail({ id }: { id: string }) {
                   .join(' · ')}
               </p>
             )}
-
-            <div className="space-y-2">
-              <p className="label">Joelho durante</p>
-              <KneePicker
-                busy={busy}
-                value={w.pain_during}
-                onAnswer={(pain) => void patch({ pain_during: pain }, 'Joelho guardado.')}
-              />
-            </div>
-            <div className="space-y-2">
-              <p className="label">Joelho no dia seguinte</p>
-              <KneePicker
-                busy={busy}
-                value={w.pain_next_day}
-                onAnswer={(pain) => void patch({ pain_next_day: pain }, 'Joelho guardado.')}
-              />
-            </div>
 
             {w.type === 'strength' && (
               <button

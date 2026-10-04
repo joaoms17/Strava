@@ -22,7 +22,7 @@
 | `/api/workout/strength` | POST | Sessão de ginásio livre: cria ou corrige a sessão e as séries (`exercise_log`). |
 | `/api/workout/shot` · `shot-add` · `parse-shot` · `discard` | POST | Print do relógio: rascunho em `workout_imports`, leitura em segundo plano (Sonnet 5), outra tentativa e descartar. O mesmo print outra vez devolve o treino. |
 | `/api/workout/update` · `delete` · `restore` | POST | Editar (recalcula as kcal desse treino), apagar e repor. |
-| `/api/workout/checkin` | POST | Semáforo de dor (durante / dia seguinte) e dados da consola. |
+| `/api/workout/checkin` | POST | Dados da consola (watts, batimentos, cadência) de um treino. A dor já não é pedida. |
 | `/api/workout/connect` · `sync` · `disconnect` | POST | intervals.icu (relógio Garmin): valida e guarda a chave só no servidor (`integrations`, RLS sem políticas), sincroniza atividades e bem-estar (3 dias ao abrir a app, 30 a pedido) e desliga. A cron sincroniza os últimos 3 dias antes de fechar os dias (máx. 8 s). |
 | `/api/day/recompute` | POST | Recalcula os dias desde `from` até ontem, por ordem, em blocos de 30 (`next` diz onde continuar). |
 | `/api/day/health` | GET | Estado do deploy (`?token=CRON_SECRET`): env vars presentes (nunca valores), prompts, Supabase, migração 1 e acesso aos modelos da Anthropic. |

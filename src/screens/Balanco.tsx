@@ -310,7 +310,7 @@ export default function Balanco() {
           {belowFloor(averages, profile.kcal_floor_week) && (
             <p className="rounded-2xl border border-attn/40 bg-attn/10 px-4 py-3 text-[15px] text-attn">
               Esta semana comeste menos de {fmtInt(profile.kcal_floor_week)} por dia em média. Come um pouco mais:
-              perder devagar protege o músculo e o joelho.
+              perder devagar protege o músculo.
             </p>
           )}
 

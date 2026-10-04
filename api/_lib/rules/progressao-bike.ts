@@ -1,10 +1,13 @@
 // Regra 10: progressão por tempo (30, 45, 60 min) com cadência >= bike_min_cadence.
 // Subir watts só quando 2 sessões consecutivas ao W atual têm avg_hr <= cap e
-// max_hr <= cap, ambas verdes — e já com os 60 min feitos (primeiro o tempo,
-// depois a potência); depois, sessão de validação de 30 min no W seguinte.
+// max_hr <= cap — e já com os 60 min feitos (primeiro o tempo, depois a
+// potência); depois, sessão de validação de 30 min no W seguinte.
 // Revista na Fase 3: os watts supostos (prefill, «≈ da última sessão») não
 // contam para subir a potência, e uma sessão sem batimentos é neutra — não
 // trava o tempo, mas pede os batimentos antes de subir a potência.
+// Revista com duas pessoas: já não se pergunta pelo joelho. Uma sessão sem
+// resposta conta como normal; as antigas marcadas com incómodo (amarelo ou
+// vermelho) continuam a pedir uma sessão leve a seguir.
 import type { Semaforo } from './semaforo.js'
 
 export interface BikeSessionSummary {
@@ -46,16 +49,15 @@ export function nextBikeTarget(
   const last = sessions[sessions.length - 1]
   if (!last) return { watts: lowest, minutes: 30, kind: 'start' }
 
-  // Regra 9: amarelo -> bike leve; vermelho -> depois das 48 h, recomeça leve.
-  if (last.status === 'yellow' || last.status === 'red') {
-    return { watts: lowest, minutes: 30, kind: 'ease' }
-  }
+  // Sessão antiga com incómodo: a seguinte é leve.
+  const rough = (s: BikeSessionSummary) => s.status === 'yellow' || s.status === 'red'
+  if (rough(last)) return { watts: lowest, minutes: 30, kind: 'ease' }
 
   const currentW = nearestOption(last.watts!, options)
   const currentIdx = options.indexOf(currentW)
 
   const meetsCaps = (s: BikeSessionSummary) =>
-    s.status === 'green' &&
+    !rough(s) &&
     s.avg_hr != null &&
     s.max_hr != null &&
     s.avg_hr <= caps.avgHr &&
@@ -73,31 +75,25 @@ export function nextBikeTarget(
   if (
     canStepUp &&
     lastTwo.length === 2 &&
-    lastTwo.every((s) => s.status === 'green') &&
+    lastTwo.every((s) => !rough(s)) &&
     lastTwo.some((s) => s.avg_hr == null || s.max_hr == null)
   ) {
     return { watts: currentW, minutes: 60, kind: 'need-hr' }
   }
 
-  if (last.status === 'green') {
-    const next = MINUTES_LADDER.find((m) => m > last.minutes!)
-    if (next) return { watts: currentW, minutes: next, kind: 'progress-time' }
-    return { watts: currentW, minutes: 60, kind: 'hold' }
-  }
-
-  // ainda sem check-in — repete o alvo
-  return { watts: currentW, minutes: Math.min(last.minutes!, 60), kind: 'hold' }
+  const next = MINUTES_LADDER.find((m) => m > last.minutes!)
+  if (next) return { watts: currentW, minutes: next, kind: 'progress-time' }
+  return { watts: currentW, minutes: 60, kind: 'hold' }
 }
 
 // Frase da sugestão seguinte, no separador Treino.
-export function bikeSuggestion(target: BikeTarget, lastHasKnee: boolean): string {
-  if (target.kind === 'start') return `Começa com ${target.minutes} min a ${target.watts} W e diz como ficou o joelho.`
-  if (!lastHasKnee) return 'Diz como ficou o joelho para eu sugerir o próximo passo.'
+export function bikeSuggestion(target: BikeTarget): string {
+  if (target.kind === 'start') return `Começa com ${target.minutes} min a ${target.watts} W.`
   switch (target.kind) {
     case 'validate-next-watts':
       return `Próxima vez: ${target.watts} W durante ${target.minutes} min, para testar.`
     case 'ease':
-      return `Bicicleta leve: ${target.minutes} min a ${target.watts} W, por causa do joelho.`
+      return `Bicicleta leve: ${target.minutes} min a ${target.watts} W, para recuperar.`
     case 'need-hr':
       return 'Para subir a potência preciso dos batimentos: junta o print do relógio ou escreve os batimentos médios.'
     default:

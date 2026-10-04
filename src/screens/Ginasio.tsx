@@ -15,7 +15,6 @@ import {
 } from '../../api/_lib/rules/progressao-forca'
 import type { ExerciseLogRow, Favorite, TemplateExercise, Workout } from '../lib/types'
 import ExercisePicker from '../components/ExercisePicker'
-import KneePicker from '../components/ui/KneePicker'
 import Icon from '../components/ui/Icon'
 import { readScoped, writeScoped } from '../lib/scoped'
 
@@ -67,7 +66,6 @@ export default function Ginasio() {
   const [editing, setEditing] = useState<Workout | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [picking, setPicking] = useState(false)
-  const [finishing, setFinishing] = useState(false)
   const [busy, setBusy] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [favName, setFavName] = useState<string | null>(null)
@@ -190,7 +188,7 @@ export default function Ginasio() {
     })
   }
 
-  async function finish(pain: number) {
+  async function finish() {
     setBusy(true)
     const sets = d.exercises.flatMap((ex) =>
       ex.sets
@@ -204,13 +202,11 @@ export default function Ginasio() {
         started_at: editId ? undefined : new Date(d.startedAt).toISOString(),
         minutes,
         sets,
-        pain_during: pain,
         favorite_id: d.favoriteId,
       })
       writeDraft(null)
       emitDataChanged()
       setSavedId(workout.id)
-      setFinishing(false)
       toast(editId ? 'Sessão corrigida.' : `Ginásio registado · ${sets.length} séries${workout.kcal_est ? ` · +${workout.kcal_est} no plano` : ''}`)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar. Tenta outra vez.')
@@ -328,7 +324,7 @@ export default function Ginasio() {
             </button>
           ))}
           <p className="text-[15px] text-dim">
-            Ou escolhe o primeiro exercício. Só aparecem os que são seguros para o joelho.
+            Ou escolhe o primeiro exercício.
           </p>
         </div>
       )}
@@ -461,24 +457,14 @@ export default function Ginasio() {
         </button>
       )}
 
-      {finishing ? (
-        <div className="space-y-2 rounded-[18px] border border-burn/50 bg-surface p-3">
-          <p className="label">Como esteve o joelho?</p>
-          <KneePicker busy={busy} value={editing?.pain_during ?? null} onAnswer={(pain) => void finish(pain)} />
-          <button onClick={() => setFinishing(false)} className="text-[14px] text-dim">
-            Continuar a sessão
-          </button>
-        </div>
-      ) : (
-        d.exercises.length > 0 && (
-          <button
-            disabled={doneSets === 0}
-            onClick={() => setFinishing(true)}
-            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
-          >
-            {editId ? 'Guardar correções' : 'Terminar'}
-          </button>
-        )
+      {d.exercises.length > 0 && (
+        <button
+          disabled={doneSets === 0 || busy}
+          onClick={() => void finish()}
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+        >
+          {busy ? 'A guardar…' : editId ? 'Guardar correções' : 'Terminar'}
+        </button>
       )}
     </div>
   )

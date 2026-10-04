@@ -12,8 +12,8 @@ import {
 } from '../../api/_lib/rules/exercicios'
 
 // Escolher um exercício: mais de 100 de origem mais os teus, por grupo
-// muscular e com pesquisa (os que forçam o joelho aparecem no fim, com
-// aviso). Se não existir, cria-o com o nome escrito, no grupo escolhido.
+// muscular e com pesquisa. Se não existir, cria-o com o nome escrito, no
+// grupo escolhido.
 export default function ExercisePicker({
   exclude = [],
   onPick,
@@ -37,8 +37,8 @@ export default function ExercisePicker({
   useEffect(() => {
     void supabase
       .from('exercise_catalog')
-      .select('name,pattern,knee_safe')
-      .then(({ data }) => setCatalog(mergeCatalog((data ?? []) as { name: string; pattern: string | null; knee_safe: boolean }[])))
+      .select('name,pattern')
+      .then(({ data }) => setCatalog(mergeCatalog((data ?? []) as { name: string; pattern: string | null }[])))
   }, [])
 
   const available = useMemo(
@@ -56,7 +56,7 @@ export default function ExercisePicker({
       // Fica no catálogo para as próximas vezes (se já existir, não faz mal).
       const { error } = await supabase
         .from('exercise_catalog')
-        .insert({ user_id: auth.user.id, name: typed, pattern: patternOfGroup(group), knee_safe: true })
+        .insert({ user_id: auth.user.id, name: typed, pattern: patternOfGroup(group) })
       if (error && error.code !== '23505') toast('Não consegui guardar no catálogo, mas fica neste treino.')
     }
     onPick(typed)
@@ -94,10 +94,9 @@ export default function ExercisePicker({
           <button
             key={c.name}
             onClick={() => onPick(c.name)}
-            className={`min-h-10 rounded-full border px-3 text-left text-[15px] ${c.knee_safe ? 'border-line' : 'border-attn/60 text-dim'}`}
+            className="min-h-10 rounded-full border border-line px-3 text-left text-[15px]"
           >
             {c.name}
-            {!c.knee_safe && <span className="ml-1 text-[12px] text-attn">· cuidado joelho</span>}
           </button>
         ))}
         {matches.length === 0 && (

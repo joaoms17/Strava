@@ -1,7 +1,6 @@
-// Regra 9: check-in de dor (0-10) pós-sessão e na manhã seguinte.
-// Verde <= 2, amarelo 3-5, vermelho >= 6. Progressão só com 2 verdes consecutivos.
-// (As consequências no plano — trocar pernas por superior, 48 h sem pernas —
-// aplicam-se na execução do plano, no M4.)
+// Regra 9 (histórica): o check-in de dor (0-10) depois do treino deixou de
+// ser pedido quando a app passou a ser de duas pessoas. Os treinos antigos
+// guardam o estado: verde <= 2, amarelo 3-5, vermelho >= 6.
 
 export type Semaforo = 'green' | 'yellow' | 'red'
 
@@ -23,11 +22,3 @@ export function canProgress(statuses: (Semaforo | null)[]): boolean {
   if (known.length < 2) return false
   return known[known.length - 1] === 'green' && known[known.length - 2] === 'green'
 }
-
-// Respostas de 1 toque sobre o joelho: Bem, Algum incómodo, Doeu. Valem 1, 4
-// e 7 na escala 0-10, por isso caem no verde, amarelo e vermelho.
-export const KNEE_ANSWERS = [
-  { label: 'Bem', value: 1 },
-  { label: 'Algum incómodo', value: 4 },
-  { label: 'Doeu', value: 7 },
-] as const

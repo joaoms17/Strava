@@ -449,7 +449,7 @@ export function ComoMedirSheet() {
             <li>Peito: na linha dos mamilos, no fim da expiração.</li>
             <li>Anca: no maior volume das nádegas, pés juntos.</li>
             <li>Braço direito: a meio entre ombro e cotovelo, relaxado.</li>
-            <li>Coxa direita: 15 cm acima do topo da rótula, peso nos dois pés (os quadríceps protegem o joelho).</li>
+            <li>Coxa direita: 15 cm acima do topo da rótula, de pé, com o peso nos dois pés.</li>
             <li>Gémeo direito: no maior volume.</li>
           </ul>
         </div>

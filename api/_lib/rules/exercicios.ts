@@ -1,8 +1,7 @@
 // Catálogo de exercícios de ginásio que vem com a app, por grupo muscular.
-// Junta-se aos do exercise_catalog (os do João mandam: nome igual → o dele).
-// knee_safe = false: força o joelho (artrose) — aparece com aviso, nunca
-// escondido. Os de tempo levam «(segundos)» no nome: as repetições são os
-// segundos. Sem imports: o telemóvel usa este ficheiro diretamente.
+// Junta-se aos do exercise_catalog de cada pessoa (nome igual → o dela).
+// Os de tempo levam «(segundos)» no nome: as repetições são os segundos.
+// Sem imports: o telemóvel usa este ficheiro diretamente.
 
 export const EXERCISE_GROUPS = ['Peito', 'Costas', 'Ombros', 'Braços', 'Pernas e glúteos', 'Core', 'Outros'] as const
 export type ExerciseGroup = (typeof EXERCISE_GROUPS)[number]
@@ -10,14 +9,12 @@ export type ExerciseGroup = (typeof EXERCISE_GROUPS)[number]
 export interface CatalogExerciseDef {
   name: string
   group: ExerciseGroup
-  knee_safe: boolean
 }
 
-const g = (group: ExerciseGroup, knee_safe: boolean, names: string[]): CatalogExerciseDef[] =>
-  names.map((name) => ({ name, group, knee_safe }))
+const g = (group: ExerciseGroup, names: string[]): CatalogExerciseDef[] => names.map((name) => ({ name, group }))
 
 export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
-  ...g('Peito', true, [
+  ...g('Peito', [
     'Supino plano com barra',
     'Supino plano com halteres',
     'Supino no banco com halteres',
@@ -34,7 +31,7 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Flexões inclinadas',
     'Paralelas (dips)',
   ]),
-  ...g('Costas', true, [
+  ...g('Costas', [
     'Puxada à frente',
     'Puxada com pega estreita',
     'Puxada com braços esticados na polia',
@@ -50,7 +47,7 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Hiperextensões (lombar)',
     'Encolhimentos (trapézio)',
   ]),
-  ...g('Ombros', true, [
+  ...g('Ombros', [
     'Press militar com barra',
     'Press de ombros com halteres',
     'Press de ombros na máquina',
@@ -63,7 +60,7 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Face pull',
     'Remada alta',
   ]),
-  ...g('Braços', true, [
+  ...g('Braços', [
     'Curl de bíceps',
     'Curl com barra',
     'Curl com barra EZ',
@@ -82,7 +79,7 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Kickback de tríceps',
     'Curl de pulso',
   ]),
-  ...g('Pernas e glúteos', true, [
+  ...g('Pernas e glúteos', [
     'Leg press (amplitude curta)',
     'Agachamento para caixa alta',
     'Step-up baixo',
@@ -107,7 +104,7 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Gémeos sentado',
     'Isométrico de parede parcial (segundos)',
   ]),
-  ...g('Pernas e glúteos', false, [
+  ...g('Pernas e glúteos', [
     'Agachamento com barra',
     'Agachamento goblet',
     'Agachamento frontal',
@@ -123,7 +120,7 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Saltos',
     'Saltos para a caixa',
   ]),
-  ...g('Core', true, [
+  ...g('Core', [
     'Prancha (segundos)',
     'Prancha lateral (segundos)',
     'Dead bug',
@@ -138,8 +135,8 @@ export const DEFAULT_EXERCISES: CatalogExerciseDef[] = [
     'Hollow hold (segundos)',
     'Farmer walk (segundos)',
   ]),
-  ...g('Outros', true, ['Kettlebell swing', 'Battle ropes (segundos)', 'Remo na máquina (segundos)', 'Sled push (segundos)']),
-  ...g('Outros', false, ['Burpees', 'Corrida']),
+  ...g('Outros', ['Kettlebell swing', 'Battle ropes (segundos)', 'Remo na máquina (segundos)', 'Sled push (segundos)']),
+  ...g('Outros', ['Burpees', 'Corrida']),
 ]
 
 // O padrão guardado no exercise_catalog → grupo muscular.
@@ -177,11 +174,9 @@ const fold = (s: string) =>
     .toLowerCase()
     .trim()
 
-// Catálogo completo para escolher: o da app mais os do João (os dele
-// mandam quando o nome coincide, incluindo o aviso do joelho).
-export function mergeCatalog(
-  own: { name: string; pattern: string | null; knee_safe: boolean }[],
-): CatalogExerciseDef[] {
+// Catálogo completo para escolher: o da app mais os da pessoa (os dela
+// mandam quando o nome coincide).
+export function mergeCatalog(own: { name: string; pattern: string | null }[]): CatalogExerciseDef[] {
   const byName = new Map<string, CatalogExerciseDef>()
   for (const d of DEFAULT_EXERCISES) byName.set(fold(d.name), d)
   for (const o of own) {
@@ -191,7 +186,6 @@ export function mergeCatalog(
     byName.set(key, {
       name: o.name,
       group: base && groupOfPattern(o.pattern) === 'Outros' ? base.group : groupOfPattern(o.pattern),
-      knee_safe: o.knee_safe,
     })
   }
   return [...byName.values()]
@@ -201,7 +195,7 @@ export function searchExercises(catalog: CatalogExerciseDef[], query: string, gr
   const q = fold(query)
   return catalog
     .filter((c) => (!group || c.group === group) && (!q || fold(c.name).includes(q)))
-    .sort((a, b) => Number(b.knee_safe) - Number(a.knee_safe) || a.name.localeCompare(b.name, 'pt'))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
 }
 
 export function sameExercise(a: string, b: string): boolean {

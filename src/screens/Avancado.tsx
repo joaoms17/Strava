@@ -38,7 +38,7 @@ export default function Avancado() {
       monthStart.setUTCHours(0, 0, 0, 0)
       const [{ data: calls }, { data: exercises }] = await Promise.all([
         supabase.from('api_calls').select('kind,cost_usd').gte('created_at', monthStart.toISOString()),
-        supabase.from('exercise_catalog').select('*').order('knee_safe', { ascending: false }).order('name'),
+        supabase.from('exercise_catalog').select('*').order('name'),
       ])
       const byKind: Record<string, number> = {}
       let usd = 0
@@ -63,7 +63,7 @@ export default function Avancado() {
     for (const exercise of catalog.filter((e) => dirty.has(e.id))) {
       const { error } = await supabase
         .from('exercise_catalog')
-        .update({ knee_safe: exercise.knee_safe, rep_min: exercise.rep_min, rep_max: exercise.rep_max })
+        .update({ rep_min: exercise.rep_min, rep_max: exercise.rep_max })
         .eq('id', exercise.id)
       if (error) failed = true
     }
@@ -175,20 +175,11 @@ export default function Avancado() {
       </section>
 
       <section className="space-y-2 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">Exercícios seguros para o joelho</h2>
-        <p className="text-[13px] text-dim">
-          Só os marcados entram no plano de ginásio. Confirma com o fisioterapeuta quando puderes.
-        </p>
+        <h2 className="text-[15px] font-semibold">Repetições por exercício</h2>
+        <p className="text-[13px] text-dim">As repetições (mínimo e máximo) que o ginásio propõe nos teus exercícios.</p>
         {catalog.map((exercise) => (
           <div key={exercise.id} className="flex items-center gap-2 border-t border-line py-2 first:border-t-0">
-            <input
-              type="checkbox"
-              checked={exercise.knee_safe}
-              onChange={(e) => change(exercise.id, { knee_safe: e.target.checked })}
-              className="h-5 w-5 shrink-0 accent-[var(--color-eat)]"
-              aria-label={`${exercise.name} seguro para o joelho`}
-            />
-            <span className={`min-w-0 flex-1 truncate text-[15px] ${exercise.knee_safe ? '' : 'text-dim line-through'}`}>
+            <span className="min-w-0 flex-1 truncate text-[15px]">
               {exercise.name}
             </span>
             <input

@@ -8,8 +8,8 @@ import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
 import ShotButton from '../ui/ShotButton'
 
-// Folha Treino: os treinos favoritos em botões grandes, «Já fiz» e o print
-// do relógio. Um favorito de bicicleta abre a folha Joelho e só depois guarda.
+// Folha Treino: os teus treinos em botões grandes, «Já fiz» e o print do
+// relógio. O ginásio abre a sessão; os outros confirmam e registam.
 export default function TreinoSheet() {
   const sheet = useSheet()
   const date = sheet.params.get('data')
@@ -40,7 +40,7 @@ export default function TreinoSheet() {
             onClick={() =>
               favorite.workout?.type === 'strength'
                 ? (sheet.close(), navigate(`/treino/ginasio?fav=${favorite.id}`))
-                : sheet.open('joelho', { fav: favorite.id, ...extra })
+                : sheet.open('registar-treino', { fav: favorite.id, ...extra })
             }
             className="flex min-h-[88px] w-full items-center gap-4 rounded-[20px] bg-burn px-4 text-left text-bg"
           >
