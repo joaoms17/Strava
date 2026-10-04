@@ -5,12 +5,14 @@ import { prepareImage, sha256Hex } from './image'
 import { exifDateTimeOf } from './exif'
 import { photoInstant } from '../../api/_lib/rules/captura'
 import { slotOf } from '../../api/_lib/rules/momentos'
+import type { Slot } from './types'
 
 export const MAX_MEAL_PHOTOS = 4
 
-// Fotografar: a foto entra na fila logo, sem esperar. Num dia passado fica
-// nesse dia, à hora habitual do momento atual.
-export async function captureCameraPhoto(file: File, pastDate: string | null): Promise<void> {
+// Fotografar: a foto entra na fila logo, sem esperar. Com um dia (e uma
+// refeição) escolhidos fica aí, à hora habitual dessa refeição (sem ela, a
+// do momento atual); senão conta a hora da foto.
+export async function captureCameraPhoto(file: File, date: string | null, slot: Slot | null = null): Promise<void> {
   const now = new Date()
   const exif = await exifDateTimeOf(file)
   const at = photoInstant({ exif, lastModified: null, now }) ?? now
@@ -19,22 +21,29 @@ export async function captureCameraPhoto(file: File, pastDate: string | null): P
     text: null,
     note: null,
     tags: [],
-    taken_at: pastDate ? null : at.toISOString(),
-    date: pastDate,
-    slot: pastDate ? slotOf(now) : null,
+    taken_at: date ? null : at.toISOString(),
+    date,
+    slot: date ? (slot ?? slotOf(now)) : null,
   })
 }
 
 // Galeria: as fotos escolhidas passam para a folha «Fotos da galeria» sem
-// passar pela URL (os ficheiros não cabem lá).
-let pendingGallery: { files: File[]; date: string | null } | null = null
+// passar pela URL (os ficheiros não cabem lá). O dia e a refeição servem
+// para as fotos sem hora.
+interface PendingGallery {
+  files: File[]
+  date: string | null
+  slot: Slot | null
+}
 
-export function setPendingGallery(files: File[], date: string | null): void {
-  pendingGallery = { files, date }
+let pendingGallery: PendingGallery | null = null
+
+export function setPendingGallery(files: File[], date: string | null, slot: Slot | null = null): void {
+  pendingGallery = { files, date, slot }
 }
 
 // Lê sem apagar (o React pode montar a folha duas vezes); apaga-se ao analisar.
-export function peekPendingGallery(): { files: File[]; date: string | null } | null {
+export function peekPendingGallery(): PendingGallery | null {
   return pendingGallery
 }
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
-import { DayChips, SlotChips, TAG_LABEL, TagChips } from '../ui/Chips'
+import { TAG_LABEL, TagChips } from '../ui/Chips'
+import WhenPicker from '../ui/WhenPicker'
+import { whenLabel, type When } from '../../lib/when'
 import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
@@ -567,7 +569,7 @@ export default function MealSheet() {
                         Corrigir por texto
                       </button>
                       <button onClick={() => setMode('when')} className="text-eat">
-                        Mudar dia ou momento
+                        Mudar dia ou refeição
                       </button>
                       <button onClick={() => setMode('copy')} className="text-eat">
                         Copiar para outro dia
@@ -618,61 +620,58 @@ export default function MealSheet() {
           </div>
         )}
 
-        {mode === 'when' && <WhenPicker today={today} initialDate={current.date} initialSlot={mealSlot} onPick={moveTo} />}
+        {mode === 'when' && (
+          <PickWhen
+            today={today}
+            initial={{ date: current.date, slot: mealSlot }}
+            action="Mudar"
+            unchanged={(date, slot) => date === current.date && slot === mealSlot}
+            onPick={(date, slot) => void moveTo(date, slot)}
+          />
+        )}
 
         {mode === 'copy' && (
-          <div className="flex flex-wrap gap-2">
-            {[0, -1, -2].map((back) => {
-              const date = shiftDate(today, back)
-              if (date === current.date) return null
-              return (
-                <button
-                  key={back}
-                  onClick={() => {
-                    sheet.close()
-                    void repeatMeal(
-                      current.id,
-                      date,
-                      `Copiado para ${back === 0 ? 'hoje' : back === -1 ? 'ontem' : 'anteontem'}`,
-                      toast,
-                    )
-                  }}
-                  className="rounded-full bg-surface2 px-3 py-1.5 text-[15px]"
-                >
-                  {back === 0 ? 'Hoje' : back === -1 ? 'Ontem' : 'Anteontem'}
-                </button>
-              )
-            })}
-          </div>
+          <PickWhen
+            today={today}
+            initial={{ date: today, slot: mealSlot }}
+            action="Copiar"
+            onPick={(date, slot, label) => {
+              sheet.close()
+              void repeatMeal(current.id, date, `Copiado · ${label}`, toast, slot)
+            }}
+          />
         )}
       </div>
     </BottomSheet>
   )
 }
 
-function WhenPicker({
+// Escolher dia (qualquer um) e refeição: para mudar esta ou copiá-la.
+function PickWhen({
   today,
-  initialDate,
-  initialSlot,
+  initial,
+  action,
+  unchanged,
   onPick,
 }: {
   today: string
-  initialDate: string
-  initialSlot: Slot
-  onPick: (date: string, slot: Slot) => void
+  initial: When
+  action: string
+  unchanged?: (date: string, slot: Slot) => boolean
+  onPick: (date: string, slot: Slot, label: string) => void
 }) {
-  const [date, setDate] = useState(initialDate)
-  const [slot, setSlot] = useState<Slot>(initialSlot)
+  const [when, setWhen] = useState<When>(initial)
+  // «Agora» é a refeição desta hora.
+  const slot = when.slot === 'agora' ? slotOf(new Date()) : when.slot
   return (
     <div className="space-y-3">
-      <DayChips today={today} value={date} onChange={setDate} />
-      <SlotChips value={slot} onChange={(s) => setSlot(s as Slot)} />
+      <WhenPicker today={today} value={when} onChange={setWhen} />
       <button
-        disabled={date === initialDate && slot === initialSlot}
-        onClick={() => onPick(date, slot)}
+        disabled={slot == null || (unchanged?.(when.date, slot) ?? false)}
+        onClick={() => slot && onPick(when.date, slot, whenLabel(when, today))}
         className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-40"
       >
-        Mudar
+        {action}
       </button>
     </div>
   )

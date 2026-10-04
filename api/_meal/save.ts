@@ -36,7 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         user_id: user.id,
         date,
         logged_at: loggedAt.toISOString(),
-        slot: slotOf(loggedAt),
+        slot: meal.slot ?? slotOf(loggedAt),
         status: 'ok',
         confirmed_at: new Date().toISOString(),
         input_type: meal.input_type,

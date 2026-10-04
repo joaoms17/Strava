@@ -36,6 +36,7 @@ export default function GallerySheet() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [photos, setPhotos] = useState<Photo[] | null>(null)
   const [fallbackDate, setFallbackDate] = useState<string | null>(null)
+  const [fallbackSlot, setFallbackSlot] = useState<Slot | null>(null)
   const [split, setSplit] = useState<Set<string>>(new Set())
   const [groupsState, setGroupsState] = useState<Record<string, GroupState>>({})
   const [busy, setBusy] = useState(false)
@@ -47,6 +48,7 @@ export default function GallerySheet() {
       return
     }
     setFallbackDate(pending.date)
+    setFallbackSlot(pending.slot)
     let alive = true
     void (async () => {
       const now = new Date()
@@ -83,7 +85,7 @@ export default function GallerySheet() {
   }, [photos, split])
 
   const stateOf = (key: string): GroupState =>
-    groupsState[key] ?? { note: '', tags: [], date: fallbackDate, slot: null }
+    groupsState[key] ?? { note: '', tags: [], date: fallbackDate, slot: fallbackSlot }
   const patch = (key: string, value: Partial<GroupState>) =>
     setGroupsState((prev) => ({ ...prev, [key]: { ...stateOf(key), ...value } }))
 

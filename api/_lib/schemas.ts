@@ -71,6 +71,8 @@ export const SaveMealSchema = z.object({
   cost_usd: z.number().nullable().optional(),
   // Usado pela fila offline: a refeição conta para o dia em que foi comida.
   logged_at: z.string().nullable().optional(),
+  // A refeição escolhida (a hora pode ter sido puxada para agora).
+  slot: z.enum(['pequeno_almoco', 'almoco', 'lanche', 'jantar', 'ceia']).optional(),
 })
 
 export type SaveMealBody = z.infer<typeof SaveMealSchema>

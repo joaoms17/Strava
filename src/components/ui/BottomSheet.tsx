@@ -1,7 +1,26 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
+// A parte do ecrã que se vê (sem o teclado). No iPhone o teclado não encolhe
+// a página: a folha segue o visualViewport para o topo nunca sair do ecrã.
+function useVisibleArea(): { top: number; height: number } | null {
+  const [area, setArea] = useState<{ top: number; height: number } | null>(null)
+  useEffect(() => {
+    const viewport = window.visualViewport
+    if (!viewport) return
+    const update = () => setArea({ top: viewport.offsetTop, height: viewport.height })
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    update()
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+    }
+  }, [])
+  return area
+}
+
 // Folha inferior: pega em cima, deslizar para baixo fecha, botão principal
-// fixo no fundo e o teclado nunca tapa o campo (visualViewport).
+// fixo no fundo e o teclado nunca tapa o campo nem empurra o título para fora.
 export default function BottomSheet({
   title,
   onClose,
@@ -13,23 +32,11 @@ export default function BottomSheet({
   children: ReactNode
   footer?: ReactNode
 }) {
-  const [keyboard, setKeyboard] = useState(0)
+  const area = useVisibleArea()
   const [drag, setDrag] = useState(0)
   const startY = useRef<number | null>(null)
-
-  useEffect(() => {
-    const viewport = window.visualViewport
-    if (!viewport) return
-    const onResize = () =>
-      setKeyboard(Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop))
-    viewport.addEventListener('resize', onResize)
-    viewport.addEventListener('scroll', onResize)
-    onResize()
-    return () => {
-      viewport.removeEventListener('resize', onResize)
-      viewport.removeEventListener('scroll', onResize)
-    }
-  }, [])
+  // Teclado aberto: a área visível é bem mais baixa do que a janela.
+  const keyboardOpen = area != null && window.innerHeight - area.height > 120
 
   useEffect(() => {
     const previous = document.body.style.overflow
@@ -45,12 +52,18 @@ export default function BottomSheet({
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-x-0 top-0 z-40 h-dvh"
+      style={area ? { top: area.top, height: area.height } : undefined}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="fade-in absolute inset-0 bg-black/55" onClick={onClose} />
       <div
-        className="sheet-in absolute inset-x-0 mx-auto flex max-h-[92dvh] max-w-md flex-col rounded-t-3xl bg-surface shadow-2xl"
+        className="sheet-in absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col rounded-t-3xl bg-surface shadow-2xl"
         style={{
-          bottom: keyboard,
+          // Com o teclado, a folha usa quase toda a área visível (o título fica à vista).
+          maxHeight: area ? area.height - (keyboardOpen ? 8 : Math.round(area.height * 0.08)) : '92dvh',
           transform: drag > 0 ? `translateY(${drag}px)` : undefined,
           transition: startY.current == null ? 'transform 180ms ease-out' : undefined,
         }}
@@ -82,14 +95,18 @@ export default function BottomSheet({
           </div>
         )}
         <div
-          className={`min-h-0 flex-1 overflow-y-auto px-4 ${
-            footer ? 'pb-4' : 'pb-[calc(16px+env(safe-area-inset-bottom))]'
+          className={`min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 ${
+            footer ? 'pb-4' : keyboardOpen ? 'pb-3' : 'pb-[calc(16px+env(safe-area-inset-bottom))]'
           }`}
         >
           {children}
         </div>
         {footer && (
-          <div className="shrink-0 border-t border-line px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
+          <div
+            className={`shrink-0 border-t border-line px-4 pt-3 ${
+              keyboardOpen ? 'pb-3' : 'pb-[calc(12px+env(safe-area-inset-bottom))]'
+            }`}
+          >
             {footer}
           </div>
         )}

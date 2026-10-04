@@ -2,7 +2,7 @@ import { postApi } from './api'
 import { emitDataChanged } from './events'
 import { fmtKcal } from './format'
 import type { ToastAction } from './toast'
-import type { Favorite, Meal } from './types'
+import type { Favorite, Meal, Slot } from './types'
 
 type ShowToast = (text: string, actions?: ToastAction[]) => void
 
@@ -27,14 +27,22 @@ async function undoInsert(meal: Meal, toast: ShowToast) {
 }
 
 // Favorito com 1 toque: regista e mostra «Registado · ½ · 1½ · 2 · Anular».
-export async function logFavorite(favorite: Favorite, date: string | null, toast: ShowToast) {
+// Com uma refeição escolhida (slot), fica nela e à hora habitual dela.
+export async function logFavorite(
+  favorite: Favorite,
+  date: string | null,
+  toast: ShowToast,
+  slot: Slot | null = null,
+  whenText: string | null = null,
+) {
   try {
     const { meal } = await postApi<{ meal: Meal }>('/api/meal/log-favorite', {
       favorite_id: favorite.id,
       ...(date ? { date } : {}),
+      ...(slot ? { slot } : {}),
     })
     emitDataChanged()
-    showRegistered(meal, `Registado · ${favorite.name}`, toast)
+    showRegistered(meal, `Registado · ${favorite.name}${whenText ? ` · ${whenText}` : ''}`, toast)
   } catch (err) {
     toast(errorText(err))
   }
@@ -61,12 +69,20 @@ function showRegistered(meal: Meal, text: string, toast: ShowToast) {
   ])
 }
 
-// «Igual a ontem», «Repetir hoje» e «Copiar para outro dia».
-export async function repeatMeal(mealId: string, date: string | null, text: string, toast: ShowToast) {
+// «Igual a ontem», «Repetir uma refeição», «Repetir hoje» e «Copiar para
+// outro dia». Sem refeição escolhida, a mesma hora do original.
+export async function repeatMeal(
+  mealId: string,
+  date: string | null,
+  text: string,
+  toast: ShowToast,
+  slot: Slot | null = null,
+) {
   try {
     const { meal } = await postApi<{ meal: Meal }>('/api/meal/repeat', {
       meal_id: mealId,
       ...(date ? { date } : {}),
+      ...(slot ? { slot } : {}),
     })
     emitDataChanged()
     toast(text, [{ label: 'Anular', run: () => undoInsert(meal, toast) }])

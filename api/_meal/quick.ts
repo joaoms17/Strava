@@ -6,7 +6,7 @@ import { respondError } from '../_lib/http.js'
 import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
 import { PORTION_FACTORS, rescaleItems, scaleItems } from '../_lib/rules/favoritos.js'
-import { SLOT_TIME, clockTime, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
+import { SLOTS, SLOT_TIME, clockTime, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 
 // Registos de 1 toque, sem IA: favorito, «Igual a ontem» / «Repetir hoje» /
 // «Copiar para outro dia», mudar a porção, apagar e repor. Os totais e o dia
@@ -15,15 +15,19 @@ import { SLOT_TIME, clockTime, loggedAtFor, slotOf, type Slot } from '../_lib/ru
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const FACTOR = z.number().refine((f) => (PORTION_FACTORS as readonly number[]).includes(f))
 
+const SLOT = z.enum(SLOTS as [Slot, ...Slot[]])
+
 const LogFavoriteSchema = z.object({
   favorite_id: z.string().uuid(),
   factor: FACTOR.optional(),
   date: DATE.optional(), // dia nutricional; sem ele, agora
+  slot: SLOT.optional(), // a refeição escolhida; sem ela, a do favorito ou a da hora
 })
 
 const RepeatSchema = z.object({
   meal_id: z.string().uuid(),
   date: DATE.optional(), // sem ele, hoje
+  slot: SLOT.optional(), // sem ela, a mesma hora do original
 })
 
 const PortionSchema = z.object({ meal_id: z.string().uuid(), factor: FACTOR })
@@ -37,9 +41,11 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
 }
 
 // Hora a gravar: agora, ou a hora pedida no dia escolhido (nunca no futuro).
-function resolveLoggedAt(date: string | undefined, time: string, cutoff: number, now: Date): Date {
-  if (!date || date === nutritionalDay(now, cutoff)) return now
-  return loggedAtFor(date, time, cutoff, now)
+// Com uma refeição escolhida, a hora habitual dela, também hoje.
+function resolveLoggedAt(date: string | undefined, time: string, cutoff: number, now: Date, explicit = false): Date {
+  const today = nutritionalDay(now, cutoff)
+  if (!explicit && (!date || date === today)) return now
+  return loggedAtFor(date ?? today, time, cutoff, now)
 }
 
 function post(run: (db: SupabaseClient, userId: string, body: unknown) => Promise<unknown>): Handler {
@@ -66,7 +72,8 @@ async function insertMeal(
       ...rest,
       date: nutritionalDay(logged_at, cutoff),
       logged_at: logged_at.toISOString(),
-      slot: slotOf(logged_at),
+      // A refeição escolhida manda (a hora pode ter sido puxada para agora).
+      slot: (rest.slot as Slot | undefined) ?? slotOf(logged_at),
       status: 'ok',
       confirmed_at: new Date().toISOString(),
       items,
@@ -81,7 +88,7 @@ async function insertMeal(
 export const logFavorite = post(async (db, userId, rawBody) => {
   const body = LogFavoriteSchema.safeParse(rawBody)
   if (!body.success) throw new HttpError(400, 'Pedido inválido.')
-  const { favorite_id, factor = 1, date } = body.data
+  const { favorite_id, factor = 1, date, slot: chosenSlot } = body.data
 
   const { data: favorite } = await db
     .from('favorites')
@@ -95,7 +102,7 @@ export const logFavorite = post(async (db, userId, rawBody) => {
 
   const now = new Date()
   const cutoff = await cutoffHour(db)
-  const slot = (favorite.default_slot as Slot | null) ?? slotOf(now)
+  const slot = chosenSlot ?? (favorite.default_slot as Slot | null) ?? slotOf(now)
   const meal = await insertMeal(db, {
     user_id: userId,
     input_type: 'favorite',
@@ -107,7 +114,8 @@ export const logFavorite = post(async (db, userId, rawBody) => {
     portion_factor: factor,
     is_estimate: false,
     items: scaleItems(items, factor),
-    logged_at: resolveLoggedAt(date, SLOT_TIME[slot], cutoff, now),
+    logged_at: resolveLoggedAt(date, SLOT_TIME[slot], cutoff, now, chosenSlot != null),
+    ...(chosenSlot ? { slot: chosenSlot } : {}),
     cutoff,
   })
 
@@ -132,8 +140,10 @@ export const repeat = post(async (db, userId, rawBody) => {
   const now = new Date()
   const cutoff = await cutoffHour(db)
   const target = body.data.date ?? nutritionalDay(now, cutoff)
-  // A mesma hora do original, no dia escolhido (nunca no futuro).
-  const loggedAt = loggedAtFor(target, clockTime(new Date(source.logged_at)), cutoff, now)
+  // A refeição escolhida (hora habitual dela) ou a mesma hora do original,
+  // no dia escolhido (nunca no futuro).
+  const slot = body.data.slot
+  const loggedAt = loggedAtFor(target, slot ? SLOT_TIME[slot] : clockTime(new Date(source.logged_at)), cutoff, now)
   const meal = await insertMeal(db, {
     user_id: userId,
     input_type: 'repeat',
@@ -149,6 +159,7 @@ export const repeat = post(async (db, userId, rawBody) => {
     confidence: source.confidence,
     items: source.items as MealItem[],
     logged_at: loggedAt,
+    ...(slot ? { slot } : {}),
     cutoff,
   })
   return { meal }

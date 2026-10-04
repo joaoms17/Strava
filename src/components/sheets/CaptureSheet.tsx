@@ -1,132 +1,321 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'wouter'
 import BottomSheet from '../ui/BottomSheet'
 import PhotoButton from '../ui/PhotoButton'
+import WhenPicker from '../ui/WhenPicker'
 import Icon from '../ui/Icon'
+import { TAG_LABEL, chip, toggle } from '../ui/Chips'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../../lib/day'
-import { fmtDayShort, fmtKcal } from '../../lib/format'
+import { fmtKcal } from '../../lib/format'
 import { logFavorite, repeatMeal } from '../../lib/meal-actions'
+import { enqueueCapture } from '../../lib/capture-queue'
+import { exifDateTimeOf } from '../../lib/exif'
+import { mealName, mealSlot } from '../../lib/repetir'
+import {
+  dayLabel,
+  needsSlot,
+  slotForRanking,
+  whenApi,
+  whenFromParams,
+  whenLabel,
+  whenParams,
+  type When,
+} from '../../lib/when'
 import { rankFavorites } from '../../../api/_lib/rules/favoritos'
-import { SLOT_LABEL, lisbonClock, slotOf } from '../../../api/_lib/rules/momentos'
+import { photoInstant } from '../../../api/_lib/rules/captura'
+import { SLOT_LABEL, lisbonClock } from '../../../api/_lib/rules/momentos'
 import type { Favorite, Meal } from '../../lib/types'
 
-// A única porta de entrada: o que se faz 4 vezes por dia é grande, o que se
-// faz uma vez por mês é pequeno. Nada muda de lugar.
-export default function CaptureSheet() {
+// Registar: tudo numa folha. Em cima o «Quando» (dia e refeição, com «Agora»
+// por defeito), logo a seguir o campo para escrever o que comeste, depois as
+// fotos, repetir uma refeição de qualquer dia e os favoritos. O que se
+// escolhe no «Quando» vale para tudo o que se regista daqui.
+export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   const profile = useReadyProfile()
   const sheet = useSheet()
   const toast = useToast()
   const [location, navigate] = useLocation()
-  const now = new Date()
+  const [now] = useState(() => new Date())
   const today = nutritionalDay(now, profile.nutrition_day_cutoff_hour)
   const viewing = /^\/hoje\/(\d{4}-\d{2}-\d{2})$/.exec(location)?.[1]
-  const [target, setTarget] = useState(viewing && viewing < today ? viewing : today)
-  const [changing, setChanging] = useState(false)
+  const [when, setWhen] = useState<When>(() =>
+    whenFromParams(sheet.params, today, viewing && viewing < today ? viewing : null),
+  )
+  const [text, setText] = useState('')
+  const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
+  const [tags, setTags] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  const [askSlot, setAskSlot] = useState(false)
   const [favorites, setFavorites] = useState<Favorite[] | null>(null)
   const [sameAsYesterday, setSameAsYesterday] = useState<Meal | null>(null)
   const [weighedToday, setWeighedToday] = useState(true)
-  const slot = slotOf(now)
+  const textBox = useRef<HTMLTextAreaElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const refSlot = slotForRanking(when, now)
+  const api = whenApi(when, today)
+  const isNow = Object.keys(api).length === 0
+  const hasContent = text.trim().length > 0 || photo != null
+
+  useEffect(() => {
+    if (focus) textBox.current?.focus()
+  }, [focus])
+
+  useEffect(() => () => {
+    if (photo) URL.revokeObjectURL(photo.url)
+  }, [photo])
 
   useEffect(() => {
     let alive = true
-    async function load() {
-      const [{ data: favRows }, { data: yesterdayMeals }, { data: weights }] = await Promise.all([
-        supabase.from('favorites').select('*').eq('kind', 'meal').eq('archived', false),
-        supabase
-          .from('meals_counted')
-          .select('*')
-          .eq('date', shiftDate(target, -1))
-          .order('logged_at'),
-        supabase.from('weights').select('date').eq('date', localCalendarDate()),
-      ])
+    void Promise.all([
+      supabase.from('favorites').select('*').eq('kind', 'meal').eq('archived', false),
+      supabase.from('weights').select('date').eq('date', localCalendarDate()),
+    ]).then(([{ data: favRows }, { data: weights }]) => {
       if (!alive) return
       setFavorites((favRows ?? []) as Favorite[])
-      setSameAsYesterday(
-        ((yesterdayMeals ?? []) as Meal[]).find((m) => slotOf(new Date(m.logged_at)) === slot) ?? null,
-      )
       setWeighedToday((weights ?? []).length > 0)
-    }
-    void load()
+    })
     return () => {
       alive = false
     }
-  }, [target, slot])
+  }, [])
 
-  const ranked = useMemo(() => rankFavorites(favorites ?? [], slot).slice(0, 6), [favorites, slot])
-  const isPast = target !== today
-  const dateParam = isPast ? target : null
+  // «Igual a ontem»: a mesma refeição no dia antes do escolhido.
+  useEffect(() => {
+    let alive = true
+    void supabase
+      .from('meals_counted')
+      .select('*')
+      .eq('date', shiftDate(when.date, -1))
+      .order('logged_at')
+      .then(({ data }) => {
+        if (!alive) return
+        const meals = (data ?? []) as Meal[]
+        setSameAsYesterday(meals.find((m) => mealSlot(m) === refSlot && m.items.length > 0) ?? null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [when.date, refSlot])
+
+  const ranked = useMemo(() => rankFavorites(favorites ?? [], refSlot).slice(0, 6), [favorites, refSlot])
   const weighDot = !weighedToday && lisbonClock(now).hour < 11
+  const label = whenLabel(when, today)
 
-  function go(path: string) {
-    navigate(path, { replace: true })
+  // Num dia passado a refeição é obrigatória: assinala-a e não regista.
+  function slotChosen(): boolean {
+    if (!needsSlot(when)) return true
+    setAskSlot(true)
+    toast('Escolhe primeiro a refeição (pequeno-almoço, almoço…).')
+    return false
+  }
+
+  function changeWhen(next: When) {
+    setWhen(next)
+    setAskSlot(false)
+  }
+
+  // Num dia que não está à vista, o aviso leva lá.
+  function seeDay(): { label: string; run: () => void }[] {
+    const shown = viewing ?? today
+    return when.date === shown ? [] : [{ label: 'Ver', run: () => navigate(when.date === today ? '/hoje' : `/hoje/${when.date}`) }]
+  }
+
+  async function send() {
+    if (!hasContent || busy || !slotChosen()) return
+    setBusy(true)
+    try {
+      let takenAt: string | null = null
+      if (isNow) {
+        const at = new Date()
+        const exif = photo ? await exifDateTimeOf(photo.file) : null
+        takenAt = (photoInstant({ exif, lastModified: null, now: at }) ?? at).toISOString()
+      }
+      await enqueueCapture({
+        files: photo ? [photo.file] : [],
+        text: text.trim() || null,
+        note: null,
+        tags,
+        taken_at: takenAt,
+        date: api.date ?? null,
+        slot: api.slot ?? null,
+      })
+      sheet.close()
+      if (!isNow) toast(`A analisar · ${label}`, seeDay())
+    } catch {
+      toast('Não consegui guardar. Tenta outra vez.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function open(name: 'barras' | 'numeros' | 'repetir') {
+    sheet.open(name, whenParams(when, today))
   }
 
   const big =
-    'flex min-h-[88px] flex-col items-center justify-center gap-1.5 rounded-2xl font-display text-[19px] font-bold tracking-[0.06em] uppercase'
+    'flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-2xl font-display text-[18px] font-bold tracking-[0.06em] uppercase'
+  const pastParam: Record<string, string> = when.date !== today ? { data: when.date } : {}
 
   return (
-    <BottomSheet onClose={sheet.close}>
+    <BottomSheet
+      onClose={sheet.close}
+      footer={
+        hasContent ? (
+          <button
+            disabled={busy}
+            onClick={() => void send()}
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
+          >
+            {busy ? 'A guardar…' : <>Registar · {isNow ? 'agora' : label}</>}
+          </button>
+        ) : undefined
+      }
+    >
       <div className="space-y-4 pb-2">
-        {isPast || changing ? (
-          <div className="space-y-2">
-            <p className="text-[15px]">
-              A registar em <span className="font-semibold">{fmtDayShort(target)}</span>
-              {!changing && (
-                <button className="ml-2 text-eat" onClick={() => setChanging(true)}>
-                  mudar
-                </button>
-              )}
-            </p>
-            {changing && (
-              <div className="flex gap-2">
-                {[0, -1, -2].map((back) => {
-                  const date = shiftDate(today, back)
-                  return (
-                    <button
-                      key={back}
-                      onClick={() => {
-                        setTarget(date)
-                        setChanging(false)
-                      }}
-                      className={`rounded-full px-3 py-1.5 text-[15px] ${
-                        date === target ? 'bg-eat text-bg' : 'bg-surface2'
-                      }`}
-                    >
-                      {back === 0 ? 'Hoje' : back === -1 ? 'Ontem' : 'Anteontem'}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+        <WhenPicker today={today} value={when} onChange={changeWhen} highlight={askSlot} />
+
+        <div className="relative">
+          <textarea
+            ref={textBox}
+            rows={3}
+            enterKeyHint="send"
+            aria-label="O que comeste"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onFocus={(e) => {
+              // Depois de o teclado abrir, o campo fica à vista.
+              const box = e.currentTarget
+              window.setTimeout(() => box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 300)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && text.trim()) {
+                e.preventDefault()
+                void send()
+              }
+            }}
+            placeholder="O que comeste? Ex.: 2 ovos mexidos, torrada, café com leite"
+            className="block w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 pr-14 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+          />
+          {photo ? (
+            <button
+              onClick={() => setPhoto(null)}
+              aria-label="Tirar a foto"
+              className="absolute top-2 right-2 h-11 w-11 overflow-hidden rounded-xl"
+            >
+              <img src={photo.url} alt="" className="h-full w-full object-cover" />
+            </button>
+          ) : (
+            <button
+              onClick={() => fileInput.current?.click()}
+              aria-label="Juntar foto ao texto"
+              className="absolute top-2 right-2 flex h-11 w-11 items-center justify-center rounded-xl text-dim"
+            >
+              <Icon name="camera" size={22} />
+            </button>
+          )}
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              e.target.value = ''
+              if (file) setPhoto({ file, url: URL.createObjectURL(file) })
+            }}
+          />
+        </div>
+        {hasContent ? (
+          <div className="-mx-4 -mt-2 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+            {Object.entries(TAG_LABEL).map(([tag, tagLabel]) => (
+              <button
+                key={tag}
+                onClick={() => setTags(toggle(tags, tag))}
+                className={`${chip(tags.includes(tag))} shrink-0 whitespace-nowrap`}
+              >
+                {tagLabel}
+              </button>
+            ))}
           </div>
-        ) : null}
+        ) : (
+          <p className="-mt-2 text-[13px] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
-          <PhotoButton source="camera" date={dateParam} className={`${big} bg-eat text-bg`} onDone={sheet.close}>
-            <Icon name="camera" size={30} />
+          <PhotoButton
+            source="camera"
+            date={api.date ?? null}
+            slot={api.slot ?? null}
+            canOpen={slotChosen}
+            className={`${big} bg-eat text-bg`}
+            onDone={() => {
+              sheet.close()
+              if (!isNow) toast(`A analisar · ${label}`, seeDay())
+            }}
+          >
+            <Icon name="camera" size={28} />
             Fotografar
           </PhotoButton>
-          <PhotoButton source="gallery" date={dateParam} className={`${big} border border-line bg-surface2`}>
-            <Icon name="gallery" size={30} />
+          <PhotoButton
+            source="gallery"
+            date={api.date ?? null}
+            slot={api.slot ?? null}
+            className={`${big} border border-line bg-surface2`}
+          >
+            <Icon name="gallery" size={28} />
             Galeria
           </PhotoButton>
         </div>
 
-        <button
-          onClick={() => sheet.open('escrever', dateParam ? { data: dateParam } : {})}
-          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface2 font-display text-[18px] font-bold tracking-[0.06em] uppercase"
-        >
-          <Icon name="pencil" size={20} /> Escrever ou ditar
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={() => open('repetir')}
+            className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line bg-surface2 px-4 text-left"
+          >
+            <Icon name="repeat" size={22} className="shrink-0 text-eat" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[16px] font-semibold">Repetir uma refeição</span>
+              <span className="block text-[13px] text-dim">De qualquer dia, com pesquisa</span>
+            </span>
+            <Icon name="chevron" size={18} className="shrink-0 text-dim" />
+          </button>
+          {sameAsYesterday && (
+            <button
+              onClick={() => {
+                if (!slotChosen()) return
+                sheet.close()
+                void repeatMeal(
+                  sameAsYesterday.id,
+                  api.date ?? null,
+                  `Registado · ${isNow ? `igual a ontem (${SLOT_LABEL[refSlot].toLowerCase()})` : label}`,
+                  toast,
+                  api.slot ?? refSlot,
+                )
+              }}
+              className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px]">
+                  Igual {when.date === today ? 'a ontem' : `a ${dayLabel(shiftDate(when.date, -1), today).toLowerCase()}`} ·{' '}
+                  {SLOT_LABEL[refSlot].toLowerCase()}
+                </span>
+                <span className="block truncate text-[13px] text-dim">{mealName(sameAsYesterday)}</span>
+              </span>
+              <span className="shrink-0 text-[13px] text-dim tabular-nums">
+                {fmtKcal(Number(sameAsYesterday.kcal))} kcal
+              </span>
+            </button>
+          )}
+        </div>
 
         <div className="space-y-2">
           <div className="flex items-baseline justify-between">
             <h3 className="label">Favoritos</h3>
-            <button onClick={() => go('/favoritos')} className="text-[13px] text-eat">
+            <button onClick={() => navigate('/favoritos', { replace: true })} className="text-[13px] text-eat">
               Todos ›
             </button>
           </div>
@@ -140,8 +329,9 @@ export default function CaptureSheet() {
                 <button
                   key={favorite.id}
                   onClick={() => {
+                    if (!slotChosen()) return
                     sheet.close()
-                    void logFavorite(favorite, dateParam, toast)
+                    void logFavorite(favorite, api.date ?? null, toast, api.slot ?? null, isNow ? null : label)
                   }}
                   className="flex min-h-12 flex-col justify-center rounded-xl bg-surface2 px-3 py-2 text-left"
                 >
@@ -151,32 +341,26 @@ export default function CaptureSheet() {
               ))}
             </div>
           )}
-          {sameAsYesterday && (
-            <button
-              onClick={() => {
-                sheet.close()
-                void repeatMeal(
-                  sameAsYesterday.id,
-                  dateParam,
-                  `Registado · igual a ontem (${SLOT_LABEL[slot].toLowerCase()})`,
-                  toast,
-                )
-              }}
-              className="flex min-h-12 w-full items-center justify-between rounded-xl border border-line px-3 text-[15px]"
-            >
-              <span>
-                Igual a ontem · {SLOT_LABEL[slot].toLowerCase()}
-              </span>
-              <span className="text-[13px] text-dim tabular-nums">
-                {fmtKcal(Number(sameAsYesterday.kcal))} kcal
-              </span>
-            </button>
-          )}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => open('barras')}
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+          >
+            <Icon name="barcode" size={18} /> Código de barras
+          </button>
+          <button
+            onClick={() => open('numeros')}
+            className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line text-[15px]"
+          >
+            Só números
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => sheet.open('peso', dateParam ? { data: dateParam } : {})}
+            onClick={() => sheet.open('peso', pastParam)}
             className="relative flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
           >
             <Icon name="scale" size={20} /> Peso
@@ -189,7 +373,7 @@ export default function CaptureSheet() {
             <Icon name="ruler" size={20} /> Medidas
           </button>
           <button
-            onClick={() => sheet.open('treino', dateParam ? { data: dateParam } : {})}
+            onClick={() => sheet.open('treino', pastParam)}
             className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
           >
             <Icon name="bike" size={20} /> Treino

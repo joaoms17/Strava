@@ -24,6 +24,9 @@ const PATHS = {
   info: 'M12 11v5M12 8h.01M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z',
   retry: 'M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5',
   moon: 'M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z',
+  calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
+  repeat: 'M4 11V9a3 3 0 0 1 3-3h12M16 3l3 3-3 3M20 13v2a3 3 0 0 1-3 3H5M8 21l-3-3 3-3',
+  send: 'M5 12h13M13 6l6 6-6 6',
 } as const
 
 export type IconName = keyof typeof PATHS

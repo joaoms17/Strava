@@ -359,9 +359,11 @@ export const quick = post(async ({ db, userId, body, res }) => {
   }
   const now = new Date()
   const cutoff = await cutoffHour(db)
+  // Com uma refeição escolhida, a hora habitual dela (também hoje).
+  const today = nutritionalDay(now, cutoff)
   const loggedAt =
-    input.date && input.date !== nutritionalDay(now, cutoff)
-      ? loggedAtFor(input.date, SLOT_TIME[input.slot ?? slotOf(now)], cutoff, now)
+    input.slot || (input.date && input.date !== today)
+      ? loggedAtFor(input.date ?? today, SLOT_TIME[input.slot ?? slotOf(now)], cutoff, now)
       : now
   const items: MealItem[] = [
     {

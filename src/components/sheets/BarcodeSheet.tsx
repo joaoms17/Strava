@@ -10,6 +10,7 @@ import { nutritionalDay } from '../../lib/day'
 import { fmtInt } from '../../lib/format'
 import { round1 } from '../../../api/_lib/rules/meal-totals'
 import { SLOT_TIME, loggedAtFor, slotOf } from '../../../api/_lib/rules/momentos'
+import { whenFromParams } from '../../lib/when'
 import type { Food, Meal, MealItem } from '../../lib/types'
 
 // Produto embalado pelo Open Food Facts, sem IA.
@@ -18,7 +19,9 @@ export default function BarcodeSheet() {
   const sheet = useSheet()
   const toast = useToast()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-  const date = sheet.params.get('data') ?? today
+  // O «Quando» escolhido no Registar (?data=…&momento=…); sem ele, agora.
+  const when = whenFromParams(sheet.params, today)
+  const date = when.date
   const [scanning, setScanning] = useState(true)
   const [food, setFood] = useState<Food | null>(null)
   const [grams, setGrams] = useState(100)
@@ -52,8 +55,11 @@ export default function BarcodeSheet() {
       estimated: false,
     }
     const now = new Date()
+    const slot = when.slot && when.slot !== 'agora' ? when.slot : null
     const loggedAt =
-      date === today ? now : loggedAtFor(date, SLOT_TIME[slotOf(now)], profile.nutrition_day_cutoff_hour, now)
+      date === today && !slot
+        ? now
+        : loggedAtFor(date, SLOT_TIME[slot ?? slotOf(now)], profile.nutrition_day_cutoff_hour, now)
     try {
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/save', {
         input_type: 'barcode',
@@ -62,6 +68,7 @@ export default function BarcodeSheet() {
         items: [item],
         is_estimate: false,
         logged_at: loggedAt.toISOString(),
+        ...(slot ? { slot } : {}),
       })
       emitDataChanged()
       sheet.close()

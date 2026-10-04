@@ -17,7 +17,7 @@ import CaptureSheet from './components/sheets/CaptureSheet'
 import WeighSheet from './components/sheets/WeighSheet'
 import MealSheet from './components/sheets/MealSheet'
 import GallerySheet from './components/sheets/GallerySheet'
-import WriteSheet from './components/sheets/WriteSheet'
+import RepeatSheet from './components/sheets/RepeatSheet'
 import NoteSheet from './components/sheets/NoteSheet'
 import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
@@ -118,13 +118,14 @@ function Header() {
 
 function Sheets() {
   const sheet = useSheet()
-  if (sheet.name === 'registar') return <CaptureSheet />
+  if (sheet.name === 'registar') return <CaptureSheet key="registar" />
   if (sheet.name === 'peso') return <WeighSheet key={sheet.params.get('data') ?? ''} />
   if (sheet.name === 'refeicao' && sheet.params.get('id')) {
     return <MealSheet key={sheet.params.get('id')} />
   }
   if (sheet.name === 'galeria') return <GallerySheet />
-  if (sheet.name === 'escrever') return <WriteSheet />
+  if (sheet.name === 'escrever') return <CaptureSheet key="escrever" focus />
+  if (sheet.name === 'repetir') return <RepeatSheet />
   if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
   if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />

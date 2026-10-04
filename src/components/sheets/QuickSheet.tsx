@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
-import { DayChips, SlotChips } from '../ui/Chips'
+import WhenPicker from '../ui/WhenPicker'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
@@ -8,8 +8,8 @@ import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { nutritionalDay } from '../../lib/day'
 import { parseDecimal } from '../../lib/format'
-import { slotOf } from '../../../api/_lib/rules/momentos'
-import type { Meal, Slot } from '../../lib/types'
+import { needsSlot, whenApi, whenFromParams, type When } from '../../lib/when'
+import type { Meal } from '../../lib/types'
 
 // Só números: quando já sabes os valores (rótulo, restaurante com tabela).
 export default function QuickSheet() {
@@ -17,14 +17,13 @@ export default function QuickSheet() {
   const sheet = useSheet()
   const toast = useToast()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-  const initialDate = sheet.params.get('data')
   const [values, setValues] = useState({ kcal: '', protein: '', carbs: '', fat: '', name: '' })
-  const [date, setDate] = useState(initialDate && initialDate <= today ? initialDate : today)
-  const [slot, setSlot] = useState<Slot>(slotOf(new Date()))
+  const [when, setWhen] = useState<When>(() => whenFromParams(sheet.params, today))
   const [busy, setBusy] = useState(false)
   const kcal = parseDecimal(values.kcal)
   const protein = parseDecimal(values.protein)
-  const valid = Number.isFinite(kcal) && kcal > 0 && Number.isFinite(protein) && protein >= 0
+  const valid =
+    Number.isFinite(kcal) && kcal > 0 && Number.isFinite(protein) && protein >= 0 && !needsSlot(when)
 
   async function save() {
     setBusy(true)
@@ -38,8 +37,7 @@ export default function QuickSheet() {
         ...(Number.isFinite(carbs) ? { carbs } : {}),
         ...(Number.isFinite(fat) ? { fat } : {}),
         ...(values.name.trim() ? { name: values.name.trim() } : {}),
-        date,
-        slot,
+        ...whenApi(when, today),
       })
       emitDataChanged()
       sheet.close()
@@ -96,8 +94,7 @@ export default function QuickSheet() {
           {field('fat', 'Gordura g')}
         </div>
         {field('name', 'Nome')}
-        <DayChips today={today} value={date} onChange={setDate} />
-        <SlotChips value={slot} onChange={(s) => setSlot(s as Slot)} />
+        <WhenPicker today={today} value={when} onChange={setWhen} />
       </div>
     </BottomSheet>
   )
