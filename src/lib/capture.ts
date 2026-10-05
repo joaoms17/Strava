@@ -1,30 +1,25 @@
-import { enqueueCapture } from './capture-queue'
 import { supabase } from './supabase'
 import { postApi } from './api'
 import { prepareImage, sha256Hex } from './image'
-import { exifDateTimeOf } from './exif'
-import { photoInstant } from '../../api/_lib/rules/captura'
-import { slotOf } from '../../api/_lib/rules/momentos'
 import type { Slot } from './types'
 
 export const MAX_MEAL_PHOTOS = 4
 
-// Fotografar: a foto entra na fila logo, sem esperar. Com um dia (e uma
-// refeição) escolhidos fica aí, à hora habitual dessa refeição (sem ela, a
-// do momento atual); senão conta a hora da foto.
-export async function captureCameraPhoto(file: File, date: string | null, slot: Slot | null = null): Promise<void> {
-  const now = new Date()
-  const exif = await exifDateTimeOf(file)
-  const at = photoInstant({ exif, lastModified: null, now }) ?? now
-  await enqueueCapture({
-    files: [file],
-    text: null,
-    note: null,
-    tags: [],
-    taken_at: date ? null : at.toISOString(),
-    date,
-    slot: date ? (slot ?? slotOf(now)) : null,
-  })
+// Fotografar: a foto não segue logo — abre o Registar com ela, para juntar
+// uma nota (e outra foto) antes de enviar. Passa sem ir pela URL.
+let pendingCamera: File[] | null = null
+
+export function setPendingCamera(files: File[]): void {
+  pendingCamera = files
+}
+
+// Lê sem apagar (o React pode montar a folha duas vezes); apaga-se depois.
+export function peekPendingCamera(): File[] | null {
+  return pendingCamera
+}
+
+export function clearPendingCamera(): void {
+  pendingCamera = null
 }
 
 // Galeria: as fotos escolhidas passam para a folha «Fotos da galeria» sem

@@ -15,6 +15,7 @@ import { logFavorite, repeatMeal } from '../../lib/meal-actions'
 import { enqueueCapture } from '../../lib/capture-queue'
 import { exifDateTimeOf } from '../../lib/exif'
 import { mealName, mealSlot } from '../../lib/repetir'
+import { MAX_MEAL_PHOTOS, clearPendingCamera, peekPendingCamera } from '../../lib/capture'
 import { loadActiveDiet } from '../../lib/diets'
 import { useSignedUrls } from '../../lib/photos'
 import Thumb from '../ui/Thumb'
@@ -49,7 +50,11 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     whenFromParams(sheet.params, today, viewing && viewing < today ? viewing : null),
   )
   const [text, setText] = useState('')
-  const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null)
+  // Fotos desta refeição (a da câmara chega já aqui): com fotos, o campo é
+  // a nota delas.
+  const [photos, setPhotos] = useState<{ file: File; url: string }[]>(() =>
+    (peekPendingCamera() ?? []).map((file) => ({ file, url: URL.createObjectURL(file) })),
+  )
   const [tags, setTags] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [askSlot, setAskSlot] = useState(false)
@@ -62,15 +67,28 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   const refSlot = slotForRanking(when, now)
   const api = whenApi(when, today)
   const isNow = Object.keys(api).length === 0
-  const hasContent = text.trim().length > 0 || photo != null
+  const hasContent = text.trim().length > 0 || photos.length > 0
+  const reviewing = photos.length > 0
 
   useEffect(() => {
     if (focus) textBox.current?.focus()
   }, [focus])
 
-  useEffect(() => () => {
-    if (photo) URL.revokeObjectURL(photo.url)
-  }, [photo])
+  useEffect(() => clearPendingCamera(), [])
+
+  function addPhotos(files: File[]) {
+    const room = MAX_MEAL_PHOTOS - photos.length
+    if (room <= 0) {
+      toast(`Até ${MAX_MEAL_PHOTOS} fotos por refeição.`)
+      return
+    }
+    setPhotos([...photos, ...files.slice(0, room).map((file) => ({ file, url: URL.createObjectURL(file) }))])
+  }
+
+  function removePhoto(i: number) {
+    URL.revokeObjectURL(photos[i]!.url)
+    setPhotos(photos.filter((_, j) => j !== i))
+  }
 
   useEffect(() => {
     let alive = true
@@ -143,13 +161,14 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
       let takenAt: string | null = null
       if (isNow) {
         const at = new Date()
-        const exif = photo ? await exifDateTimeOf(photo.file) : null
+        const exif = photos[0] ? await exifDateTimeOf(photos[0].file) : null
         takenAt = (photoInstant({ exif, lastModified: null, now: at }) ?? at).toISOString()
       }
       await enqueueCapture({
-        files: photo ? [photo.file] : [],
-        text: text.trim() || null,
-        note: null,
+        files: photos.map((p) => p.file),
+        // Com fotos, o que se escreve é a nota (a IA lê-a com a foto).
+        text: reviewing ? null : text.trim() || null,
+        note: reviewing ? text.trim() || null : null,
         tags,
         taken_at: takenAt,
         date: api.date ?? null,
@@ -198,12 +217,52 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
       <div className="space-y-4 pb-2">
         <WhenPicker today={today} value={when} onChange={changeWhen} highlight={askSlot} />
 
+        {reviewing && (
+          <div className="space-y-2">
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
+              {photos.map((p, i) => (
+                <div key={p.url} className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl">
+                  <img src={p.url} alt="" className="h-full w-full object-cover" />
+                  <button
+                    onClick={() => removePhoto(i)}
+                    aria-label={`Tirar a foto ${i + 1}`}
+                    className="absolute top-1 right-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white"
+                  >
+                    <Icon name="close" size={16} />
+                  </button>
+                </div>
+              ))}
+              {photos.length < MAX_MEAL_PHOTOS && (
+                <label className="flex h-28 w-28 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-line text-[13px] text-dim">
+                  <Icon name="camera" size={24} />
+                  Outra foto
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    aria-label="Outra foto"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = [...(e.target.files ?? [])]
+                      e.target.value = ''
+                      if (files.length) addPhotos(files)
+                    }}
+                  />
+                </label>
+              )}
+            </div>
+            <p className="text-[13px] text-dim">
+              Junta uma nota se quiseres (o que não se vê, o que sobrou) e carrega em Registar.
+            </p>
+          </div>
+        )}
+
         <div className="relative">
           <textarea
             ref={textBox}
             rows={3}
             enterKeyHint="send"
-            aria-label="O que comeste"
+            aria-label={reviewing ? 'Nota da foto' : 'O que comeste'}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onFocus={(e) => {
@@ -217,18 +276,16 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
                 void send()
               }
             }}
-            placeholder="O que comeste? Ex.: 2 ovos mexidos, torrada, café com leite"
-            className="block w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 pr-14 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+            placeholder={
+              reviewing
+                ? 'Nota (opcional). Ex.: comi metade do arroz, molho à parte, frito em azeite'
+                : 'O que comeste? Ex.: 2 ovos mexidos, torrada, café com leite'
+            }
+            className={`block w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none ${
+              reviewing ? '' : 'pr-14'
+            }`}
           />
-          {photo ? (
-            <button
-              onClick={() => setPhoto(null)}
-              aria-label="Tirar a foto"
-              className="absolute top-2 right-2 h-11 w-11 overflow-hidden rounded-xl"
-            >
-              <img src={photo.url} alt="" className="h-full w-full object-cover" />
-            </button>
-          ) : (
+          {!reviewing && (
             <button
               onClick={() => fileInput.current?.click()}
               aria-label="Juntar foto ao texto"
@@ -243,9 +300,9 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             accept="image/*"
             className="hidden"
             onChange={(e) => {
-              const file = e.target.files?.[0]
+              const files = [...(e.target.files ?? [])]
               e.target.value = ''
-              if (file) setPhoto({ file, url: URL.createObjectURL(file) })
+              if (files.length) addPhotos(files)
             }}
           />
         </div>
@@ -265,21 +322,37 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
           <p className="-mt-2 text-[13px] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <PhotoButton
-            source="camera"
-            date={api.date ?? null}
-            slot={api.slot ?? null}
-            canOpen={slotChosen}
-            className={`${big} bg-eat text-bg`}
-            onDone={() => {
-              sheet.close()
-              if (!isNow) toast(`A analisar · ${label}`, seeDay())
+        {reviewing ? (
+          <button
+            onClick={() => {
+              for (const p of photos) URL.revokeObjectURL(p.url)
+              setPhotos([])
+              setText('')
             }}
+            className="min-h-11 w-full text-[15px] text-dim"
           >
+            Cancelar a foto
+          </button>
+        ) : (
+          <>
+        <div className="grid grid-cols-2 gap-3">
+          {/* A foto fica aqui para a nota; só segue com «Registar». */}
+          <label className={`cursor-pointer ${big} bg-eat text-bg`}>
             <Icon name="camera" size={28} />
             Fotografar
-          </PhotoButton>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              aria-label="Fotografar"
+              className="hidden"
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])]
+                e.target.value = ''
+                if (files.length) addPhotos(files.slice(0, 1))
+              }}
+            />
+          </label>
           <PhotoButton
             source="gallery"
             date={api.date ?? null}
@@ -430,6 +503,8 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             <Icon name="bike" size={20} /> Treino
           </button>
         </div>
+          </>
+        )}
       </div>
     </BottomSheet>
   )

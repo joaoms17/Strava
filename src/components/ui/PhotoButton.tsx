@@ -1,12 +1,11 @@
 import type { ReactNode } from 'react'
-import { useToast } from '../../lib/toast'
 import { useSheet } from '../../lib/sheet'
-import { captureCameraPhoto, setPendingGallery } from '../../lib/capture'
+import { setPendingCamera, setPendingGallery } from '../../lib/capture'
 import type { Slot } from '../../lib/types'
 
 // Botão que abre a câmara (ou a galeria) dentro do próprio toque — o iOS só
-// abre a câmara num gesto do utilizador. A foto da câmara entra logo na fila;
-// as da galeria abrem a folha para dizer a hora e juntar notas.
+// abre a câmara num gesto do utilizador. A foto da câmara abre o Registar
+// (nota antes de enviar); as da galeria abrem a folha para dizer a hora.
 export default function PhotoButton({
   source,
   date,
@@ -14,7 +13,6 @@ export default function PhotoButton({
   canOpen,
   className,
   children,
-  onDone,
 }: {
   source: 'camera' | 'gallery'
   date?: string | null
@@ -22,9 +20,7 @@ export default function PhotoButton({
   canOpen?: () => boolean // false: não abre (ex.: falta escolher a refeição)
   className?: string
   children: ReactNode
-  onDone?: () => void
 }) {
-  const toast = useToast()
   const sheet = useSheet()
   return (
     <label
@@ -48,12 +44,12 @@ export default function PhotoButton({
             sheet.open('galeria')
             return
           }
-          onDone?.()
-          // Sem aviso: a linha «A analisar…» aparece logo no dia (um aviso
-          // tapava o «＋ Nota» dessa linha).
-          void captureCameraPhoto(files[0]!, date ?? null, slot ?? null).catch(() =>
-            toast('Não consegui guardar a foto. Tenta outra vez.'),
-          )
+          // A foto abre o Registar: aí junta-se uma nota antes de enviar.
+          setPendingCamera(files.slice(0, 1))
+          sheet.open('registar', {
+            ...(date ? { data: date } : {}),
+            ...(slot ? { momento: slot } : {}),
+          })
         }}
       />
     </label>
