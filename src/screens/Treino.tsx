@@ -101,10 +101,13 @@ export default function Treino() {
   const weekMinutes = week.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const weekKcal = week.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
 
-  const openWorkout = (w: Workout) =>
+  const openWorkout = (w: Workout & { parts?: Workout[] }) =>
     w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
       ? navigate(`/treino/ginasio?id=${w.id}`)
-      : sheet.open('confirmar-treino', { id: w.id })
+      : sheet.open('confirmar-treino', {
+          id: w.id,
+          ...((w.parts?.length ?? 0) > 1 ? { partes: w.parts!.map((p) => p.id).join(',') } : {}),
+        })
 
 
   const bikes = sessions.filter((w) => w.type === 'bike')

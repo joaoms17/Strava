@@ -592,7 +592,12 @@ export default function Hoje() {
       key: `t-${workout.id}`,
       node: (
         <button
-          onClick={() => sheet.open('confirmar-treino', { id: workout.id })}
+          onClick={() =>
+            sheet.open('confirmar-treino', {
+              id: workout.id,
+              ...(workout.parts.length > 1 ? { partes: workout.parts.map((p) => p.id).join(',') } : {}),
+            })
+          }
           className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
         >
           <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">
