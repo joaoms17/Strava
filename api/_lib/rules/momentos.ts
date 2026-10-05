@@ -51,13 +51,13 @@ export function lisbonClock(instant: Date, timeZone = TIME_ZONE): LocalClock {
 }
 
 // Momento a que pertence uma hora local (minutos desde a meia-noite).
-// 04:00–10:59 pequeno-almoço · 11:00–14:59 almoço · 15:00–18:29 lanche ·
-// 18:30–21:59 jantar · 22:00–03:59 ceia.
+// 06:00–11:59 pequeno-almoço · 12:00–14:59 almoço · 15:00–19:29 lanche ·
+// 19:30–21:59 jantar · 22:00–05:59 ceia.
 export function slotOfMinutes(minutes: number): Slot {
-  if (minutes >= 4 * 60 && minutes < 11 * 60) return 'pequeno_almoco'
-  if (minutes >= 11 * 60 && minutes < 15 * 60) return 'almoco'
-  if (minutes >= 15 * 60 && minutes < 18 * 60 + 30) return 'lanche'
-  if (minutes >= 18 * 60 + 30 && minutes < 22 * 60) return 'jantar'
+  if (minutes >= 6 * 60 && minutes < 12 * 60) return 'pequeno_almoco'
+  if (minutes >= 12 * 60 && minutes < 15 * 60) return 'almoco'
+  if (minutes >= 15 * 60 && minutes < 19 * 60 + 30) return 'lanche'
+  if (minutes >= 19 * 60 + 30 && minutes < 22 * 60) return 'jantar'
   return 'ceia'
 }
 

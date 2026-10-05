@@ -11,12 +11,15 @@ import { nutritionalDay } from '../api/_lib/rules/nutritional-day'
 
 describe('momentos do dia', () => {
   it('limites de cada momento', () => {
-    expect(slotOfMinutes(4 * 60)).toBe('pequeno_almoco')
-    expect(slotOfMinutes(10 * 60 + 59)).toBe('pequeno_almoco')
-    expect(slotOfMinutes(11 * 60)).toBe('almoco')
+    expect(slotOfMinutes(5 * 60 + 59)).toBe('ceia')
+    expect(slotOfMinutes(6 * 60)).toBe('pequeno_almoco')
+    expect(slotOfMinutes(11 * 60 + 59)).toBe('pequeno_almoco')
+    expect(slotOfMinutes(12 * 60)).toBe('almoco')
+    expect(slotOfMinutes(14 * 60 + 59)).toBe('almoco')
     expect(slotOfMinutes(15 * 60)).toBe('lanche')
-    expect(slotOfMinutes(18 * 60 + 29)).toBe('lanche')
-    expect(slotOfMinutes(18 * 60 + 30)).toBe('jantar')
+    expect(slotOfMinutes(19 * 60 + 29)).toBe('lanche')
+    expect(slotOfMinutes(19 * 60 + 30)).toBe('jantar')
+    expect(slotOfMinutes(21 * 60 + 59)).toBe('jantar')
     expect(slotOfMinutes(22 * 60)).toBe('ceia')
     expect(slotOfMinutes(2 * 60)).toBe('ceia')
   })
@@ -24,8 +27,8 @@ describe('momentos do dia', () => {
   it('usa a hora de Lisboa, não UTC', () => {
     // 12:30 UTC no verão = 13:30 em Lisboa
     expect(slotOf(new Date('2026-07-10T12:30:00Z'))).toBe('almoco')
-    // 10:30 UTC no verão = 11:30 em Lisboa (almoço); em UTC seria pequeno-almoço
-    expect(slotOf(new Date('2026-07-10T10:30:00Z'))).toBe('almoco')
+    // 11:30 UTC no verão = 12:30 em Lisboa (almoço); em UTC seria pequeno-almoço
+    expect(slotOf(new Date('2026-07-10T11:30:00Z'))).toBe('almoco')
   })
 })
 
