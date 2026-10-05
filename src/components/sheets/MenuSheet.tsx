@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
-import { postApi } from '../../lib/api'
+import { isNetworkError, postApi } from '../../lib/api'
+import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { emitDataChanged } from '../../lib/events'
@@ -55,16 +56,34 @@ export default function MenuSheet() {
     setReading(true)
     setError(null)
     try {
-      const encoded = []
-      for (const p of photos) encoded.push(await prepareMenuPhoto(p.file))
+      // As fotos sobem primeiro para o Storage (no pedido não cabem); o
+      // servidor lê-as e apaga-as.
+      const { data: auth } = await supabase.auth.getUser()
+      if (!auth.user) throw new Error('Sessão expirada. Volta a entrar.')
+      const stamp = Date.now().toString(36)
+      const paths: string[] = []
+      for (let i = 0; i < photos.length; i++) {
+        const path = `${auth.user.id}/menu/${stamp}-${i}.jpg`
+        const { error: upload } = await supabase.storage
+          .from('meal-photos')
+          .upload(path, await prepareMenuPhoto(photos[i]!.file), { contentType: 'image/jpeg', upsert: true })
+        if (upload) throw new Error('Não consegui enviar a foto. Tenta outra vez.')
+        paths.push(path)
+      }
       const data = await postApi<MenuResult>('/api/meal/menu', {
-        photos: encoded,
+        photo_paths: paths,
         ...(note.trim() ? { note: note.trim() } : {}),
       })
       setResult(data)
       setShowAll(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não consegui ler o menu. Tenta outra vez.')
+      setError(
+        isNetworkError(err)
+          ? 'Perdi a ligação a meio. Vê se tens rede e tenta outra vez.'
+          : err instanceof Error
+            ? err.message
+            : 'Não consegui ler o menu. Tenta outra vez.',
+      )
     } finally {
       setReading(false)
     }
