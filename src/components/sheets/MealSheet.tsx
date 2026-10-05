@@ -563,6 +563,11 @@ export default function MealSheet() {
                           Juntar foto
                         </AttachPhotoButton>
                       )}
+                      {current.status !== 'a_analisar' && (
+                        <button onClick={() => sheet.open('barras', { refeicao: current.id })} className="text-eat">
+                          Juntar por código de barras
+                        </button>
+                      )}
                     </div>
                   )
                 )}
