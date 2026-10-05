@@ -3,6 +3,7 @@ import parseText from './_meal/parse-text.js'
 import parsePhoto from './_meal/parse-photo.js'
 import save from './_meal/save.js'
 import barcode from './_meal/barcode.js'
+import menu from './_meal/menu.js'
 import { logFavorite, portion, remove, repeat, restore } from './_meal/quick.js'
 import { analyse, attach, capture, correct, quick, update } from './_meal/async.js'
 
@@ -15,6 +16,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   'parse-photo': parsePhoto,
   save,
   barcode,
+  menu,
   'log-favorite': logFavorite,
   repeat,
   portion,

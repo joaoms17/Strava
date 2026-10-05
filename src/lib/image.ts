@@ -73,3 +73,31 @@ export async function prepareShot(file: Blob): Promise<{ full: Blob; thumb: Blob
     bitmap.close()
   }
 }
+
+// Fotos do menu: até 2048 px (JPEG q0,8) para as letras pequenas se lerem;
+// se ainda passar de ~1,4 MB, mais pequena. Devolve o JPEG em base64.
+export async function prepareMenuPhoto(file: Blob): Promise<string> {
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+  } catch {
+    throw new Error('Este formato de foto não é suportado. Tenta outra.')
+  }
+  try {
+    let jpeg = await toJpegBlob(bitmap, 2048, 0.8)
+    if (jpeg.size > 1_400_000) jpeg = await toJpegBlob(bitmap, 1600, 0.7)
+    if (jpeg.size > 1_400_000) jpeg = await toJpegBlob(bitmap, 1280, 0.6)
+    return await blobToBase64(jpeg)
+  } finally {
+    bitmap.close()
+  }
+}
+
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''))
+    reader.onerror = () => reject(new Error('Não consegui ler a foto.'))
+    reader.readAsDataURL(blob)
+  })
+}

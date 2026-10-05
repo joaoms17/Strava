@@ -24,6 +24,7 @@ export type SheetName =
   | 'como-medir'
   | 'meu-treino'
   | 'dizer-treino'
+  | 'menu'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

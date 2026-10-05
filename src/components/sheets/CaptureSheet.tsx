@@ -402,6 +402,17 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             </span>
             <Icon name="chevron" size={18} className="shrink-0 text-dim" />
           </button>
+          <button
+            onClick={() => sheet.open('menu')}
+            className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line bg-surface2 px-4 text-left"
+          >
+            <Icon name="menu" size={22} className="shrink-0 text-eat" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[16px] font-semibold">Escolher pelo menu</span>
+              <span className="block text-[13px] text-dim">Os 3 melhores em calorias e proteína</span>
+            </span>
+            <Icon name="chevron" size={18} className="shrink-0 text-dim" />
+          </button>
           {sameAsYesterday && (
             <button
               onClick={() => {

@@ -29,6 +29,7 @@ import PersonSheet from './components/sheets/PersonSheet'
 import NoteSheet from './components/sheets/NoteSheet'
 import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
+import MenuSheet from './components/sheets/MenuSheet'
 import ReviewSheet from './components/sheets/ReviewSheet'
 import TreinoSheet from './components/sheets/TreinoSheet'
 import LogWorkoutSheet from './components/sheets/LogWorkoutSheet'
@@ -147,6 +148,7 @@ function Sheets() {
   if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
   if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />
+  if (sheet.name === 'menu') return <MenuSheet />
   if (sheet.name === 'rever') return <ReviewSheet />
   if (sheet.name === 'treino') return <TreinoSheet />
   if (sheet.name === 'registar-treino') return <LogWorkoutSheet key={sheet.params.get('fav') ?? ''} />

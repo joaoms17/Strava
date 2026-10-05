@@ -17,6 +17,7 @@
 | `/api/meal/portion` | POST | Muda a porção (½ · 1 · 1½ · 2) de uma refeição já registada. |
 | `/api/meal/delete` · `/api/meal/restore` | POST | Apagar reversível (`deleted_at`); a refeição sai das contas e pode voltar. |
 | `/api/food/barcode/:ean` | GET | Proxy ao Open Food Facts (User-Agent identificado), guarda em `foods` com source `off`. Vive na função `meal`. |
+| `/api/meal/menu` | POST | «Escolher pelo menu»: 1 a 3 fotos do menu (JPEG em base64, até 4 MB juntas) e preferências opcionais; o modelo das fotos estima cada prato (`prompts/menu-pick.v1.md`), `rules/menu.ts` arruma e ordena pelo que falta comer hoje (calorias e proteína). Não grava: «Vou comer este» usa `/api/meal/save`. Conta para o limite diário de fotos. |
 | `/api/meal/attach` | POST | Junta até 4 fotos a uma refeição que já existe e volta a analisá-la com todas. |
 | `/api/workout/save` | POST | Guarda um treino (favorito, «Já fiz» ou rascunho de um print), com a cadeia de watts e as kcal da regra 2 revista; com `merge_into` junta o print a uma sessão existente sem duplicar. |
 | `/api/workout/strength` | POST | Sessão de ginásio livre: cria ou corrige a sessão e as séries (`exercise_log`). |

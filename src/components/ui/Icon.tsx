@@ -29,6 +29,7 @@ const PATHS = {
   send: 'M5 12h13M13 6l6 6-6 6',
   mic: 'M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3ZM6 11a6 6 0 0 0 12 0M12 17v4M9 21h6',
   phone: 'M8 3h8a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM11 18h2',
+  menu: 'M6 3h12v18H6zM9 7.5h6M9 11h6M9 14.5h6M9 18h3',
 } as const
 
 export type IconName = keyof typeof PATHS
