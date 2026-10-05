@@ -6,7 +6,9 @@ import {
   isEmptyStravaCopy,
   mapActivity,
   mapWellness,
+  mergeDailyHealth,
   syncMatch,
+  type DailyHealth,
   type IcuActivity,
   type IcuWellness,
   type MappedActivity,
@@ -314,9 +316,10 @@ export async function syncIntervals(
       }
     }
 
-    // Sono, FC em repouso e passos. O Atalho do iPhone, quando existe, manda
-    // nas horas, passos e FC que já preencheu; a pontuação, a qualidade, o
-    // HRV e a FC do sono só vêm do relógio (o valor mais recente manda).
+    // Sono, FC em repouso e passos (regras em mergeDailyHealth: os passos
+    // ficam com o maior, o Atalho manda nas horas e na FC que preencheu); a
+    // pontuação, a qualidade, o HRV e a FC do sono só vêm do relógio (o valor
+    // mais recente manda).
     const byDate = new Map((healthRows ?? []).map((r) => [r.date as string, r as Record<string, unknown>]))
     const rows: { base: Record<string, unknown>; extras: Record<string, unknown>; night: boolean }[] = []
     for (const m of days) {
@@ -333,10 +336,7 @@ export async function syncIntervals(
         base: {
           user_id: userId,
           date: m.date,
-          steps: (health?.steps as number | null | undefined) ?? m.steps,
-          sleep_minutes: (health?.sleep_minutes as number | null | undefined) ?? m.sleepMinutes,
-          resting_hr: (health?.resting_hr as number | null | undefined) ?? m.restingHr,
-          source: (health?.source as string | undefined) ?? 'intervals',
+          ...mergeDailyHealth(health as Partial<DailyHealth> | null, m),
         },
         extras: Object.fromEntries(Object.entries(sleepExtras).map(([k, v]) => [k, v ?? health?.[k] ?? null])),
         night: m.sleepMinutes != null || m.sleepScore != null || m.sleepQuality != null,

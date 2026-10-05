@@ -25,6 +25,7 @@ import {
 } from '../../api/_lib/rules/weight'
 import type { WeightRow } from '../lib/types'
 import CompositionCards from '../components/CompositionCards'
+import Evolucao from '../components/Evolucao'
 
 type Range = '1M' | '3M' | 'Tudo'
 const RANGE_DAYS: Record<Range, number | null> = { '1M': 30, '3M': 91, Tudo: null }
@@ -36,7 +37,7 @@ function rateText(rate: number): string {
 }
 
 // O resultado em 3 cartões: peso médio (com o gráfico), gordura e massa
-// magra, e cintura.
+// magra, e cintura; depois a evolução do relógio e do treino.
 export default function Corpo() {
   const profile = useReadyProfile()
   const sheet = useSheet()
@@ -226,6 +227,7 @@ export default function Corpo() {
         </section>
       )}
       <CompositionCards />
+      <Evolucao />
     </div>
   )
 }

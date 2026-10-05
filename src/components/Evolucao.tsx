@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis, ResponsiveContainer } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useThemeColors } from '../lib/colors'
+import { useDataVersion } from '../lib/events'
 import { useReadyProfile } from '../lib/profile'
 import { nutritionalDay, shiftDate } from '../lib/day'
 import { fmtInt } from '../lib/format'
@@ -11,43 +12,58 @@ import {
   lastMondays,
   weeklyStats,
   wellnessTrend,
+  type PlanWorkout,
   type WellnessRow,
 } from '../../api/_lib/rules/plano'
-import type { Workout } from '../lib/types'
 
 const WEEKS = 12
 const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
-// Treino › Evolução: minutos por semana (bicicleta e ginásio), watts por
-// batimento na bicicleta, a forma (carga dos últimos 42 dias) e o bem-estar do
-// relógio (HRV, FC em repouso, sono e passos, 7 dias contra o mês).
-export default function Evolucao({ workouts }: { workouts: Workout[] }) {
+// Corpo › Evolução: o bem-estar do relógio (HRV, FC em repouso, sono e passos,
+// 7 dias contra o mês), minutos de treino por semana (bicicleta e ginásio),
+// watts por batimento na bicicleta e a forma (carga dos últimos 42 dias).
+export default function Evolucao() {
   const colors = useThemeColors()
   const profile = useReadyProfile()
+  const version = useDataVersion()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [health, setHealth] = useState<WellnessRow[]>([])
+  const [workouts, setWorkouts] = useState<PlanWorkout[]>([])
 
   useEffect(() => {
     let alive = true
-    void supabase
-      .from('health_daily')
-      .select('date,hrv,resting_hr,sleep_score,sleep_quality,sleep_minutes,steps')
-      .gte('date', shiftDate(today, -28))
-      .lte('date', today)
-      .then(({ data }) => {
-        if (alive) setHealth((data ?? []) as WellnessRow[])
-      })
+    void Promise.all([
+      supabase
+        .from('health_daily')
+        .select('date,hrv,resting_hr,sleep_score,sleep_quality,sleep_minutes,steps')
+        .gte('date', shiftDate(today, -29))
+        .lte('date', today),
+      supabase
+        .from('workouts_active')
+        .select('date,started_at,type,minutes,watts,np_w,avg_hr,max_hr,training_load')
+        .gte('date', shiftDate(today, -7 * WEEKS - 42))
+        .lte('date', today)
+        .order('date'),
+    ]).then(([{ data: h }, { data: w }]) => {
+      if (!alive) return
+      setHealth((h ?? []) as WellnessRow[])
+      setWorkouts((w ?? []) as PlanWorkout[])
+    })
     return () => {
       alive = false
     }
-  }, [today])
+  }, [today, version])
 
   const weeks = useMemo(() => {
     const stats = weeklyStats(workouts, lastMondays(today, WEEKS))
     return stats.map((w) => ({ label: dm(w.start), bike: w.bike.minutes, gym: w.gym.minutes, sessions: w.bike.sessions + w.gym.sessions }))
   }, [workouts, today])
   const efficiency = useMemo(() => efficiencySeries(workouts).slice(-20), [workouts])
-  const form = useMemo(() => fitnessSeries(workouts, shiftDate(today, -7 * WEEKS + 1), today), [workouts, today])
+  // A forma começa 6 semanas antes, para não arrancar do zero no gráfico.
+  const form = useMemo(
+    () => fitnessSeries(workouts, shiftDate(today, -7 * WEEKS - 41), today).slice(-7 * WEEKS),
+    [workouts, today],
+  )
   const trend = wellnessTrend(health, today)
   const hasWeeks = weeks.some((w) => w.bike + w.gym > 0)
   const hasForm = form.some((p) => p.ctl > 0)
@@ -87,7 +103,7 @@ export default function Evolucao({ workouts }: { workouts: Workout[] }) {
           ? `qualidade ${['', 'ótima', 'boa', 'razoável', 'fraca'][Math.round(trend.sleepQuality7)] ?? '—'}`
           : delta(trend.sleepScore7, trend.sleepScore28, ''),
     },
-    { label: 'Passos (7 dias)', value: trend.steps7 != null ? fmtInt(trend.steps7) : null, sub: delta(trend.steps7, trend.steps28, '') },
+    { label: 'Passos por dia (7 dias)', value: trend.steps7 != null ? fmtInt(trend.steps7) : null, sub: delta(trend.steps7, trend.steps28, '') },
   ]
   const hasTiles = tiles.some((t) => t.value != null)
 

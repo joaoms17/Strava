@@ -95,9 +95,11 @@ describe('plano semanal', () => {
     ])
   })
 
-  it('bem-estar: 7 dias contra 28, com passos e qualidade do sono', () => {
+  it('bem-estar: 7 dias contra 28, com passos (sem hoje, que vai a meio) e qualidade do sono', () => {
     const rows = [
-      { date: '2026-10-07', hrv: 50, resting_hr: 52, steps: 8000, sleep_quality: 2, sleep_score: 80 },
+      { date: '2026-10-07', hrv: 50, resting_hr: 52, steps: 190, sleep_quality: 2, sleep_score: 80 },
+      { date: '2026-09-30', steps: 8000 },
+      { date: '2026-09-08', steps: 3000 },
       { date: '2026-10-06', hrv: 46, resting_hr: 54, steps: 6000, sleep_quality: 3, sleep_score: 70 },
       { date: '2026-09-20', hrv: 40, resting_hr: 58, steps: 4000, sleep_quality: 4, sleep_score: 60 },
     ]

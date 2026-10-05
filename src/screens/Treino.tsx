@@ -21,7 +21,6 @@ import { useProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { useLocation } from 'wouter'
 import WeekPlanCard from '../components/WeekPlanCard'
-import Evolucao from '../components/Evolucao'
 import { cleanPrefs } from '../../api/_lib/rules/plano'
 
 function origin(w: Workout): string {
@@ -339,7 +338,6 @@ export default function Treino() {
       </div>
       )}
 
-      <Evolucao workouts={workouts} />
 
       {workouts.length === 0 ? (
         <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">

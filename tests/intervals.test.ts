@@ -4,6 +4,7 @@ import {
   mapActivity,
   mapIcuType,
   mapWellness,
+  mergeDailyHealth,
   syncMatch,
   syncedAgo,
   historyWindows,
@@ -179,5 +180,34 @@ describe('mais desportos', () => {
     expect(mapIcuType('Tennis', false)).toEqual({ type: 'other', sport: 'tenis' })
     expect(mapIcuType('Yoga', false)).toEqual({ type: 'other', sport: 'yoga' })
     expect(mapIcuType('HighIntensityIntervalTraining', false)).toEqual({ type: 'other', sport: 'aula' })
+  })
+})
+
+describe('passos, sono e FC em repouso do dia', () => {
+  it('a sincronização da madrugada já não fica para sempre: os passos sobem', () => {
+    const early = mergeDailyHealth(null, { steps: 38, sleepMinutes: 410, restingHr: 57 })
+    expect(early).toEqual({ steps: 38, sleep_minutes: 410, resting_hr: 57, source: 'intervals' })
+    expect(mergeDailyHealth(early, { steps: 9120, sleepMinutes: 415, restingHr: 55 })).toEqual({
+      steps: 9120,
+      sleep_minutes: 415,
+      resting_hr: 55,
+      source: 'intervals',
+    })
+    // Um valor mais baixo ou em falta não apaga o que já havia.
+    expect(mergeDailyHealth({ steps: 9120, sleep_minutes: 415, resting_hr: 55, source: 'intervals' }, { steps: 8000, sleepMinutes: null, restingHr: null })).toEqual({
+      steps: 9120,
+      sleep_minutes: 415,
+      resting_hr: 55,
+      source: 'intervals',
+    })
+  })
+
+  it('o Atalho do iPhone manda nas horas e na FC que preencheu', () => {
+    expect(mergeDailyHealth({ steps: 5000, sleep_minutes: 400, resting_hr: null, source: 'shortcut' }, { steps: 7000, sleepMinutes: 380, restingHr: 54 })).toEqual({
+      steps: 7000,
+      sleep_minutes: 400,
+      resting_hr: 54,
+      source: 'shortcut',
+    })
   })
 })

@@ -93,9 +93,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       {
         user_id: profile.user_id,
         date: body.data.date ?? localCalendarDate(),
-        steps: body.data.steps ?? null,
-        sleep_minutes: body.data.sleep_minutes ?? null,
-        resting_hr: body.data.resting_hr ?? null,
+        // Só o que o Atalho mandou (não apaga o que veio do relógio) e marcado
+        // como dele, para a sincronização do intervals.icu não o substituir.
+        ...(body.data.steps != null ? { steps: body.data.steps } : {}),
+        ...(body.data.sleep_minutes != null ? { sleep_minutes: body.data.sleep_minutes } : {}),
+        ...(body.data.resting_hr != null ? { resting_hr: body.data.resting_hr } : {}),
+        source: 'shortcut',
       },
       { onConflict: 'user_id,date' },
     )

@@ -170,6 +170,9 @@ export function wellnessTrend(rows: WellnessRow[], today: string): WellnessTrend
   const pick = (list: WellnessRow[], key: keyof WellnessRow) => mean(values(list, key))
   const w7 = since(7)
   const w28 = since(28)
+  // Passos: hoje ainda vai a meio, contam os 7 e 28 dias completos antes.
+  const full = (days: number) =>
+    rows.filter((r) => r.date > shiftDate(today, -days - 1) && r.date < today)
   const quality = values(w7, 'sleep_quality')
   return {
     hrv7: pick(w7, 'hrv'),
@@ -180,8 +183,8 @@ export function wellnessTrend(rows: WellnessRow[], today: string): WellnessTrend
     sleepScore28: pick(w28, 'sleep_score'),
     sleepQuality7: quality.length ? Math.round((quality.reduce((a, b) => a + b, 0) / quality.length) * 10) / 10 : null,
     sleepMinutes7: pick(w7, 'sleep_minutes'),
-    steps7: pick(w7, 'steps'),
-    steps28: pick(w28, 'steps'),
+    steps7: pick(full(7), 'steps'),
+    steps28: pick(full(28), 'steps'),
   }
 }
 

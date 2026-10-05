@@ -195,6 +195,33 @@ export function mapWellness(w: IcuWellness): {
   }
 }
 
+// Junta o dia do relógio ao que já está gravado. Os passos vão-se somando ao
+// longo do dia: fica o maior (a primeira sincronização da madrugada trazia
+// 38 passos e ficava para sempre). As horas de sono e a FC em repouso do
+// Atalho do iPhone mandam no que ele preencheu; as que vieram do próprio
+// intervals.icu são substituídas pelo valor mais recente.
+export interface DailyHealth {
+  steps: number | null
+  sleep_minutes: number | null
+  resting_hr: number | null
+  source: string
+}
+export function mergeDailyHealth(
+  existing: Partial<DailyHealth> | null,
+  incoming: { steps: number | null; sleepMinutes: number | null; restingHr: number | null },
+): DailyHealth {
+  const source = existing?.source ?? 'intervals'
+  const shortcut = source !== 'intervals'
+  const keep = (old: number | null | undefined, now: number | null) => (shortcut ? (old ?? now) : (now ?? old ?? null))
+  const oldSteps = existing?.steps ?? null
+  return {
+    steps: oldSteps != null && incoming.steps != null ? Math.max(oldSteps, incoming.steps) : (incoming.steps ?? oldSteps),
+    sleep_minutes: keep(existing?.sleep_minutes, incoming.sleepMinutes),
+    resting_hr: keep(existing?.resting_hr, incoming.restingHr),
+    source,
+  }
+}
+
 // «Sincronizado há 4 min»
 export function syncedAgo(lastSyncAt: string | null | undefined, now: Date): string | null {
   if (!lastSyncAt) return null
