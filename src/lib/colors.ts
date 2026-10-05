@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 // Cores do tema lidas das variáveis CSS, para os gráficos (SVG) seguirem o
 // tema claro ou escuro.
-const NAMES = ['bg', 'surface', 'surface2', 'line', 'ink', 'dim', 'eat', 'burn', 'protein', 'body', 'bodyfat', 'attn', 'pain', 'ok'] as const
+const NAMES = ['bg', 'surface', 'surface2', 'line', 'ink', 'dim', 'eat', 'burn', 'protein', 'body', 'bodyfat', 'attn', 'pain', 'ok', 'chart-bike', 'chart-gym'] as const
 export type ThemeColors = Record<(typeof NAMES)[number], string>
 
 function read(): ThemeColors {

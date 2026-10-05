@@ -10,6 +10,7 @@ export const PROMPT_MEAL_PHOTO_V2 = 'meal-photo.v2.md'
 export const PROMPT_MEAL_TEXT_V2 = 'meal-text.v2.md'
 export const PROMPT_MEAL_CORRECT = 'meal-correct.v1.md'
 export const PROMPT_WORKOUT_SHOT = 'workout-shot.v1.md'
+export const PROMPT_TRAINING_WEEK = 'training-week.v1.md'
 
 export function readPrompt(filename: string): string {
   const candidates = [

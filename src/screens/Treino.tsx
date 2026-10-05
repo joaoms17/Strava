@@ -20,6 +20,9 @@ import { syncedAgo } from '../../api/_lib/rules/intervals'
 import { useProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { useLocation } from 'wouter'
+import WeekPlanCard from '../components/WeekPlanCard'
+import Evolucao from '../components/Evolucao'
+import { cleanPrefs } from '../../api/_lib/rules/plano'
 
 function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
@@ -143,8 +146,10 @@ export default function Treino() {
     { avgHr: profile.bike_hr_avg_cap, maxHr: profile.bike_hr_max_cap },
   )
   const suggestion = bikeSuggestion(target)
-  // A sugestão da bicicleta só para quem anda de bicicleta.
-  const ridesBike = bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike')
+  // A sugestão da bicicleta só para quem anda de bicicleta e não tem o plano
+  // semanal (aí quem sugere é a IA).
+  const planOn = cleanPrefs(profile.goals?.plano)?.ativo === true
+  const ridesBike = !planOn && (bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike'))
 
   const history = [...workouts.slice().reverse(), ...(older ?? [])]
   async function loadOlder() {
@@ -195,6 +200,8 @@ export default function Treino() {
           ))}
         </div>
       )}
+
+      <WeekPlanCard workouts={workouts} />
 
       {top?.workout && (
         <button
@@ -331,6 +338,8 @@ export default function Treino() {
         )}
       </div>
       )}
+
+      <Evolucao workouts={workouts} />
 
       {workouts.length === 0 ? (
         <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">

@@ -50,6 +50,8 @@
     --color-attn: #b7791f;
     --color-pain: #d14343;
     --color-ok: #1f9d55;
+    --color-chart-bike: #2743f5;
+    --color-chart-gym: #a21caf;
     --color-cta: #121212;
     --color-on-cta: #f1eee7;
     color-scheme: light;
@@ -71,6 +73,8 @@
       --color-attn: #b7791f;
       --color-pain: #d14343;
       --color-ok: #1f9d55;
+      --color-chart-bike: #2743f5;
+      --color-chart-gym: #a21caf;
       --color-cta: #121212;
       --color-on-cta: #f1eee7;
       color-scheme: light;
@@ -79,6 +83,10 @@
 
   :root {
     color-scheme: dark;
+    /* Gráficos do treino: bicicleta e ginásio (validados para daltonismo).
+       Fora do @theme porque nenhuma classe as usa e o Tailwind tirava-as. */
+    --color-chart-bike: #7f9f14;
+    --color-chart-gym: #bd57c6;
   }
 
   html {

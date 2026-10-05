@@ -24,6 +24,7 @@ export default function Capitulo({ onOpenTimeline }: { onOpenTimeline?: () => vo
           .from('plan_blocks')
           .select('*')
           .in('status', ['active', 'completed'])
+          .neq('weeks', 1) // os planos semanais da IA não são capítulos
           .order('created_at', { ascending: false })
           .limit(1),
         supabase.from('profile').select('timeline').single(),

@@ -57,6 +57,8 @@ export interface Profile {
   console_shows_watts: boolean | null
   measure_interval_days?: number
   thigh_landmark_cm?: number
+  // Plano semanal com IA (goals.plano): ativo, sessões por semana e início.
+  goals?: { plano?: { ativo: boolean; bicicleta: number; ginasio: number; inicio: string } } & Record<string, unknown>
   integration_status?: {
     intervals?: {
       connected?: boolean

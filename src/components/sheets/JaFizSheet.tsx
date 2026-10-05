@@ -42,6 +42,8 @@ export default function JaFizSheet() {
   const profile = useReadyProfile()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const favId = sheet.params.get('fav')
+  // Do plano da semana: bicicleta com os minutos da sessão planeada.
+  const plannedMinutes = Number(sheet.params.get('minutos')) || null
   const [kind, setKind] = useState<Kind>('bike')
   const [day, setDay] = useState(sheet.params.get('data') ?? today)
   const [time, setTime] = useState('')
@@ -74,7 +76,13 @@ export default function JaFizSheet() {
         .order('created_at', { ascending: false })
         .limit(1)
       const last = data?.[0] as Workout | undefined
-      if (last) {
+      if (plannedMinutes) {
+        setKind('bike')
+        // Fora dos botões (ex.: 50 min): vai para «outro», para se ver.
+        setMinutes(DURATIONS.includes(plannedMinutes) ? plannedMinutes : null)
+        setOtherMinutes(DURATIONS.includes(plannedMinutes) ? '' : String(plannedMinutes))
+        if (last?.type === 'bike' && last.watts) setWatts(last.watts)
+      } else if (last) {
         setKind(kindOf(last))
         if (last.minutes) setMinutes(last.minutes)
         if (last.watts) setWatts(last.watts)
@@ -82,7 +90,7 @@ export default function JaFizSheet() {
       const { data: weights } = await supabase.from('weights').select('kg').order('date', { ascending: false }).limit(7)
       if (weights?.length) setWeightKg(weights.reduce((a, w) => a + Number(w.kg), 0) / weights.length)
     })()
-  }, [favId])
+  }, [favId, plannedMinutes])
 
   const type: Workout['type'] = kind === 'bike' || kind === 'strength' ? kind : 'other'
   const effectiveMinutes = minutes ?? toInt(otherMinutes)
