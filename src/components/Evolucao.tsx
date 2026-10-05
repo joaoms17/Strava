@@ -5,6 +5,7 @@ import { useThemeColors } from '../lib/colors'
 import { useDataVersion } from '../lib/events'
 import { useReadyProfile } from '../lib/profile'
 import BemEstar from './BemEstar'
+import EvolucaoIA from './EvolucaoIA'
 import { nutritionalDay, shiftDate } from '../lib/day'
 import {
   cleanWellness,
@@ -19,9 +20,9 @@ import {
 const WEEKS = 12
 const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
-// Corpo › Evolução: o relógio (passos, sono, FC em repouso e HRV, dia a dia),
-// minutos de treino por semana (bicicleta e ginásio), watts por batimento na
-// bicicleta e a forma (carga dos últimos 42 dias).
+// Corpo › Evolução: a análise da IA de tudo, o relógio dia a dia (passos,
+// sono, FC em repouso e HRV), minutos de treino por semana (bicicleta e
+// ginásio), watts por batimento na bicicleta e a forma (carga de 42 dias).
 export default function Evolucao() {
   const colors = useThemeColors()
   const profile = useReadyProfile()
@@ -83,15 +84,11 @@ export default function Evolucao() {
     cursor: { fill: colors.surface2, stroke: colors.line },
   }
 
-  const hasHealth = health.some(
-    (r) => r.steps != null || r.sleep_minutes != null || r.sleep_score != null || r.resting_hr != null || r.hrv != null,
-  )
-
-  if (!hasWeeks && !hasHealth) return null
-
   return (
     <section className="space-y-3" aria-label="Evolução">
       <p className="label">Evolução</p>
+
+      <EvolucaoIA today={today} />
 
       <BemEstar rows={health} today={today} />
 

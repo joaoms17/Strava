@@ -1,0 +1,67 @@
+import { describe, expect, it } from 'vitest'
+import { cleanAnalysis, foodWeeks, weightSummary, wellnessMonths } from '../api/_lib/rules/evolucao'
+
+// Corpo › Evolução: o que vai para a IA e o que se mostra do que ela devolve.
+describe('análise da evolução', () => {
+  it('só áreas conhecidas, uma vez cada, pela ordem; as vazias e «sem dados» saem', () => {
+    const a = cleanAnalysis({
+      titulo: ' A descer devagar ',
+      resumo: 'Bom mês.',
+      areas: [
+        { area: 'sono', estado: 'pior', texto: 'Dormiste menos 30 min.' },
+        { area: 'peso', estado: 'melhor', texto: '−1,2 kg em 30 dias.' },
+        { area: 'peso', estado: 'pior', texto: 'repetida' },
+        { area: 'coracao', estado: 'sem_dados', texto: '' },
+        { area: 'humor', estado: 'melhor', texto: 'não existe' },
+        { area: 'passos', estado: 'igual', texto: '' },
+      ],
+      foco: ['Proteína a 140 g', '', 'Dormir 7 h', 'Caminhar', 'A mais'],
+    })
+    expect(a.titulo).toBe('A descer devagar')
+    expect(a.areas.map((x) => [x.area, x.estado])).toEqual([
+      ['peso', 'melhor'],
+      ['sono', 'pior'],
+    ])
+    expect(a.foco).toEqual(['Proteína a 140 g', 'Dormir 7 h', 'Caminhar'])
+    expect(cleanAnalysis(null)).toEqual({ titulo: '', resumo: '', areas: [], foco: [] })
+  })
+
+  it('peso: último, média de 7 dias hoje e há 30 dias (só com pesagem perto)', () => {
+    const weights = [
+      { date: '2026-09-01', kg: 88 },
+      { date: '2026-09-04', kg: 87.6 },
+      { date: '2026-10-03', kg: 86.2 },
+      { date: '2026-10-05', kg: 85.8 },
+    ]
+    const w = weightSummary(weights, '2026-10-05')!
+    expect(w.ultimo).toEqual({ data: '2026-10-05', kg: 85.8 })
+    expect(w.media_7_dias.hoje).toBe(86)
+    expect(w.media_7_dias.ha_30_dias).toBe(87.8)
+    expect(w.media_7_dias.ha_90_dias).toBeNull()
+    expect(weightSummary([], '2026-10-05')).toBeNull()
+  })
+
+  it('comida: 4 semanas, só dias completos, a última termina ontem', () => {
+    const days = [
+      { date: '2026-10-04', kcal_in: 1800, protein: 130, kcal_target: 1700, is_complete: true },
+      { date: '2026-10-03', kcal_in: 1600, protein: 120, kcal_target: 1700, is_complete: true },
+      { date: '2026-10-02', kcal_in: 400, protein: 20, kcal_target: 1700, is_complete: false },
+      { date: '2026-10-05', kcal_in: 900, protein: 50, kcal_target: 1700, is_complete: true },
+    ]
+    const weeks = foodWeeks(days, '2026-10-05')
+    expect(weeks).toHaveLength(4)
+    expect(weeks[3]).toMatchObject({ de: '2026-09-28', a: '2026-10-04', dias_completos: 2, comeu_kcal: 1700, proteina_g: 125 })
+  })
+
+  it('relógio: 30 dias contra os 30 antes, sem a FC dos dias sem noite', () => {
+    const rows = [
+      { date: '2026-10-04', steps: 9000, resting_hr: 55, sleep_minutes: 420 },
+      { date: '2026-10-01', steps: 7000, resting_hr: 74 },
+      { date: '2026-10-05', steps: 300 },
+      { date: '2026-08-20', steps: 5000, resting_hr: 60, sleep_score: 70 },
+    ]
+    const m = wellnessMonths(rows, '2026-10-05')
+    expect(m.ultimos_30_dias).toMatchObject({ dias_com_dados: 2, passos: 8000, fc_repouso: 55, sono_minutos: 420 })
+    expect(m.os_30_antes).toMatchObject({ dias_com_dados: 1, passos: 5000, fc_repouso: 60 })
+  })
+})

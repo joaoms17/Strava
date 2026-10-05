@@ -11,7 +11,6 @@ import {
   weekNumber,
   weeklyStats,
   cleanWellness,
-  latestOf,
   wellnessTrend,
   type PlanWorkout,
 } from '../api/_lib/rules/plano'
@@ -118,19 +117,6 @@ describe('plano semanal', () => {
     expect(cleanWellness(rows).map((r) => r.resting_hr)).toEqual([null, 57, 57])
     expect(cleanWellness(rows)[0]!.steps).toBe(1184)
     expect(wellnessTrend(rows, '2026-10-03').rhr7).toBe(57)
-  })
-
-  it('o valor mais recente de cada campo, só dos últimos dias', () => {
-    const rows = [
-      { date: '2026-10-07', steps: 1200, hrv: null },
-      { date: '2026-10-06', steps: 9120, resting_hr: 55 },
-      { date: '2026-10-03', hrv: 50 },
-      { date: '2026-10-08', steps: 99 },
-    ]
-    expect(latestOf(rows, 'steps', '2026-10-07')).toEqual({ date: '2026-10-07', value: 1200 })
-    expect(latestOf(rows, 'resting_hr', '2026-10-07')).toEqual({ date: '2026-10-06', value: 55 })
-    expect(latestOf(rows, 'hrv', '2026-10-07')).toBeNull()
-    expect(latestOf(rows, 'hrv', '2026-10-07', 4)).toEqual({ date: '2026-10-03', value: 50 })
   })
 
   it('plano da IA: forma certa e no máximo as sessões pedidas', () => {

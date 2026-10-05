@@ -4,7 +4,7 @@ import { useThemeColors } from '../lib/colors'
 import { shiftDate } from '../lib/day'
 import { fmtDayShort, fmtInt } from '../lib/format'
 import { fmtSleep, sleepLabel } from '../../api/_lib/rules/sono'
-import { latestOf, wellnessTrend, type WellnessRow } from '../../api/_lib/rules/plano'
+import { wellnessTrend, type WellnessRow } from '../../api/_lib/rules/plano'
 
 type Range = 30 | 90
 type Day = {
@@ -21,46 +21,13 @@ type Day = {
 const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 const thousands = (v: number) => (v === 0 ? '0' : `${(v / 1000).toFixed(v % 1000 ? 1 : 0).replace('.', ',')} mil`)
 
-// Corpo › Evolução › Do relógio: o último valor de cada coisa (passos de hoje
-// no total, a noite, FC em repouso e HRV) e os gráficos dia a dia. Só aparece o
-// que o relógio mandou.
+// Corpo › Evolução › Do relógio: os gráficos dia a dia (passos, sono, FC em
+// repouso e HRV). Só aparece o que o relógio mandou.
 export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: string }) {
   const colors = useThemeColors()
   const [range, setRange] = useState<Range>(30)
-  const yesterday = shiftDate(today, -1)
-  const when = (date: string, night = false) =>
-    date === today ? (night ? 'esta noite' : 'hoje') : date === yesterday ? 'ontem' : dm(date)
-
   const month = wellnessTrend(rows, today)
-  const steps = latestOf(rows, 'steps', today, 1)
-  const stepsYesterday = rows.find((r) => r.date === yesterday)?.steps ?? null
-  const night = rows
-    .filter((r) => r.date <= today && r.date >= shiftDate(today, -2) && (r.sleep_score != null || r.sleep_minutes != null))
-    .sort((a, b) => b.date.localeCompare(a.date))[0]
-  const rhr = latestOf(rows, 'resting_hr', today)
-  const hrv = latestOf(rows, 'hrv', today)
-  const vsMonth = (now: number, avg: number | null, unit = '') =>
-    avg == null ? null : Math.round(now) === avg ? 'igual ao mês' : `${now > avg ? '↑' : '↓'} ${fmtInt(Math.abs(now - avg))}${unit} vs mês`
-
-  const tiles: { label: string; value: string; sub: string | null }[] = []
-  if (steps) {
-    tiles.push({
-      label: `Passos ${when(steps.date)}`,
-      value: fmtInt(steps.value),
-      sub: steps.date === today && stepsYesterday != null ? `ontem ${fmtInt(stepsYesterday)}` : null,
-    })
-  }
-  if (night) {
-    const label = sleepLabel({ sleep_score: night.sleep_score ?? null, sleep_quality: night.sleep_quality ?? null })
-    const hours = night.sleep_minutes != null ? fmtSleep(night.sleep_minutes) : null
-    tiles.push({
-      label: `Sono ${when(night.date, true)}`,
-      value: night.sleep_score != null ? String(night.sleep_score) : hours!,
-      sub: [night.sleep_score != null ? hours : null, label].filter(Boolean).join(' · ') || null,
-    })
-  }
-  if (rhr) tiles.push({ label: 'FC em repouso', value: `${rhr.value} bpm`, sub: vsMonth(rhr.value, month.rhr28) })
-  if (hrv) tiles.push({ label: 'HRV', value: `${Math.round(hrv.value)} ms`, sub: vsMonth(hrv.value, month.hrv28, ' ms') })
+  const stepsToday = rows.find((r) => r.date === today)?.steps ?? null
 
   const byDate = new Map(rows.map((r) => [r.date, r]))
   const days: Day[] = Array.from({ length: range }, (_, i) => {
@@ -84,7 +51,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
   const sleepAvg = sleepDays.length ? sleepDays.reduce((a, d) => a + d.sleep_minutes!, 0) / sleepDays.length : null
   const charts = count('steps') >= 2 || count('sleepH') >= 2 || count('rhr') >= 2 || count('hrv') >= 2
 
-  if (tiles.length === 0 && !charts) return null
+  if (!charts) return null
 
   const dense = range === 90
   const axis = { tick: { fill: colors.dim, fontSize: 11 }, axisLine: false, tickLine: false } as const
@@ -138,18 +105,6 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
 
   return (
     <div className="space-y-3">
-      {tiles.length > 0 && (
-        <div className={`grid gap-2 ${tiles.length === 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          {tiles.map((t) => (
-            <div key={t.label} className="rounded-2xl border border-line bg-surface p-3">
-              <p className="text-[13px] text-dim">{t.label}</p>
-              <p className={`num leading-tight font-semibold ${tiles.length === 3 ? 'text-[22px]' : 'text-[26px]'}`}>{t.value}</p>
-              {t.sub && <p className="text-[12px] text-dim tabular-nums">{t.sub}</p>}
-            </div>
-          ))}
-        </div>
-      )}
-
       {charts && (
         <div className="flex items-center justify-between">
           <p className="text-[15px] font-semibold">Do relógio, dia a dia</p>
@@ -171,7 +126,12 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
       {count('steps') >= 2 &&
         card(
           'Passos por dia',
-          stepsAvg != null ? `Média: ${fmtInt(stepsAvg)} por dia (sem hoje, que ainda vai a meio)` : null,
+          [
+            stepsToday != null ? `Hoje: ${fmtInt(stepsToday)} até agora` : null,
+            stepsAvg != null ? `média ${fmtInt(stepsAvg)} por dia (sem hoje)` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || null,
           <BarChart data={days} margin={margin}>
             <CartesianGrid stroke={colors.line} vertical={false} />
             {xAxis}

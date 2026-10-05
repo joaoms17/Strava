@@ -12,6 +12,7 @@ function Index() {
     void supabase
       .from('weekly_reviews')
       .select('week_start,text')
+      .neq('kind', 'evolucao')
       .order('week_start', { ascending: false })
       .limit(20)
       .then(({ data }) => setReviews((data ?? []) as WeeklyReview[]))
