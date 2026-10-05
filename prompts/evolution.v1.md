@@ -5,7 +5,7 @@ Recebes um JSON com:
 - `peso`: o último peso, a média de 7 dias hoje, há 30 e há 90 dias, o ritmo em kg por semana (negativo = a descer) e quantas pesagens houve em 90 dias.
 - `medidas`: as últimas medições com fita (cintura, pescoço, etc.), da mais recente para a mais antiga.
 - `comida`: as últimas 4 semanas, só com os dias completos: quantos dias, média do que comeu, do alvo, da proteína e do gasto estimado.
-- `treino`: as últimas semanas (sessões e minutos de bicicleta, ginásio e outros, watts e FC médios da bicicleta), a eficiência na bicicleta (watts ou metros por batimento, só entre sessões comparáveis; primeiras e últimas) e a forma (CTL, 42 dias) hoje e há 4 semanas; e o plano semanal, se existir, com o que foi cumprido.
+- `treino`: as últimas semanas (sessões e minutos de bicicleta, ginásio e outros, watts e FC médios da bicicleta), a eficiência na bicicleta (watts ou metros por batimento, só entre sessões comparáveis; primeiras e últimas) e a forma (CTL, 42 dias) hoje e há 4 semanas.
 - `relogio`: médias dos últimos 30 dias contra os 30 antes: passos por dia, minutos e pontuação de sono, qualidade do sono (1 ótima … 4 fraca), FC em repouso (só noites com relógio) e HRV.
 
 O que fazer:

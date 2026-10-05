@@ -15,10 +15,8 @@ import BikeHrChart from '../components/BikeHrChart'
 import LoadChart from '../components/LoadChart'
 import { useAutoSync } from '../lib/intervals'
 import { useLocation } from 'wouter'
-import WeekPlanCard from '../components/WeekPlanCard'
 import WorkoutLogOptions from '../components/WorkoutLogOptions'
 import PendingInfo from '../components/PendingInfo'
-import { cleanPrefs } from '../../api/_lib/rules/plano'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 
 function origin(w: Workout): string {
@@ -126,8 +124,7 @@ export default function Treino() {
   const suggestion = bikeSuggestion(target)
   // A sugestão da bicicleta só para quem anda de bicicleta e não tem o plano
   // semanal (aí quem sugere é a IA).
-  const planOn = cleanPrefs(profile.goals?.plano)?.ativo === true
-  const ridesBike = !planOn && (bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike'))
+  const ridesBike = bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike')
 
   const history = [...sessions.slice().reverse(), ...mergeSessions(older ?? []).reverse()]
   async function loadOlder() {
@@ -176,8 +173,6 @@ export default function Treino() {
           ))}
         </div>
       )}
-
-      <WeekPlanCard workouts={workouts} />
 
       <WorkoutLogOptions />
 

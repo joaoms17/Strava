@@ -6,14 +6,11 @@ import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from '../_lib/ant
 import { PROMPT_EVOLUTION, promptVersion, readPrompt } from '../_lib/prompts.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
-import { mondayOf } from '../_lib/rules/manutencao.js'
 import { AREAS, ESTADOS, cleanAnalysis, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
 import {
-  cleanPlan,
   bikeEfficiency,
   fitnessSeries,
   lastMondays,
-  planProgress,
   weeklyStats,
   type PlanWorkout,
   type WellnessRow,
@@ -61,7 +58,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
     }
 
     const since = shiftDate(today, -90)
-    const [weights, measurements, days, workouts, health, plans] = await Promise.all([
+    const [weights, measurements, days, workouts, health] = await Promise.all([
       db.from('weights').select('date,kg').gte('date', since).order('date'),
       db
         .from('body_measurements')
@@ -84,18 +81,11 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .select('date,hrv,resting_hr,sleep_score,sleep_quality,sleep_minutes,steps')
         .gte('date', shiftDate(today, -61))
         .lte('date', today),
-      db
-        .from('plan_blocks')
-        .select('start_date,plan')
-        .eq('weeks', 1)
-        .order('start_date', { ascending: false })
-        .limit(4),
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
     const efficiency = bikeEfficiency(allWorkouts)
     const form = fitnessSeries(allWorkouts, shiftDate(today, -125), today)
-    const goals = (profile.goals ?? {}) as Record<string, unknown>
     const payload = {
       pessoa: {
         sexo: profile.sex === 'f' ? 'mulher' : 'homem',
@@ -127,21 +117,6 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
           hoje: form[form.length - 1]?.ctl ?? null,
           ha_4_semanas: form[form.length - 29]?.ctl ?? null,
         },
-        plano_semanal: goals.plano ?? null,
-        semanas_do_plano: (plans.data ?? []).map((p) => {
-          const plan = cleanPlan(p.plan, { bicicleta: 7, ginasio: 7 }, 1)
-          const end = shiftDate(p.start_date as string, 6)
-          const done = planProgress(
-            plan,
-            allWorkouts.filter((w) => w.date >= (p.start_date as string) && w.date <= end),
-          )
-          return {
-            semana: p.start_date,
-            atual: p.start_date === mondayOf(today),
-            bicicleta: { planeadas: plan.bicicleta.length, feitas: done.bike.filter(Boolean).length },
-            ginasio: { planeadas: plan.ginasio.length, feitas: done.gym.filter(Boolean).length },
-          }
-        }),
       },
       relogio: wellnessMonths((health.data ?? []) as WellnessRow[], today),
     }
