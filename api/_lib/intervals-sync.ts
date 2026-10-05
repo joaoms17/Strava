@@ -93,6 +93,7 @@ export async function testKey(key: string): Promise<{ id: string | null; name: s
 export interface SyncResult {
   activities: number // atividades que o intervals.icu devolveu (novas ou não)
   known: number // dessas, as que já estavam na app
+  updated: number // das que já estavam, as que ganharam km ou kcal novas
   weightDays: number // dias com peso no intervals.icu (entrados ou não)
   inserted: number
   merged: number
@@ -164,6 +165,7 @@ export async function syncIntervals(
   const result: SyncResult = {
     activities: Array.isArray(activities) ? activities.length : 0,
     known: 0,
+    updated: 0,
     weightDays: 0,
     inserted: 0,
     merged: 0,
@@ -275,7 +277,10 @@ export async function syncIntervals(
         if (Object.keys(patch).length === 0) continue
         const { error } = await admin.from('workouts').update(patch).eq('id', row.id as string)
         if (error) console.error('workouts (atualizar):', error.message)
-        else touch(row.date as string)
+        else {
+          result.updated++
+          touch(row.date as string)
+        }
       }
     }
 

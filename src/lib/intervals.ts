@@ -17,6 +17,7 @@ import {
 export interface SyncResult {
   activities?: number
   known?: number
+  updated?: number
   weightDays?: number
   inserted: number
   merged: number
@@ -33,6 +34,7 @@ export function syncSummary(r: SyncResult): string {
   const parts = [
     r.inserted ? `${r.inserted} ${r.inserted === 1 ? 'treino novo' : 'treinos novos'}` : null,
     r.merged ? `${r.merged} ${r.merged === 1 ? 'junto a uma sessão' : 'juntos a sessões'}` : null,
+    r.updated ? `${r.updated} ${r.updated === 1 ? 'treino completado' : 'treinos completados'}` : null,
     r.weights ? `${r.weights} ${r.weights === 1 ? 'pesagem' : 'pesagens'}` : null,
     r.nights ? `${r.nights} ${r.nights === 1 ? 'noite de sono' : 'noites de sono'}` : null,
   ].filter(Boolean)
@@ -52,7 +54,7 @@ let lastAttempt = 0
 export async function syncNow(days = 3): Promise<SyncResult> {
   lastAttempt = Date.now()
   const result = await postApi<SyncResult>('/api/workout/sync', { days })
-  if (result.inserted || result.merged || result.weights || result.nights) emitDataChanged()
+  if (result.inserted || result.merged || result.updated || result.weights || result.nights) emitDataChanged()
   return result
 }
 
