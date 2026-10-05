@@ -4,14 +4,13 @@ import { supabase } from '../lib/supabase'
 import { useThemeColors } from '../lib/colors'
 import { useDataVersion } from '../lib/events'
 import { useReadyProfile } from '../lib/profile'
+import BemEstar from './BemEstar'
 import { nutritionalDay, shiftDate } from '../lib/day'
-import { fmtInt } from '../lib/format'
 import {
   efficiencySeries,
   fitnessSeries,
   lastMondays,
   weeklyStats,
-  wellnessTrend,
   type PlanWorkout,
   type WellnessRow,
 } from '../../api/_lib/rules/plano'
@@ -19,9 +18,9 @@ import {
 const WEEKS = 12
 const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
-// Corpo › Evolução: o bem-estar do relógio (HRV, FC em repouso, sono e passos,
-// 7 dias contra o mês), minutos de treino por semana (bicicleta e ginásio),
-// watts por batimento na bicicleta e a forma (carga dos últimos 42 dias).
+// Corpo › Evolução: o relógio (passos, sono, FC em repouso e HRV, dia a dia),
+// minutos de treino por semana (bicicleta e ginásio), watts por batimento na
+// bicicleta e a forma (carga dos últimos 42 dias).
 export default function Evolucao() {
   const colors = useThemeColors()
   const profile = useReadyProfile()
@@ -36,7 +35,7 @@ export default function Evolucao() {
       supabase
         .from('health_daily')
         .select('date,hrv,resting_hr,sleep_score,sleep_quality,sleep_minutes,steps')
-        .gte('date', shiftDate(today, -29))
+        .gte('date', shiftDate(today, -90))
         .lte('date', today),
       supabase
         .from('workouts_active')
@@ -64,7 +63,6 @@ export default function Evolucao() {
     () => fitnessSeries(workouts, shiftDate(today, -7 * WEEKS - 41), today).slice(-7 * WEEKS),
     [workouts, today],
   )
-  const trend = wellnessTrend(health, today)
   const hasWeeks = weeks.some((w) => w.bike + w.gym > 0)
   const hasForm = form.some((p) => p.ctl > 0)
 
@@ -84,46 +82,17 @@ export default function Evolucao() {
     cursor: { fill: colors.surface2, stroke: colors.line },
   }
 
-  const delta = (now: number | null, month: number | null, unit: string) => {
-    if (now == null || month == null || now === month) return month != null ? `igual ao mês` : null
-    return `${now > month ? '↑' : '↓'} ${fmtInt(Math.abs(now - month))}${unit} vs mês`
-  }
-  const tiles: { label: string; value: string | null; sub: string | null }[] = [
-    { label: 'HRV (7 dias)', value: trend.hrv7 != null ? `${trend.hrv7} ms` : null, sub: delta(trend.hrv7, trend.hrv28, ' ms') },
-    {
-      label: 'FC em repouso',
-      value: trend.rhr7 != null ? `${trend.rhr7} bpm` : null,
-      sub: delta(trend.rhr7, trend.rhr28, ''),
-    },
-    {
-      label: 'Sono',
-      value: trend.sleepScore7 != null ? `${trend.sleepScore7}` : trend.sleepMinutes7 != null ? `${Math.floor(trend.sleepMinutes7 / 60)} h ${trend.sleepMinutes7 % 60}` : null,
-      sub:
-        trend.sleepQuality7 != null
-          ? `qualidade ${['', 'ótima', 'boa', 'razoável', 'fraca'][Math.round(trend.sleepQuality7)] ?? '—'}`
-          : delta(trend.sleepScore7, trend.sleepScore28, ''),
-    },
-    { label: 'Passos por dia (7 dias)', value: trend.steps7 != null ? fmtInt(trend.steps7) : null, sub: delta(trend.steps7, trend.steps28, '') },
-  ]
-  const hasTiles = tiles.some((t) => t.value != null)
+  const hasHealth = health.some(
+    (r) => r.steps != null || r.sleep_minutes != null || r.sleep_score != null || r.resting_hr != null || r.hrv != null,
+  )
 
-  if (!hasWeeks && !hasTiles) return null
+  if (!hasWeeks && !hasHealth) return null
 
   return (
     <section className="space-y-3" aria-label="Evolução">
       <p className="label">Evolução</p>
 
-      {hasTiles && (
-        <div className="grid grid-cols-2 gap-2">
-          {tiles.map((t) => (
-            <div key={t.label} className="rounded-2xl border border-line bg-surface p-3">
-              <p className="text-[13px] text-dim">{t.label}</p>
-              <p className="num text-[26px] leading-tight font-semibold">{t.value ?? '—'}</p>
-              {t.sub && t.value && <p className="text-[12px] text-dim tabular-nums">{t.sub}</p>}
-            </div>
-          ))}
-        </div>
-      )}
+      <BemEstar rows={health} today={today} />
 
       {hasWeeks && (
         <div className="rounded-2xl border border-line bg-surface p-4">

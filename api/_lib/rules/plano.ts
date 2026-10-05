@@ -162,6 +162,24 @@ export interface WellnessTrend {
   steps28: number | null
 }
 
+// O valor mais recente de um campo do relógio, de hoje até `maxAge` dias
+// antes (um valor mais antigo já não diz como estás).
+export function latestOf(
+  rows: WellnessRow[],
+  key: Exclude<keyof WellnessRow, 'date'>,
+  today: string,
+  maxAge = 2,
+): { date: string; value: number } | null {
+  const oldest = shiftDate(today, -maxAge)
+  let best: { date: string; value: number } | null = null
+  for (const r of rows) {
+    const v = r[key]
+    if (typeof v !== 'number' || r.date > today || r.date < oldest) continue
+    if (!best || r.date > best.date) best = { date: r.date, value: v }
+  }
+  return best
+}
+
 // Média dos últimos 7 dias contra a dos últimos 28 (até `today`).
 export function wellnessTrend(rows: WellnessRow[], today: string): WellnessTrend {
   const since = (days: number) => rows.filter((r) => r.date > shiftDate(today, -days) && r.date <= today)

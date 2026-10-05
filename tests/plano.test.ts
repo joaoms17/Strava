@@ -10,6 +10,7 @@ import {
   sessionLoad,
   weekNumber,
   weeklyStats,
+  latestOf,
   wellnessTrend,
   type PlanWorkout,
 } from '../api/_lib/rules/plano'
@@ -105,6 +106,19 @@ describe('plano semanal', () => {
     ]
     const t = wellnessTrend(rows, '2026-10-07')
     expect(t).toMatchObject({ hrv7: 48, hrv28: 45, rhr7: 53, rhr28: 55, steps7: 7000, steps28: 6000, sleepQuality7: 2.5, sleepScore7: 75 })
+  })
+
+  it('o valor mais recente de cada campo, só dos últimos dias', () => {
+    const rows = [
+      { date: '2026-10-07', steps: 1200, hrv: null },
+      { date: '2026-10-06', steps: 9120, resting_hr: 55 },
+      { date: '2026-10-03', hrv: 50 },
+      { date: '2026-10-08', steps: 99 },
+    ]
+    expect(latestOf(rows, 'steps', '2026-10-07')).toEqual({ date: '2026-10-07', value: 1200 })
+    expect(latestOf(rows, 'resting_hr', '2026-10-07')).toEqual({ date: '2026-10-06', value: 55 })
+    expect(latestOf(rows, 'hrv', '2026-10-07')).toBeNull()
+    expect(latestOf(rows, 'hrv', '2026-10-07', 4)).toEqual({ date: '2026-10-03', value: 50 })
   })
 
   it('plano da IA: forma certa e no máximo as sessões pedidas', () => {

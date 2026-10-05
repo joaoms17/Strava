@@ -52,6 +52,7 @@
     --color-ok: #1f9d55;
     --color-chart-bike: #2743f5;
     --color-chart-gym: #a21caf;
+    --color-chart-health: #0d9488;
     --color-cta: #121212;
     --color-on-cta: #f1eee7;
     color-scheme: light;
@@ -75,6 +76,7 @@
       --color-ok: #1f9d55;
       --color-chart-bike: #2743f5;
       --color-chart-gym: #a21caf;
+      --color-chart-health: #0d9488;
       --color-cta: #121212;
       --color-on-cta: #f1eee7;
       color-scheme: light;
@@ -87,6 +89,7 @@
        Fora do @theme porque nenhuma classe as usa e o Tailwind tirava-as. */
     --color-chart-bike: #7f9f14;
     --color-chart-gym: #bd57c6;
+    --color-chart-health: #2a9d8f;
   }
 
   html {
