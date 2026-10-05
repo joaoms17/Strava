@@ -9,7 +9,6 @@ import EvolucaoIA from './EvolucaoIA'
 import { nutritionalDay, shiftDate } from '../lib/day'
 import {
   cleanWellness,
-  efficiencySeries,
   fitnessSeries,
   lastMondays,
   weeklyStats,
@@ -22,7 +21,8 @@ const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
 // Corpo › Evolução: a análise da IA de tudo, o relógio dia a dia (passos,
 // sono, FC em repouso e HRV), minutos de treino por semana (bicicleta e
-// ginásio), watts por batimento na bicicleta e a forma (carga de 42 dias).
+// ginásio) e a forma (carga de 42 dias). A eficiência na bicicleta está no
+// Treino.
 export default function Evolucao() {
   const colors = useThemeColors()
   const profile = useReadyProfile()
@@ -41,7 +41,7 @@ export default function Evolucao() {
         .lte('date', today),
       supabase
         .from('workouts_active')
-        .select('date,started_at,type,minutes,watts,np_w,avg_hr,max_hr,training_load')
+        .select('id,date,started_at,type,sport,minutes,moving_s,elapsed_s,distance_km,watts,np_w,avg_hr,max_hr,training_load')
         .gte('date', shiftDate(today, -7 * WEEKS - 42))
         .lte('date', today)
         .order('date'),
@@ -59,7 +59,6 @@ export default function Evolucao() {
     const stats = weeklyStats(workouts, lastMondays(today, WEEKS))
     return stats.map((w) => ({ label: dm(w.start), bike: w.bike.minutes, gym: w.gym.minutes, sessions: w.bike.sessions + w.gym.sessions }))
   }, [workouts, today])
-  const efficiency = useMemo(() => efficiencySeries(workouts).slice(-20), [workouts])
   // A forma começa 6 semanas antes, para não arrancar do zero no gráfico.
   const form = useMemo(
     () => fitnessSeries(workouts, shiftDate(today, -7 * WEEKS - 41), today).slice(-7 * WEEKS),
@@ -154,35 +153,6 @@ export default function Evolucao() {
               </tbody>
             </table>
           </details>
-        </div>
-      )}
-
-      {efficiency.length >= 2 && (
-        <div className="rounded-2xl border border-line bg-surface p-4">
-          <p className="text-[15px] font-semibold">Watts por batimento na bicicleta</p>
-          <p className="text-[13px] text-dim">Se sobe, fazes a mesma potência com menos esforço do coração.</p>
-          <div className="mt-2 h-40">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={efficiency} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
-                <CartesianGrid stroke={colors.line} vertical={false} />
-                <XAxis dataKey="date" tickFormatter={dm} {...axis} minTickGap={32} />
-                <YAxis {...axis} domain={['auto', 'auto']} tickFormatter={(v: number) => v.toFixed(2).replace('.', ',')} />
-                <Tooltip
-                  {...tooltipStyle}
-                  labelFormatter={(label) => dm(String(label))}
-                  formatter={(value) => [`${Number(value).toFixed(2).replace('.', ',')} W/bpm`, 'Eficiência']}
-                />
-                <Line
-                  isAnimationActive={false}
-                  dataKey="value"
-                  stroke={colors['chart-bike']}
-                  strokeWidth={2}
-                  dot={{ r: 4, fill: colors['chart-bike'], stroke: colors.surface, strokeWidth: 2 }}
-                  activeDot={{ r: 6, stroke: colors.surface, strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
         </div>
       )}
 

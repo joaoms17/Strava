@@ -10,7 +10,7 @@ import { mondayOf } from '../_lib/rules/manutencao.js'
 import { AREAS, ESTADOS, cleanAnalysis, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
 import {
   cleanPlan,
-  efficiencySeries,
+  bikeEfficiency,
   fitnessSeries,
   lastMondays,
   planProgress,
@@ -75,7 +75,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .lte('date', today),
       db
         .from('workouts_active')
-        .select('date,type,minutes,watts,np_w,avg_hr,max_hr,training_load')
+        .select('id,date,started_at,type,sport,minutes,moving_s,elapsed_s,distance_km,watts,np_w,avg_hr,max_hr,training_load')
         .gte('date', shiftDate(today, -125))
         .lte('date', today)
         .order('date'),
@@ -93,7 +93,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
-    const efficiency = efficiencySeries(allWorkouts)
+    const efficiency = bikeEfficiency(allWorkouts)
     const form = fitnessSeries(allWorkouts, shiftDate(today, -125), today)
     const goals = (profile.goals ?? {}) as Record<string, unknown>
     const payload = {
@@ -115,8 +115,13 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
           ginasio: w.gym,
           outros: w.other,
         })),
-        watts_por_batimento: efficiency.length
-          ? { primeiras: efficiency.slice(0, 3), ultimas: efficiency.slice(-3) }
+        // Só sessões comparáveis (≥ 20 min, a mesma medida de esforço).
+        eficiencia_bicicleta: efficiency.metric
+          ? {
+              medida: efficiency.metric === 'watts' ? 'watts por batimento' : 'metros por batimento',
+              primeiras: efficiency.points.slice(0, 3),
+              ultimas: efficiency.points.slice(-3),
+            }
           : null,
         forma: {
           hoje: form[form.length - 1]?.ctl ?? null,

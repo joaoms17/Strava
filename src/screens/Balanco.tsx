@@ -34,6 +34,7 @@ import { weeklyRate } from '../../api/_lib/rules/weight'
 import { belowFloor, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
 import type { Meal, Workout } from '../lib/types'
 import BalancoMes from '../components/BalancoMes'
+import { mergeSessions } from '../../api/_lib/rules/sessoes'
 
 interface WeekData {
   days: (BalanceDay & { out: number })[]
@@ -255,7 +256,7 @@ export default function Balanco() {
   const hasAny = data.days.some((d) => d.meals > 0)
   const rate = data.rate
   const exp = data.expenditure
-  const sessions = data.workouts.length
+  const sessions = mergeSessions(data.workouts).length
   const minutes = data.workouts.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const trainingKcal = data.workouts.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
   const missingComplete = Math.max(0, MIN_COMPLETE_DAYS - data.completeDays)

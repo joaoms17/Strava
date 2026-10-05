@@ -18,6 +18,7 @@ import { useLocation } from 'wouter'
 import WeekPlanCard from '../components/WeekPlanCard'
 import WorkoutLogOptions from '../components/WorkoutLogOptions'
 import { cleanPrefs } from '../../api/_lib/rules/plano'
+import { mergeSessions } from '../../api/_lib/rules/sessoes'
 
 function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
@@ -93,7 +94,9 @@ export default function Treino() {
 
   const { workouts, favorites, pending } = data
   const monday = mondayOf(today)
-  const week = workouts.filter((w) => w.date >= monday && w.date <= today)
+  // Um treino que o relógio partiu em dois (parou e recomeçou) conta como um.
+  const sessions = mergeSessions(workouts)
+  const week = sessions.filter((w) => w.date >= monday && w.date <= today)
   const weekMinutes = week.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const weekKcal = week.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
 
@@ -103,7 +106,7 @@ export default function Treino() {
       : sheet.open('confirmar-treino', { id: w.id })
 
 
-  const bikes = workouts.filter((w) => w.type === 'bike')
+  const bikes = sessions.filter((w) => w.type === 'bike')
   const target = nextBikeTarget(
     bikes.map((w) => ({
       watts: w.watts,
@@ -122,7 +125,7 @@ export default function Treino() {
   const planOn = cleanPrefs(profile.goals?.plano)?.ativo === true
   const ridesBike = !planOn && (bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike'))
 
-  const history = [...workouts.slice().reverse(), ...(older ?? [])]
+  const history = [...sessions.slice().reverse(), ...mergeSessions(older ?? []).reverse()]
   async function loadOlder() {
     const { data: rows } = await supabase
       .from('workouts_active')
@@ -217,6 +220,7 @@ export default function Treino() {
                       w.watts != null ? `${w.watts_source === 'prefill' ? '≈' : ''}${w.watts} W` : null,
                       w.avg_hr != null ? `${w.avg_hr} bpm` : null,
                       origin(w),
+                      w.parts.length > 1 ? `${w.parts.length} partes juntas` : null,
                     ]
                       .filter(Boolean)
                       .join(' · ')}
@@ -245,7 +249,7 @@ export default function Treino() {
       {bikes.some((w) => w.avg_hr != null) && (
         <section className="space-y-2">
           <p className="label">Progressão na bicicleta</p>
-          <BikeHrChart workouts={workouts} capAvg={profile.bike_hr_avg_cap} />
+          <BikeHrChart workouts={workouts} />
         </section>
       )}
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   cleanPlan,
   cleanPrefs,
-  efficiencySeries,
+  bikeEfficiency,
   fitnessSeries,
   isDeloadWeek,
   lastMondays,
@@ -83,17 +83,43 @@ describe('plano semanal', () => {
   })
 
   it('eficiência: watts por batimento nas sessões de 20 min ou mais', () => {
-    expect(
-      efficiencySeries([
-        w({ date: '2026-10-02', watts: 150, avg_hr: 125 }),
-        w({ date: '2026-10-01', watts: 120, avg_hr: 120 }),
-        w({ date: '2026-10-03', watts: 200, avg_hr: 150, minutes: 10 }),
-        w({ date: '2026-10-04', type: 'strength', watts: null }),
-      ]),
-    ).toEqual([
-      { date: '2026-10-01', value: 1 },
-      { date: '2026-10-02', value: 1.2 },
+    const e = bikeEfficiency([
+      w({ date: '2026-10-02', watts: 150, avg_hr: 125 }),
+      w({ date: '2026-10-01', watts: 120, avg_hr: 120 }),
+      w({ date: '2026-10-03', watts: 200, avg_hr: 150, minutes: 10 }),
+      w({ date: '2026-10-04', type: 'strength', watts: null }),
     ])
+    expect(e.metric).toBe('watts')
+    expect(e.points.map((p) => [p.date, p.value])).toEqual([
+      ['2026-10-01', 1],
+      ['2026-10-02', 1.2],
+    ])
+    expect(e.left_out).toBe(1)
+  })
+
+  it('eficiência sem potência: metros por batimento, só rolo com rolo', () => {
+    const ride = (date: string, km: number, hr: number, sport: string) =>
+      w({ date, minutes: 60, moving_s: 3600, distance_km: km, avg_hr: hr, watts: null, sport })
+    const e = bikeEfficiency([
+      ride('2026-10-01', 25, 130, 'VirtualRide'),
+      ride('2026-10-03', 27, 128, 'VirtualRide'),
+      ride('2026-10-02', 32, 140, 'Ride'),
+    ])
+    expect(e.metric).toBe('distance')
+    expect(e.points.map((p) => [p.date, p.value, p.speed_kmh])).toEqual([
+      ['2026-10-01', 3.21, 25],
+      ['2026-10-03', 3.52, 27],
+    ])
+    expect(e.left_out).toBe(1)
+  })
+
+  it('só batimentos (sem watts nem distância): não se compara', () => {
+    const e = bikeEfficiency([
+      w({ date: '2026-10-05', started_at: '2026-10-05T14:53:15Z', minutes: 10, moving_s: 576, elapsed_s: 580, avg_hr: 118, watts: null }),
+      w({ date: '2026-10-05', started_at: '2026-10-05T15:03:50Z', minutes: 25, moving_s: 1500, elapsed_s: 1500, avg_hr: 143, watts: null }),
+      w({ date: '2026-10-01', minutes: 40, avg_hr: 120, watts: null }),
+    ])
+    expect(e).toEqual({ metric: null, points: [], left_out: 2 })
   })
 
   it('bem-estar: 7 dias contra 28, com passos (sem hoje, que vai a meio) e qualidade do sono', () => {

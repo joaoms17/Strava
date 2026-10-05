@@ -5,6 +5,7 @@
 // de servidor: o telemóvel usa este ficheiro diretamente.
 import { mondayOf } from './manutencao.js'
 import { shiftDate } from './nutritional-day.js'
+import { mergeSessions } from './sessoes.js'
 
 export interface PlanPrefs {
   ativo: boolean
@@ -51,7 +52,11 @@ export interface PlanWorkout {
   date: string
   started_at?: string | null
   type: 'bike' | 'strength' | 'other'
+  sport?: string | null
   minutes: number | null
+  moving_s?: number | null
+  elapsed_s?: number | null
+  distance_km?: number | null
   training_load?: number | null
   watts?: number | null
   np_w?: number | null
@@ -101,7 +106,9 @@ const mean = (values: number[]) =>
   values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null
 
 // As semanas pedidas (segundas-feiras), com o que se fez em cada uma.
-export function weeklyStats(workouts: PlanWorkout[], mondays: string[]): WeekStats[] {
+export function weeklyStats(all: PlanWorkout[], mondays: string[]): WeekStats[] {
+  // Um treino partido em dois pelo relógio conta como uma sessão.
+  const workouts = mergeSessions(all)
   return mondays.map((start) => {
     const end = shiftDate(start, 6)
     const week = workouts.filter((w) => w.date >= start && w.date <= end)
@@ -130,13 +137,58 @@ export function lastMondays(today: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) => shiftDate(current, -7 * (count - 1 - i)))
 }
 
-// Potência por batimento nas sessões de bicicleta com ≥ 20 min: se sobe, o
-// coração faz o mesmo com menos esforço.
-export function efficiencySeries(workouts: PlanWorkout[]): { date: string; value: number }[] {
-  return workouts
-    .filter((w) => w.type === 'bike' && (w.minutes ?? 0) >= 20 && w.watts != null && w.avg_hr != null && w.avg_hr > 0)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((w) => ({ date: w.date, value: Math.round((w.watts! / w.avg_hr!) * 100) / 100 }))
+// Eficiência na bicicleta, só com o que se pode comparar: sessões de 20 min
+// ou mais (as partes seguidas juntas), com batimentos e com a mesma medida de
+// esforço em todas: watts por batimento quando há potência; sem ela, metros
+// por batimento (distância ÷ batimentos), só entre sessões do mesmo tipo
+// (rolo/indoor com rolo, estrada com estrada). Sessões só com batimentos não
+// se comparam (o ritmo de cada uma é outro).
+export interface EfficiencyPoint {
+  date: string
+  value: number
+  minutes: number
+  avg_hr: number
+  watts: number | null
+  speed_kmh: number | null
+}
+export interface BikeEfficiency {
+  metric: 'watts' | 'distance' | null
+  points: EfficiencyPoint[]
+  left_out: number // sessões de bicicleta que não entram (curtas, sem batimentos ou sem medida)
+}
+export const MIN_EFFICIENCY_MINUTES = 20
+
+const indoor = (sport: string | null | undefined) => /virtual|indoor|trainer/i.test(sport ?? '')
+
+export function bikeEfficiency(workouts: PlanWorkout[]): BikeEfficiency {
+  const bikes = mergeSessions(workouts.filter((w) => w.type === 'bike'))
+  const usable = bikes.filter((w) => (w.minutes ?? 0) >= MIN_EFFICIENCY_MINUTES && (w.avg_hr ?? 0) > 0)
+  const withWatts = usable.filter((w) => w.watts != null && w.watts > 0)
+  const withDistance = usable.filter((w) => (w.distance_km ?? 0) > 0)
+  let metric: BikeEfficiency['metric'] = null
+  let chosen: typeof usable = []
+  if (withWatts.length >= 2) {
+    metric = 'watts'
+    chosen = withWatts
+  } else if (withDistance.length >= 2) {
+    // Rolo e estrada não se comparam: fica o tipo com mais sessões.
+    const inside = withDistance.filter((w) => indoor(w.sport))
+    const outside = withDistance.filter((w) => !indoor(w.sport))
+    chosen = inside.length >= outside.length ? inside : outside
+    metric = chosen.length >= 2 ? 'distance' : null
+    if (!metric) chosen = []
+  }
+  const points = chosen.map((w): EfficiencyPoint => {
+    const hours = (w.moving_s ?? (w.minutes ?? 0) * 60) / 3600
+    const speed = (w.distance_km ?? 0) > 0 && hours > 0 ? Math.round((w.distance_km! / hours) * 10) / 10 : null
+    const beats = w.avg_hr! * (w.moving_s != null ? w.moving_s / 60 : (w.minutes ?? 0))
+    const value =
+      metric === 'watts'
+        ? Math.round((w.watts! / w.avg_hr!) * 100) / 100
+        : Math.round(((w.distance_km! * 1000) / beats) * 100) / 100
+    return { date: w.date, value, minutes: w.minutes ?? 0, avg_hr: w.avg_hr!, watts: w.watts ?? null, speed_kmh: speed }
+  })
+  return { metric, points, left_out: bikes.length - points.length }
 }
 
 export interface WellnessRow {
@@ -292,9 +344,9 @@ export function planProgress<T extends PlanWorkout>(
   plan: Pick<WeekPlan, 'bicicleta' | 'ginasio'>,
   weekWorkouts: T[],
 ): { bike: (T | null)[]; gym: (T | null)[] } {
-  const sorted = [...weekWorkouts].sort(
-    (a, b) => a.date.localeCompare(b.date) || (a.started_at ?? '').localeCompare(b.started_at ?? ''),
-  )
+  // Por ordem de início, com as partes seguidas de um treino juntas (os
+  // minutos passam a ser os do treino todo).
+  const sorted = mergeSessions(weekWorkouts)
   const bikes = sorted.filter((w) => w.type === 'bike')
   const gyms = sorted.filter((w) => w.type === 'strength')
   return {

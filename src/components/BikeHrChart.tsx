@@ -1,130 +1,116 @@
-import {
-  ComposedChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  ReferenceLine,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts'
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useThemeColors } from '../lib/colors'
+import { fmtDayShort } from '../lib/format'
+import { MIN_EFFICIENCY_MINUTES, bikeEfficiency, type EfficiencyPoint } from '../../api/_lib/rules/plano'
 import type { Workout } from '../lib/types'
 
+const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
+const comma = (n: number, digits = 2) => n.toFixed(digits).replace('.', ',')
 
-function fmtDate(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${day}/${month}`
-}
-
-// FC média por sessão de bike, com anotação quando muda o W e a linha do cap.
-export default function BikeHrChart({
-  workouts,
-  capAvg,
-}: {
-  workouts: Workout[]
-  capAvg: number
-}) {
+// Treino › Progressão na bicicleta: só o que se pode comparar entre sessões —
+// watts por batimento (com potência) ou metros por batimento (com distância,
+// rolo com rolo, estrada com estrada), em sessões de 20 min ou mais. Os
+// batimentos sozinhos não se comparam: cada sessão teve o seu ritmo.
+export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
   const colors = useThemeColors()
-  const sessions = workouts
-    .filter((w) => w.type === 'bike' && w.avg_hr != null)
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const { metric, points, left_out } = bikeEfficiency(workouts)
+  const anyBike = workouts.some((w) => w.type === 'bike')
+  if (!anyBike) return null
 
-  if (sessions.length < 2) {
+  if (!metric) {
     return (
-      <div className="rounded-2xl border border-edge bg-card p-6 text-center text-sm text-dim">
-        <p className="text-[17px] font-semibold text-ink">Batimentos na bicicleta</p>
-        <p className="mt-2">Com 2 sessões de bicicleta com batimentos, o gráfico aparece aqui.</p>
+      <div className="rounded-2xl border border-line bg-surface p-4 text-[15px]">
+        <p className="font-semibold">Eficiência na bicicleta</p>
+        <p className="mt-1 text-dim">
+          Para comparar sessões é preciso saber o esforço de cada uma: a potência (watts) ou a distância. Os batimentos
+          sozinhos não chegam, porque cada sessão teve o seu ritmo. Com um sensor de potência ou de velocidade na
+          bicicleta (ou o print da consola com os watts), em 2 sessões de {MIN_EFFICIENCY_MINUTES} min ou mais o gráfico
+          aparece aqui.
+        </p>
       </div>
     )
   }
 
-  const points = sessions.map((w) => ({ date: w.date, hr: w.avg_hr, watts: w.watts }))
-  const wattChanges: { date: string; watts: number }[] = []
-  let prevWatts: number | null = null
-  for (const p of points) {
-    if (p.watts != null && p.watts !== prevWatts) {
-      if (prevWatts != null) wattChanges.push({ date: p.date, watts: p.watts })
-      prevWatts = p.watts
-    }
-  }
-  const hrValues = points.map((p) => p.hr!).concat(capAvg)
-  const yMin = Math.floor(Math.min(...hrValues) - 3)
-  const yMax = Math.ceil(Math.max(...hrValues) + 3)
+  const unit = metric === 'watts' ? 'W por batimento' : 'm por batimento'
+  const first = points[0]!
+  const last = points[points.length - 1]!
+  const change = Math.round(((last.value - first.value) / first.value) * 100)
 
   return (
-    <div className="rounded-2xl border border-edge bg-card p-4">
-      <h2 className="text-sm font-semibold text-dim">Batimentos médios na bicicleta, por sessão</h2>
-      <div className="mt-2 h-52">
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <p className="text-[15px] font-semibold">
+        {metric === 'watts' ? 'Watts por batimento' : 'Metros por batimento'}
+      </p>
+      <p className="text-[13px] text-dim">
+        Se sobe, fazes o mesmo esforço com menos batimentos.{' '}
+        {points.length >= 2 &&
+          `Desde ${dm(first.date)}: ${change > 0 ? '+' : ''}${change} %.`}
+      </p>
+      <div className="mt-2 h-44">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
+          <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
             <CartesianGrid stroke={colors.line} vertical={false} />
             <XAxis
               dataKey="date"
-              tickFormatter={fmtDate}
-              tick={{ fill: colors.dim, fontSize: 11 }}
-              axisLine={{ stroke: colors.line }}
-              tickLine={false}
-              minTickGap={40}
-            />
-            <YAxis
-              domain={[yMin, yMax]}
+              tickFormatter={dm}
               tick={{ fill: colors.dim, fontSize: 11 }}
               axisLine={false}
               tickLine={false}
-              width={64}
+              minTickGap={28}
+            />
+            <YAxis
+              domain={['auto', 'auto']}
+              tickFormatter={(v: number) => comma(v)}
+              tick={{ fill: colors.dim, fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              width={44}
             />
             <Tooltip
-              contentStyle={{
-                background: colors.surface,
-                border: `1px solid ${colors.line}`,
-                borderRadius: 12,
-                color: colors.ink,
-                fontSize: 12,
+              cursor={{ stroke: colors.line }}
+              content={({ active, payload }) => {
+                const p = payload?.[0]?.payload as EfficiencyPoint | undefined
+                if (!active || !p) return null
+                return (
+                  <div
+                    className="rounded-xl px-3 py-2 text-[13px] tabular-nums shadow"
+                    style={{ background: colors.surface, border: `1px solid ${colors.line}`, color: colors.ink }}
+                  >
+                    <p style={{ color: colors.dim }}>{fmtDayShort(p.date)}</p>
+                    <p>
+                      {comma(p.value)} {unit}
+                    </p>
+                    <p style={{ color: colors.dim }}>
+                      {[
+                        `${p.minutes} min`,
+                        p.watts != null ? `${p.watts} W` : null,
+                        p.speed_kmh != null ? `${comma(p.speed_kmh, 1)} km/h` : null,
+                        `FC ${p.avg_hr}`,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
+                )
               }}
-              labelFormatter={(label) => fmtDate(String(label))}
-              formatter={(value, name, entry) => [
-                `${value} bpm${entry?.payload?.watts != null ? ` @ ${entry.payload.watts} W` : ''}`,
-                name === 'hr' ? 'batimentos médios' : String(name),
-              ]}
             />
-            <ReferenceLine
-              y={capAvg}
-              stroke={colors.dim}
-              strokeDasharray="2 4"
-              label={{
-                value: `cap ${capAvg}`,
-                position: 'insideTopRight',
-                fill: colors.dim,
-                fontSize: 11,
-              }}
-            />
-            {wattChanges.map((change) => (
-              <ReferenceLine
-                key={change.date + change.watts}
-                x={change.date}
-                stroke={colors.line}
-                label={{
-                  value: `${change.watts} W`,
-                  position: 'insideTopLeft',
-                  fill: colors.burn,
-                  fontSize: 11,
-                }}
-              />
-            ))}
-            <Line isAnimationActive={false}
-              dataKey="hr"
-              stroke={colors.burn}
+            <Line
+              isAnimationActive={false}
+              dataKey="value"
+              stroke={colors['chart-bike']}
               strokeWidth={2}
-              dot={{ r: 3, fill: colors.burn, strokeWidth: 0 }}
-              connectNulls
+              dot={{ r: 4, fill: colors['chart-bike'], stroke: colors.surface, strokeWidth: 2 }}
+              activeDot={{ r: 6, stroke: colors.surface, strokeWidth: 2 }}
             />
-          </ComposedChart>
+          </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="pt-2 text-xs text-dim">
-        Sobe a potência quando 2 sessões seguidas ficam abaixo do limite de batimentos.
-      </p>
+      {left_out > 0 && (
+        <p className="mt-1 text-[13px] text-dim">
+          {left_out === 1 ? '1 sessão não entra' : `${left_out} sessões não entram`} (menos de {MIN_EFFICIENCY_MINUTES} min
+          ou sem {metric === 'watts' ? 'potência' : 'distância'}): não dá para comparar.
+        </p>
+      )}
     </div>
   )
 }

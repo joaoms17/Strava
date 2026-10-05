@@ -7,6 +7,7 @@ import { PROMPT_TRAINING_WEEK, promptVersion, readPrompt } from '../_lib/prompts
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { mondayOf } from '../_lib/rules/manutencao.js'
+import { mergeSessions } from '../_lib/rules/sessoes.js'
 import {
   BIKE_KINDS,
   GYM_FOCUS,
@@ -99,7 +100,7 @@ export default async function planWeek(req: VercelRequest, res: VercelResponse) 
     const [{ data: workoutRows }, { data: healthRows }, { data: weights }, { data: previous }] = await Promise.all([
       db
         .from('workouts_active')
-        .select('id,date,type,sport,minutes,watts,np_w,avg_hr,max_hr,training_load')
+        .select('id,date,started_at,type,sport,minutes,moving_s,elapsed_s,distance_km,watts,np_w,avg_hr,max_hr,training_load')
         .gte('date', since)
         .lte('date', today)
         .order('date'),
@@ -135,7 +136,8 @@ export default async function planWeek(req: VercelRequest, res: VercelResponse) 
       historico_semanas: weeklyStats(workouts, lastMondays(shiftDate(weekStart, -1), 6)),
       // Ao refazer a meio da semana, o que já se fez conta.
       esta_semana: weeklyStats(workouts, [weekStart])[0] ?? null,
-      bicicleta_recentes: workouts
+      // As partes seguidas de um treino (o relógio às vezes divide) juntas.
+      bicicleta_recentes: mergeSessions(workouts)
         .filter((w) => w.type === 'bike')
         .slice(-12)
         .map((w) => ({

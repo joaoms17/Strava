@@ -39,6 +39,7 @@ import PhotoButton from '../components/ui/PhotoButton'
 import AttachPhotoButton from '../components/ui/AttachPhotoButton'
 import { MAX_MEAL_PHOTOS } from '../lib/capture'
 import WeekStrip from '../components/ui/WeekStrip'
+import { mergeSessions } from '../../api/_lib/rules/sessoes'
 
 interface DayData {
   meals: (Meal & { created_at: string })[]
@@ -247,7 +248,8 @@ export default function Hoje() {
     localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
   // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa.
-  const workoutKcals = data.workouts.map((w) => ({
+  // Um treino partido em dois pelo relógio aparece (e conta) como um.
+  const workoutKcals = mergeSessions(data.workouts).map((w) => ({
     workout: w,
     kcal: storedExerciseKcal([
       {
