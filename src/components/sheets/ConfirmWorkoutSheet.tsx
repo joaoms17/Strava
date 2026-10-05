@@ -105,6 +105,8 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   const [lastWatts, setLastWatts] = useState<number | null>(null)
   // O que o João já corrigiu à mão: sobrevive a «Juntar outro print».
   const [edited, setEdited] = useState<Partial<Draft>>({})
+  // Os campos que o print trouxe: só esses aparecem (o que não vem, não se pede).
+  const [present, setPresent] = useState<Set<keyof Draft>>(new Set())
   const [adding, setAdding] = useState(false)
   const kicked = useRef(false)
 
@@ -169,13 +171,15 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       cadence: str(a.avg_cadence),
       kcalDevice: str(a.calories_device),
     }
-    setDraft({ ...next, ...edited })
+    const filled = { ...next, ...edited }
+    setPresent(new Set((Object.keys(filled) as (keyof Draft)[]).filter((k) => filled[k] !== '' && filled[k] != null)))
+    setDraft(filled)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row, draft, today, profile.nutrition_day_cutoff_hour])
 
   // Sem watts no print, propõe os últimos confirmados (≈, não contam para subir).
   useEffect(() => {
-    if (draft && draft.kind === 'bike' && !draft.watts && lastWatts) {
+    if (draft && draft.kind === 'bike' && !draft.watts && !draft.kcalDevice && lastWatts) {
       setDraft({ ...draft, watts: String(lastWatts), wattsSource: 'prefill' })
     }
   }, [draft, lastWatts])
@@ -220,6 +224,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   }, [draft?.day, draft?.kind, draft?.minutes, draft?.time]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function startManual() {
+    setPresent(new Set(['minutes', 'watts', 'kcalDevice']))
     setDraft({
       kind: 'bike',
       day: today,
@@ -501,41 +506,50 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2">
-          {KINDS.map(([k, label]) => (
-            <button key={k} onClick={() => set({ kind: k })} className={chip(draft.kind === k)}>
-              {label}
-            </button>
-          ))}
-        </div>
+        {!merging && (
+          <div className="flex flex-wrap gap-2">
+            {KINDS.map(([k, label]) => (
+              <button key={k} onClick={() => set({ kind: k })} className={chip(draft.kind === k)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
-        <div className="space-y-2">
-          <p className="label flex items-center gap-2">
-            Dia e hora
-            {(low.has('date') || low.has('start_time')) && (
-              <span className="rounded bg-attn/20 px-1.5 text-[11px] text-attn">confirma</span>
+        {!merging && (
+          <div className="space-y-2">
+            <p className="label flex items-center gap-2">
+              Dia e hora
+              {(low.has('date') || low.has('start_time')) && (
+                <span className="rounded bg-attn/20 px-1.5 text-[11px] text-attn">confirma</span>
+              )}
+            </p>
+            <DayChips today={today} value={draft.day} onChange={(day) => set({ day })} />
+            {present.has('time') && (
+              <label className="flex items-center gap-3 text-[15px] text-dim">
+                Começou às
+                <input
+                  type="time"
+                  value={draft.time}
+                  onChange={(e) => set({ time: e.target.value })}
+                  className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+                  aria-label="Hora de início"
+                />
+              </label>
             )}
-          </p>
-          <DayChips today={today} value={draft.day} onChange={(day) => set({ day })} />
-          <label className="flex items-center gap-3 text-[15px] text-dim">
-            Começou às
-            <input
-              type="time"
-              value={draft.time}
-              onChange={(e) => set({ time: e.target.value })}
-              className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
-              aria-label="Hora de início"
-            />
-          </label>
-        </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           {input('Duração', 'minutes', type === 'strength' ? 'total_time_s' : 'moving_time_s', 'min')}
-          {type === 'bike' && input('Potência', 'watts', 'avg_power_w', 'W')}
-          {input('Batimentos médios', 'avgHr', 'avg_hr', 'bpm')}
-          {input('Batimentos máximos', 'maxHr', 'max_hr', 'bpm')}
-          {type === 'bike' && input('Cadência', 'cadence', 'avg_cadence', 'rpm')}
-          {type === 'other' && input('Calorias do relógio', 'kcalDevice', 'calories_device', 'kcal')}
+          {/* Na bicicleta vem a potência ou as calorias do relógio; sem nenhuma, pedem-se as duas. */}
+          {type === 'bike' &&
+            (present.has('watts') || !present.has('kcalDevice')) &&
+            input('Potência', 'watts', 'avg_power_w', 'W')}
+          {present.has('avgHr') && input('Batimentos médios', 'avgHr', 'avg_hr', 'bpm')}
+          {present.has('maxHr') && input('Batimentos máximos', 'maxHr', 'max_hr', 'bpm')}
+          {((type === 'bike' && (present.has('kcalDevice') || !present.has('watts'))) || type === 'other') &&
+            input('Calorias do relógio', 'kcalDevice', 'calories_device', 'kcal')}
         </div>
 
         {type === 'bike' && draft.wattsSource === 'prefill' && (
@@ -756,9 +770,9 @@ function WorkoutDetail({ id }: { id: string }) {
             <Thumbs paths={thumbs} />
             <div className="grid grid-cols-2 gap-3">
               {numberField('Duração', minutes, setMinutes, 'min')}
-              {w.type === 'bike' && numberField('Potência', watts, setWatts, 'W')}
-              {numberField('Batimentos médios', avgHr, setAvgHr, 'bpm')}
-              {numberField('Batimentos máximos', maxHr, setMaxHr, 'bpm')}
+              {w.type === 'bike' && (w.watts != null || deviceCalories == null) && numberField('Potência', watts, setWatts, 'W')}
+              {w.avg_hr != null && numberField('Batimentos médios', avgHr, setAvgHr, 'bpm')}
+              {w.max_hr != null && numberField('Batimentos máximos', maxHr, setMaxHr, 'bpm')}
             </div>
             {(w.cadence != null || w.distance_km != null || w.aerobic_te != null) && (
               <p className="text-[14px] text-dim tabular-nums">
