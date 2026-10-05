@@ -41,8 +41,13 @@ describe('exerciseKcal', () => {
     })
   })
 
-  it('bicicleta sem potência conta 0 (nunca as calorias do relógio)', () => {
-    expect(exerciseKcal({ type: 'bike', minutes: 45, watts: null, wattsSource: null, deviceCalories: 520 }).kcal).toBe(0)
+  it('bicicleta sem potência: 70 % das calorias do relógio (estimativa); sem elas, 0', () => {
+    expect(exerciseKcal({ type: 'bike', minutes: 25, watts: null, wattsSource: null, deviceCalories: 352 })).toEqual({
+      kcal: 246,
+      rule: 'device_x0.7',
+      estimated: true,
+    })
+    expect(exerciseKcal({ type: 'bike', minutes: 45, watts: null, wattsSource: null, deviceCalories: null }).kcal).toBe(0)
   })
 
   it('ginásio: 150 fixas a partir de 30 min', () => {

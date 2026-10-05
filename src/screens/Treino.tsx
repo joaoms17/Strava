@@ -217,6 +217,7 @@ export default function Treino() {
                   <span className="block truncate text-[14px] text-dim">
                     {[
                       w.minutes != null ? `${w.minutes} min` : null,
+                      w.distance_km != null ? `${String(w.distance_km).replace('.', ',')} km` : null,
                       w.watts != null ? `${w.watts_source === 'prefill' ? '≈' : ''}${w.watts} W` : null,
                       w.avg_hr != null ? `${w.avg_hr} bpm` : null,
                       origin(w),

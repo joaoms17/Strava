@@ -14,6 +14,8 @@ import {
   type MappedActivity,
 } from './rules/intervals.js'
 import type { WorkoutType } from './rules/targets.js'
+import { ciqExtras, hasCiq, type CiqExtras } from './rules/ciq.js'
+import { fitDeveloperFields } from './fit.js'
 
 // Fase 7 — intervals.icu. A chave vive em `integrations` (RLS sem
 // políticas): só a service role a lê. Autenticação HTTP Basic com o
@@ -44,6 +46,41 @@ async function icuGet<T>(key: string, path: string, timeoutMs: number): Promise<
     throw new IntervalsError('Não consegui falar com o intervals.icu.')
   } finally {
     clearTimeout(timer)
+  }
+}
+
+// O ficheiro original de uma atividade (FIT, às vezes comprimido).
+async function icuFile(key: string, activityId: string, kind: 'file' | 'fit-file', timeoutMs: number): Promise<Uint8Array> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const res = await fetch(`https://intervals.icu/api/v1/activity/${encodeURIComponent(activityId)}/${kind}`, {
+      headers: { Authorization: `Basic ${Buffer.from(`API_KEY:${key}`).toString('base64')}` },
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new IntervalsError(`Ficheiro da atividade: erro ${res.status}.`)
+    return new Uint8Array(await res.arrayBuffer())
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Os campos das apps Connect IQ (km, velocidade, potência, calorias da app da
+// bicicleta) só estão no ficheiro FIT. Lê-se no máximo MAX_FIT_READS por
+// sincronização, para caber no tempo; um erro não pára a sincronização.
+const MAX_FIT_READS = 4
+async function readCiq(key: string, activityId: string, timeoutMs: number): Promise<CiqExtras | null> {
+  try {
+    // O ficheiro original (o que veio do Garmin); se não for um FIT, o FIT
+    // que o intervals.icu gera.
+    const fields =
+      fitDeveloperFields(await icuFile(key, activityId, 'file', timeoutMs)) ??
+      fitDeveloperFields(await icuFile(key, activityId, 'fit-file', timeoutMs)) ??
+      []
+    return ciqExtras(fields)
+  } catch (err) {
+    console.error('FIT', activityId, err instanceof Error ? err.message : err)
+    return null
   }
 }
 
@@ -163,6 +200,81 @@ export async function syncIntervals(
     const fresh = mapped.filter((m) => !known.has(m.a.external_id))
     result.known = mapped.length - fresh.length
 
+    // Bicicletas sem distância (rolo com uma app Connect IQ): o ficheiro FIT.
+    const started = Date.now()
+    let fitReads = 0
+    const fitTimeout = Math.min(6000, options.timeoutMs)
+    const canReadFit = () => fitReads < MAX_FIT_READS && Date.now() - started < options.timeoutMs
+    const fitByActivity = new Map<string, CiqExtras | null>()
+    for (const { a } of fresh) {
+      if (a.type !== 'bike' || a.distance_km != null || !canReadFit()) continue
+      fitReads++
+      const ciq = await readCiq(key, a.external_id, fitTimeout)
+      fitByActivity.set(a.external_id, ciq)
+      if (!ciq) continue
+      a.distance_km = ciq.distance_km
+      if (a.watts == null && ciq.power_w != null) {
+        a.watts = ciq.power_w
+        a.watts_source = 'device'
+      }
+      if (a.kcal_device == null && ciq.calories != null) a.kcal_device = ciq.calories
+    }
+    const fitRaw = (id: string) => {
+      if (!fitByActivity.has(id)) return {}
+      const ciq = fitByActivity.get(id)
+      return { fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro', ...(ciq && hasCiq(ciq) ? { ciq } : {}) }
+    }
+
+    // As que já entraram: ganham os km do ficheiro (uma vez) e as kcal pela
+    // regra atual (bicicleta sem potência: 70 % das calorias do relógio).
+    if (known.size > 0) {
+      const { data: knownFull } = await admin
+        .from('workouts')
+        .select('id,date,type,source,minutes,watts,watts_source,kcal_device,kcal_est,kcal_rule,distance_km,raw,deleted_at,external_id')
+        .eq('user_id', userId)
+        .eq('type', 'bike')
+        .is('deleted_at', null)
+        .in('external_id', [...known])
+      for (const row of (knownFull ?? []) as Record<string, unknown>[]) {
+        const raw = (row.raw ?? {}) as Record<string, unknown>
+        const patch: Record<string, unknown> = {}
+        let watts = row.watts as number | null
+        let wattsSource = row.watts_source as WattsSource | null
+        let deviceCalories = row.kcal_device as number | null
+        if (row.distance_km == null && raw.fit !== 'lido' && raw.fit !== 'sem_dados' && canReadFit()) {
+          fitReads++
+          const ciq = await readCiq(key, row.external_id as string, fitTimeout)
+          patch.raw = { ...raw, fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro', ...(ciq && hasCiq(ciq) ? { ciq } : {}) }
+          if (ciq?.distance_km != null) patch.distance_km = ciq.distance_km
+          if (watts == null && ciq?.power_w != null) {
+            watts = ciq.power_w
+            wattsSource = 'device'
+            Object.assign(patch, { watts, watts_source: wattsSource })
+          }
+          if (deviceCalories == null && ciq?.calories != null) {
+            deviceCalories = ciq.calories
+            patch.kcal_device = deviceCalories
+          }
+        }
+        // As kcal só se refazem nas que vieram do relógio (as registadas à mão
+        // e depois juntadas ficam com as contas de quando foram guardadas).
+        const kcal = exerciseKcal({
+          type: 'bike',
+          minutes: row.minutes as number | null,
+          watts,
+          wattsSource,
+          deviceCalories,
+        })
+        if (row.source === 'intervals' && (kcal.kcal !== Number(row.kcal_est ?? 0) || kcal.rule !== row.kcal_rule)) {
+          Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
+        }
+        if (Object.keys(patch).length === 0) continue
+        const { error } = await admin.from('workouts').update(patch).eq('id', row.id as string)
+        if (error) console.error('workouts (atualizar):', error.message)
+        else touch(row.date as string)
+      }
+    }
+
     const dates = [...new Set(fresh.map((m) => m.date))]
     const { data: sameDayRows } = dates.length
       ? await admin
@@ -235,7 +347,7 @@ export async function syncIntervals(
         minutes: a.minutes,
         watts: a.watts,
         wattsSource: a.watts_source,
-        deviceCalories: a.type === 'other' ? a.kcal_device : null,
+        deviceCalories: a.type === 'strength' ? null : a.kcal_device,
         sport: a.sport,
         weightKg: null,
       })
@@ -257,7 +369,7 @@ export async function syncIntervals(
         kcal_est: kcal.kcal,
         kcal_rule: kcal.rule,
         kcal_estimated: kcal.estimated,
-        raw: a.type === 'other' ? { sport: a.sport } : null,
+        raw: a.type === 'other' ? { sport: a.sport } : a.type === 'bike' && fitByActivity.has(a.external_id) ? fitRaw(a.external_id) : null,
         ...extras,
       })
     }

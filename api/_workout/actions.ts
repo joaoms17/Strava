@@ -527,7 +527,7 @@ export const update = post(async ({ db, body, res }) => {
       minutes: (patch.minutes ?? workout.minutes) as number | null,
       watts: type === 'bike' ? ((patch.watts !== undefined ? patch.watts : workout.watts) as number | null) : null,
       wattsSource: ((patch.watts_source !== undefined ? patch.watts_source : workout.watts_source) as WattsSource | null) ?? null,
-      deviceCalories: type === 'other' ? deviceCalories : null,
+      deviceCalories: type === 'other' || type === 'bike' ? deviceCalories : null,
       sport,
       weightKg: type === 'other' && deviceCalories == null ? await weightNear(db, date) : null,
     })

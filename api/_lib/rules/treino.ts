@@ -39,10 +39,14 @@ export interface KcalInput {
 }
 
 // As kcal que o treino soma ao plano, a regra usada e se é uma estimativa.
-// As calorias do relógio nunca contam na bicicleta nem no ginásio.
+// Na bicicleta contam os watts; sem potência, 70 % das calorias do relógio
+// (estimativa). No ginásio, as calorias do relógio nunca contam.
 export function exerciseKcal(w: KcalInput): { kcal: number; rule: KcalRule; estimated: boolean } {
   switch (w.type) {
     case 'bike': {
+      if (w.watts == null && w.deviceCalories != null && w.deviceCalories > 0) {
+        return { kcal: Math.round(w.deviceCalories * 0.7), rule: 'device_x0.7', estimated: true }
+      }
       const kcal = workoutKcal({ type: 'bike', minutes: w.minutes, watts: w.watts, deviceCalories: null })
       const prefill = w.wattsSource === 'prefill'
       return { kcal, rule: prefill ? 'watts_prefill' : 'watts', estimated: prefill }
@@ -78,6 +82,9 @@ export function kcalExplanation(w: {
   deviceCalories: number | null
 }): string {
   if (w.type === 'bike') {
+    if (w.watts == null && w.rule === 'device_x0.7' && w.deviceCalories != null) {
+      return `Sem potência: 70 % das ${w.deviceCalories} kcal do relógio. Com os watts (foto da consola) a conta é mais certa.`
+    }
     if (w.watts == null) return 'Sem potência: junta uma foto da consola ou escreve os watts.'
     const base = `${w.watts} W × ${w.minutes ?? 0} min = ${w.kcal}`
     const device =

@@ -335,7 +335,7 @@ function ImportConfirm({ id }: { id: string }) {
     minutes,
     watts,
     wattsSource: draft.wattsSource,
-    deviceCalories: type === 'other' ? toInt(draft.kcalDevice) : null,
+    deviceCalories: type === 'strength' ? null : toInt(draft.kcalDevice),
     sport: type === 'other' ? (draft.kind as OtherSport) : null,
     weightKg: null,
   })
@@ -750,7 +750,10 @@ function WorkoutDetail({ id }: { id: string }) {
               <p className="text-[14px] text-dim tabular-nums">
                 {[
                   w.cadence != null ? `${w.cadence} rpm` : null,
-                  w.distance_km != null ? `${w.distance_km} km` : null,
+                  w.distance_km != null ? `${String(w.distance_km).replace('.', ',')} km` : null,
+                  w.distance_km != null && w.moving_s
+                    ? `${String(Math.round((w.distance_km / (w.moving_s / 3600)) * 10) / 10).replace('.', ',')} km/h`
+                    : null,
                   w.aerobic_te != null ? `efeito aeróbio ${w.aerobic_te}` : null,
                 ]
                   .filter(Boolean)

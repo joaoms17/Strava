@@ -604,6 +604,7 @@ export default function Hoje() {
           <span className="flex-1 text-[16px] font-semibold">
             {workoutTitle(workout)}
             {workout.minutes != null && ` · ${workout.minutes} min`}
+            {workout.distance_km != null && ` · ${String(workout.distance_km).replace('.', ',')} km`}
           </span>
           {kcal > 0 && <span className="num text-[22px] text-burn">+{fmtKcal(kcal)}</span>}
         </button>
@@ -893,9 +894,11 @@ export default function Hoje() {
                       ? `pela potência (${workout.watts} W × ${workout.minutes} min)`
                       : workout.type === 'strength'
                         ? '150 fixas por ginásio de 30 min ou mais'
-                        : workout.raw?.calories != null
-                          ? '70 % das calorias do relógio'
-                          : 'pelo tempo e pelo teu peso'}
+                        : workout.kcal_rule === 'device_x0.7' || workout.raw?.calories != null
+                          ? `70 % das calorias do relógio${workout.type === 'bike' ? ' (sem potência)' : ''}`
+                          : workout.type === 'bike'
+                            ? 'sem potência nem calorias do relógio'
+                            : 'pelo tempo e pelo teu peso'}
                   </li>
                 ))}
               </ul>
