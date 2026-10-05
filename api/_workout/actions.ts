@@ -37,6 +37,8 @@ const SaveSchema = z.object({
   import_id: z.string().uuid().nullable().optional(),
   merge_into: z.string().uuid().nullable().optional(),
   note: z.string().max(500).nullable().optional(),
+  // Nome da sessão quando não é um dos teus treinos (ex.: «Dizer o treino»).
+  name: z.string().trim().max(80).nullable().optional(),
 })
 
 const UpdateSchema = z.object({
@@ -84,6 +86,7 @@ const StrengthSchema = z.object({
   pain_during: int(0, 10).nullable().optional(),
   favorite_id: z.string().uuid().nullable().optional(),
   note: z.string().max(500).nullable().optional(),
+  name: z.string().trim().max(80).nullable().optional(),
 })
 
 const ShotAddSchema = z.object({
@@ -338,7 +341,7 @@ export const save = post(async ({ db, userId, body, res }) => {
       status: painStatus(input.pain_during ?? null, null),
       favorite_id: input.favorite_id ?? null,
       // O nome do teu treino («Pernas A»), ou o do print.
-      ...(favoriteName ? { name: favoriteName } : {}),
+      ...(favoriteName ? { name: favoriteName } : input.name ? { name: input.name } : {}),
       source_paths: importRow?.source_paths ?? [],
       image_hashes: importRow?.image_hashes ?? [],
       note: input.note?.trim() || null,
@@ -442,7 +445,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
       pain_during: input.pain_during ?? null,
       status: painStatus(input.pain_during ?? null, null),
       favorite_id: favorite?.id ?? null,
-      ...(favorite ? { name: favorite.name } : {}),
+      ...(favorite ? { name: favorite.name } : input.name ? { name: input.name } : {}),
       note: input.note?.trim() || null,
     })
     .select()

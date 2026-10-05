@@ -63,7 +63,7 @@ export function toGeminiSchema(node: unknown): Json {
 }
 
 // As chamadas estão escritas no formato do Claude (system, messages com
-// blocos de imagem em base64); o mesmo pedido no formato do Gemini.
+// blocos de imagem ou de áudio em base64); o mesmo pedido no formato do Gemini.
 interface ClaudeLikeBlock {
   type: string
   text?: string
@@ -84,6 +84,10 @@ export function geminiRequest(params: ClaudeLikeParams, jsonSchema: Json): Json 
       if (block.type === 'text' && block.text) return [{ text: block.text }]
       if (block.type === 'image' && block.source?.type === 'base64' && block.source.data) {
         return [{ inlineData: { mimeType: block.source.media_type ?? 'image/jpeg', data: block.source.data } }]
+      }
+      // Áudio (só o Gemini ouve): «Dizer o treino».
+      if (block.type === 'audio' && block.source?.type === 'base64' && block.source.data) {
+        return [{ inlineData: { mimeType: block.source.media_type ?? 'audio/wav', data: block.source.data } }]
       }
       return []
     })

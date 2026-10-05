@@ -34,6 +34,7 @@ import TreinoSheet from './components/sheets/TreinoSheet'
 import LogWorkoutSheet from './components/sheets/LogWorkoutSheet'
 import JaFizSheet from './components/sheets/JaFizSheet'
 import TemplateSheet from './components/sheets/TemplateSheet'
+import DizerTreinoSheet from './components/sheets/DizerTreinoSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
 import MedidasSheet, { ComoMedirSheet } from './components/sheets/MedidasSheet'
 import Hoje from './screens/Hoje'
@@ -154,6 +155,7 @@ function Sheets() {
   if (sheet.name === 'medidas') return <MedidasSheet key={sheet.params.get('id') ?? ''} />
   if (sheet.name === 'como-medir') return <ComoMedirSheet />
   if (sheet.name === 'meu-treino') return <TemplateSheet key={sheet.params.get('id') ?? 'novo'} />
+  if (sheet.name === 'dizer-treino') return <DizerTreinoSheet />
   return null
 }
 

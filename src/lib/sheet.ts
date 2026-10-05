@@ -23,6 +23,7 @@ export type SheetName =
   | 'medidas'
   | 'como-medir'
   | 'meu-treino'
+  | 'dizer-treino'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

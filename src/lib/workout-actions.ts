@@ -17,9 +17,12 @@ export const WORKOUT_LABEL: Record<Workout['type'], string> = {
 
 export const SPORT_LABEL: Record<string, string> = SPORT_LABELS
 
-// O nome do treino (o teu treino, «Pernas A»; ou o nome do relógio) ou o tipo.
-export function workoutTitle(w: Pick<Workout, 'type' | 'sport' | 'raw'> & { name?: string | null; favorite_id?: string | null }): string {
-  if (w.favorite_id && w.name) return w.name
+// O nome do treino (o teu treino, «Pernas A», ou o que deste ao dizer o
+// treino) ou o tipo. O nome que vem do relógio não se usa.
+export function workoutTitle(
+  w: Pick<Workout, 'type' | 'sport' | 'raw'> & { name?: string | null; favorite_id?: string | null; source?: string | null },
+): string {
+  if ((w.favorite_id || w.source === 'manual') && w.name) return w.name
   if (w.type !== 'other') return WORKOUT_LABEL[w.type]
   const sport = w.sport ?? w.raw?.sport ?? 'outro'
   return SPORT_LABEL[sport] ?? 'Treino'
@@ -45,6 +48,7 @@ export interface SaveWorkoutBody {
   import_id?: string | null
   merge_into?: string | null
   note?: string | null
+  name?: string | null
 }
 
 // Guarda o treino e mostra «Bicicleta registada · +380 no plano · Anular».

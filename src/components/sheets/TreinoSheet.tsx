@@ -5,15 +5,14 @@ import { useSheet } from '../../lib/sheet'
 import { fmtDayShort } from '../../lib/format'
 import type { Favorite } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
-import Icon from '../ui/Icon'
-import ShotButton from '../ui/ShotButton'
+import WorkoutLogOptions from '../WorkoutLogOptions'
 
-// Folha Treino: os teus treinos em botões grandes, «Já fiz» e o print do
-// relógio. O ginásio abre a sessão; os outros confirmam e registam.
+// Folha Treino (do ＋): print do relógio, print da app ou dizer/escrever o
+// que fizeste; por baixo, os teus treinos para repetir com um toque.
 export default function TreinoSheet() {
   const sheet = useSheet()
   const date = sheet.params.get('data')
-  const [favorites, setFavorites] = useState<Favorite[] | null>(null)
+  const [favorites, setFavorites] = useState<Favorite[]>([])
   const [, navigate] = useLocation()
 
   useEffect(() => {
@@ -26,51 +25,34 @@ export default function TreinoSheet() {
       .then(({ data }) => setFavorites((data ?? []) as Favorite[]))
   }, [])
 
-  const extra: Record<string, string> = date ? { data: date } : {}
-  const secondary =
-    'flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-line bg-surface2 font-display text-[18px] font-bold tracking-[0.06em] uppercase'
-
   return (
     <BottomSheet title="Treino" onClose={sheet.close}>
-      <div className="space-y-3 pb-2">
+      <div className="space-y-4 pb-2">
         {date && <p className="text-[15px] text-dim">A registar em {fmtDayShort(date)}</p>}
-        {(favorites ?? []).map((favorite) => (
-          <button
-            key={favorite.id}
-            onClick={() =>
-              favorite.workout?.type === 'strength'
-                ? (sheet.close(), navigate(`/treino/ginasio?fav=${favorite.id}`))
-                : sheet.open('registar-treino', { fav: favorite.id, ...extra })
-            }
-            className="flex min-h-[88px] w-full items-center gap-4 rounded-[20px] bg-burn px-4 text-left text-bg"
-          >
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-bg text-burn">
-              <Icon name={favorite.workout?.type === 'bike' ? 'bike' : favorite.workout?.type === 'strength' ? 'dumbbell' : 'walk'} size={30} stroke={1.8} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate font-display text-[24px] leading-none font-extrabold uppercase">
-                {favorite.name}
-              </span>
-              <span className="mt-1 block font-display text-[17px] font-semibold uppercase">
-                {favorite.workout?.type === 'strength'
-                  ? `${favorite.workout.exercises?.length ?? 0} exercícios`
-                  : `${favorite.workout?.minutes} min${favorite.workout?.watts ? ` · ${favorite.workout.watts} W` : ''}`}
-              </span>
-            </span>
-            <Icon name="chevron" size={22} stroke={2.4} />
-          </button>
-        ))}
-        <div className="grid grid-cols-2 gap-2">
-          <button onClick={() => sheet.open('ja-fiz', extra)} className={secondary}>
-            <Icon name="check" size={20} /> Já fiz
-          </button>
-          <ShotButton className={secondary}>
-            <Icon name="watch" size={20} /> Print
-          </ShotButton>
-        </div>
+        <WorkoutLogOptions date={date} />
+        {favorites.length > 0 && (
+          <div className="space-y-2">
+            <p className="label">Os meus treinos</p>
+            <div className="flex flex-wrap gap-2">
+              {favorites.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() =>
+                    f.workout?.type === 'strength'
+                      ? (sheet.close(), navigate(`/treino/ginasio?fav=${f.id}`))
+                      : sheet.open('registar-treino', { fav: f.id, ...(date ? { data: date } : {}) })
+                  }
+                  className="min-h-10 rounded-full border border-line px-3 text-[15px]"
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <p className="text-[14px] text-dim">
-          Print: na app do relógio (Garmin Connect, Zepp…) abre o treino e tira 2 capturas (Resumo e Estatísticas). Também serve o Strava ou
-          uma foto da consola da bicicleta.
+          Print: abre o treino na app do relógio ou noutra app (Strava, a app do ginásio…) e tira 1 a 4 capturas. Os
+          treinos do relógio também chegam sozinhos pelo intervals.icu.
         </p>
       </div>
     </BottomSheet>

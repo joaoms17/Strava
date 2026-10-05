@@ -9,18 +9,14 @@ import { workoutTitle } from '../lib/workout-actions'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { bikeSuggestion, nextBikeTarget } from '../../api/_lib/rules/progressao-bike'
 import { fmtSleep, hasSleep, poorNight, type NightSleep } from '../../api/_lib/rules/sono'
-import { SPORT_LABEL, isOtherSport } from '../../api/_lib/rules/targets'
 import type { ExerciseLogRow, Favorite, Workout, WorkoutImport } from '../lib/types'
 import Icon from '../components/ui/Icon'
-import ShotButton from '../components/ui/ShotButton'
 import BikeHrChart from '../components/BikeHrChart'
 import LoadChart from '../components/LoadChart'
-import { syncNow, syncSummary, useAutoSync } from '../lib/intervals'
-import { syncedAgo } from '../../api/_lib/rules/intervals'
-import { useProfile } from '../lib/profile'
-import { useToast } from '../lib/toast'
+import { useAutoSync } from '../lib/intervals'
 import { useLocation } from 'wouter'
 import WeekPlanCard from '../components/WeekPlanCard'
+import WorkoutLogOptions from '../components/WorkoutLogOptions'
 import { cleanPrefs } from '../../api/_lib/rules/plano'
 
 function origin(w: Workout): string {
@@ -38,19 +34,9 @@ interface TreinoData {
   sleep: NightSleep | null
 }
 
-function templateSummary(f: Favorite): string {
-  const w = f.workout
-  if (!w) return ''
-  if (w.type === 'strength') {
-    const n = w.exercises?.length ?? 0
-    return `Ginásio · ${n} ${n === 1 ? 'exercício' : 'exercícios'} · ${w.minutes} min`
-  }
-  if (w.type === 'bike') return `Bicicleta · ${w.minutes} min${w.watts ? ` · ${w.watts} W` : ''}`
-  return `${SPORT_LABEL[isOtherSport(w.sport) ? w.sport : 'outro']} · ${w.minutes} min`
-}
-
-// Treino: registar em poucos toques (os teus treinos, Já fiz, print do
-// relógio) e ver o que gastou e como progride.
+// Treino: o plano da semana, registar (print do relógio, print da app, ou
+// dizer/escrever o que fizeste) e ver o que gastou e como progride. Os treinos
+// do relógio chegam sozinhos (Definições › Ligações).
 export default function Treino() {
   const version = useDataVersion()
   const sheet = useSheet()
@@ -61,11 +47,7 @@ export default function Treino() {
   // Treinos com mais de 12 semanas (histórico importado): só a pedido.
   const [older, setOlder] = useState<Workout[] | null>(null)
   const [, navigate] = useLocation()
-  const { reload } = useProfile()
-  const toast = useToast()
-  const [syncing, setSyncing] = useState(false)
   useAutoSync()
-  const icu = profile.integration_status?.intervals
 
   const load = useCallback(async () => {
     const [{ data: workouts }, { data: favorites }, { data: pending }, { data: logs }, { data: health }] = await Promise.all([
@@ -115,21 +97,11 @@ export default function Treino() {
   const weekMinutes = week.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const weekKcal = week.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
 
-  // O treino que mais fazes, em grande (o primeiro, por uso).
-  const top = favorites[0]
-  // Um treino de ginásio abre a Sessão de ginásio; os outros confirmam e registam.
-  const openFavorite = (f: Favorite) =>
-    f.workout?.type === 'strength' ? navigate(`/treino/ginasio?fav=${f.id}`) : sheet.open('registar-treino', { fav: f.id })
   const openWorkout = (w: Workout) =>
     w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
       ? navigate(`/treino/ginasio?id=${w.id}`)
       : sheet.open('confirmar-treino', { id: w.id })
 
-  // Treinos do relógio das últimas 2 semanas ainda sem um dos teus treinos.
-  const unassigned = workouts
-    .filter((w) => w.source === 'intervals' && !w.favorite_id && w.date >= shiftDate(today, -14))
-    .slice()
-    .reverse()
 
   const bikes = workouts.filter((w) => w.type === 'bike')
   const target = nextBikeTarget(
@@ -162,8 +134,6 @@ export default function Treino() {
   }
   const shown = showAll ? history : history.slice(0, 8)
 
-  const secondary =
-    'flex min-h-14 items-center justify-center gap-2 rounded-2xl border border-line bg-surface font-display text-[18px] font-bold tracking-[0.06em] uppercase'
 
   return (
     <div className="space-y-4 pt-1">
@@ -202,123 +172,7 @@ export default function Treino() {
 
       <WeekPlanCard workouts={workouts} />
 
-      {top?.workout && (
-        <button
-          onClick={() => openFavorite(top)}
-          className="flex min-h-24 w-full items-center gap-4 rounded-[20px] bg-burn px-4 text-left text-bg active:scale-[0.99]"
-        >
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-bg text-burn">
-            <Icon
-              name={top.workout.type === 'bike' ? 'bike' : top.workout.type === 'strength' ? 'dumbbell' : 'walk'}
-              size={32}
-              stroke={1.8}
-            />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block truncate font-display text-[26px] leading-none font-extrabold uppercase">
-              {top.name}
-            </span>
-            <span className="mt-1 block truncate font-display text-[18px] font-semibold uppercase">
-              {templateSummary(top)}
-              {top.kcal ? ` · +${fmtKcal(top.kcal)}` : ''}
-            </span>
-          </span>
-          <Icon name="chevron" size={22} stroke={2.4} />
-        </button>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => sheet.open('ja-fiz')} className={secondary}>
-          <Icon name="check" size={20} /> Já fiz
-        </button>
-        <button onClick={() => navigate('/treino/ginasio')} className={secondary}>
-          <Icon name="dumbbell" size={20} /> Ginásio
-        </button>
-        <ShotButton className={`${secondary} col-span-2`}>
-          <Icon name="watch" size={20} /> Print do relógio
-        </ShotButton>
-      </div>
-
-      {icu?.connected && (
-        <div className="flex items-center justify-between gap-2 text-[14px] text-dim">
-          <span>
-            Relógio (intervals.icu){icu.last_sync_at ? ` · sincronizado ${syncedAgo(icu.last_sync_at, new Date())}` : ''}
-            {icu.last_error ? ` · ${icu.last_error}` : ''}
-          </span>
-          <button
-            disabled={syncing}
-            onClick={() => {
-              setSyncing(true)
-              void syncNow(3)
-                .then((r) => toast(syncSummary(r)))
-                .catch((err) => toast(err instanceof Error ? err.message : 'Não consegui sincronizar.'))
-                .finally(() => {
-                  setSyncing(false)
-                  void reload()
-                })
-            }}
-            className="min-h-10 shrink-0 rounded-xl border border-line px-3 text-ink disabled:opacity-40"
-          >
-            {syncing ? 'A sincronizar…' : 'Sincronizar agora'}
-          </button>
-        </div>
-      )}
-
-      {unassigned.length > 0 && favorites.length > 0 && (
-        <button
-          onClick={() => sheet.open('confirmar-treino', { id: unassigned[0]!.id })}
-          className="flex w-full items-center gap-3 rounded-[18px] border border-line bg-surface p-4 text-left"
-        >
-          <Icon name="watch" />
-          <span className="flex-1 text-[15px]">
-            {unassigned.length === 1
-              ? `Treino do relógio de ${weekdayShort(unassigned[0]!.date)}: qual dos teus treinos foi?`
-              : `${unassigned.length} treinos do relógio sem nome: diz qual dos teus treinos foi cada um.`}
-          </span>
-          <Icon name="chevron" size={20} />
-        </button>
-      )}
-
-      <section className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="label">Os meus treinos</p>
-          <button onClick={() => sheet.open('meu-treino')} className="min-h-10 px-2 text-[15px] text-eat">
-            ＋ Novo treino
-          </button>
-        </div>
-        {favorites.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-line p-4 text-[15px] text-dim">
-            Define os teus 4 ou 5 treinos (ginásio com os exercícios, corrida, padel…). Depois registas cada um com um
-            toque, ou dizes qual foi quando o treino chega do relógio.
-          </p>
-        ) : (
-          <div className="divide-y divide-line/60 rounded-2xl border border-line bg-surface">
-            {favorites.map((f) => (
-              <div key={f.id} className="flex items-center gap-2 px-3">
-                <button onClick={() => openFavorite(f)} className="flex min-h-16 min-w-0 flex-1 items-center gap-3 text-left">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim">
-                    <Icon
-                      name={f.workout?.type === 'bike' ? 'bike' : f.workout?.type === 'strength' ? 'dumbbell' : 'walk'}
-                      size={20}
-                    />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[16px] font-semibold">{f.name}</span>
-                    <span className="block truncate text-[13px] text-dim">{templateSummary(f)}</span>
-                  </span>
-                </button>
-                <button
-                  onClick={() => sheet.open('meu-treino', { id: f.id })}
-                  aria-label={`Editar ${f.name}`}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-dim"
-                >
-                  <Icon name="pencil" size={18} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      <WorkoutLogOptions />
 
       {ridesBike && (
       <div className="rounded-[18px] border border-line bg-surface p-4">
@@ -339,12 +193,7 @@ export default function Treino() {
       )}
 
 
-      {workouts.length === 0 ? (
-        <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
-          Regista o primeiro treino: toca num dos teus treinos ou em Já fiz. Se usas relógio, os treinos chegam
-          sozinhos (Definições › Ligações) ou juntas o print.
-        </p>
-      ) : (
+      {workouts.length > 0 && (
         <section>
           <p className="label mb-1">Histórico</p>
           <div className="divide-y divide-line/60">
