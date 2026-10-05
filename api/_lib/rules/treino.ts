@@ -3,7 +3,7 @@
 import { NET_METS, isOtherSport, workoutKcal, type OtherSport, type WorkoutType } from './targets.js'
 
 export type WattsSource = 'device' | 'console' | 'manual' | 'favorite' | 'prefill'
-export type KcalRule = 'watts' | 'watts_prefill' | 'strength_flat' | 'device_x0.7' | 'met'
+export type KcalRule = 'watts' | 'watts_prefill' | 'strength_flat' | 'device' | 'device_x0.7' | 'met'
 
 // Regra 2 revista: os watts vêm, por ordem, do dispositivo, da foto da
 // consola, do valor à mão, do favorito e, por fim, dos últimos watts
@@ -39,13 +39,14 @@ export interface KcalInput {
 }
 
 // As kcal que o treino soma ao plano, a regra usada e se é uma estimativa.
-// Na bicicleta contam os watts; sem potência, 70 % das calorias do relógio
-// (estimativa). No ginásio, as calorias do relógio nunca contam.
+// Na bicicleta contam os watts; sem a potência média, as calorias do relógio
+// por inteiro (a bicicleta de casa manda os watts ao relógio, que já os usa
+// na conta). No ginásio, as calorias do relógio nunca contam.
 export function exerciseKcal(w: KcalInput): { kcal: number; rule: KcalRule; estimated: boolean } {
   switch (w.type) {
     case 'bike': {
       if (w.watts == null && w.deviceCalories != null && w.deviceCalories > 0) {
-        return { kcal: Math.round(w.deviceCalories * 0.7), rule: 'device_x0.7', estimated: true }
+        return { kcal: Math.round(w.deviceCalories), rule: 'device', estimated: false }
       }
       const kcal = workoutKcal({ type: 'bike', minutes: w.minutes, watts: w.watts, deviceCalories: null })
       const prefill = w.wattsSource === 'prefill'
@@ -82,8 +83,8 @@ export function kcalExplanation(w: {
   deviceCalories: number | null
 }): string {
   if (w.type === 'bike') {
-    if (w.watts == null && w.rule === 'device_x0.7' && w.deviceCalories != null) {
-      return `Sem potência: 70 % das ${w.deviceCalories} kcal do relógio. Com os watts (foto da consola) a conta é mais certa.`
+    if (w.watts == null && (w.rule === 'device' || w.rule === 'device_x0.7') && w.deviceCalories != null) {
+      return `As ${w.deviceCalories} kcal do relógio (a bicicleta manda-lhe os watts e ele já os usa na conta).`
     }
     if (w.watts == null) return 'Sem potência: junta uma foto da consola ou escreve os watts.'
     const base = `${w.watts} W × ${w.minutes ?? 0} min = ${w.kcal}`

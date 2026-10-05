@@ -894,8 +894,10 @@ export default function Hoje() {
                       ? `pela potência (${workout.watts} W × ${workout.minutes} min)`
                       : workout.type === 'strength'
                         ? '150 fixas por ginásio de 30 min ou mais'
-                        : workout.kcal_rule === 'device_x0.7' || workout.raw?.calories != null
-                          ? `70 % das calorias do relógio${workout.type === 'bike' ? ' (sem potência)' : ''}`
+                        : workout.type === 'bike' && workout.kcal_rule === 'device'
+                          ? 'as calorias do relógio (já contam com os watts)'
+                          : workout.kcal_rule === 'device_x0.7' || workout.raw?.calories != null
+                            ? '70 % das calorias do relógio'
                           : workout.type === 'bike'
                             ? 'sem potência nem calorias do relógio'
                             : 'pelo tempo e pelo teu peso'}

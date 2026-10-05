@@ -41,11 +41,11 @@ describe('exerciseKcal', () => {
     })
   })
 
-  it('bicicleta sem potência: 70 % das calorias do relógio (estimativa); sem elas, 0', () => {
-    expect(exerciseKcal({ type: 'bike', minutes: 25, watts: null, wattsSource: null, deviceCalories: 352 })).toEqual({
-      kcal: 246,
-      rule: 'device_x0.7',
-      estimated: true,
+  it('bicicleta sem potência média: as calorias do relógio por inteiro (já contam com os watts); sem elas, 0', () => {
+    expect(exerciseKcal({ type: 'bike', minutes: 25, watts: null, wattsSource: null, deviceCalories: 509 })).toEqual({
+      kcal: 509,
+      rule: 'device',
+      estimated: false,
     })
     expect(exerciseKcal({ type: 'bike', minutes: 45, watts: null, wattsSource: null, deviceCalories: null }).kcal).toBe(0)
   })
