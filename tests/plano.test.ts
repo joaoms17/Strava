@@ -113,6 +113,18 @@ describe('plano semanal', () => {
     expect(e.left_out).toBe(1)
   })
 
+  it('treino partido em dois: o aquecimento sem km não baixa a velocidade', () => {
+    const part = (at: string, minutes: number, hr: number, km: number | null) =>
+      w({ date: '2026-10-05', started_at: `2026-10-05T${at}Z`, minutes, moving_s: minutes * 60, elapsed_s: minutes * 60, avg_hr: hr, watts: null, distance_km: km, sport: 'VirtualRide' })
+    const e = bikeEfficiency([
+      part('14:53:00', 10, 118, null),
+      part('15:03:30', 25, 143, 12.88),
+      w({ date: '2026-10-01', minutes: 30, moving_s: 1800, avg_hr: 140, watts: null, distance_km: 15, sport: 'VirtualRide' }),
+    ])
+    expect(e.metric).toBe('distance')
+    expect(e.points.at(-1)).toMatchObject({ date: '2026-10-05', minutes: 35, speed_kmh: 30.9, value: 3.6 })
+  })
+
   it('só batimentos (sem watts nem distância): não se compara', () => {
     const e = bikeEfficiency([
       w({ date: '2026-10-05', started_at: '2026-10-05T14:53:15Z', minutes: 10, moving_s: 576, elapsed_s: 580, avg_hr: 118, watts: null }),

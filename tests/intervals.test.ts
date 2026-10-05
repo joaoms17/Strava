@@ -211,3 +211,12 @@ describe('passos, sono e FC em repouso do dia', () => {
     })
   })
 })
+
+describe('rolo sem distância', () => {
+  it('a distância sai da velocidade média × tempo (Garmin «Indoor Cycling»: 30,8 km/h, 25 min)', () => {
+    const ride = mapActivity({ id: 'i193877398', type: 'VirtualRide', moving_time: 1500, elapsed_time: 1501, average_speed: 30.8 / 3.6 })
+    expect(ride.distance_km).toBe(12.83)
+    expect(mapActivity({ id: 'i2', type: 'VirtualRide', moving_time: 1500, average_speed: 0 }).distance_km).toBeNull()
+    expect(mapActivity({ id: 'i3', type: 'Ride', moving_time: 3600, distance: 30000, average_speed: 5 }).distance_km).toBe(30)
+  })
+})

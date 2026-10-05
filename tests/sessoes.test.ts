@@ -61,3 +61,15 @@ describe('sessões partidas', () => {
     expect(progress.gym[0]?.minutes).toBe(50)
   })
 })
+
+describe('falta informação', () => {
+  it('bicicleta do relógio sem km nem potência, de 15 min ou mais', async () => {
+    const { missingInfo } = await import('../api/_lib/rules/sessoes')
+    const ride = { date: '2026-10-05', type: 'bike' as const, source: 'intervals', minutes: 25, distance_km: null, watts: null }
+    expect(missingInfo(ride)).toEqual(['os km', 'a potência'])
+    expect(missingInfo({ ...ride, minutes: 10 })).toEqual([])
+    expect(missingInfo({ ...ride, distance_km: 12.88 })).toEqual([])
+    expect(missingInfo({ ...ride, source: 'manual' })).toEqual([])
+    expect(missingInfo({ ...ride, type: 'strength' })).toEqual([])
+  })
+})

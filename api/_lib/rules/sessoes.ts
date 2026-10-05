@@ -40,7 +40,8 @@ function weighted<T extends SessionLike>(parts: T[], key: 'avg_hr' | 'watts' | '
 }
 function sum<T extends SessionLike>(parts: T[], key: 'minutes' | 'moving_s' | 'distance_km' | 'training_load' | 'kcal_est' | 'kcal_device') {
   const values = parts.map((p) => p[key]).filter((v) => v != null).map(Number)
-  return values.length ? Math.round(values.reduce((a, b) => a + b, 0) * 10) / 10 : null
+  const f = key === 'distance_km' ? 100 : 10
+  return values.length ? Math.round(values.reduce((a, b) => a + b, 0) * f) / f : null
 }
 
 function combine<T extends SessionLike>(parts: T[]): Merged<T> {
@@ -82,4 +83,16 @@ export function mergeSessions<T extends SessionLike>(rows: T[]): Merged<T>[] {
     }
   }
   return groups.map(combine)
+}
+
+// Bicicleta do relógio sem km nem potência (rolo sem sensor; a app da
+// bicicleta não chegou pelo intervals.icu): fica «a faltar informação» até
+// chegarem os prints. As partes curtas (aquecimento) não contam.
+export const MIN_PENDING_MINUTES = 15
+export function missingInfo(w: SessionLike & { source?: string | null }): string[] {
+  if (w.type !== 'bike' || w.source !== 'intervals' || (w.minutes ?? 0) < MIN_PENDING_MINUTES) return []
+  const missing: string[] = []
+  if (w.distance_km == null) missing.push('os km')
+  if (w.watts == null) missing.push('a potência')
+  return missing.length === 2 ? missing : []
 }

@@ -17,6 +17,7 @@ import { useAutoSync } from '../lib/intervals'
 import { useLocation } from 'wouter'
 import WeekPlanCard from '../components/WeekPlanCard'
 import WorkoutLogOptions from '../components/WorkoutLogOptions'
+import PendingInfo from '../components/PendingInfo'
 import { cleanPrefs } from '../../api/_lib/rules/plano'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 
@@ -176,6 +177,8 @@ export default function Treino() {
       <WeekPlanCard workouts={workouts} />
 
       <WorkoutLogOptions />
+
+      <PendingInfo workouts={workouts} today={today} />
 
       {ridesBike && (
       <div className="rounded-[18px] border border-line bg-surface p-4">

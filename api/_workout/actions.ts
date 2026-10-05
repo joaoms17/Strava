@@ -290,13 +290,20 @@ export const save = post(async ({ db, userId, body, res }) => {
       watts: type === 'bike' ? watts : null,
       watts_source: wattsSource,
     })
-    if (patch.watts != null) {
+    // As calorias do print (o que o Garmin mostra) mandam sobre as que o
+    // intervals.icu calculou.
+    if (target.source === 'intervals' && input.kcal_device != null && input.kcal_device !== target.kcal_device) {
+      patch.kcal_device = input.kcal_device
+    }
+    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts.
+    const wattsNow = (patch.watts ?? target.watts) as number | null
+    if (patch.watts != null || (target.type === 'bike' && wattsNow == null && patch.kcal_device != null)) {
       const again = exerciseKcal({
         type: target.type as WorkoutType,
         minutes: (target.minutes as number | null) ?? input.minutes,
-        watts: patch.watts as number,
-        wattsSource: patch.watts_source as WattsSource,
-        deviceCalories: null,
+        watts: wattsNow,
+        wattsSource: (patch.watts_source ?? target.watts_source) as WattsSource,
+        deviceCalories: target.type === 'bike' ? ((patch.kcal_device ?? target.kcal_device) as number | null) : null,
       })
       Object.assign(patch, { kcal_est: again.kcal, kcal_rule: again.rule, kcal_estimated: again.estimated })
     }

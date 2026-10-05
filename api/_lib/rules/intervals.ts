@@ -14,6 +14,8 @@ export interface IcuActivity {
   moving_time?: number | null
   elapsed_time?: number | null
   distance?: number | null // metros
+  icu_distance?: number | null // metros (calculada pelo intervals.icu)
+  average_speed?: number | null // m/s (o Garmin dá-a no rolo mesmo sem distância)
   average_heartrate?: number | null
   max_heartrate?: number | null
   icu_average_watts?: number | null
@@ -108,7 +110,10 @@ export function mapActivity(a: IcuActivity): MappedActivity {
   const watts = int(a.icu_average_watts ?? a.average_watts)
   const hr = int(a.average_heartrate)
   const maxHr = int(a.max_heartrate)
-  const distance = num(a.distance)
+  // Sem distância (rolo), pela velocidade média × tempo em movimento.
+  const speed = num(a.average_speed)
+  const distance =
+    num(a.distance) || num(a.icu_distance) || (speed != null && speed > 0 && (moving ?? elapsed) ? speed * (moving ?? elapsed)! : null)
   return {
     external_id: String(a.id),
     type,

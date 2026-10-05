@@ -55,7 +55,7 @@ export default function ConfirmWorkoutSheet() {
   const workoutId = sheet.params.get('id')
   const importId = sheet.params.get('import')
   if (workoutId) return <WorkoutDetail key={workoutId} id={workoutId} />
-  if (importId) return <ImportConfirm key={importId} id={importId} />
+  if (importId) return <ImportConfirm key={importId} id={importId} target={sheet.params.get('para')} />
   return null
 }
 
@@ -92,7 +92,7 @@ interface Draft {
   kcalDevice: string
 }
 
-function ImportConfirm({ id }: { id: string }) {
+function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   const sheet = useSheet()
   const toast = useToast()
   const profile = useReadyProfile()
@@ -189,8 +189,20 @@ function ImportConfirm({ id }: { id: string }) {
         ? lisbonInstant(draft.day, '18:00').toISOString()
         : null
     : null
+  // Prints para completar um treino escolhido (o do relógio sem km): é esse.
   useEffect(() => {
-    if (!draft) return
+    if (!target) return
+    void supabase
+      .from('workouts_active')
+      .select('*')
+      .eq('id', target)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data) setCandidate(data as Workout)
+      })
+  }, [target])
+  useEffect(() => {
+    if (!draft || target) return
     void supabase
       .from('workouts_active')
       .select('*')
@@ -481,7 +493,9 @@ function ImportConfirm({ id }: { id: string }) {
             </div>
             {merging && (
               <p className="text-[13px] text-dim">
-                Junta os batimentos e o resto que faltar. A duração e os watts que deste ficam.
+                {target
+                  ? 'Completa o treino do relógio com o que o print tem a mais: km, calorias, potência.'
+                  : 'Junta os batimentos e o resto que faltar. A duração e os watts que deste ficam.'}
               </p>
             )}
           </div>

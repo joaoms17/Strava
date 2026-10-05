@@ -164,7 +164,18 @@ export function bikeEfficiency(workouts: PlanWorkout[]): BikeEfficiency {
   const bikes = mergeSessions(workouts.filter((w) => w.type === 'bike'))
   const usable = bikes.filter((w) => (w.minutes ?? 0) >= MIN_EFFICIENCY_MINUTES && (w.avg_hr ?? 0) > 0)
   const withWatts = usable.filter((w) => w.watts != null && w.watts > 0)
-  const withDistance = usable.filter((w) => (w.distance_km ?? 0) > 0)
+  // Na distância contam só as partes com km e batimentos (um aquecimento
+  // sem km não pode baixar a velocidade do treino), com 20 min ou mais.
+  const distanceOf = (w: (typeof usable)[number]) => {
+    const parts = w.parts.filter((p) => (p.distance_km ?? 0) > 0 && (p.avg_hr ?? 0) > 0)
+    const seconds = parts.reduce((a, p) => a + (p.moving_s ?? (p.minutes ?? 0) * 60), 0)
+    return {
+      km: parts.reduce((a, p) => a + p.distance_km!, 0),
+      seconds,
+      beats: parts.reduce((a, p) => a + p.avg_hr! * ((p.moving_s ?? (p.minutes ?? 0) * 60) / 60), 0),
+    }
+  }
+  const withDistance = usable.filter((w) => distanceOf(w).km > 0 && distanceOf(w).seconds >= MIN_EFFICIENCY_MINUTES * 60)
   let metric: BikeEfficiency['metric'] = null
   let chosen: typeof usable = []
   if (withWatts.length >= 2) {
@@ -179,13 +190,12 @@ export function bikeEfficiency(workouts: PlanWorkout[]): BikeEfficiency {
     if (!metric) chosen = []
   }
   const points = chosen.map((w): EfficiencyPoint => {
-    const hours = (w.moving_s ?? (w.minutes ?? 0) * 60) / 3600
-    const speed = (w.distance_km ?? 0) > 0 && hours > 0 ? Math.round((w.distance_km! / hours) * 10) / 10 : null
-    const beats = w.avg_hr! * (w.moving_s != null ? w.moving_s / 60 : (w.minutes ?? 0))
+    const d = distanceOf(w)
+    const speed = d.km > 0 && d.seconds > 0 ? Math.round((d.km / (d.seconds / 3600)) * 10) / 10 : null
     const value =
       metric === 'watts'
         ? Math.round((w.watts! / w.avg_hr!) * 100) / 100
-        : Math.round(((w.distance_km! * 1000) / beats) * 100) / 100
+        : Math.round(((d.km * 1000) / d.beats) * 100) / 100
     return { date: w.date, value, minutes: w.minutes ?? 0, avg_hr: w.avg_hr!, watts: w.watts ?? null, speed_kmh: speed }
   })
   return { metric, points, left_out: bikes.length - points.length }

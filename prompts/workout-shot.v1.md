@@ -13,9 +13,9 @@ Devolve exclusivamente o JSON pedido:
 - `activity.sport`: indoor_bike (bicicleta estática, rolo, «Indoor Cycling», «Virtual Ride»), outdoor_bike, strength (ginásio, musculação, «Strength Training»), walk, run, elliptical, swim ou other. `sport_label_raw` é o nome tal como aparece; `title` o título do treino, se houver.
 - `activity.date` (AAAA-MM-DD, resolvido com `hoje`) e `activity.start_time` (HH:MM, hora local mostrada).
 - Tempos em segundos: `total_time_s` (tempo total ou decorrido) e `moving_time_s` (tempo em movimento). Converte «1:02:15» em 3735 e «45:10» em 2710.
-- `distance_km` em km (converte milhas: × 1,609).
+- `distance_km` em km (converte milhas: × 1,609). No rolo, o Garmin pode não ter distância no resumo, mas uma app da bicicleta mostra-a na secção «Connect IQ» («Distância 12,88 km»): usa essa. Da mesma secção, «Pico de Potência»/«Peak Power» vai para `max_power_w` (não é a média) e uma potência média, se aparecer, para `avg_power_w`.
 - `avg_hr` e `max_hr` em bpm; `avg_power_w`, `max_power_w` e `np_w` (Normalized Power do Garmin ou «Weighted Avg Power» do Strava) em watts; `avg_cadence` e `max_cadence` em rpm.
-- `calories_device`: as calorias mostradas pelo relógio ou pela app.
+- `calories_device`: as calorias mostradas pelo relógio ou pela app (no Garmin, «Total Calories Burned»/«Calorias totais»; se só houver as da secção Connect IQ, essas).
 - `elevation_gain_m`, `aerobic_te` e `anaerobic_te` (Training Effect do Garmin), `training_load` com `training_load_kind` (garmin_exercise_load, strava_relative_effort, tss ou other) e `rpe` (esforço percebido), quando aparecem.
 - `hr_zones`: lista {zone, seconds} só se as zonas aparecerem; senão vazia. `laps`: lista {n, time_s, avg_hr, avg_power_w, avg_cadence} só se aparecerem voltas; senão vazia. `strength_sets`: lista {exercise_raw, reps, weight_kg} para séries de ginásio visíveis (converte lb em kg: × 0,4536); senão vazia.
 - `field_confidence`: uma entrada por campo lido, com `confidence` (alta, media ou baixa) e `image_index` da imagem de onde veio.

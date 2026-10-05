@@ -235,13 +235,17 @@ export async function syncIntervals(
         .eq('type', 'bike')
         .is('deleted_at', null)
         .in('external_id', [...known])
+      const fromApi = new Map(mapped.map((m) => [m.a.external_id, m.a]))
       for (const row of (knownFull ?? []) as Record<string, unknown>[]) {
         const raw = (row.raw ?? {}) as Record<string, unknown>
         const patch: Record<string, unknown> = {}
         let watts = row.watts as number | null
         let wattsSource = row.watts_source as WattsSource | null
         let deviceCalories = row.kcal_device as number | null
-        if (row.distance_km == null && raw.fit !== 'lido' && raw.fit !== 'sem_dados' && canReadFit()) {
+        // A distância pela velocidade média do intervals.icu (rolo).
+        const apiDistance = fromApi.get(row.external_id as string)?.distance_km ?? null
+        if (row.distance_km == null && apiDistance != null) patch.distance_km = apiDistance
+        if (row.distance_km == null && apiDistance == null && raw.fit !== 'lido' && raw.fit !== 'sem_dados' && canReadFit()) {
           fitReads++
           const ciq = await readCiq(key, row.external_id as string, fitTimeout)
           patch.raw = { ...raw, fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro', ...(ciq && hasCiq(ciq) ? { ciq } : {}) }
