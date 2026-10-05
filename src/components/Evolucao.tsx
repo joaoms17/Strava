@@ -7,6 +7,7 @@ import { useReadyProfile } from '../lib/profile'
 import BemEstar from './BemEstar'
 import { nutritionalDay, shiftDate } from '../lib/day'
 import {
+  cleanWellness,
   efficiencySeries,
   fitnessSeries,
   lastMondays,
@@ -45,7 +46,7 @@ export default function Evolucao() {
         .order('date'),
     ]).then(([{ data: h }, { data: w }]) => {
       if (!alive) return
-      setHealth((h ?? []) as WellnessRow[])
+      setHealth(cleanWellness((h ?? []) as WellnessRow[]))
       setWorkouts((w ?? []) as PlanWorkout[])
     })
     return () => {

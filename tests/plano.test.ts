@@ -10,6 +10,7 @@ import {
   sessionLoad,
   weekNumber,
   weeklyStats,
+  cleanWellness,
   latestOf,
   wellnessTrend,
   type PlanWorkout,
@@ -106,6 +107,17 @@ describe('plano semanal', () => {
     ]
     const t = wellnessTrend(rows, '2026-10-07')
     expect(t).toMatchObject({ hrv7: 48, hrv28: 45, rhr7: 53, rhr28: 55, steps7: 7000, steps28: 6000, sleepQuality7: 2.5, sleepScore7: 75 })
+  })
+
+  it('FC em repouso só nos dias com noite registada', () => {
+    const rows = [
+      { date: '2026-10-01', resting_hr: 74, steps: 1184 },
+      { date: '2026-10-02', resting_hr: 57, sleep_minutes: 410 },
+      { date: '2026-10-03', resting_hr: 57, sleep_quality: 3 },
+    ]
+    expect(cleanWellness(rows).map((r) => r.resting_hr)).toEqual([null, 57, 57])
+    expect(cleanWellness(rows)[0]!.steps).toBe(1184)
+    expect(wellnessTrend(rows, '2026-10-03').rhr7).toBe(57)
   })
 
   it('o valor mais recente de cada campo, só dos últimos dias', () => {

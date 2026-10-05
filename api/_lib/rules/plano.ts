@@ -162,6 +162,16 @@ export interface WellnessTrend {
   steps28: number | null
 }
 
+// A FC em repouso só vale nos dias com noite registada: sem o relógio a
+// dormir, a Garmin calcula-a durante o dia e sai alta (ex.: 74 em vez de 57).
+export function cleanWellness<T extends WellnessRow>(rows: T[]): T[] {
+  return rows.map((r) =>
+    r.resting_hr != null && r.sleep_minutes == null && r.sleep_score == null && r.sleep_quality == null
+      ? { ...r, resting_hr: null }
+      : r,
+  )
+}
+
 // O valor mais recente de um campo do relógio, de hoje até `maxAge` dias
 // antes (um valor mais antigo já não diz como estás).
 export function latestOf(
@@ -181,7 +191,8 @@ export function latestOf(
 }
 
 // Média dos últimos 7 dias contra a dos últimos 28 (até `today`).
-export function wellnessTrend(rows: WellnessRow[], today: string): WellnessTrend {
+export function wellnessTrend(all: WellnessRow[], today: string): WellnessTrend {
+  const rows = cleanWellness(all)
   const since = (days: number) => rows.filter((r) => r.date > shiftDate(today, -days) && r.date <= today)
   const values = (list: WellnessRow[], key: keyof WellnessRow) =>
     list.map((r) => r[key]).filter((v): v is number => typeof v === 'number')
