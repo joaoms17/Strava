@@ -52,8 +52,15 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       return
     }
     // Cada fase nova do redesenho traz uma migração para correr no Supabase.
+    // Só falta a tabela quando o Postgres o diz: uma falha de rede (no
+    // iPhone, ao voltar à app) não é migração por correr.
+    const noFavorites =
+      migration.error != null &&
+      (migration.error.code === '42P01' ||
+        migration.error.code === 'PGRST205' ||
+        /favorites/.test(migration.error.message ?? ''))
     const missing = [
-      ...(migration.error || !('pin_mode' in data) ? ['20260928000000_fase1.sql'] : []),
+      ...(noFavorites || !('pin_mode' in data) ? ['20260928000000_fase1.sql'] : []),
       ...(!('ai_monthly_cap_eur' in data) ? ['20260929000000_fase2.sql'] : []),
       ...(!('has_garmin_watch' in data) ? ['20260930000000_fase3.sql'] : []),
       ...(!('measure_interval_days' in data) ? ['20261001000000_fase4.sql'] : []),
