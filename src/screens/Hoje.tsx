@@ -40,6 +40,7 @@ import AttachPhotoButton from '../components/ui/AttachPhotoButton'
 import { MAX_MEAL_PHOTOS } from '../lib/capture'
 import WeekStrip from '../components/ui/WeekStrip'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
+import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
 
 interface DayData {
   meals: (Meal & { created_at: string })[]
@@ -55,6 +56,7 @@ interface DayData {
   weighedToday: boolean
   sleep: NightSleep | null
   lastNight: (NightSleep & { date: string }) | null
+  steps: { steps: number; avg: number | null } | null
   importsToConfirm: string[]
   weightCount: number
   lastMeasureDate: string | null
@@ -125,6 +127,7 @@ export default function Hoje() {
       { data: imports },
       { data: lastMeasure },
       { data: health },
+      { data: stepRows },
       expenditure,
       diet,
     ] = await Promise.all([
@@ -168,6 +171,12 @@ export default function Hoje() {
         .lte('date', date)
         .gte('date', shiftDate(date, -3))
         .order('date', { ascending: false }),
+      // Os passos do dia e dos 30 antes (para a média).
+      supabase
+        .from('health_daily')
+        .select('date,steps')
+        .lte('date', date)
+        .gte('date', shiftDate(date, -STEPS_AVG_DAYS)),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
       // A dieta que segue (migração 10; sem ela fica null).
       loadActiveDiet(),
@@ -196,6 +205,7 @@ export default function Hoje() {
       weightCount: weightCount ?? 0,
       lastMeasureDate: (lastMeasure?.[0]?.date as string | undefined) ?? null,
       ...pickNights(date, (health ?? []) as (Partial<NightSleep> & { date: string })[]),
+      steps: daySteps((stepRows ?? []) as { date: string; steps: number | null }[], date),
       expenditure,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
@@ -420,6 +430,33 @@ export default function Hoje() {
       ),
     })
   }
+  // Os passos fecham o dia (hoje, até agora): os do relógio contra a média.
+  if (data.steps) {
+    const { steps, avg } = data.steps
+    entries.push({
+      at: isToday ? new Date().toISOString() : `${date}T23:59:59Z`,
+      key: 'passos',
+      node: (
+        <div className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2">
+          <span className="w-12 shrink-0 font-display text-[15px] font-semibold tracking-[0.04em] text-dim uppercase">
+            Dia
+          </span>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim">
+            <Icon name="walk" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[16px] font-semibold">Passos</span>
+            <span className="block truncate text-[14px] text-dim">
+              {[isToday ? 'até agora' : null, avg != null ? `média ${fmtInt(avg)}` : null]
+                .filter(Boolean)
+                .join(' · ') || 'do relógio'}
+            </span>
+          </span>
+          <span className="num shrink-0 text-[22px]">{fmtInt(steps)}</span>
+        </div>
+      ),
+    })
+  }
   for (const w of data.weights) {
     const at = w.measured_at ?? w.created_at ?? `${w.date}T07:00:00Z`
     entries.push({
@@ -617,9 +654,10 @@ export default function Hoje() {
     })
   }
   entries.sort((a, b) => a.at.localeCompare(b.at))
-  // O sono sozinho não conta como dia registado: continua o convite a começar.
-  const empty = entries.every((e) => e.key === 'sono')
-  const sleepEntry = entries.find((e) => e.key === 'sono')
+  // O sono e os passos sozinhos não contam como dia registado: continua o
+  // convite a começar.
+  const watchOnly = entries.filter((e) => e.key === 'sono' || e.key === 'passos')
+  const empty = watchOnly.length === entries.length
 
   return (
     <div className="space-y-4 pt-1">
@@ -766,7 +804,13 @@ export default function Hoje() {
         />
       )}
 
-      {empty && sleepEntry && <div className="-mx-2">{sleepEntry.node}</div>}
+      {empty && watchOnly.length > 0 && (
+        <div className="-mx-2 divide-y divide-line/60">
+          {watchOnly.map((e) => (
+            <div key={e.key}>{e.node}</div>
+          ))}
+        </div>
+      )}
       {empty ? (
         <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
           <p className="text-[15px] text-dim">
