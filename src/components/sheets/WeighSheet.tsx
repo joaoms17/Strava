@@ -32,7 +32,7 @@ export default function WeighSheet() {
     async function load() {
       const { data: rows } = await supabase
         .from('weights')
-        .select('date,kg,body_fat_pct')
+        .select('date,kg,body_fat_pct,measured_at,source')
         .gte('date', shiftDate(today, -60))
         .order('date')
       setWeights(((rows ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })))
@@ -100,6 +100,48 @@ export default function WeighSheet() {
     }
     const text = `Guardado · ${fmt1(kg)} kg`
     toast(text, [{ label: 'Anular', run: undo }])
+    sheet.close()
+  }
+
+  // Apagar a pesagem deste dia (ex.: o peso de outra pessoa na conta errada),
+  // com Anular.
+  async function remove() {
+    if (!existing) return
+    setBusy(true)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      setBusy(false)
+      setError('Sessão expirada. Volta a entrar.')
+      return
+    }
+    const gone = existing as WeightRow & { source?: string | null }
+    const { error: deleteError } = await supabase.from('weights').delete().eq('user_id', user.id).eq('date', date)
+    setBusy(false)
+    if (deleteError) {
+      setError('Não consegui apagar. Tenta outra vez.')
+      return
+    }
+    emitDataChanged()
+    recomputeFrom(date, today)
+    toast(`Pesagem apagada · ${fmt1(gone.kg)} kg`, [
+      {
+        label: 'Anular',
+        run: async () => {
+          await supabase.from('weights').insert({
+            user_id: user.id,
+            date,
+            kg: gone.kg,
+            body_fat_pct: gone.body_fat_pct ?? null,
+            source: gone.source ?? 'manual',
+            measured_at: gone.measured_at ?? null,
+          })
+          emitDataChanged()
+          recomputeFrom(date, today)
+        },
+      },
+    ])
     sheet.close()
   }
 
@@ -248,9 +290,16 @@ export default function WeighSheet() {
           })}
         </div>
         {existing && (
-          <p className="text-[13px] text-dim">
-            Já há {fmt1(existing.kg)} kg neste dia; guardar substitui.
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[13px] text-dim">Já há {fmt1(existing.kg)} kg neste dia; guardar substitui.</p>
+            <button
+              disabled={busy}
+              onClick={() => void remove()}
+              className="min-h-11 shrink-0 px-1 text-[15px] text-pain disabled:opacity-40"
+            >
+              Apagar pesagem
+            </button>
+          </div>
         )}
 
         {profile.scale_has_bodyfat && (
