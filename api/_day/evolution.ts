@@ -6,6 +6,7 @@ import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from '../_lib/ant
 import { PROMPT_EVOLUTION, promptVersion, readPrompt } from '../_lib/prompts.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
+import { inWaterPhase } from '../_lib/rules/manutencao.js'
 import { AREAS, ESTADOS, cleanAnalysis, daysToConfirm, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
 import {
   bikeEfficiency,
@@ -101,6 +102,11 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         proteina_g: profile.protein_g ?? null,
       },
       peso: weightSummary((weights.data ?? []) as { date: string; kg: number }[], today),
+      dieta: {
+        inicio: profile.maintenance_anchor ?? null,
+        // Primeiras 3 semanas da dieta ou depois da manutenção: sai sobretudo água.
+        fase_agua: inWaterPhase(profile.maintenance_anchor ?? null, today, profile.maintenance_enabled !== false),
+      },
       medidas: measurements.data ?? [],
       comida: foodWeeks((days.data ?? []) as Parameters<typeof foodWeeks>[0], today),
       treino: {

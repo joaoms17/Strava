@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../api/_lib/rules/manutencao'
+import { inWaterPhase, isMaintenanceWeek, maintenanceTarget, mondayOf } from '../api/_lib/rules/manutencao'
 
 describe('mondayOf', () => {
   it('recua até à segunda-feira da semana', () => {
@@ -37,5 +37,29 @@ describe('maintenanceTarget', () => {
   it('usa o tdee estimado quando existe, senão 2000', () => {
     expect(maintenanceTarget(2135.4)).toBe(2135)
     expect(maintenanceTarget(null)).toBe(2000)
+  })
+})
+
+// 2026-09-07 é segunda: semanas 0–2 (dias 0–20) e, depois da manutenção
+// (semana 5), as semanas 6–8 (dias 42–62) são de água.
+describe('inWaterPhase', () => {
+  it('as 3 primeiras semanas da dieta', () => {
+    expect(inWaterPhase('2026-09-09', '2026-09-07')).toBe(true)
+    expect(inWaterPhase('2026-09-09', '2026-09-27')).toBe(true) // dia 20
+    expect(inWaterPhase('2026-09-09', '2026-09-28')).toBe(false) // dia 21
+  })
+
+  it('as 3 semanas depois de cada semana de manutenção', () => {
+    expect(inWaterPhase('2026-09-07', '2026-10-18')).toBe(false) // dia 41, manutenção
+    expect(inWaterPhase('2026-09-07', '2026-10-19')).toBe(true) // dia 42
+    expect(inWaterPhase('2026-09-07', '2026-11-08')).toBe(true) // dia 62
+    expect(inWaterPhase('2026-09-07', '2026-11-09')).toBe(false) // dia 63
+  })
+
+  it('sem manutenção só as 3 primeiras; sem início nunca; antes do início não', () => {
+    expect(inWaterPhase('2026-09-07', '2026-10-19', false)).toBe(false)
+    expect(inWaterPhase('2026-09-07', '2026-09-10', false)).toBe(true)
+    expect(inWaterPhase(null, '2026-09-10')).toBe(false)
+    expect(inWaterPhase('2026-09-07', '2026-09-01')).toBe(false)
   })
 })

@@ -21,3 +21,18 @@ export function isMaintenanceWeek(anchorDate: string, date: string): boolean {
 export function maintenanceTarget(tdeeEst: number | null): number {
   return tdeeEst != null ? Math.round(tdeeEst) : 2000
 }
+
+// Água e glicogénio: nas primeiras 3 semanas da dieta e nas 3 depois de cada
+// semana de manutenção, o peso cai depressa sem ser gordura (o primeiro quilo
+// vai logo). Nessas semanas não se avisa «a perder depressa». Sem semanas de
+// manutenção, só as 3 primeiras.
+export const WATER_PHASE_DAYS = 21
+
+export function inWaterPhase(anchorDate: string | null, date: string, maintenanceEnabled = true): boolean {
+  if (!anchorDate) return false
+  const days = Math.round(
+    (Date.parse(`${date}T00:00:00Z`) - Date.parse(`${mondayOf(anchorDate)}T00:00:00Z`)) / 86_400_000,
+  )
+  if (days < 0) return false
+  return (maintenanceEnabled ? days % 42 : days) < WATER_PHASE_DAYS
+}
