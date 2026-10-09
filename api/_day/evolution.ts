@@ -83,14 +83,18 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .select('date,hrv,resting_hr,sleep_score,sleep_quality,sleep_minutes,steps')
         .gte('date', shiftDate(today, -61))
         .lte('date', today),
-      db.from('meals_counted').select('date').gte('date', shiftDate(today, -28)).lt('date', today),
+      db.from('meals_counted').select('date,kcal').gte('date', shiftDate(today, -28)).lt('date', today),
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
     const efficiency = bikeEfficiency(allWorkouts)
-    const mealsByDate: Record<string, number> = {}
-    for (const m of meals.data ?? []) mealsByDate[m.date as string] = (mealsByDate[m.date as string] ?? 0) + 1
-    const toConfirm = daysToConfirm((days.data ?? []) as Parameters<typeof daysToConfirm>[0], mealsByDate, today)
+    const mealsByDate: Record<string, { refeicoes: number; kcal: number }> = {}
+    for (const m of meals.data ?? []) {
+      const day = (mealsByDate[m.date as string] ??= { refeicoes: 0, kcal: 0 })
+      day.refeicoes++
+      day.kcal += Number(m.kcal ?? 0)
+    }
+    const toConfirm = daysToConfirm((days.data ?? []) as { date: string; flags: string[] | null }[], mealsByDate, today)
     const form = fitnessSeries(allWorkouts, shiftDate(today, -125), today)
     const payload = {
       pessoa: {

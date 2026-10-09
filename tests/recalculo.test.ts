@@ -21,8 +21,14 @@ describe('dias a recalcular numa noite', () => {
 
   it('mais de 21 dias: para e diz onde continuar na noite seguinte', () => {
     const { dates, next } = recomputeRange('2026-09-28', '2026-08-01', 21)
-    expect(dates).toHaveLength(21)
-    expect(dates[0]).toBe('2026-08-01')
+    expect(dates).toHaveLength(24)
+    expect(dates.slice(3)[0]).toBe('2026-08-01')
+    expect(dates[dates.length - 1]).toBe('2026-08-21')
     expect(next).toBe('2026-08-22')
+  })
+
+  it('com a cadeia atrasada, os últimos 3 dias fecham na mesma (primeiro)', () => {
+    const { dates } = recomputeRange('2026-10-09', '2026-07-25', 21)
+    expect(dates.slice(0, 3)).toEqual(['2026-10-06', '2026-10-07', '2026-10-08'])
   })
 })
