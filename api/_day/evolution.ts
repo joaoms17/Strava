@@ -6,7 +6,8 @@ import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from '../_lib/ant
 import { PROMPT_EVOLUTION, promptVersion, readPrompt } from '../_lib/prompts.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
-import { AREAS, ESTADOS, cleanAnalysis, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
+import { inWaterPhase } from '../_lib/rules/manutencao.js'
+import { AREAS, ESTADOS, cleanAnalysis, daysToConfirm, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
 import {
   bikeEfficiency,
   fitnessSeries,
@@ -28,6 +29,7 @@ const AiSchema = z.object({
   resumo: z.string(),
   areas: z.array(z.object({ area: z.enum(AREAS), estado: z.enum(ESTADOS), texto: z.string() })),
   foco: z.array(z.string()),
+  perguntas: z.array(z.object({ data: z.string(), pergunta: z.string() })),
 })
 
 export default async function evolution(req: VercelRequest, res: VercelResponse) {
@@ -58,7 +60,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
     }
 
     const since = shiftDate(today, -90)
-    const [weights, measurements, days, workouts, health] = await Promise.all([
+    const [weights, measurements, days, workouts, health, meals] = await Promise.all([
       db.from('weights').select('date,kg').gte('date', since).order('date'),
       db
         .from('body_measurements')
@@ -67,7 +69,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .limit(4),
       db
         .from('days')
-        .select('date,kcal_in,protein,kcal_target,kcal_out_est,is_complete')
+        .select('date,kcal_in,protein,kcal_target,kcal_out_est,is_complete,flags')
         .gte('date', shiftDate(today, -29))
         .lte('date', today),
       db
@@ -81,10 +83,14 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .select('date,hrv,resting_hr,sleep_score,sleep_quality,sleep_minutes,steps')
         .gte('date', shiftDate(today, -61))
         .lte('date', today),
+      db.from('meals_counted').select('date').gte('date', shiftDate(today, -28)).lt('date', today),
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
     const efficiency = bikeEfficiency(allWorkouts)
+    const mealsByDate: Record<string, number> = {}
+    for (const m of meals.data ?? []) mealsByDate[m.date as string] = (mealsByDate[m.date as string] ?? 0) + 1
+    const toConfirm = daysToConfirm((days.data ?? []) as Parameters<typeof daysToConfirm>[0], mealsByDate, today)
     const form = fitnessSeries(allWorkouts, shiftDate(today, -125), today)
     const payload = {
       pessoa: {
@@ -96,6 +102,11 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         proteina_g: profile.protein_g ?? null,
       },
       peso: weightSummary((weights.data ?? []) as { date: string; kg: number }[], today),
+      dieta: {
+        inicio: profile.maintenance_anchor ?? null,
+        // Primeiras 3 semanas da dieta ou depois da manutenção: sai sobretudo água.
+        fase_agua: inWaterPhase(profile.maintenance_anchor ?? null, today, profile.maintenance_enabled !== false),
+      },
       medidas: measurements.data ?? [],
       comida: foodWeeks((days.data ?? []) as Parameters<typeof foodWeeks>[0], today),
       treino: {
@@ -118,6 +129,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
           ha_4_semanas: form[form.length - 29]?.ctl ?? null,
         },
       },
+      dias_por_confirmar: toConfirm,
       relogio: wellnessMonths((health.data ?? []) as WellnessRow[], today),
     }
 
@@ -133,7 +145,10 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
       },
       AiSchema,
     )
-    const analysis = cleanAnalysis(output)
+    const analysis = cleanAnalysis(
+      output,
+      toConfirm.map((d) => d.data),
+    )
     if (!analysis.resumo && analysis.areas.length === 0) throw new HttpError(502, 'A IA não devolveu uma análise. Tenta outra vez.')
 
     const row = {

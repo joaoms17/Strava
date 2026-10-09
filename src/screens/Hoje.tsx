@@ -15,6 +15,7 @@ import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
 import { workoutTitle } from '../lib/workout-actions'
 import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
 import { recomputeFrom } from '../lib/recompute'
+import { answerDay, type DayAnswer } from '../lib/day-flag'
 import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
 import { kcalOut, paceFromDiff, round10 } from '../../api/_lib/rules/gasto'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
@@ -353,25 +354,11 @@ export default function Hoje() {
     await update({ dismissed_hints: [...hints, hint] })
   }
 
-  async function answerYesterday(flag: 'dia_fechado' | 'faltou_algo') {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return
-    const other = flag === 'dia_fechado' ? 'faltou_algo' : 'dia_fechado'
-    const flags = [...data!.yesterday.flags.filter((f) => f !== other && f !== flag), flag]
-    const { error } = await supabase
-      .from('days')
-      .upsert(
-        { user_id: user.id, date: shiftDate(today, -1), flags, dirty: true },
-        { onConflict: 'user_id,date' },
-      )
-    if (error) {
+  async function answerYesterday(flag: DayAnswer) {
+    if (!(await answerDay(shiftDate(today, -1), flag, today))) {
       toast('Não consegui gravar. Tenta outra vez.')
       return
     }
-    emitDataChanged()
-    recomputeFrom(shiftDate(today, -1), today)
     toast(flag === 'dia_fechado' ? 'Ontem fica completo.' : 'Ontem fica fora das contas do gasto.')
   }
 
@@ -995,7 +982,7 @@ function NextStepCard({
   yesterdayMeals: number
   favorites: Favorite[]
   onWeigh: () => void
-  onYesterday: (flag: 'dia_fechado' | 'faltou_algo') => void
+  onYesterday: (flag: DayAnswer) => void
   onFavorite: (favorite: Favorite) => void
   onDismiss: () => void
   errorMeals: Meal[]

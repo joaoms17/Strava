@@ -23,6 +23,7 @@ import {
   trend7,
   weeklyRate,
 } from '../../api/_lib/rules/weight'
+import { inWaterPhase } from '../../api/_lib/rules/manutencao'
 import type { WeightRow } from '../lib/types'
 import CompositionCards from '../components/CompositionCards'
 import Evolucao from '../components/Evolucao'
@@ -77,6 +78,7 @@ export default function Corpo() {
 
   const { trend, rate, projection, stable } = derived
   const target = Number(profile.target_weight_kg)
+  const waterPhase = inWaterPhase(profile.maintenance_anchor, today, profile.maintenance_enabled !== false)
   const lastTrend = trend[trend.length - 1]
   const latest = weights[weights.length - 1]
   const previous = weights[weights.length - 2]
@@ -131,11 +133,16 @@ export default function Corpo() {
           </div>
         )}
 
-        {rate != null && rate < -FAST_LOSS_KG_WEEK && (
+        {rate != null && rate < -FAST_LOSS_KG_WEEK && (waterPhase ? (
+          <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-dim">
+            A descer depressa, mas é normal agora: nas primeiras semanas (da dieta ou depois da manutenção) sai
+            sobretudo água.
+          </p>
+        ) : (
           <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-attn">
             Estás a perder depressa (mais de 0,85 kg por semana). Come um pouco mais para proteger o músculo.
           </p>
-        )}
+        ))}
         {stable && rate != null && Math.abs(rate) < 0.1 && (
           <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-dim">
             Peso estável há 3 semanas. A app ajusta o gasto sozinha.
