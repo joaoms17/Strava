@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanAnalysis, foodWeeks, weightSummary, wellnessMonths } from '../api/_lib/rules/evolucao'
+import { cleanAnalysis, daysToConfirm, foodWeeks, weightSummary, wellnessMonths } from '../api/_lib/rules/evolucao'
 
 // Corpo › Evolução: o que vai para a IA e o que se mostra do que ela devolve.
 describe('análise da evolução', () => {
@@ -23,7 +23,7 @@ describe('análise da evolução', () => {
       ['sono', 'pior'],
     ])
     expect(a.foco).toEqual(['Proteína a 140 g', 'Dormir 7 h', 'Caminhar'])
-    expect(cleanAnalysis(null)).toEqual({ titulo: '', resumo: '', areas: [], foco: [] })
+    expect(cleanAnalysis(null)).toEqual({ titulo: '', resumo: '', areas: [], foco: [], perguntas: [] })
   })
 
   it('peso: último, média de 7 dias hoje e há 30 dias (só com pesagem perto)', () => {
@@ -63,5 +63,38 @@ describe('análise da evolução', () => {
     const m = wellnessMonths(rows, '2026-10-05')
     expect(m.ultimos_30_dias).toMatchObject({ dias_com_dados: 2, passos: 8000, fc_repouso: 55, sono_minutos: 420 })
     expect(m.os_30_antes).toMatchObject({ dias_com_dados: 1, passos: 5000, fc_repouso: 60 })
+  })
+
+  it('perguntas: só dias por confirmar, uma por dia, no máximo 3', () => {
+    const raw = {
+      perguntas: [
+        { data: '2026-10-03', pergunta: 'Só 1 refeição. Foi jejum?' },
+        { data: '2026-10-03', pergunta: 'repetida' },
+        { data: '2026-10-01', pergunta: 'Não foi à IA' },
+        { data: 'ontem', pergunta: 'data inválida' },
+        { data: '2026-10-04', pergunta: '' },
+        { data: '2026-10-05', pergunta: 'Foi tudo?' },
+        { data: '2026-10-06', pergunta: 'Foi tudo?' },
+        { data: '2026-10-07', pergunta: 'A quarta' },
+      ],
+    }
+    const allowed = ['2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07']
+    expect(cleanAnalysis(raw, allowed).perguntas.map((q) => q.data)).toEqual(['2026-10-03', '2026-10-05', '2026-10-06'])
+    // Sem lista (no ecrã), qualquer data válida.
+    expect(cleanAnalysis(raw).perguntas.map((q) => q.data)).toEqual(['2026-10-03', '2026-10-01', '2026-10-05'])
+  })
+
+  it('dias por confirmar: incompletos, com refeições, sem resposta, sem hoje', () => {
+    const days = [
+      { date: '2026-10-08', kcal_in: 900, is_complete: false },
+      { date: '2026-10-07', kcal_in: 1100.4, is_complete: false },
+      { date: '2026-10-06', kcal_in: 2000, is_complete: true },
+      { date: '2026-10-05', kcal_in: 700, is_complete: false, flags: ['dia_fechado'] },
+      { date: '2026-10-04', kcal_in: 600, is_complete: false, flags: ['faltou_algo'] },
+      { date: '2026-10-03', kcal_in: 0, is_complete: false },
+      { date: '2026-09-01', kcal_in: 800, is_complete: false },
+    ]
+    const meals = { '2026-10-08': 1, '2026-10-07': 1, '2026-10-06': 3, '2026-10-05': 1, '2026-10-04': 1, '2026-09-01': 1 }
+    expect(daysToConfirm(days, meals, '2026-10-08')).toEqual([{ data: '2026-10-07', refeicoes: 1, kcal: 1100 }])
   })
 })

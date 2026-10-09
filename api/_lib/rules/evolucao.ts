@@ -24,6 +24,14 @@ export interface Analysis {
   resumo: string
   areas: { area: Area; estado: Exclude<Estado, 'sem_dados'>; texto: string }[]
   foco: string[]
+  perguntas: Pergunta[]
+}
+
+// Uma pergunta da IA sobre um dia que ficou incompleto (ex.: «Foi jejum?»).
+// Responde-se com «Sim, foi tudo» ou «Não, faltou algo», como no Hoje.
+export interface Pergunta {
+  data: string
+  pergunta: string
 }
 
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
@@ -32,7 +40,9 @@ const mean = (values: number[]) => (values.length ? values.reduce((a, b) => a + 
 
 // A resposta da IA, arrumada: só áreas conhecidas, uma vez cada, pela ordem
 // fixa; as «sem dados» e as vazias saem (não se mostra o que vem vazio).
-export function cleanAnalysis(raw: unknown): Analysis {
+// As perguntas: no máximo 3, uma por dia e, com `allowedDates`, só sobre os
+// dias que foram à IA como por confirmar.
+export function cleanAnalysis(raw: unknown, allowedDates?: string[]): Analysis {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const seen = new Map<Area, Analysis['areas'][number]>()
   for (const item of Array.isArray(r.areas) ? r.areas : []) {
@@ -51,7 +61,43 @@ export function cleanAnalysis(raw: unknown): Analysis {
       .map((f) => text(f, 240))
       .filter(Boolean)
       .slice(0, 3),
+    perguntas: cleanQuestions(r.perguntas, allowedDates),
   }
+}
+
+function cleanQuestions(raw: unknown, allowedDates?: string[]): Pergunta[] {
+  const out: Pergunta[] = []
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const q = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
+    const data = text(q.data, 10)
+    const pergunta = text(q.pergunta, 240)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !pergunta) continue
+    if (allowedDates && !allowedDates.includes(data)) continue
+    if (out.some((x) => x.data === data)) continue
+    out.push({ data, pergunta })
+  }
+  return out.slice(0, 3)
+}
+
+// Dias por confirmar: dos últimos 28 (sem hoje), os que ficaram incompletos
+// com pelo menos 1 refeição e ainda sem resposta («Sim, foi tudo» ou «Não,
+// faltou algo»). A IA pergunta por eles (jejum?) em vez de assumir que faltou
+// registar. No máximo os 8 mais recentes.
+export interface OpenDay {
+  date: string
+  kcal_in: number | null
+  is_complete: boolean
+  flags?: string[] | null
+}
+export function daysToConfirm(days: OpenDay[], mealsByDate: Record<string, number>, today: string) {
+  const from = shiftDate(today, -28)
+  return days
+    .filter((d) => d.date >= from && d.date < today && !d.is_complete)
+    .filter((d) => !(d.flags ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'))
+    .filter((d) => (mealsByDate[d.date] ?? 0) >= 1)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 8)
+    .map((d) => ({ data: d.date, refeicoes: mealsByDate[d.date]!, kcal: Math.round(Number(d.kcal_in ?? 0)) }))
 }
 
 // O peso: o último, a média de 7 dias hoje, há 30 e há 90 dias, e o ritmo.
