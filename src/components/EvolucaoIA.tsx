@@ -6,7 +6,12 @@ import { useToast } from '../lib/toast'
 import { answerDay, type DayAnswer } from '../lib/day-flag'
 import { AREA_LABEL, cleanAnalysis } from '../../api/_lib/rules/evolucao'
 
-type Review = { week_start: string; text: string | null; data: { analise?: unknown } | null; created_at: string }
+type Review = {
+  week_start: string
+  text: string | null
+  data: { analise?: unknown; gerado?: string } | null
+  created_at: string
+}
 
 const ESTADO = {
   melhor: { label: 'a melhorar', className: 'text-ok' },
@@ -22,25 +27,52 @@ export default function EvolucaoIA({ today }: { today: string }) {
   const [review, setReview] = useState<Review | null | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Dias já respondidos (aqui ou no Hoje): a pergunta deixa de aparecer.
+  // Dias já respondidos (aqui ou no Hoje) ou já completos: a pergunta deixa de aparecer.
   const [answered, setAnswered] = useState<Set<string>>(new Set())
   const toast = useToast()
 
   useEffect(() => {
     let alive = true
-    void supabase
-      .from('weekly_reviews')
-      .select('week_start,text,data,created_at')
-      .eq('kind', 'evolucao')
-      .order('week_start', { ascending: false })
-      .limit(1)
-      .then(({ data }) => {
-        if (alive) setReview(((data ?? [])[0] ?? null) as Review | null)
-      })
+    void latestReview().then((r) => {
+      if (alive) setReview(r)
+    })
     return () => {
       alive = false
     }
   }, [])
+
+  // No iPhone, se a app vai para segundo plano a meio, o pedido perde-se e
+  // nunca responde, mas a análise fica guardada no servidor. Ao voltar à app
+  // (ou ao fim de 75 s) vai-se buscar a guardada, se for desta vez.
+  useEffect(() => {
+    if (!busy) return
+    const started = Date.now() - 5_000
+    const recover = async () => {
+      const r = await latestReview()
+      const at = Date.parse(r?.data?.gerado ?? r?.created_at ?? '')
+      if (r && at >= started) {
+        setReview(r)
+        setBusy(false)
+        return true
+      }
+      return false
+    }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void recover()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    const timer = setTimeout(() => {
+      void recover().then((ok) => {
+        if (ok) return
+        setBusy(false)
+        setError('A análise está a demorar. Tenta outra vez daqui a pouco.')
+      })
+    }, 75_000)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearTimeout(timer)
+    }
+  }, [busy])
 
   async function analyse() {
     setBusy(true)
@@ -63,12 +95,18 @@ export default function EvolucaoIA({ today }: { today: string }) {
     let alive = true
     void supabase
       .from('days')
-      .select('date,flags')
+      .select('date,flags,is_complete')
       .in('date', questionDates.split(','))
       .then(({ data }) => {
         if (!alive) return
+        // Respondidos, ou que entretanto ficaram completos (ex.: o dia estava
+        // por recalcular quando a análise foi feita).
         const done = (data ?? [])
-          .filter((d) => ((d.flags as string[] | null) ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'))
+          .filter(
+            (d) =>
+              d.is_complete === true ||
+              ((d.flags as string[] | null) ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'),
+          )
           .map((d) => d.date as string)
         setAnswered(new Set(done))
       })
@@ -188,4 +226,14 @@ export default function EvolucaoIA({ today }: { today: string }) {
       {error && <p className="text-[14px] text-pain">{error}</p>}
     </div>
   )
+}
+
+async function latestReview(): Promise<Review | null> {
+  const { data } = await supabase
+    .from('weekly_reviews')
+    .select('week_start,text,data,created_at')
+    .eq('kind', 'evolucao')
+    .order('week_start', { ascending: false })
+    .limit(1)
+  return ((data ?? [])[0] ?? null) as Review | null
 }

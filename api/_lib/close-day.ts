@@ -278,6 +278,8 @@ export async function closeDay(
 // Dias a recalcular numa noite: desde o dia sujo mais antigo (ou 3 dias
 // atrás) até ontem, por ordem, no máximo `maxDays`. O peso médio e o gasto
 // medido encadeiam de um dia para o outro, por isso vai-se sempre para a frente.
+// Se a cadeia não chega a ontem (dias sujos antigos), os últimos 3 dias fecham
+// na mesma, primeiro: sem isso ficavam semanas a 0 kcal à espera da cadeia.
 export function recomputeRange(
   today: string,
   oldestDirty: string | null,
@@ -286,9 +288,12 @@ export function recomputeRange(
   const yesterday = shiftDate(today, -1)
   const floor = shiftDate(today, -3)
   const start = oldestDirty != null && oldestDirty < floor ? oldestDirty : floor
-  const dates: string[] = []
-  for (let d = start; d <= yesterday && dates.length < maxDays; d = shiftDate(d, 1)) dates.push(d)
-  const last = dates[dates.length - 1]
+  const chain: string[] = []
+  for (let d = start; d <= yesterday && chain.length < maxDays; d = shiftDate(d, 1)) chain.push(d)
+  const last = chain[chain.length - 1]
   const next = last != null && last < yesterday ? shiftDate(last, 1) : null
-  return { dates, next }
+  if (next == null) return { dates: chain, next }
+  const recent: string[] = []
+  for (let d = floor; d <= yesterday; d = shiftDate(d, 1)) recent.push(d)
+  return { dates: [...recent, ...chain], next }
 }

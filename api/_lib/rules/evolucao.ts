@@ -3,6 +3,7 @@
 import { shiftDate } from './nutritional-day.js'
 import { trend7, weeklyRate } from './weight.js'
 import { cleanWellness, type WellnessRow } from './plano.js'
+import { isDayComplete } from './day-close.js'
 
 export const AREAS = ['peso', 'medidas', 'comida', 'treino', 'sono', 'coracao', 'passos'] as const
 export const ESTADOS = ['melhor', 'igual', 'pior', 'sem_dados'] as const
@@ -79,25 +80,36 @@ function cleanQuestions(raw: unknown, allowedDates?: string[]): Pergunta[] {
   return out.slice(0, 3)
 }
 
-// Dias por confirmar: dos últimos 28 (sem hoje), os que ficaram incompletos
-// com pelo menos 1 refeição e ainda sem resposta («Sim, foi tudo» ou «Não,
-// faltou algo»). A IA pergunta por eles (jejum?) em vez de assumir que faltou
-// registar. No máximo os 8 mais recentes.
-export interface OpenDay {
-  date: string
-  kcal_in: number | null
-  is_complete: boolean
-  flags?: string[] | null
+// Dias por confirmar: dos últimos 28 (sem hoje), os que pelas refeições
+// registadas ficam incompletos (regra 5) e ainda sem resposta («Sim, foi
+// tudo» ou «Não, faltou algo»). Conta-se a partir das refeições e não do dia
+// guardado, que pode estar por recalcular (a 0 kcal). Os 8 mais recentes.
+export interface MealDayStats {
+  refeicoes: number
+  kcal: number
 }
-export function daysToConfirm(days: OpenDay[], mealsByDate: Record<string, number>, today: string) {
+export function daysToConfirm(
+  days: { date: string; flags?: string[] | null }[],
+  meals: Record<string, MealDayStats>,
+  today: string,
+) {
   const from = shiftDate(today, -28)
-  return days
-    .filter((d) => d.date >= from && d.date < today && !d.is_complete)
-    .filter((d) => !(d.flags ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'))
-    .filter((d) => (mealsByDate[d.date] ?? 0) >= 1)
-    .sort((a, b) => b.date.localeCompare(a.date))
+  const answered = new Set(
+    days
+      .filter((d) => (d.flags ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'))
+      .map((d) => d.date),
+  )
+  return Object.entries(meals)
+    .filter(([date, m]) => date >= from && date < today && m.refeicoes >= 1 && !answered.has(date))
+    .filter(([, m]) => !isDayComplete({ mealCount: m.refeicoes, kcalIn: m.kcal, manuallyClosed: false }))
+    .sort(([a], [b]) => b.localeCompare(a))
     .slice(0, 8)
-    .map((d) => ({ data: d.date, refeicoes: mealsByDate[d.date]!, kcal: Math.round(Number(d.kcal_in ?? 0)) }))
+    .map(([date, m]) => ({
+      data: date,
+      dia: `${Number(date.slice(8, 10))}/${Number(date.slice(5, 7))}`,
+      refeicoes: m.refeicoes,
+      kcal: Math.round(m.kcal),
+    }))
 }
 
 // O peso: o último, a média de 7 dias hoje, há 30 e há 90 dias, e o ritmo.
