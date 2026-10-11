@@ -84,17 +84,23 @@ describe('análise da evolução', () => {
     expect(cleanAnalysis(raw).perguntas.map((q) => q.data)).toEqual(['2026-10-03', '2026-10-01', '2026-10-05'])
   })
 
-  it('dias por confirmar: incompletos, com refeições, sem resposta, sem hoje', () => {
+  it('dias por confirmar: pelas refeições (não pelo dia guardado), sem resposta, sem hoje', () => {
     const days = [
-      { date: '2026-10-08', kcal_in: 900, is_complete: false },
-      { date: '2026-10-07', kcal_in: 1100.4, is_complete: false },
-      { date: '2026-10-06', kcal_in: 2000, is_complete: true },
-      { date: '2026-10-05', kcal_in: 700, is_complete: false, flags: ['dia_fechado'] },
-      { date: '2026-10-04', kcal_in: 600, is_complete: false, flags: ['faltou_algo'] },
-      { date: '2026-10-03', kcal_in: 0, is_complete: false },
-      { date: '2026-09-01', kcal_in: 800, is_complete: false },
+      { date: '2026-10-05', flags: ['dia_fechado'] },
+      { date: '2026-10-04', flags: ['faltou_algo'] },
     ]
-    const meals = { '2026-10-08': 1, '2026-10-07': 1, '2026-10-06': 3, '2026-10-05': 1, '2026-10-04': 1, '2026-09-01': 1 }
-    expect(daysToConfirm(days, meals, '2026-10-08')).toEqual([{ data: '2026-10-07', refeicoes: 1, kcal: 1100 }])
+    const meals = {
+      '2026-10-08': { refeicoes: 1, kcal: 900 }, // hoje
+      '2026-10-07': { refeicoes: 1, kcal: 1100.4 },
+      '2026-10-06': { refeicoes: 8, kcal: 2391 }, // completo (o dia guardado a 0 não conta)
+      '2026-10-05': { refeicoes: 1, kcal: 700 },
+      '2026-10-04': { refeicoes: 1, kcal: 600 },
+      '2026-10-03': { refeicoes: 3, kcal: 700 },
+      '2026-09-01': { refeicoes: 1, kcal: 800 },
+    }
+    expect(daysToConfirm(days, meals, '2026-10-08')).toEqual([
+      { data: '2026-10-07', dia: '7/10', refeicoes: 1, kcal: 1100 },
+      { data: '2026-10-03', dia: '3/10', refeicoes: 3, kcal: 700 },
+    ])
   })
 })
