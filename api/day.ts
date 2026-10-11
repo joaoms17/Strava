@@ -3,6 +3,7 @@ import health from './_day/health.js'
 import aiCheck from './_day/ai-check.js'
 import recompute from './_day/recompute.js'
 import evolution from './_day/evolution.js'
+import ingestToken from './_day/ingest-token.js'
 import { addPerson, createProfile } from './_day/people.js'
 
 // Endpoints do dia (e o estado do deploy) numa só função, por causa do limite
@@ -14,6 +15,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   'add-person': addPerson,
   'create-profile': createProfile,
   evolution,
+  'ingest-token': ingestToken,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

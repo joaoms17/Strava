@@ -8,6 +8,7 @@ import type { Profile } from '../lib/types'
 import IntervalsSettings from '../components/IntervalsSettings'
 import NewPasswordForm from '../components/NewPasswordForm'
 import PeopleSettings from '../components/PeopleSettings'
+import AtalhoSaude from '../components/AtalhoSaude'
 import { signOutCurrent } from '../lib/accounts'
 
 interface Field {
@@ -255,6 +256,10 @@ export default function Definicoes() {
           <IntervalsSettings />
         </Section>
       )}
+
+      <Section title="Ligações · Atalho do iPhone (Apple Watch)">
+        <AtalhoSaude />
+      </Section>
 
       <Section title="Corpo e balança">
         {BODY.map(numberInput)}
