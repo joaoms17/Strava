@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient } from '../_lib/supabase.js'
+import { tokenUser } from '../_lib/ingest-token.js'
 
 const HealthSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -32,10 +33,15 @@ function localCalendarDate(): string {
 // Passos, sono e FC em repouso, enviados por um Atalho iOS todas as noites;
 // com `body[]`, também o peso e a % de gordura da balança (só entram em dias
 // sem pesagem do João; a % de gordura completa uma pesagem que não a tem).
-// Autenticado por Bearer HEALTH_INGEST_TOKEN (o Atalho não tem sessão).
+// Autenticado por Bearer (o Atalho não tem sessão): HEALTH_INGEST_TOKEN grava
+// na primeira conta (o João, como sempre); o token pessoal de Definições ›
+// Atalho do iPhone grava na conta dessa pessoa (ex.: a Joana).
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const expected = process.env.HEALTH_INGEST_TOKEN
-  if (!expected || req.headers.authorization !== `Bearer ${expected}`) {
+  const secret = process.env.HEALTH_INGEST_TOKEN
+  const header = req.headers.authorization ?? ''
+  const given = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
+  const personal = secret && given ? tokenUser(secret, given) : null
+  if (!secret || (given !== secret && !personal)) {
     res.status(401).json({ error: 'Token errado.' })
     return
   }
@@ -52,13 +58,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const admin = adminClient()
-    const { data: profile } = await admin
-      .from('profile')
-      .select('user_id')
-      .order('created_at')
-      .limit(1)
-      .single()
-    if (!profile) throw new Error('Perfil não encontrado.')
+    const query = admin.from('profile').select('user_id')
+    const { data: profile } = await (personal
+      ? query.eq('user_id', personal).maybeSingle()
+      : query.order('created_at').limit(1).maybeSingle())
+    if (!profile) {
+      res.status(404).json({ error: 'Perfil não encontrado.' })
+      return
+    }
 
     let weights = 0
     for (const entry of body.data.body ?? []) {
