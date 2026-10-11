@@ -27,7 +27,7 @@ export default function EvolucaoIA({ today }: { today: string }) {
   const [review, setReview] = useState<Review | null | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Dias já respondidos (aqui ou no Hoje): a pergunta deixa de aparecer.
+  // Dias já respondidos (aqui ou no Hoje) ou já completos: a pergunta deixa de aparecer.
   const [answered, setAnswered] = useState<Set<string>>(new Set())
   const toast = useToast()
 
@@ -95,12 +95,18 @@ export default function EvolucaoIA({ today }: { today: string }) {
     let alive = true
     void supabase
       .from('days')
-      .select('date,flags')
+      .select('date,flags,is_complete')
       .in('date', questionDates.split(','))
       .then(({ data }) => {
         if (!alive) return
+        // Respondidos, ou que entretanto ficaram completos (ex.: o dia estava
+        // por recalcular quando a análise foi feita).
         const done = (data ?? [])
-          .filter((d) => ((d.flags as string[] | null) ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'))
+          .filter(
+            (d) =>
+              d.is_complete === true ||
+              ((d.flags as string[] | null) ?? []).some((f) => f === 'dia_fechado' || f === 'faltou_algo'),
+          )
           .map((d) => d.date as string)
         setAnswered(new Set(done))
       })
