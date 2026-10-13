@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
-import { TAG_LABEL, TagChips } from '../ui/Chips'
 import WhenPicker from '../ui/WhenPicker'
 import { whenLabel, type When } from '../../lib/when'
 import { supabase } from '../../lib/supabase'
@@ -28,7 +27,7 @@ import { SLOTS, SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
 import type { Meal, MealItem, Slot } from '../../lib/types'
 
 const MAIN_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
-type Mode = 'view' | 'favorite' | 'copy' | 'when' | 'correct' | 'write'
+type Mode = 'view' | 'favorite' | 'when' | 'correct' | 'write'
 
 // Ver, confirmar, corrigir, repetir, guardar como favorito ou apagar uma
 // refeição, com os itens sempre visíveis.
@@ -152,10 +151,19 @@ export default function MealSheet() {
     })
     if (!result) return
     await afterWrite(result.meal)
+    const mealId = current.id
     toast(`Guardado · ${diffText(result.previous.items, result.meal.items)}`, [
-      { label: 'Anular', run: () => undo({ items: result.previous.items }) },
+      {
+        label: 'Anular',
+        run: async () => {
+          await postApi('/api/meal/update', { meal_id: mealId, items: result.previous.items }).catch(() => null)
+          emitDataChanged()
+          recomputeFrom(current.date, today)
+        },
+      },
     ])
     recomputeFrom(current.date, today)
+    sheet.close()
   }
 
   async function undo(body: Record<string, unknown>) {
@@ -177,17 +185,6 @@ export default function MealSheet() {
     ])
     recomputeFrom(current.date, today)
     return true
-  }
-
-  async function toggleTag(tag: string) {
-    const on = !(current.tags ?? []).includes(tag)
-    const tags = on ? [...(current.tags ?? []), tag] : (current.tags ?? []).filter((t) => t !== tag)
-    // Com a análise feita, ligar «Comi metade» (ou outra marca) corrige a refeição.
-    if (on && analysed && tag !== 'jantar_fora') {
-      if (!(await correct(TAG_LABEL[tag] ?? tag))) return
-    }
-    const result = await call<{ meal: Meal }>('/api/meal/update', { meal_id: current.id, tags })
-    if (result) await afterWrite(result.meal)
   }
 
   async function analyse(body: Record<string, unknown>, message: string) {
@@ -474,6 +471,15 @@ export default function MealSheet() {
                       {item.confidence === 'baixa' && <span className="ml-1 text-attn">confirma a porção</span>}
                     </p>
                   </div>
+                  {current.deleted_at == null && items.length > 1 && (
+                    <button
+                      onClick={() => setItems(items.filter((_, j) => j !== i))}
+                      className="h-10 w-10 shrink-0 rounded-lg bg-surface text-[17px] text-pain"
+                      aria-label={`tirar ${item.name}`}
+                    >
+                      ×
+                    </button>
+                  )}
                   {item.grams > 0 && current.deleted_at == null && (
                     <>
                       <button
@@ -498,8 +504,6 @@ export default function MealSheet() {
 
             {current.deleted_at == null && (
               <>
-                <TagChips value={current.tags ?? []} onToggle={(tag) => void toggleTag(tag)} />
-
                 {suggest && mode === 'view' && (
                   <div className="space-y-2 rounded-2xl border border-line p-3">
                     <p className="text-[15px]">Registas isto muitas vezes. Guardar como favorito?</p>
@@ -546,27 +550,10 @@ export default function MealSheet() {
                       <button onClick={() => setMode('when')} className="text-eat">
                         Mudar dia ou refeição
                       </button>
-                      <button onClick={() => setMode('copy')} className="text-eat">
-                        Copiar para outro dia
-                      </button>
-                      {photos.length > 0 && current.input_type !== 'favorite' && (
-                        <button
-                          disabled={busy}
-                          onClick={() => void analyse({ reset: true }, 'A analisar a foto outra vez…')}
-                          className="text-eat"
-                        >
-                          Reanalisar foto
-                        </button>
-                      )}
                       {(current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
                         <AttachPhotoButton meal={current} onDone={() => void load()} className="text-eat">
                           Juntar foto
                         </AttachPhotoButton>
-                      )}
-                      {current.status !== 'a_analisar' && (
-                        <button onClick={() => sheet.open('barras', { refeicao: current.id })} className="text-eat">
-                          Juntar por código de barras
-                        </button>
                       )}
                     </div>
                   )
@@ -610,17 +597,6 @@ export default function MealSheet() {
           />
         )}
 
-        {mode === 'copy' && (
-          <PickWhen
-            today={today}
-            initial={{ date: today, slot: mealSlot }}
-            action="Copiar"
-            onPick={(date, slot, label) => {
-              sheet.close()
-              void repeatMeal(current.id, date, `Copiado · ${label}`, toast, slot)
-            }}
-          />
-        )}
       </div>
     </BottomSheet>
   )

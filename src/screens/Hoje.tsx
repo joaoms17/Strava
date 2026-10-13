@@ -9,6 +9,7 @@ import { emitDataChanged, useDataVersion } from '../lib/events'
 import { signedUrls } from '../lib/photos'
 import { loadActiveDiet } from '../lib/diets'
 import DietToday from '../components/DietToday'
+import Sequencia from '../components/Sequencia'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
@@ -823,7 +824,10 @@ export default function Hoje() {
         </div>
       ) : (
         <div>
-          <p className="label mb-1">O dia</p>
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <p className="label">O dia</p>
+            {isToday && <Sequencia today={today} />}
+          </div>
           <div className="-mx-2 divide-y divide-line/60">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { floorWarning, isDayComplete } from '../api/_lib/rules/day-close'
+import { completeStreak, floorWarning, isDayComplete } from '../api/_lib/rules/day-close'
 
 // Regra 5: >= 2 refeições ou "dia fechado"; < 800 kcal sem marca é incompleto.
 describe('isDayComplete', () => {
@@ -49,5 +49,32 @@ describe('floorWarning', () => {
 
   it('com menos de 7 dias completos ainda não avisa', () => {
     expect(floorWarning([1000, 1000, 1000], 1400)).toBe(false)
+  })
+})
+
+describe('completeStreak', () => {
+  const full = { mealCount: 3, kcalIn: 1800 }
+  it('conta para trás a partir de ontem até ao primeiro dia incompleto', () => {
+    const days = {
+      '2026-10-12': full,
+      '2026-10-11': full,
+      '2026-10-10': { mealCount: 1, kcalIn: 600 }, // quebra
+      '2026-10-09': full,
+    }
+    expect(completeStreak(days, '2026-10-13')).toBe(2)
+  })
+
+  it('jejum ou refeições saltadas contam com «Sim, foi tudo»', () => {
+    const days = {
+      '2026-10-12': { mealCount: 1, kcalIn: 900, flags: ['dia_fechado'] },
+      '2026-10-11': full,
+    }
+    expect(completeStreak(days, '2026-10-13')).toBe(2)
+  })
+
+  it('«faltou algo» quebra; hoje soma se completo mas não quebra', () => {
+    expect(completeStreak({ '2026-10-12': { ...full, flags: ['faltou_algo'] } }, '2026-10-13')).toBe(0)
+    expect(completeStreak({ '2026-10-13': full, '2026-10-12': full }, '2026-10-13')).toBe(2)
+    expect(completeStreak({ '2026-10-13': { mealCount: 1, kcalIn: 300 }, '2026-10-12': full }, '2026-10-13')).toBe(1)
   })
 })
