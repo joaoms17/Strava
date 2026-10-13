@@ -318,8 +318,9 @@ export default function Balanco() {
             )}
             {exp.learning && (
               <p className="text-[14px] text-dim">
-                Gasto (a aprender): mais {missingComplete} {missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo
-                a medir o teu gasto pelo peso. Até lá uso uma fórmula.
+                {missingComplete > 0
+                  ? `Gasto (a aprender): mais ${missingComplete} ${missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo a medir o teu gasto pelo peso. Até lá uso uma fórmula.`
+                  : 'Gasto (a aprender): já há dias completos suficientes; a medição pelo peso começa na próxima semana. Até lá uso uma fórmula.'}
               </p>
             )}
           </section>
@@ -358,13 +359,26 @@ export default function Balanco() {
                       <Cell key={d.date} fill={colors.eat} fillOpacity={d.today ? 0.45 : 1} />
                     ))}
                   </RBar>
+                  {/* O alvo de cada dia: um traço curto em cima da barra, sem ligar os dias. */}
                   <Line
                     dataKey="plan"
-                    type="stepAfter"
-                    stroke={colors.ink}
-                    strokeWidth={1.5}
-                    strokeDasharray="4 4"
-                    dot={false}
+                    stroke="none"
+                    dot={(props: { cx?: number; cy?: number; index?: number }) =>
+                      props.cx == null || props.cy == null ? (
+                        <g key={props.index} />
+                      ) : (
+                        <line
+                          key={props.index}
+                          x1={props.cx - 14}
+                          x2={props.cx + 14}
+                          y1={props.cy}
+                          y2={props.cy}
+                          stroke={colors.ink}
+                          strokeWidth={2.5}
+                          strokeLinecap="round"
+                        />
+                      )
+                    }
                     activeDot={false}
                     isAnimationActive={false}
                   />
@@ -391,7 +405,7 @@ export default function Balanco() {
                 <span className="inline-block h-0.5 w-4 bg-burn" /> gasto{exp.learning ? ' (a aprender)' : ''}
               </span>
               <span className="flex items-center gap-1.5">
-                <span className="inline-block w-4 border-t-2 border-dashed border-ink" /> alvo
+                <span className="inline-block w-4 border-t-[2.5px] border-ink" /> alvo do dia
               </span>
               {avg7 != null && (
                 <span className="flex items-center gap-1.5">
@@ -444,8 +458,10 @@ export default function Balanco() {
                 </p>
               ) : (
                 <p className="text-dim">
-                  Mais {missingComplete} {missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo a medir o
-                  teu gasto pelo peso. Até lá uso uma fórmula ({fmtKcal(exp.formula)} por dia sem treino).
+                  {missingComplete > 0
+                    ? `Mais ${missingComplete} ${missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo a medir o teu gasto pelo peso.`
+                    : 'A medição do gasto pelo peso começa na próxima semana.'}{' '}
+                  Até lá uso uma fórmula ({fmtKcal(exp.formula)} por dia sem treino).
                 </p>
               )}
               {gapNote && (
