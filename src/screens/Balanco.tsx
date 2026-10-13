@@ -34,6 +34,7 @@ import { weeklyRate } from '../../api/_lib/rules/weight'
 import { belowFloor, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
 import type { Meal, Workout } from '../lib/types'
 import BalancoMes from '../components/BalancoMes'
+import ContaGordura from '../components/ContaGordura'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 
 interface WeekData {
@@ -235,6 +236,7 @@ export default function Balanco() {
     return (
       <div className="space-y-4 pt-1">
         {toggle}
+        <ContaGordura today={today} />
         <BalancoMes today={today} />
       </div>
     )
