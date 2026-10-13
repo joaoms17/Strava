@@ -6,6 +6,7 @@ import {
   Cell,
   ComposedChart,
   Line,
+  ReferenceLine,
   ResponsiveContainer,
   XAxis,
   YAxis,
@@ -50,6 +51,7 @@ interface WeekData {
   firstDate: string | null
   review: string | null
   weeklyGaps: number[]
+  avg7: number | null
 }
 
 // «Estou a comer menos do que gasto, e o peso confirma?» — uma frase e um gráfico.
@@ -81,6 +83,7 @@ export default function Balanco() {
       { data: reviews },
       { data: history },
       expenditure,
+      { data: lastComplete },
     ] = await Promise.all([
       supabase
         .from('meals_counted')
@@ -115,6 +118,14 @@ export default function Balanco() {
         .lt('date', monday)
         .order('date'),
       loadExpenditure(profile, monday),
+      // Média do que se comeu nos últimos 7 dias completos (até ao fim desta semana, sem hoje).
+      supabase
+        .from('days')
+        .select('kcal_in')
+        .eq('is_complete', true)
+        .lte('date', sunday < today ? sunday : shiftDate(today, -1))
+        .order('date', { ascending: false })
+        .limit(7),
     ])
     const latestTdee = tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null
     const workoutRows = (workouts ?? []) as Workout[]
@@ -188,6 +199,7 @@ export default function Balanco() {
       firstDate: (first?.[0]?.date as string | undefined) ?? null,
       review: (reviews?.[0]?.text as string | undefined) ?? null,
       weeklyGaps,
+      avg7: avgOf((lastComplete ?? []).map((d) => Number(d.kcal_in))),
     })
   }, [monday, sunday, profile])
 
@@ -273,8 +285,10 @@ export default function Balanco() {
     label: weekdayLetter(d.date),
     eaten: d.meals > 0 ? Math.round(d.eaten) : null,
     out: d.date <= today ? d.out : null,
+    plan: d.plan,
     today: d.date === today,
   }))
+  const avg7 = data.avg7
 
   async function applyBase(value: number) {
     const previous = profile.base_kcal
@@ -345,6 +359,19 @@ export default function Balanco() {
                     ))}
                   </RBar>
                   <Line
+                    dataKey="plan"
+                    type="stepAfter"
+                    stroke={colors.ink}
+                    strokeWidth={1.5}
+                    strokeDasharray="4 4"
+                    dot={false}
+                    activeDot={false}
+                    isAnimationActive={false}
+                  />
+                  {avg7 != null && (
+                    <ReferenceLine y={avg7} stroke={colors.eat} strokeWidth={1.5} strokeDasharray="2 3" ifOverflow="extendDomain" />
+                  )}
+                  <Line
                     dataKey="out"
                     stroke={colors.burn}
                     strokeWidth={2.5}
@@ -356,13 +383,21 @@ export default function Balanco() {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex gap-4 text-[13px] text-dim">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-dim">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-2.5 w-2.5 rounded-sm bg-eat" /> o que comeste
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-0.5 w-4 bg-burn" /> gasto{exp.learning ? ' (a aprender)' : ''}
               </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block w-4 border-t-2 border-dashed border-ink" /> alvo
+              </span>
+              {avg7 != null && (
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-4 border-t-2 border-dotted border-eat" /> média 7 dias ({fmtInt(avg7)})
+                </span>
+              )}
             </div>
           </section>
 
@@ -399,6 +434,13 @@ export default function Balanco() {
                 <p>
                   Gasto medido pelo teu peso: cerca de {fmtKcal(exp.tdeeFrozen)} por dia. A fórmula dizia{' '}
                   {fmtKcal(exp.formula + exp.avgTraining)}.
+                  {exp.tdeeMeasured != null && Math.abs(exp.tdeeMeasured - exp.tdeeFrozen) >= 10 && (
+                    <span className="text-dim">
+                      {' '}
+                      Pelo peso dava {fmtKcal(exp.tdeeMeasured)}, mas o peso desceu depressa (água, no início ou depois de
+                      uma pausa); uso no máximo 400 acima da fórmula.
+                    </span>
+                  )}
                 </p>
               ) : (
                 <p className="text-dim">

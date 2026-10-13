@@ -5,7 +5,7 @@ import { kcalTarget, storedExerciseKcal, type WorkoutType } from './rules/target
 import { floorWarning, isDayComplete } from './rules/day-close.js'
 import { tdeeRaw, smoothTdee } from './rules/adaptativo.js'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from './rules/manutencao.js'
-import { dailyBase, formulaBase, kcalOut } from './rules/gasto.js'
+import { dailyBase, formulaBase, kcalOut, trustedTdee } from './rules/gasto.js'
 
 // Fecho de um dia nutricional: kcal e macros das refeições contadas, kcal
 // guardadas dos treinos, meta (plano ou semana de pausa), dia completo,
@@ -88,7 +88,7 @@ async function dayExpenditure(
   })
   const base = dailyBase({
     completeDays: count ?? 0,
-    tdeeFrozen: frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null,
+    tdeeFrozen: trustedTdee(frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null, formula + avgTraining),
     avgTrainingKcal: avgTraining,
     formula,
   })
@@ -104,16 +104,22 @@ function round2(n: number): number {
 async function computeAdaptive(admin: SupabaseClient, userId: string, date: string) {
   const { data: completeDays } = await admin
     .from('days')
-    .select('date,kcal_in,weight_trend')
+    .select('date,kcal_in,weight_trend,kcal_exercise,formula_base')
     .eq('user_id', userId)
     .eq('is_complete', true)
     .lte('date', date)
     .order('date', { ascending: false })
     .limit(14)
-  const window = (completeDays ?? [])
-    .reverse()
-    .map((d) => ({ date: d.date, kcal_in: Number(d.kcal_in), weight_trend: d.weight_trend }))
+  const rows = (completeDays ?? []).reverse()
+  const window = rows.map((d) => ({ date: d.date, kcal_in: Number(d.kcal_in), weight_trend: d.weight_trend }))
   const raw = tdeeRaw(window)
+  // Referência para o limite: a fórmula mais recente da janela mais o treino médio.
+  const formula = [...rows].reverse().find((d) => d.formula_base != null)?.formula_base
+  const reference =
+    formula != null
+      ? Number(formula) + rows.reduce((a, d) => a + Number(d.kcal_exercise ?? 0), 0) / Math.max(1, rows.length)
+      : null
+  const limit = (v: number | null) => (reference != null ? trustedTdee(v, reference) : v)
 
   let tdee: number | null = null
   if (raw != null) {
@@ -126,7 +132,7 @@ async function computeAdaptive(admin: SupabaseClient, userId: string, date: stri
       .order('date', { ascending: false })
       .limit(1)
     const previous = prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null
-    tdee = smoothTdee(previous, raw)
+    tdee = limit(smoothTdee(limit(previous), limit(raw)!))
   }
   // Recalcular um dia antigo pode tirar-lhe a estimativa (ex.: «faltou algo»).
   await admin.from('days').update({ tdee_est: tdee }).eq('user_id', userId).eq('date', date)
