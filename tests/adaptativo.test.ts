@@ -44,8 +44,13 @@ describe('tdeeRaw', () => {
 })
 
 describe('smoothTdee', () => {
-  it('EMA com alfa 0,3', () => {
-    expect(smoothTdee(2000, 2100)).toBeCloseTo(2030, 5)
+  it('EMA com alfa 0,1', () => {
+    expect(smoothTdee(2000, 2100)).toBeCloseTo(2010, 5)
+  })
+
+  it('mexe no máximo 30 kcal por dia (o peso que cai depressa é água)', () => {
+    expect(smoothTdee(2190, 3260)).toBe(2220)
+    expect(smoothTdee(2190, 1500)).toBe(2160)
   })
 
   it('a primeira estimativa entra sem suavização', () => {
