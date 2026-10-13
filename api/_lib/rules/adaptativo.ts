@@ -1,6 +1,8 @@
 // Regra 4: gasto adaptativo (tdee_est), no fecho do dia, sobre os últimos
-// 14 dias completos: tdee = média(kcal_in) + (trend_inicio - trend_fim) x 7700
-// / n_dias, suavizado com EMA alfa 0,3. Só mostrar com >= 10 dias completos.
+// 28 dias completos: tdee = média(kcal_in) + (trend_inicio - trend_fim) x 7700
+// / n_dias, suavizado devagar: EMA alfa 0,1 e no máximo 30 kcal por dia, a
+// partir da fórmula (o peso que cai no início é água, não gordura). Só
+// mostrar com >= 10 dias completos.
 // Se |tdee_est - expected_tdee| > 250, propor ajustar base_kcal.
 
 export interface ClosedDay {
@@ -10,7 +12,9 @@ export interface ClosedDay {
 }
 
 const KCAL_PER_KG = 7700
-export const TDEE_ALPHA = 0.3
+export const TDEE_ALPHA = 0.1
+export const TDEE_MAX_STEP_KCAL = 30
+export const TDEE_WINDOW_DAYS = 28
 export const MIN_COMPLETE_DAYS = 10
 
 function round1(n: number): number {
@@ -36,7 +40,8 @@ export function tdeeRaw(window: ClosedDay[]): number | null {
 
 export function smoothTdee(previous: number | null, raw: number, alpha = TDEE_ALPHA): number {
   if (previous == null) return round1(raw)
-  return round1(previous + alpha * (raw - previous))
+  const step = Math.max(-TDEE_MAX_STEP_KCAL, Math.min(TDEE_MAX_STEP_KCAL, alpha * (raw - previous)))
+  return round1(previous + step)
 }
 
 export function shouldAdjustBase(tdeeEst: number, expectedTdee: number): boolean {

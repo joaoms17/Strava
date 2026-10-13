@@ -3,7 +3,7 @@ import { shiftDate } from './rules/nutritional-day.js'
 import { round1 } from './rules/meal-totals.js'
 import { kcalTarget, storedExerciseKcal, type WorkoutType } from './rules/targets.js'
 import { floorWarning, isDayComplete } from './rules/day-close.js'
-import { tdeeRaw, smoothTdee } from './rules/adaptativo.js'
+import { tdeeRaw, smoothTdee, TDEE_WINDOW_DAYS } from './rules/adaptativo.js'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from './rules/manutencao.js'
 import { dailyBase, formulaBase, kcalOut, trustedTdee } from './rules/gasto.js'
 
@@ -109,7 +109,7 @@ async function computeAdaptive(admin: SupabaseClient, userId: string, date: stri
     .eq('is_complete', true)
     .lte('date', date)
     .order('date', { ascending: false })
-    .limit(14)
+    .limit(TDEE_WINDOW_DAYS)
   const rows = (completeDays ?? []).reverse()
   const window = rows.map((d) => ({ date: d.date, kcal_in: Number(d.kcal_in), weight_trend: d.weight_trend }))
   const raw = tdeeRaw(window)
@@ -132,7 +132,8 @@ async function computeAdaptive(admin: SupabaseClient, userId: string, date: stri
       .order('date', { ascending: false })
       .limit(1)
     const previous = prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null
-    tdee = limit(smoothTdee(limit(previous), limit(raw)!))
+    // A primeira estimativa parte da fórmula e não do peso (que no início cai com água).
+    tdee = limit(smoothTdee(limit(previous) ?? (reference != null ? Math.round(reference) : null), limit(raw)!))
   }
   // Recalcular um dia antigo pode tirar-lhe a estimativa (ex.: «faltou algo»).
   await admin.from('days').update({ tdee_est: tdee }).eq('user_id', userId).eq('date', date)

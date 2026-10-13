@@ -7,7 +7,7 @@ Cada regra tem testes; as implementações vivem em `/api/_lib/rules` como funç
 | 1. Dia nutricional 04:00–04:00 (Europe/Lisbon) | `dia-nutricional.test.ts` |
 | 2. `kcal_target` e `kcal_exercise` (bike = W×min×0,06; força = 150; outros = Strava×0,7) | `kcal-exercicio.test.ts` |
 | 3. Tendência de peso (média 7d) + projeção linear (21d) | `peso-tendencia.test.ts` |
-| 4. Gasto adaptativo (14 dias completos, EMA α 0,3, ≥ 10 dias) | `adaptativo.test.ts` |
+| 4. Gasto adaptativo (28 dias completos, EMA α 0,1 e no máximo 30 kcal/dia a partir da fórmula, ≥ 10 dias) | `adaptativo.test.ts` |
 | 5. Dia completo (≥ 2 refeições ou "dia fechado"; < 800 kcal sem marca = incompleto) | `dia-completo.test.ts` |
 | 6. Chão semanal (média 7 dias completos < `kcal_floor_week`) | `chao.test.ts` |
 | 7. Semana de manutenção a cada 6 semanas | `manutencao.test.ts` |
