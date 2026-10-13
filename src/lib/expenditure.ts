@@ -1,11 +1,12 @@
 import { supabase } from './supabase'
-import { dailyBase, formulaBase } from '../../api/_lib/rules/gasto'
+import { dailyBase, formulaBase, trustedTdee } from '../../api/_lib/rules/gasto'
 import type { Profile } from './types'
 
 export interface ExpenditureContext {
   base: number // base sem treino, por dia
   learning: boolean // antes de 10 dias completos: fórmula
-  tdeeFrozen: number | null // gasto medido até antes da semana
+  tdeeFrozen: number | null // gasto medido até antes da semana (com o limite de 400 da fórmula)
+  tdeeMeasured: number | null // o medido sem limite
   formula: number // Mifflin × 1,2 (ou o valor fixo)
   avgTraining: number // kcal de treino por dia (dias completos, 14)
   completeDays: number
@@ -44,7 +45,8 @@ export async function loadExpenditure(profile: Profile, monday: string): Promise
     date: monday,
     fallback: Number(profile.expected_tdee ?? 2200),
   })
-  const tdeeFrozen = frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null
+  const tdeeMeasured = frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null
+  const tdeeFrozen = trustedTdee(tdeeMeasured, formula + avgTraining)
   const { base, learning } = dailyBase({ completeDays: count ?? 0, tdeeFrozen, avgTrainingKcal: avgTraining, formula })
-  return { base, learning, tdeeFrozen, formula, avgTraining, completeDays: count ?? 0 }
+  return { base, learning, tdeeFrozen, tdeeMeasured, formula, avgTraining, completeDays: count ?? 0 }
 }

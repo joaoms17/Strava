@@ -119,3 +119,13 @@ describe('qualidade da perda', () => {
     ).toEqual({ fatShare: 80, weightKg: -3.5 })
   })
 })
+
+describe('trustedTdee: limite do gasto medido', () => {
+  it('fica no máximo 400 acima ou abaixo da fórmula', async () => {
+    const { trustedTdee } = await import('../api/_lib/rules/gasto')
+    expect(trustedTdee(3260, 2190)).toBe(2590)
+    expect(trustedTdee(1500, 2190)).toBe(1790)
+    expect(trustedTdee(2400, 2190)).toBe(2400)
+    expect(trustedTdee(null, 2190)).toBeNull()
+  })
+})

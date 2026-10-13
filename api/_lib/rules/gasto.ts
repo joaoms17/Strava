@@ -11,6 +11,7 @@ export const FORMULA_GAP_KCAL = 300
 export const PLAN_DEFICIT_KCAL = 550
 export const MIN_BASE_KCAL = 1500
 export const BASE_SUGGESTION_MIN_CHANGE = 100
+export const MEASURED_MAX_GAP_KCAL = 400
 
 // Mifflin-St Jeor × 1,2 (sedentário: o treino soma à parte).
 export function mifflinBase(input: {
@@ -50,6 +51,14 @@ export function dailyBase(input: {
     return { base: Math.round(input.tdeeFrozen - input.avgTrainingKcal), learning: false }
   }
   return { base: input.formula, learning: true }
+}
+
+// O gasto medido pelo peso só se usa até 400 kcal da fórmula (com o treino
+// médio): no início da dieta, ou depois de uma pausa, o peso cai depressa com
+// água e glicogénio e o medido dispara (ex.: 3 260 para uma fórmula de 2 190).
+export function trustedTdee(measured: number | null, reference: number): number | null {
+  if (measured == null) return null
+  return Math.min(reference + MEASURED_MAX_GAP_KCAL, Math.max(reference - MEASURED_MAX_GAP_KCAL, measured))
 }
 
 export function kcalOut(base: number, exerciseKcal: number): number {
