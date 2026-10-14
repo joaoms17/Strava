@@ -4,6 +4,7 @@ import { lisbonInstant } from './rules/momentos.js'
 import { exerciseKcal, mergePatch, type WattsSource } from './rules/treino.js'
 import {
   isEmptyStravaCopy,
+  isSameActivity,
   mapActivity,
   mapWellness,
   mergeDailyHealth,
@@ -199,7 +200,32 @@ export async function syncIntervals(
       .eq('user_id', userId)
       .in('external_id', mapped.map((m) => m.a.external_id))
     const known = new Set((knownRows ?? []).map((r) => r.external_id as string))
-    const fresh = mapped.filter((m) => !known.has(m.a.external_id))
+    let fresh = mapped.filter((m) => !known.has(m.a.external_id))
+
+    // Cópias com outro id (mesmo treino, mesma hora): contra os que já entraram
+    // do relógio (com external_id, mesmo apagados ou fundidos numa sessão) e
+    // entre si. As sessões manuais ainda por fundir não contam aqui.
+    const freshDates = [...new Set(fresh.map((m) => m.date))]
+    const { data: syncedRows } = freshDates.length
+      ? await admin
+          .from('workouts')
+          .select('type,date,started_at,minutes')
+          .eq('user_id', userId)
+          .not('external_id', 'is', null)
+          .in('date', freshDates)
+      : { data: [] }
+    const seen = (syncedRows ?? []).map((r) => ({
+      type: r.type as WorkoutType,
+      date: r.date as string,
+      started_at: r.started_at as string | null,
+      minutes: r.minutes != null ? Number(r.minutes) : null,
+    }))
+    fresh = fresh.filter((m) => {
+      const activity = { type: m.a.type, date: m.date, started_at: m.startedAt, minutes: m.a.minutes }
+      if (seen.some((s) => isSameActivity(s, activity))) return false
+      seen.push(activity)
+      return true
+    })
     result.known = mapped.length - fresh.length
 
     // Bicicletas sem distância (rolo com uma app Connect IQ): o ficheiro FIT.
