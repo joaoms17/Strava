@@ -3,7 +3,7 @@ import BottomSheet from '../ui/BottomSheet'
 import WhenPicker from '../ui/WhenPicker'
 import { whenLabel, type When } from '../../lib/when'
 import { supabase } from '../../lib/supabase'
-import { postApi } from '../../lib/api'
+import { getApi, postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { useProfile, useReadyProfile } from '../../lib/profile'
@@ -43,6 +43,19 @@ export default function MealSheet() {
   const [suggest, setSuggest] = useState(false)
   const [items, setItems] = useState<MealItem[]>([])
   const [mode, setMode] = useState<Mode>('view')
+  // As outras pessoas da app, para «Partilhar com …» (comeram o mesmo).
+  const [people, setPeople] = useState<{ user_id: string; name: string }[]>([])
+  useEffect(() => {
+    let alive = true
+    getApi<{ people: { user_id: string; name: string }[] }>('/api/meal/people')
+      .then((r) => {
+        if (alive) setPeople(r.people)
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [])
   const [name, setName] = useState('')
   const [slot, setSlot] = useState<Slot>('almoco')
   const [text, setText] = useState('')
@@ -217,6 +230,14 @@ export default function MealSheet() {
     toast(`Passou para ${SLOT_LABEL[newSlot].toLowerCase()}${date !== today ? ` de ${fmtDayShort(date)}` : ''}`, [
       { label: 'Anular', run: () => undo({ logged_at: result.previous.logged_at }) },
     ])
+  }
+
+  async function shareWith(person: { user_id: string; name: string }) {
+    const result = await call<{ ok: boolean; to: string }>('/api/meal/share', {
+      meal_id: current.id,
+      to_user_id: person.user_id,
+    })
+    if (result) toast(`Partilhada com ${result.to}. As quantidades ajustam-se na conta de ${result.to}.`)
   }
 
   async function confirm() {
@@ -555,6 +576,11 @@ export default function MealSheet() {
                           Juntar foto
                         </AttachPhotoButton>
                       )}
+                      {people.map((p) => (
+                        <button key={p.user_id} disabled={busy} onClick={() => void shareWith(p)} className="text-eat">
+                          Partilhar com {p.name}
+                        </button>
+                      ))}
                     </div>
                   )
                 )}
