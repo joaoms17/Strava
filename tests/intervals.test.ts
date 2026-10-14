@@ -220,3 +220,22 @@ describe('rolo sem distância', () => {
     expect(mapActivity({ id: 'i3', type: 'Ride', moving_time: 3600, distance: 30000, average_speed: 5 }).distance_km).toBe(30)
   })
 })
+
+// Cópias no intervals.icu: a mesma atividade com outro id não entra duas vezes.
+describe('isSameActivity', () => {
+  it('mesmo treino à mesma hora com outro id é cópia', async () => {
+    const { isSameActivity } = await import('../api/_lib/rules/intervals')
+    const a = { type: 'strength' as const, date: '2026-10-12', minutes: 42, started_at: '2026-10-12T17:50:29Z' }
+    expect(isSameActivity(a, { ...a })).toBe(true)
+    expect(isSameActivity(a, { ...a, started_at: '2026-10-12T17:51:40Z', minutes: 43 })).toBe(true)
+  })
+
+  it('outro treino no mesmo dia não é cópia', async () => {
+    const { isSameActivity } = await import('../api/_lib/rules/intervals')
+    const a = { type: 'bike' as const, date: '2026-10-14', minutes: 35, started_at: '2026-10-14T12:16:23Z' }
+    expect(isSameActivity(a, { ...a, started_at: '2026-10-14T18:00:00Z' })).toBe(false)
+    expect(isSameActivity(a, { ...a, type: 'strength' })).toBe(false)
+    expect(isSameActivity(a, { ...a, minutes: 60 })).toBe(false)
+    expect(isSameActivity(a, { ...a, started_at: null })).toBe(false)
+  })
+})

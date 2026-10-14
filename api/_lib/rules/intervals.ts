@@ -163,6 +163,23 @@ export function syncMatch<T extends { type: WorkoutType; date: string; minutes: 
   return null
 }
 
+// Cópias no intervals.icu: a mesma atividade às vezes aparece duas vezes com
+// ids diferentes (chegou por duas vias, ex.: Garmin e Strava, ou foi
+// reprocessada). Mesmo tipo e dia, início a ±2 min e duração parecida: é a
+// mesma e não entra outra vez (o id sozinho não chega).
+export const COPY_START_WINDOW_MIN = 2
+
+export function isSameActivity(
+  a: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null },
+  b: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null },
+): boolean {
+  if (a.type !== b.type || a.date !== b.date || !a.started_at || !b.started_at) return false
+  const gap = Math.abs(Date.parse(a.started_at) - Date.parse(b.started_at)) / 60_000
+  if (gap > COPY_START_WINDOW_MIN) return false
+  if (a.minutes == null || b.minutes == null) return true
+  return Math.abs(a.minutes - b.minutes) <= Math.max(2, 0.05 * Math.max(a.minutes, b.minutes))
+}
+
 // Bem-estar: peso (só em dias sem pesagem do João), sono (horas, pontuação,
 // qualidade, HRV e FC durante o sono), FC em repouso e passos.
 export function mapWellness(w: IcuWellness): {
