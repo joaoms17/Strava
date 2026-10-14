@@ -24,6 +24,7 @@ import {
   weeklyRate,
 } from '../../api/_lib/rules/weight'
 import { inWaterPhase } from '../../api/_lib/rules/manutencao'
+import Ciclo from '../components/Ciclo'
 import type { WeightRow } from '../lib/types'
 import CompositionCards from '../components/CompositionCards'
 import Evolucao from '../components/Evolucao'
@@ -234,6 +235,7 @@ export default function Corpo() {
         </section>
       )}
       <CompositionCards />
+      {profile.sex === 'f' && <Ciclo today={today} />}
       <Evolucao />
     </div>
   )

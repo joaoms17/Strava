@@ -15,6 +15,7 @@ import { supabase } from '../lib/supabase'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
+import { shareWeekReport } from '../lib/week-report'
 import { useDataVersion } from '../lib/events'
 import { useThemeColors } from '../lib/colors'
 import { nutritionalDay, shiftDate } from '../lib/day'
@@ -414,6 +415,31 @@ export default function Balanco() {
               )}
             </div>
           </section>
+
+          <button
+            onClick={() =>
+              void shareWeekReport({
+                range: fmtRange(monday, sunday),
+                sentence: averages && avgOut != null ? weekSentence(averages.eaten, avgOut, rate) : null,
+                eaten: averages?.eaten ?? null,
+                plan: averages?.plan ?? null,
+                out: avgOut,
+                protein: averages?.protein ?? null,
+                proteinTarget: profile.protein_g,
+                sessions,
+                minutes,
+                rateKgWeek: rate,
+                completeDays: counted.length,
+              })
+                .then((how) => {
+                  if (how === 'downloaded') toast('Imagem guardada.')
+                })
+                .catch(() => toast('Não consegui criar a imagem.'))
+            }
+            className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[15px] font-semibold"
+          >
+            Partilhar a semana (imagem)
+          </button>
 
           {data.review && (
             <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
