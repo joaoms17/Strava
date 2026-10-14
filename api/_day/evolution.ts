@@ -7,6 +7,7 @@ import { PROMPT_EVOLUTION, promptVersion, readPrompt } from '../_lib/prompts.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { inWaterPhase } from '../_lib/rules/manutencao.js'
+import { cycleInfo, cleanStarts } from '../_lib/rules/ciclo.js'
 import { AREAS, ESTADOS, cleanAnalysis, daysToConfirm, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
 import {
   bikeEfficiency,
@@ -134,6 +135,11 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         },
       },
       dias_por_confirmar: toConfirm,
+      ciclo: (() => {
+        if (profile.sex !== 'f') return null
+        const c = cycleInfo(cleanStarts((profile.goals as Record<string, unknown> | null)?.ciclo), today)
+        return c ? { dia: c.dayOfCycle, fase: c.phase, semana_de_agua: c.waterWeek } : null
+      })(),
       relogio: wellnessMonths((health.data ?? []) as WellnessRow[], today),
     }
 
