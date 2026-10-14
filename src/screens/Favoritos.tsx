@@ -11,13 +11,14 @@ import { fmtInt, fmtKcal } from '../lib/format'
 import { logFavorite } from '../lib/meal-actions'
 import { SLOTS, SLOT_LABEL } from '../../api/_lib/rules/momentos'
 import type { Favorite, Food, Slot } from '../lib/types'
+import ListaCompras from '../components/ListaCompras'
 import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
 import { chip } from '../components/ui/Chips'
 import { useSheet } from '../lib/sheet'
 
-type Segment = 'refeicoes' | 'dieta' | 'treinos' | 'alimentos'
-const SEGMENTS: Segment[] = ['refeicoes', 'dieta', 'treinos', 'alimentos']
+type Segment = 'refeicoes' | 'dieta' | 'treinos' | 'alimentos' | 'compras'
+const SEGMENTS: Segment[] = ['refeicoes', 'dieta', 'treinos', 'alimentos', 'compras']
 
 // Tudo o que se repete: refeições favoritas (registar com 1 toque), treinos
 // favoritos (a Bicicleta habitual) e a biblioteca de alimentos.
@@ -80,13 +81,14 @@ export default function Favoritos() {
 
   return (
     <div className="space-y-4 pt-1">
-      <div className="grid grid-cols-4 rounded-xl bg-surface2 p-1 text-[15px]">
+      <div className="grid grid-cols-5 rounded-xl bg-surface2 p-1 text-[14px]">
         {(
           [
             ['refeicoes', 'Refeições'],
             ['dieta', 'Dieta'],
             ['treinos', 'Treinos'],
             ['alimentos', 'Alimentos'],
+            ['compras', 'Compras'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -204,6 +206,8 @@ export default function Favoritos() {
           ))}
         </div>
       )}
+
+      {segment === 'compras' && favorites && <ListaCompras favorites={favorites} />}
 
       {segment === 'alimentos' && (
         <div className="space-y-2">

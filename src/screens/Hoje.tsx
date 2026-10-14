@@ -10,6 +10,7 @@ import { signedUrls } from '../lib/photos'
 import { loadActiveDiet } from '../lib/diets'
 import DietToday from '../components/DietToday'
 import Sequencia from '../components/Sequencia'
+import Agua from '../components/Agua'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
@@ -831,6 +832,8 @@ export default function Hoje() {
           <div className="-mx-2 divide-y divide-line/60">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
         </div>
       )}
+
+      {date <= today && <Agua date={date} />}
 
       {data.diet && date <= today && (
         <DietToday diet={data.diet} favorites={data.favorites} meals={data.meals} date={date} today={today} />

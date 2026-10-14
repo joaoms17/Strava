@@ -16,6 +16,7 @@ import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { shareWeekReport } from '../lib/week-report'
+import ProteinaRefeicao from '../components/ProteinaRefeicao'
 import { useDataVersion } from '../lib/events'
 import { useThemeColors } from '../lib/colors'
 import { nutritionalDay, shiftDate } from '../lib/day'
@@ -415,6 +416,8 @@ export default function Balanco() {
               )}
             </div>
           </section>
+
+          <ProteinaRefeicao today={today} perMeal={profile.protein_per_meal_g} />
 
           <button
             onClick={() =>
