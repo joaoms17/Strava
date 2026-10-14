@@ -21,6 +21,7 @@ import {
 import { lossQuality } from '../../api/_lib/rules/gasto'
 import type { BodyMeasurement } from '../lib/types'
 import Icon from './ui/Icon'
+import FatScale from './FatScale'
 
 function Sparkline({ values }: { values: number[] }) {
   if (values.length < 2) return null
@@ -139,6 +140,7 @@ export default function CompositionCards() {
             <div className="bg-ink/80" style={{ width: `${100 - last.c.pct}%` }} />
             <div className="bg-body" style={{ width: `${last.c.pct}%` }} />
           </div>
+          <FatScale pct={last.c.pct} sex={profile.sex} />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="num text-[34px] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>

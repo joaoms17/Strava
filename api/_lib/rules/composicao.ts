@@ -254,3 +254,30 @@ export function scaleFatAverage(values: number[], alpha = 0.1): number | null {
   for (const v of values.slice(1)) avg = avg + alpha * (v - avg)
   return round1(avg)
 }
+
+// Categorias da % de gordura (Corpo): seis faixas, diferentes para homens e
+// mulheres (as mulheres têm mais gordura essencial). Os cortes seguem as
+// tabelas habituais (ACE), arredondados: homens 8 · 14 · 20 · 25 · 30,
+// mulheres 15 · 22 · 29 · 34 · 40.
+export const FAT_LABELS = [
+  'Muito seco',
+  'Seco',
+  'Saudável',
+  'Gordurinha a mais',
+  'Excesso de gordura',
+  'Muita gordura',
+] as const
+
+export function fatCuts(sex: string | null): number[] {
+  return sex === 'f' ? [15, 22, 29, 34, 40] : [8, 14, 20, 25, 30]
+}
+
+// Os limites da barra no ecrã (onde começa e acaba).
+export function fatScaleRange(sex: string | null): [number, number] {
+  return sex === 'f' ? [10, 48] : [3, 38]
+}
+
+export function fatCategory(pct: number, sex: string | null): { index: number; label: (typeof FAT_LABELS)[number] } {
+  const index = fatCuts(sex).filter((cut) => pct >= cut).length
+  return { index, label: FAT_LABELS[index]! }
+}

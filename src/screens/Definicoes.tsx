@@ -213,6 +213,18 @@ export default function Definicoes() {
       </Section>
 
       <Section title="Perfil e metas">
+        <div className="space-y-1">
+          <p className="text-[15px]">Sexo</p>
+          <Choice
+            options={[
+              ['m', 'Homem'],
+              ['f', 'Mulher'],
+            ]}
+            value={profile.sex === 'f' ? 'f' : 'm'}
+            onChange={(v) => void update({ sex: v })}
+          />
+          <p className="text-[13px] text-dim">Muda a fórmula da gordura (as mulheres medem também a anca), o gasto e as categorias.</p>
+        </div>
         {GOALS.map(numberInput)}
         <Toggle
           label="Semana de pausa da dieta"
