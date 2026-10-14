@@ -37,12 +37,31 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-// D = 1,0324 − 0,19077 × log10(cintura − pescoço) + 0,15456 × log10(altura)
-// %G = 495 / D − 450. Só vale com a cintura maior do que o pescoço.
-export function navyBodyFat(heightCm: number, neckCm: number, waistCm: number): number | null {
-  if (!(waistCm > neckCm) || !(heightCm > 0)) return null
+// Marinha dos EUA (Hodgdon e Beckett), em cm, %G = 495 / D − 450.
+// Homens: D = 1,0324 − 0,19077 × log10(cintura − pescoço) + 0,15456 × log10(altura).
+// Mulheres: D = 1,29579 − 0,35004 × log10(cintura + anca − pescoço) + 0,22100 × log10(altura);
+// sem anca não há valor (a fórmula dos homens dava 13 % a uma mulher com 29 %).
+export function navyBodyFat(
+  heightCm: number,
+  neckCm: number,
+  waistCm: number,
+  hipsCm: number | null = null,
+  sex: string | null = 'm',
+): number | null {
+  if (!(heightCm > 0)) return null
+  if (sex === 'f') {
+    if (hipsCm == null || !(hipsCm > 0) || !(waistCm + hipsCm > neckCm)) return null
+    const density = 1.29579 - 0.35004 * Math.log10(waistCm + hipsCm - neckCm) + 0.221 * Math.log10(heightCm)
+    return 495 / density - 450
+  }
+  if (!(waistCm > neckCm)) return null
   const density = 1.0324 - 0.19077 * Math.log10(waistCm - neckCm) + 0.15456 * Math.log10(heightCm)
   return 495 / density - 450
+}
+
+// %G de referência para a cintura alvo: 15 % nos homens, 25 % nas mulheres.
+export function targetBodyFatPct(sex: string | null): number {
+  return sex === 'f' ? 25 : 15
 }
 
 // Versão em polegadas, só para verificar a métrica nos testes.
@@ -71,9 +90,10 @@ export interface Composition {
 
 export function composition(
   heightCm: number,
-  m: { neck_cm: number; waist_cm: number; weight_used_kg: number },
+  m: { neck_cm: number; waist_cm: number; hips_cm?: number | null; weight_used_kg: number },
+  sex: string | null = 'm',
 ): Composition | null {
-  const pct = navyBodyFat(heightCm, m.neck_cm, m.waist_cm)
+  const pct = navyBodyFat(heightCm, m.neck_cm, m.waist_cm, m.hips_cm ?? null, sex)
   if (pct == null) return null
   const fatKg = (m.weight_used_kg * pct) / 100
   const leanKg = m.weight_used_kg - fatKg
@@ -135,9 +155,19 @@ export function confirmationSentence(change: CompositionChange): string {
   return change.pctExact < 0 ? 'a fita já confirma esta descida' : 'a fita já confirma esta subida'
 }
 
-// Cintura para uma %G alvo, com o mesmo pescoço e altura.
-export function targetWaist(heightCm: number, neckCm: number, targetPct: number): number {
+// Cintura para uma %G alvo, com o mesmo pescoço, altura (e anca, nas mulheres).
+export function targetWaist(
+  heightCm: number,
+  neckCm: number,
+  targetPct: number,
+  sex: string | null = 'm',
+  hipsCm: number | null = null,
+): number | null {
   const density = 495 / (targetPct + 450)
+  if (sex === 'f') {
+    if (hipsCm == null || !(hipsCm > 0)) return null
+    return 10 ** ((1.29579 + 0.221 * Math.log10(heightCm) - density) / 0.35004) - hipsCm + neckCm
+  }
   return neckCm + 10 ** ((1.0324 + 0.15456 * Math.log10(heightCm) - density) / 0.19077)
 }
 

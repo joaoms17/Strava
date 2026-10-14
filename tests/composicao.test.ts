@@ -115,7 +115,7 @@ describe('cintura alvo', () => {
   })
 
   it('é a inversa da fórmula', () => {
-    const waist = targetWaist(HEIGHT, 41, 18)
+    const waist = targetWaist(HEIGHT, 41, 18)!
     expect(navyBodyFat(HEIGHT, 41, waist)).toBeCloseTo(18, 6)
   })
 })
@@ -182,5 +182,30 @@ describe('avisos e lembretes', () => {
   it('balança: média suavizada à parte', () => {
     expect(scaleFatAverage([24, 22, 23, 25])).toBe(23.8)
     expect(scaleFatAverage([])).toBeNull()
+  })
+})
+
+// Mulheres: a fórmula leva a anca (com a dos homens a Joana dava 13 %).
+describe('navyBodyFat (mulheres)', () => {
+  const inchesFemale = (h: number, neck: number, waist: number, hips: number) => {
+    const inch = (cm: number) => cm / 2.54
+    return 163.205 * Math.log10(inch(waist) + inch(hips) - inch(neck)) - 97.684 * Math.log10(inch(h)) - 78.387
+  }
+
+  it('usa cintura + anca − pescoço e bate com a versão em polegadas', () => {
+    const pct = navyBodyFat(161, 30.5, 70, 100, 'f')!
+    expect(pct).toBeGreaterThan(28)
+    expect(pct).toBeLessThan(31)
+    expect(Math.abs(pct - inchesFemale(161, 30.5, 70, 100))).toBeLessThan(1)
+  })
+
+  it('sem anca não há valor', () => {
+    expect(navyBodyFat(161, 30.5, 70, null, 'f')).toBeNull()
+  })
+
+  it('a cintura alvo devolve a %G alvo', () => {
+    const waist = targetWaist(161, 30.5, 25, 'f', 100)!
+    expect(navyBodyFat(161, 30.5, waist, 100, 'f')).toBeCloseTo(25, 1)
+    expect(targetWaist(161, 30.5, 25, 'f', null)).toBeNull()
   })
 })

@@ -20,6 +20,7 @@ import {
   measureFlags,
   needsThirdReading,
   referenceWeight,
+  targetBodyFatPct,
   targetWaist,
   type MeasureFlag,
   type Zone,
@@ -28,9 +29,9 @@ import type { BodyMeasurement } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
 
-export const TARGET_BODY_FAT_PCT = 15
-const ESSENTIAL: Zone[] = ['neck', 'waist']
-const OPTIONAL: Zone[] = ['chest', 'hips', 'arm', 'thigh', 'calf']
+const ALL_ZONES: Zone[] = ['neck', 'waist', 'hips', 'chest', 'arm', 'thigh', 'calf']
+// Nas mulheres a anca entra na fórmula: passa a essencial.
+const essentialZones = (sex: string | null): Zone[] => (sex === 'f' ? ['neck', 'waist', 'hips'] : ['neck', 'waist'])
 const COLUMN: Record<Zone, keyof BodyMeasurement> = {
   neck: 'neck_cm',
   waist: 'waist_cm',
@@ -44,7 +45,7 @@ const COLUMN: Record<Zone, keyof BodyMeasurement> = {
 type Readings = Record<Zone, string[]>
 
 const emptyReadings = (): Readings =>
-  Object.fromEntries([...ESSENTIAL, ...OPTIONAL].map((z) => [z, ['', '', '']])) as Readings
+  Object.fromEntries(ALL_ZONES.map((z) => [z, ['', '', '']])) as Readings
 
 function parse(text: string): number | null {
   if (!text.trim()) return null
@@ -58,6 +59,8 @@ export default function MedidasSheet() {
   const sheet = useSheet()
   const toast = useToast()
   const profile = useReadyProfile()
+  const ESSENTIAL = essentialZones(profile.sex)
+  const OPTIONAL = ALL_ZONES.filter((z) => !ESSENTIAL.includes(z))
   const [, navigate] = useLocation()
   const editId = sheet.params.get('id')
   const today = localCalendarDate()
@@ -86,7 +89,7 @@ export default function MedidasSheet() {
           day = editing.date
           setDate(editing.date)
           const r = emptyReadings()
-          for (const zone of [...ESSENTIAL, ...OPTIONAL]) {
+          for (const zone of ALL_ZONES) {
             const list = editing.readings?.[zone]
             const value = editing[COLUMN[zone]] as number | null
             r[zone] = list?.length ? [...list.map(String), '', ''].slice(0, 3) : [value != null ? String(value) : '', '', '']
@@ -122,11 +125,13 @@ export default function MedidasSheet() {
   const value = (zone: Zone) => averageReadings(readings[zone].map((t) => parse(t) ?? NaN))
   const neck = value('neck')
   const waist = value('waist')
+  const hips = value('hips')
+  const needsHips = profile.sex === 'f'
   const liveComposition =
     neck != null && waist != null && weightUsed != null
-      ? composition(height, { neck_cm: neck, waist_cm: waist, weight_used_kg: weightUsed })
+      ? composition(height, { neck_cm: neck, waist_cm: waist, hips_cm: hips, weight_used_kg: weightUsed }, profile.sex)
       : null
-  const canSave = neck != null && waist != null && weightUsed != null
+  const canSave = neck != null && waist != null && weightUsed != null && (!needsHips || hips != null)
 
   function setReading(zone: Zone, index: number, text: string) {
     const next = { ...readings, [zone]: readings[zone].map((t, i) => (i === index ? text.replace(/[^\d,.]/g, '') : t)) }
@@ -176,12 +181,12 @@ export default function MedidasSheet() {
       weight_used_kg: weightUsed,
       flags,
       readings: Object.fromEntries(
-        [...ESSENTIAL, ...OPTIONAL]
+        ALL_ZONES
           .map((z) => [z, readings[z].map(parse).filter((n): n is number => n != null)] as const)
           .filter(([, list]) => list.length > 0),
       ),
     }
-    for (const zone of [...ESSENTIAL, ...OPTIONAL]) row[COLUMN[zone]] = value(zone)
+    for (const zone of ALL_ZONES) row[COLUMN[zone]] = value(zone)
     const { data, error } = await supabase
       .from('body_measurements')
       .upsert(row, { onConflict: 'user_id,date,method' })
@@ -230,21 +235,41 @@ export default function MedidasSheet() {
   if (saved) {
     const c =
       saved.neck_cm != null && saved.waist_cm != null
-        ? composition(height, {
-            neck_cm: Number(saved.neck_cm),
-            waist_cm: Number(saved.waist_cm),
-            weight_used_kg: Number(saved.weight_used_kg),
-          })
+        ? composition(
+            height,
+            {
+              neck_cm: Number(saved.neck_cm),
+              waist_cm: Number(saved.waist_cm),
+              hips_cm: saved.hips_cm != null ? Number(saved.hips_cm) : null,
+              weight_used_kg: Number(saved.weight_used_kg),
+            },
+            profile.sex,
+          )
         : null
     const before =
       previous?.neck_cm != null && previous.waist_cm != null
-        ? composition(height, {
-            neck_cm: Number(previous.neck_cm),
-            waist_cm: Number(previous.waist_cm),
-            weight_used_kg: Number(previous.weight_used_kg),
-          })
+        ? composition(
+            height,
+            {
+              neck_cm: Number(previous.neck_cm),
+              waist_cm: Number(previous.waist_cm),
+              hips_cm: previous.hips_cm != null ? Number(previous.hips_cm) : null,
+              weight_used_kg: Number(previous.weight_used_kg),
+            },
+            profile.sex,
+          )
         : null
     const change = c && before ? compareCompositions(before, c) : null
+    const savedTarget =
+      saved.neck_cm != null
+        ? targetWaist(
+            height,
+            Number(saved.neck_cm),
+            targetBodyFatPct(profile.sex),
+            profile.sex,
+            saved.hips_cm != null ? Number(saved.hips_cm) : null,
+          )
+        : null
     return (
       <BottomSheet
         title="Medição guardada"
@@ -277,8 +302,8 @@ export default function MedidasSheet() {
                 </div>
               </div>
               <p className="text-[15px]">
-                Cintura {fmt1(Number(saved.waist_cm))} cm · alvo cerca de{' '}
-                {Math.round(targetWaist(height, Number(saved.neck_cm), TARGET_BODY_FAT_PCT))} cm
+                Cintura {fmt1(Number(saved.waist_cm))} cm
+                {savedTarget != null && <> · alvo cerca de {Math.round(savedTarget)} cm</>}
               </p>
               {change && previous ? (
                 <p className="text-[15px]">
@@ -374,7 +399,11 @@ export default function MedidasSheet() {
       <div className="space-y-5 pb-2">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[14px] text-dim">
-            {previous ? 'Essenciais (1 min).' : 'Chegam a cintura e o pescoço. A altura já está no perfil.'}
+            {previous
+              ? 'Essenciais (1 min).'
+              : needsHips
+                ? 'Chegam a cintura, a anca e o pescoço. A altura já está no perfil.'
+                : 'Chegam a cintura e o pescoço. A altura já está no perfil.'}
           </p>
           <button onClick={() => sheet.open('como-medir')} className="flex shrink-0 items-center gap-1 text-[14px] text-dim">
             <Icon name="info" size={18} /> Como medir
@@ -412,7 +441,7 @@ export default function MedidasSheet() {
         )}
 
         <button onClick={() => setShowOptional(!showOptional)} className="text-[15px] text-dim">
-          Opcionais: peito, anca, braço, coxa, gémeo {showOptional ? '▾' : '›'}
+          Opcionais: {needsHips ? 'peito, braço, coxa, gémeo' : 'peito, anca, braço, coxa, gémeo'} {showOptional ? '▾' : '›'}
         </button>
         {showOptional && OPTIONAL.map((z) => zoneInput(z, false))}
 
