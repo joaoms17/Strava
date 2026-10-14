@@ -40,3 +40,28 @@ describe('cycleInfo', () => {
     expect(cleanStarts(['2026-10-01', 'x', '2026-10-01', 3, '2026-09-01'])).toEqual(['2026-09-01', '2026-10-01'])
   })
 })
+
+describe('cycleInfo com pílula', () => {
+  it('pílula contínua: 91 dias sem histórico, sem fases, água na semana antes', async () => {
+    const { cycleInfo } = await import('../api/_lib/rules/ciclo')
+    const opts = { pill: true, defaultLength: 91 }
+    const c = cycleInfo(['2026-09-01'], '2026-10-14', opts)!
+    expect(c.length).toBe(91)
+    expect(c.phase).toBe('pilula')
+    expect(c.nextStart).toBe('2026-12-01')
+    expect(c.waterWeek).toBe(false)
+    expect(cycleInfo(['2026-09-01'], '2026-11-26', opts)!.waterWeek).toBe(true)
+    expect(cycleInfo(['2026-09-01'], '2026-09-02', opts)!.phase).toBe('menstrual')
+  })
+
+  it('aprende ciclos de 3 meses do histórico', async () => {
+    const { cycleInfo } = await import('../api/_lib/rules/ciclo')
+    expect(cycleInfo(['2026-03-01', '2026-05-31', '2026-08-30'], '2026-09-10', { pill: true })!.length).toBe(91)
+  })
+
+  it('lê as opções do perfil', async () => {
+    const { cycleOptions } = await import('../api/_lib/rules/ciclo')
+    expect(cycleOptions({ ciclo_pilula: true, ciclo_dias: 91 })).toEqual({ pill: true, defaultLength: 91 })
+    expect(cycleOptions(null)).toEqual({ pill: false, defaultLength: 28 })
+  })
+})
