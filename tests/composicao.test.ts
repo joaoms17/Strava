@@ -209,3 +209,24 @@ describe('navyBodyFat (mulheres)', () => {
     expect(targetWaist(161, 30.5, 25, 'f', null)).toBeNull()
   })
 })
+
+describe('fatCategory', () => {
+  it('homens: 8 · 14 · 20 · 25 · 30', async () => {
+    const { fatCategory } = await import('../api/_lib/rules/composicao')
+    expect(fatCategory(6, 'm').label).toBe('Muito seco')
+    expect(fatCategory(12, 'm').label).toBe('Seco')
+    expect(fatCategory(18, 'm').label).toBe('Saudável')
+    expect(fatCategory(22, 'm').label).toBe('Gordurinha a mais')
+    expect(fatCategory(27, 'm').label).toBe('Excesso de gordura')
+    expect(fatCategory(33, 'm').label).toBe('Muita gordura')
+  })
+
+  it('mulheres: 15 · 22 · 29 · 34 · 40 (os mesmos 29 % são outra categoria)', async () => {
+    const { fatCategory } = await import('../api/_lib/rules/composicao')
+    expect(fatCategory(13, 'f').label).toBe('Muito seco')
+    expect(fatCategory(25, 'f').label).toBe('Saudável')
+    expect(fatCategory(29.3, 'f').label).toBe('Gordurinha a mais')
+    expect(fatCategory(29.3, 'm').label).toBe('Excesso de gordura')
+    expect(fatCategory(41, 'f').label).toBe('Muita gordura')
+  })
+})
