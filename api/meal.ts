@@ -6,6 +6,7 @@ import barcode from './_meal/barcode.js'
 import menu from './_meal/menu.js'
 import { logFavorite, portion, remove, repeat, restore } from './_meal/quick.js'
 import { analyse, attach, capture, correct, quick, update } from './_meal/async.js'
+import { people, share } from './_meal/share.js'
 
 // O plano Hobby do Vercel limita a 12 funções por deploy; os endpoints de
 // refeições vivem juntos numa função, com os caminhos originais preservados
@@ -28,6 +29,8 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   correct,
   update,
   quick,
+  share,
+  people,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
