@@ -49,11 +49,16 @@ export default function MedidasHistorico() {
         const before = rows[i + 1]
         const c =
           m.neck_cm != null && m.waist_cm != null
-            ? composition(height, {
-                neck_cm: Number(m.neck_cm),
-                waist_cm: Number(m.waist_cm),
-                weight_used_kg: Number(m.weight_used_kg),
-              })
+            ? composition(
+                height,
+                {
+                  neck_cm: Number(m.neck_cm),
+                  waist_cm: Number(m.waist_cm),
+                  hips_cm: m.hips_cm != null ? Number(m.hips_cm) : null,
+                  weight_used_kg: Number(m.weight_used_kg),
+                },
+                profile.sex,
+              )
             : null
         return (
           <button

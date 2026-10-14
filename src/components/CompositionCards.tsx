@@ -15,11 +15,11 @@ import {
   daysSinceMeasure,
   earlyDietWeeks,
   scaleFatAverage,
+  targetBodyFatPct,
   targetWaist,
 } from '../../api/_lib/rules/composicao'
 import { lossQuality } from '../../api/_lib/rules/gasto'
 import type { BodyMeasurement } from '../lib/types'
-import { TARGET_BODY_FAT_PCT } from './sheets/MedidasSheet'
 import Icon from './ui/Icon'
 
 function Sparkline({ values }: { values: number[] }) {
@@ -94,11 +94,16 @@ export default function CompositionCards() {
       m,
       c:
         m.neck_cm != null && m.waist_cm != null
-          ? composition(height, {
-              neck_cm: Number(m.neck_cm),
-              waist_cm: Number(m.waist_cm),
-              weight_used_kg: Number(m.weight_used_kg),
-            })
+          ? composition(
+              height,
+              {
+                neck_cm: Number(m.neck_cm),
+                waist_cm: Number(m.waist_cm),
+                hips_cm: m.hips_cm != null ? Number(m.hips_cm) : null,
+                weight_used_kg: Number(m.weight_used_kg),
+              },
+              profile.sex,
+            )
           : null,
     }))
     .filter((x) => x.c != null) as { m: BodyMeasurement; c: NonNullable<ReturnType<typeof composition>> }[]
@@ -108,6 +113,16 @@ export default function CompositionCards() {
   const days = last ? daysSinceMeasure(last.m.date, today) : null
   const scaleAvg = scaleFatAverage(scale)
   const lastWaist = rows[rows.length - 1]!
+  const lastTarget =
+    lastWaist.neck_cm != null
+      ? targetWaist(
+          height,
+          Number(lastWaist.neck_cm),
+          targetBodyFatPct(profile.sex),
+          profile.sex,
+          lastWaist.hips_cm != null ? Number(lastWaist.hips_cm) : null,
+        )
+      : null
   const bmi = last ? Number(last.m.weight_used_kg) / (height / 100) ** 2 : null
   // Que parte do peso perdido foi gordura (3 medições ou mais, 3 kg ou mais).
   const quality = lossQuality(withComp.map((x) => ({ weight_used_kg: Number(x.m.weight_used_kg), fatKg: x.c.fatKg })))
@@ -182,11 +197,7 @@ export default function CompositionCards() {
         <div className="flex items-end justify-between gap-3">
           <div>
             <p className="num text-[34px] leading-none font-extrabold">{fmt1(Number(lastWaist.waist_cm))} cm</p>
-            {lastWaist.neck_cm != null && (
-              <p className="text-[14px] text-dim">
-                alvo cerca de {Math.round(targetWaist(height, Number(lastWaist.neck_cm), TARGET_BODY_FAT_PCT))} cm
-              </p>
-            )}
+            {lastTarget != null && <p className="text-[14px] text-dim">alvo cerca de {Math.round(lastTarget)} cm</p>}
           </div>
           <Sparkline values={rows.filter((r) => r.waist_cm != null).map((r) => Number(r.waist_cm))} />
         </div>
