@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
 import { fmtDayMonth } from '../lib/format'
-import { PHASE_LABEL, cleanStarts, cycleInfo } from '../../api/_lib/rules/ciclo'
+import { PHASE_LABEL, cleanStarts, cycleInfo, cycleOptions } from '../../api/_lib/rules/ciclo'
 
 // Corpo › Ciclo (só para mulheres, opcional): marca o primeiro dia do
 // período; a app mostra a fase e avisa da semana em que o peso sobe com
@@ -14,7 +14,13 @@ export default function Ciclo({ today }: { today: string }) {
   const [other, setOther] = useState(false)
   const [date, setDate] = useState(today)
   const starts = cleanStarts(profile.goals?.ciclo)
-  const info = cycleInfo(starts, today)
+  const options = cycleOptions(profile.goals)
+  const info = cycleInfo(starts, today, options)
+
+  async function setOptions(pill: boolean, days: number) {
+    const ok = await update({ goals: { ...(profile.goals ?? {}), ciclo_pilula: pill, ciclo_dias: days } })
+    if (!ok) toast('Não consegui guardar.')
+  }
 
   async function save(next: string[], message: string, previous: string[]) {
     const ok = await update({ goals: { ...(profile.goals ?? {}), ciclo: next } })
@@ -37,7 +43,8 @@ export default function Ciclo({ today }: { today: string }) {
       {info ? (
         <>
           <p className="text-[17px]">
-            Dia {info.dayOfCycle} · {PHASE_LABEL[info.phase]}
+            Dia {info.dayOfCycle}
+            {options.pill && info.phase === 'pilula' ? ` de ~${info.length}` : ''} · {PHASE_LABEL[info.phase]}
             <span className="text-dim">
               {' '}
               · próximo {info.daysToNext <= 0 ? 'a qualquer momento' : `por volta de ${fmtDayMonth(info.nextStart)}`}
@@ -48,7 +55,10 @@ export default function Ciclo({ today }: { today: string }) {
               Semana de água: é normal o peso subir 0,5–2 kg agora. Não é gordura e desce depois do período.
             </p>
           ) : (
-            <p className="text-[14px] text-dim">Ciclo de cerca de {info.length} dias{starts.length < 3 ? ' (ainda a aprender)' : ''}.</p>
+            <p className="text-[14px] text-dim">
+              {options.pill ? 'Período' : 'Ciclo'} a cada cerca de {info.length} dias
+              {starts.length < 3 ? ' (ainda a aprender)' : ''}.
+            </p>
           )}
         </>
       ) : (
@@ -84,6 +94,39 @@ export default function Ciclo({ today }: { today: string }) {
           </button>
         </div>
       )}
+
+      <div className="space-y-2 border-t border-line/60 pt-3">
+        <label className="flex items-center justify-between gap-3 text-[15px]">
+          Tomo a pílula
+          <input
+            type="checkbox"
+            checked={options.pill === true}
+            onChange={(e) => void setOptions(e.target.checked, e.target.checked ? 91 : 28)}
+            className="h-5 w-5 accent-current"
+          />
+        </label>
+        {options.pill && (
+          <div className="grid grid-cols-2 gap-2 text-[14px]">
+            {(
+              [
+                [28, 'Todos os meses'],
+                [91, 'De 3 em 3 meses'],
+              ] as const
+            ).map(([days, text]) => (
+              <button
+                key={days}
+                onClick={() => void setOptions(true, days)}
+                className={`min-h-10 rounded-xl ${options.defaultLength === days ? 'bg-cta text-on-cta' : 'bg-surface2'}`}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        )}
+        {options.pill && (
+          <p className="text-[13px] text-dim">Com a pílula não há ovulação nem fases; conta só a semana de água antes da pausa.</p>
+        )}
+      </div>
 
       {starts.length > 0 && (
         <div className="flex flex-wrap gap-2 text-[13px] text-dim">
