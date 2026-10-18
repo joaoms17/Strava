@@ -5,6 +5,8 @@ import { getApi, postApi } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, runBusy } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { nutritionalDay } from '../../lib/day'
@@ -49,7 +51,9 @@ export default function BarcodeSheet() {
   const [grams, setGrams] = useState(100)
   const [basket, setBasket] = useState<MealItem[]>([])
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  // Tocar outra vez depois de uma falha de rede não grava a dobrar; outros
+  // produtos (ou outro dia) são outro registo.
+  const clientIdFor = useClientId()
   const [target, setTarget] = useState<Target | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [dayMeals, setDayMeals] = useState<Target[]>([])
@@ -101,7 +105,6 @@ export default function BarcodeSheet() {
 
   async function saveNew() {
     if (items.length === 0) return
-    setBusy(true)
     const now = new Date()
     const slot = when.slot && when.slot !== 'agora' ? when.slot : null
     const loggedAt =
@@ -110,6 +113,7 @@ export default function BarcodeSheet() {
         : loggedAtFor(date, SLOT_TIME[slot ?? slotOf(now)], profile.nutrition_day_cutoff_hour, now)
     try {
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/save', {
+        client_id: clientIdFor({ items, date, slot }),
         input_type: 'barcode',
         raw_text: items.length === 1 ? items[0]!.name : items.map((i) => i.name).join(', '),
         photo_path: null,
@@ -131,8 +135,6 @@ export default function BarcodeSheet() {
       ])
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -143,7 +145,6 @@ export default function BarcodeSheet() {
       toast('Essa refeição ainda está a ser analisada. Espera um pouco.')
       return
     }
-    setBusy(true)
     try {
       const { previous } = await postApi<{ meal: Meal; previous: { items: MealItem[] } }>('/api/meal/update', {
         meal_id: meal.id,
@@ -162,15 +163,13 @@ export default function BarcodeSheet() {
       sheet.open('refeicao', { id: meal.id })
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui juntar.')
-    } finally {
-      setBusy(false)
     }
   }
 
   if (scanning) {
     return (
       <BarcodeScanner
-        onDetect={(ean) => void lookup(ean)}
+        onDetect={(ean) => void runBusy('A procurar o produto…', () => lookup(ean))}
         onClose={() => (basket.length > 0 ? setScanning(false) : sheet.close())}
       />
     )
@@ -187,11 +186,9 @@ export default function BarcodeSheet() {
       onClose={sheet.close}
       footer={
         items.length > 0 && !choosing ? (
-          <button disabled={busy} onClick={() => void (target ? addTo(target) : saveNew())} className={primary}>
-            {busy
-              ? 'A guardar…'
-              : `${target ? 'Juntar' : 'Guardar'}${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
-          </button>
+          <BusyButton busy="A guardar…" onClick={() => (target ? addTo(target) : saveNew())} className={primary}>
+            {`${target ? 'Juntar' : 'Guardar'}${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
+          </BusyButton>
         ) : undefined
       }
     >
@@ -287,13 +284,13 @@ export default function BarcodeSheet() {
               <ul className="space-y-2">
                 {dayMeals.map((m) => (
                   <li key={m.id}>
-                    <button
-                      disabled={busy}
-                      onClick={() => void addTo(m)}
+                    <BusyButton
+                      busy="A juntar…"
+                      onClick={() => addTo(m)}
                       className="min-h-12 w-full truncate rounded-xl border border-line px-3 text-left text-[15px]"
                     >
                       {describe(m)}
-                    </button>
+                    </BusyButton>
                   </li>
                 ))}
               </ul>

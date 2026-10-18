@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useSearch } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
+import { BusyButton, BusyLabel, runBusy, useBusyKey } from '../lib/busy'
 import { emitDataChanged, useDataVersion } from '../lib/events'
 import { signedUrls, useSignedUrls } from '../lib/photos'
 import { setFavoritePhoto, uploadFavoritePhoto } from '../lib/favorites'
@@ -65,7 +66,11 @@ export default function Favoritos() {
   }, [load, version])
 
   async function archive(favorite: Favorite) {
-    await supabase.from('favorites').update({ archived: true }).eq('id', favorite.id)
+    const { error } = await supabase.from('favorites').update({ archived: true }).eq('id', favorite.id)
+    if (error) {
+      toast('Não consegui arquivar. Tenta outra vez.')
+      return
+    }
     setEditing(null)
     emitDataChanged()
     toast(`Arquivado · ${favorite.name}`, [
@@ -126,7 +131,10 @@ export default function Favoritos() {
               const photo = favorite.photo_path ? photos[favorite.photo_path] : null
               return (
                 <div key={favorite.id} className="overflow-hidden rounded-2xl bg-surface">
-                  <button onClick={() => void logFavorite(favorite, null, toast)} className="block w-full text-left">
+                  <button
+                    onClick={() => void runBusy('A registar…', () => logFavorite(favorite, null, toast))}
+                    className="block w-full text-left"
+                  >
                     {photo ? (
                       <img src={photo} alt="" className="h-28 w-full object-cover" />
                     ) : (
@@ -240,7 +248,7 @@ export default function Favoritos() {
       )}
 
       {editing && (
-        <EditFavorite favorite={editing} onClose={() => setEditing(null)} onArchive={() => void archive(editing)} />
+        <EditFavorite favorite={editing} onClose={() => setEditing(null)} onArchive={() => archive(editing)} />
       )}
       {editingFood && <EditFood food={editingFood} onClose={() => setEditingFood(null)} />}
     </div>
@@ -254,18 +262,17 @@ function EditFavorite({
 }: {
   favorite: Favorite
   onClose: () => void
-  onArchive: () => void
+  onArchive: () => Promise<void>
 }) {
   const toast = useToast()
   const [name, setName] = useState(favorite.name)
   const [slot, setSlot] = useState<Slot | null>(favorite.default_slot)
-  const [busy, setBusy] = useState(false)
+  const [photoKey, busy] = useBusyKey()
   const [photoPath, setPhotoPath] = useState(favorite.photo_path)
   const urls = useSignedUrls([photoPath])
 
   // A foto muda logo (é a que aparece sempre que a favorita é usada).
   async function changePhoto(file: File | null) {
-    setBusy(true)
     try {
       const path = file ? await uploadFavoritePhoto(file, favorite.id) : null
       await setFavoritePhoto(favorite.id, path)
@@ -274,18 +281,18 @@ function EditFavorite({
       toast(path ? 'Foto guardada.' : 'Foto tirada.')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui mudar a foto.')
-    } finally {
-      setBusy(false)
     }
   }
 
   async function save() {
-    setBusy(true)
-    await supabase
+    const { error } = await supabase
       .from('favorites')
       .update({ name: name.trim() || favorite.name, default_slot: slot, updated_at: new Date().toISOString() })
       .eq('id', favorite.id)
-    setBusy(false)
+    if (error) {
+      toast('Não consegui guardar. Tenta outra vez.')
+      return
+    }
     emitDataChanged()
     onClose()
   }
@@ -296,16 +303,12 @@ function EditFavorite({
       onClose={onClose}
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
-          <button onClick={onArchive} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-dim">
+          <BusyButton busy="A arquivar…" onClick={onArchive} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-dim">
             Arquivar
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => void save()}
-            className="min-h-14 rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
-          >
+          </BusyButton>
+          <BusyButton busy="A guardar…" onClick={save} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50">
             Guardar
-          </button>
+          </BusyButton>
         </div>
       }
     >
@@ -313,8 +316,8 @@ function EditFavorite({
         <div className="flex items-center gap-3">
           <Thumb url={photoPath ? urls[photoPath] : null} size={88} />
           <div className="flex flex-col items-start gap-1">
-            <label className={`cursor-pointer text-[15px] text-eat ${busy ? 'pointer-events-none opacity-50' : ''}`}>
-              {photoPath ? 'Mudar a foto' : 'Juntar foto'}
+            <label className={`cursor-pointer text-[15px] text-eat ${busy ? 'pointer-events-none' : ''}`}>
+              {busy ? <BusyLabel text="A enviar a foto…" /> : photoPath ? 'Mudar a foto' : 'Juntar foto'}
               <input
                 type="file"
                 accept="image/*"
@@ -323,14 +326,14 @@ function EditFavorite({
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   e.target.value = ''
-                  if (file) void changePhoto(file)
+                  if (file) void runBusy('A enviar a foto…', () => changePhoto(file), photoKey)
                 }}
               />
             </label>
             {photoPath && (
-              <button disabled={busy} onClick={() => void changePhoto(null)} className="text-[15px] text-dim">
+              <BusyButton busy="A tirar a foto…" onClick={() => changePhoto(null)} className="text-[15px] text-dim">
                 Tirar a foto
-              </button>
+              </BusyButton>
             )}
             <span className="text-[13px] text-dim">Aparece sempre que registares esta refeição.</span>
           </div>
@@ -377,29 +380,33 @@ function EditFavorite({
 }
 
 function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
+  const toast = useToast()
   const [name, setName] = useState(food.name)
   const [portion, setPortion] = useState(food.default_portion_g != null ? String(food.default_portion_g) : '')
-  const [busy, setBusy] = useState(false)
 
   async function save() {
-    setBusy(true)
     const grams = Number(portion.replace(',', '.'))
-    await supabase
+    const { error } = await supabase
       .from('foods')
       .update({
         name: name.trim() || food.name,
         default_portion_g: Number.isFinite(grams) && grams > 0 ? grams : null,
       })
       .eq('id', food.id)
-    setBusy(false)
+    if (error) {
+      toast('Não consegui guardar. Tenta outra vez.')
+      return
+    }
     emitDataChanged()
     onClose()
   }
 
   async function remove() {
-    setBusy(true)
-    await supabase.from('foods').delete().eq('id', food.id)
-    setBusy(false)
+    const { error } = await supabase.from('foods').delete().eq('id', food.id)
+    if (error) {
+      toast('Não consegui apagar. Tenta outra vez.')
+      return
+    }
     emitDataChanged()
     onClose()
   }
@@ -410,16 +417,12 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
       onClose={onClose}
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
-          <button disabled={busy} onClick={() => void remove()} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-pain">
+          <BusyButton busy="A apagar…" onClick={remove} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-pain">
             Apagar
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => void save()}
-            className="min-h-14 rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
-          >
+          </BusyButton>
+          <BusyButton busy="A guardar…" onClick={save} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50">
             Guardar
-          </button>
+          </BusyButton>
         </div>
       }
     >

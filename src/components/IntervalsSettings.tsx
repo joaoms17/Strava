@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { postApi } from '../lib/api'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
+import { BusyLabel, runBusy } from '../lib/busy'
 import { recomputeFrom } from '../lib/recompute'
 import { nutritionalDay } from '../lib/day'
 import {
@@ -136,15 +137,17 @@ export default function IntervalsSettings() {
         <button
           disabled={busy || key.trim().length < 8}
           onClick={() =>
-            void run('ligar', async () => {
-              const r = await postApi<{ athlete: string | null }>('/api/workout/connect', { api_key: key.trim() })
-              setKey('')
-              return `Ligado${r.athlete ? ` · ${r.athlete}` : ''}. Toca em «Importar últimos 30 dias».`
-            })
+            void runBusy('A testar a chave…', () =>
+              run('ligar', async () => {
+                const r = await postApi<{ athlete: string | null }>('/api/workout/connect', { api_key: key.trim() })
+                setKey('')
+                return `Ligado${r.athlete ? ` · ${r.athlete}` : ''}. Toca em «Importar últimos 30 dias».`
+              }),
+            )
           }
           className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-40"
         >
-          {busy ? 'A testar…' : 'Testar e ligar'}
+          {busy ? <BusyLabel text="A testar…" /> : 'Testar e ligar'}
         </button>
         {status?.last_error && <p className="text-[14px] text-pain">{status.last_error}</p>}
       </div>
@@ -166,8 +169,9 @@ export default function IntervalsSettings() {
         print quando são a mesma sessão.
       </p>
       <div className="grid grid-cols-2 gap-2">
+        {/* A sincronização corre por trás (como a automática): só este botão espera. */}
         <button disabled={busy} onClick={() => void sync(3)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-40">
-          Sincronizar agora
+          {busy && !history ? <BusyLabel text="A sincronizar…" /> : 'Sincronizar agora'}
         </button>
         <button
           disabled={busy}
@@ -250,7 +254,11 @@ export default function IntervalsSettings() {
       )}
       <button
         disabled={busy}
-        onClick={() => void run('desligar', async () => (await postApi('/api/workout/disconnect', {}), 'Desligado.'))}
+        onClick={() =>
+          void runBusy('A desligar…', () =>
+            run('desligar', async () => (await postApi('/api/workout/disconnect', {}), 'Desligado.')),
+          )
+        }
         className="text-[14px] text-pain"
       >
         Desligar

@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import { DayChips, SlotChips, TagChips, toggle } from '../ui/Chips'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { clearPendingGallery, peekPendingGallery } from '../../lib/capture'
 import { enqueueCapture } from '../../lib/capture-queue'
@@ -39,7 +40,8 @@ export default function GallerySheet() {
   const [fallbackSlot, setFallbackSlot] = useState<Slot | null>(null)
   const [split, setSplit] = useState<Set<string>>(new Set())
   const [groupsState, setGroupsState] = useState<Record<string, GroupState>>({})
-  const [busy, setBusy] = useState(false)
+  // Os grupos já na fila: tentar outra vez depois de uma falha não os repete.
+  const queued = useRef(new Set<string>())
 
   useEffect(() => {
     const pending = peekPendingGallery()
@@ -96,10 +98,10 @@ export default function GallerySheet() {
   })
 
   async function analyse() {
-    setBusy(true)
     try {
       for (const group of groups) {
         const key = group[0]!.id
+        if (queued.current.has(key)) continue
         const state = stateOf(key)
         const at = group[0]!.at
         await enqueueCapture({
@@ -111,14 +113,13 @@ export default function GallerySheet() {
           date: at ? null : state.date,
           slot: at ? slotOf(at) : state.slot,
         })
+        queued.current.add(key)
       }
       clearPendingGallery()
       sheet.close()
       toast(`${groups.length} ${groups.length === 1 ? 'refeição' : 'refeições'} a analisar. Podes continuar.`)
     } catch {
       toast('Não consegui guardar as fotos. Tenta outra vez.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -142,13 +143,14 @@ export default function GallerySheet() {
       title={`${photos.length} ${photos.length === 1 ? 'foto' : 'fotos'} → ${groups.length} ${groups.length === 1 ? 'refeição' : 'refeições'}`}
       onClose={sheet.close}
       footer={
-        <button
-          disabled={busy || missingWhen}
-          onClick={() => void analyse()}
+        <BusyButton
+          busy="A guardar as fotos…"
+          disabled={missingWhen}
+          onClick={analyse}
           className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
         >
           {missingWhen ? 'Diz quando foi cada foto sem hora' : `Analisar (${groups.length})`}
-        </button>
+        </BusyButton>
       }
     >
       <div className="space-y-4 pb-2">

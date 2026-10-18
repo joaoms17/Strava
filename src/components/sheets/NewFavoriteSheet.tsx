@@ -4,6 +4,7 @@ import Icon from '../ui/Icon'
 import MealHistoryList, { type HistoryMeal } from '../MealHistoryList'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, runBusy } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { postApi } from '../../lib/api'
@@ -38,7 +39,6 @@ export default function NewFavoriteSheet() {
   const initialSlot = sheet.params.get('momento') as Slot | null
   const [slot, setSlot] = useState<Slot | null>(initialSlot && SLOTS.includes(initialSlot) ? initialSlot : null)
   const [items, setItems] = useState<MealItem[] | null>(null)
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => () => {
     if (photo) URL.revokeObjectURL(photo.url)
@@ -67,8 +67,7 @@ export default function NewFavoriteSheet() {
   }
 
   async function calculate() {
-    if (busy || (!text.trim() && !photo)) return
-    setBusy(true)
+    if (!text.trim() && !photo) return
     try {
       // Com texto contam as palavras (mais exatas); só com foto, a IA olha para a foto.
       const parsed = text.trim()
@@ -81,14 +80,11 @@ export default function NewFavoriteSheet() {
       setItems(parsed.items.length ? parsed.items : null)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui calcular. Tenta outra vez.')
-    } finally {
-      setBusy(false)
     }
   }
 
   async function save() {
-    if (!items || busy) return
-    setBusy(true)
+    if (!items) return
     try {
       const path = await photoPath()
       const finalName = name.trim() || favoriteName(items)
@@ -110,14 +106,10 @@ export default function NewFavoriteSheet() {
       ])
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar.')
-    } finally {
-      setBusy(false)
     }
   }
 
   async function fromMeal(meal: HistoryMeal) {
-    if (busy) return
-    setBusy(true)
     try {
       const finalName = mealName(meal).slice(0, 60)
       const created = await favoriteFromMeal(meal, finalName, mealSlot(meal))
@@ -138,8 +130,6 @@ export default function NewFavoriteSheet() {
       ])
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -162,21 +152,22 @@ export default function NewFavoriteSheet() {
       footer={
         mode === 'escrever' ? (
           items ? (
-            <button
-              disabled={busy}
-              onClick={() => void save()}
+            <BusyButton
+              busy="A guardar…"
+              onClick={save}
               className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
             >
-              {busy ? 'A guardar…' : 'Guardar favorita'}
-            </button>
+              Guardar favorita
+            </BusyButton>
           ) : (
-            <button
-              disabled={busy || (!text.trim() && !photo)}
-              onClick={() => void calculate()}
+            <BusyButton
+              busy="A calcular…"
+              disabled={!text.trim() && !photo}
+              onClick={calculate}
               className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
             >
-              {busy ? 'A calcular…' : 'Calcular'}
-            </button>
+              Calcular
+            </BusyButton>
           )
         ) : undefined
       }
@@ -192,7 +183,7 @@ export default function NewFavoriteSheet() {
             <p className="text-[14px] text-dim">Toca numa refeição que já registaste: fica nas favoritas com a foto dela.</p>
             <MealHistoryList
               today={today}
-              onPick={(meal) => void fromMeal(meal)}
+              onPick={(meal) => void runBusy('A guardar…', () => fromMeal(meal))}
               exclude={(meal) => meal.input_type === 'favorite'}
               emptyText="Ainda não há refeições analisadas para guardar."
             />

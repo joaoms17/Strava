@@ -8,7 +8,18 @@ import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { inWaterPhase } from '../_lib/rules/manutencao.js'
 import { cycleInfo, cycleOptions, cleanStarts } from '../_lib/rules/ciclo.js'
-import { AREAS, ESTADOS, cleanAnalysis, daysToConfirm, foodWeeks, weightSummary, wellnessMonths } from '../_lib/rules/evolucao.js'
+import {
+  AREAS,
+  ESTADOS,
+  WEIGHT_HISTORY_DAYS,
+  cleanAnalysis,
+  daysToConfirm,
+  foodWeeks,
+  measurementSummary,
+  scaleFatSummary,
+  weightSummary,
+  wellnessMonths,
+} from '../_lib/rules/evolucao.js'
 import {
   bikeEfficiency,
   fitnessSeries,
@@ -62,17 +73,17 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
       throw new HttpError(429, 'Chegaste ao limite mensal da IA (Definições › Avançado).')
     }
 
-    const since = shiftDate(today, -90)
-    const [weights, measurements, days, workouts, health, meals, icu] = await Promise.all([
+    const since = shiftDate(today, -WEIGHT_HISTORY_DAYS)
+    const [weights, measurements, days, workouts, health, meals, icu, scale] = await Promise.all([
       db.from('weights').select('date,kg').gte('date', since).order('date'),
+      // Todas: o «desde» compara com a primeira, como no Corpo.
       db
         .from('body_measurements')
-        .select('date,waist_cm,neck_cm,chest_cm,hips_cm,arm_cm,thigh_cm,calf_cm')
-        .order('date', { ascending: false })
-        .limit(4),
+        .select('date,waist_cm,neck_cm,chest_cm,hips_cm,arm_cm,thigh_cm,calf_cm,weight_used_kg,readings')
+        .order('date'),
       db
         .from('days')
-        .select('date,kcal_in,protein,kcal_target,kcal_out_est,is_complete,flags')
+        .select('date,kcal_in,protein,kcal_target,kcal_out_est,is_complete,flags,water_ml')
         .gte('date', shiftDate(today, -29))
         .lte('date', today),
       db
@@ -89,6 +100,15 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
       db.from('meals_counted').select('date,kcal').gte('date', shiftDate(today, -28)).lt('date', today),
       // A forma do intervals.icu (sem a migração ou sem dados, fica a da app).
       db.from('health_daily').select('date,ctl,atl').gte('date', shiftDate(today, -28)).lte('date', today),
+      // A % de gordura da balança: as 60 leituras mais recentes.
+      profile.scale_has_bodyfat
+        ? db
+            .from('weights')
+            .select('date,body_fat_pct')
+            .not('body_fat_pct', 'is', null)
+            .order('date', { ascending: false })
+            .limit(60)
+        : Promise.resolve({ data: [] as { date: string; body_fat_pct: number }[] }),
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
@@ -117,7 +137,16 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         // Primeiras 3 semanas da dieta ou depois da manutenção: sai sobretudo água.
         fase_agua: inWaterPhase(profile.maintenance_anchor ?? null, today, profile.maintenance_enabled !== false),
       },
-      medidas: measurements.data ?? [],
+      medidas: measurementSummary(
+        (measurements.data ?? []) as Parameters<typeof measurementSummary>[0],
+        Number(profile.height_cm ?? 183),
+        profile.sex ?? null,
+        today,
+      ),
+      balanca_gordura: scaleFatSummary(
+        ((scale.data ?? []) as { date: string; body_fat_pct: number }[]).slice().reverse(),
+        today,
+      ),
       comida: foodWeeks((days.data ?? []) as Parameters<typeof foodWeeks>[0], today),
       treino: {
         semanas: weeklyStats(allWorkouts, lastMondays(today, 8)).map((w) => ({
@@ -144,7 +173,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         if (profile.sex !== 'f') return null
         const goals = profile.goals as Record<string, unknown> | null
         const c = cycleInfo(cleanStarts(goals?.ciclo), today, cycleOptions(goals))
-        return c ? { dia: c.dayOfCycle, fase: c.phase, semana_de_agua: c.waterWeek } : null
+        return c ? { dia: c.dayOfCycle, fase: c.phase, semana_de_agua: c.waterWeek, atrasado: c.overdue } : null
       })(),
       relogio: wellnessMonths((health.data ?? []) as WellnessRow[], today),
     }

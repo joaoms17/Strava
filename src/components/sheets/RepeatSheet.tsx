@@ -7,6 +7,7 @@ import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { repeatMeal } from '../../lib/meal-actions'
+import { runBusy } from '../../lib/busy'
 import { needsSlot, whenApi, whenFromParams, whenLabel, type When } from '../../lib/when'
 import { slotOf } from '../../../api/_lib/rules/momentos'
 
@@ -30,7 +31,9 @@ export default function RepeatSheet() {
     const api = whenApi(when, today)
     sheet.close()
     // «Agora»: fica na refeição desta hora.
-    void repeatMeal(mealId, api.date ?? null, `Repetido · ${label}`, toast, api.slot ?? slotOf(new Date()))
+    void runBusy('A registar…', () =>
+      repeatMeal(mealId, api.date ?? null, `Repetido · ${label}`, toast, api.slot ?? slotOf(new Date())),
+    )
   }
 
   return (

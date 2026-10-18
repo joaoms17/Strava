@@ -344,6 +344,9 @@ export function splitWindow(w: { oldest: string; newest: string }): [{ oldest: s
 // limite do intervals.icu.
 export function retryableImportError(err: unknown): boolean {
   if (err instanceof TypeError) return true
+  // O ApiError do telemóvel traz o estado (a mensagem já vem em português).
+  const status = (err as { status?: unknown } | null)?.status
+  if (typeof status === 'number' && (status === 429 || status >= 500)) return true
   const message = err instanceof Error ? err.message : String(err)
   return /load failed|failed to fetch|networkerror|network|erro 5\d\d|demorou|timeout|\(429\)|\(5\d\d\)|não consegui falar/i.test(message)
 }

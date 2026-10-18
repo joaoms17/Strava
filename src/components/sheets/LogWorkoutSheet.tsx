@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, fmtKcal } from '../../lib/format'
@@ -21,7 +22,6 @@ export default function LogWorkoutSheet() {
   const favId = sheet.params.get('fav')
   const date = sheet.params.get('data')
   const [favorite, setFavorite] = useState<Favorite | null | undefined>(undefined)
-  const [busy, setBusy] = useState(false)
   // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
   const [match, setMatch] = useState<Workout | null>(null)
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
@@ -57,14 +57,11 @@ export default function LogWorkoutSheet() {
 
   // Sem decisão, vê primeiro se já há um treino parecido nesse dia.
   async function save(decision?: 'merge' | 'new') {
-    if (busy) return
-    setBusy(true)
     const day = date ?? today
     if (!decision) {
       const found = await sameDaySession({ type: w.type, sport: w.sport ?? null, date: day, minutes: w.minutes, started_at: null })
       if (found) {
         setMatch(found)
-        setBusy(false)
         return
       }
     }
@@ -85,7 +82,6 @@ export default function LogWorkoutSheet() {
       },
       toast,
     )
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -95,15 +91,15 @@ export default function LogWorkoutSheet() {
       onClose={sheet.close}
       footer={
         match ? (
-          <SameSession workout={match} busy={busy} onMerge={() => void save('merge')} onNew={() => void save('new')} />
+          <SameSession workout={match} onMerge={() => save('merge')} onNew={() => save('new')} />
         ) : (
-          <button
-            disabled={busy}
-            onClick={() => void save()}
+          <BusyButton
+            busy="A guardar…"
+            onClick={() => save()}
             className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
-            {busy ? 'A guardar…' : 'Registar'}
-          </button>
+            Registar
+          </BusyButton>
         )
       }
     >

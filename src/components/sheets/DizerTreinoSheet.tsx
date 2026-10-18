@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, runBusy } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { emitDataChanged } from '../../lib/events'
@@ -40,7 +42,9 @@ export default function DizerTreinoSheet() {
   const [minutes, setMinutes] = useState('')
   const [day, setDay] = useState(sheet.params.get('data') ?? today)
   const [keep, setKeep] = useState(false)
-  const [busy, setBusy] = useState(false)
+  // Tocar outra vez depois de uma falha de rede não grava a dobrar; um
+  // treino corrigido é outro registo.
+  const clientIdFor = useClientId()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
   const [match, setMatch] = useState<Workout | null>(null)
@@ -64,7 +68,7 @@ export default function DizerTreinoSheet() {
     const timer = window.setInterval(() => {
       const s = Math.floor((Date.now() - started) / 1000)
       setSeconds(s)
-      if (s >= MAX_AUDIO_SECONDS) void stopAndRead()
+      if (s >= MAX_AUDIO_SECONDS) void runBusy('A perceber o treino…', stopAndRead)
     }, 250)
     return () => window.clearInterval(timer)
   }, [phase])
@@ -121,29 +125,30 @@ export default function DizerTreinoSheet() {
   // Sem decisão, vê primeiro se já há um treino parecido nesse dia (fora do
   // ginásio: as séries vão para uma sessão nova).
   async function save(decision?: 'merge' | 'new') {
-    if (!said || !canSave || busy) return
-    setBusy(true)
+    if (!said || !canSave) return
     const startedAt = day !== today ? lisbonInstant(day, '18:00').toISOString() : null
     const name = title.trim() || null
     if (!decision && said.type !== 'strength') {
       const found = await sameDaySession({ type: said.type, sport: said.sport, date: day, minutes: mins, started_at: null })
       if (found) {
         setMatch(found)
-        setBusy(false)
         return
       }
     }
     let saved: Workout | null = null
     if (said.type === 'strength') {
       try {
-        const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
-          client_id: crypto.randomUUID(),
+        const body = {
           started_at: startedAt,
           started_at_estimated: startedAt != null,
           minutes: mins,
           sets: strengthSets(said.exercises),
           name,
           note: said.note,
+        }
+        const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
+          client_id: clientIdFor(body),
+          ...body,
         })
         saved = workout
         emitDataChanged()
@@ -193,7 +198,6 @@ export default function DizerTreinoSheet() {
         toast(`Registado e guardado em «Os meus treinos».`)
       }
     }
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -212,23 +216,27 @@ export default function DizerTreinoSheet() {
       onClose={sheet.close}
       footer={
         phase === 'review' && match ? (
-          <SameSession workout={match} busy={busy} onMerge={() => void save('merge')} onNew={() => void save('new')} />
+          <SameSession workout={match} onMerge={() => save('merge')} onNew={() => save('new')} />
         ) : phase === 'review' ? (
-          <button disabled={!canSave || busy} onClick={() => void save()} className={primary}>
-            {busy ? 'A guardar…' : 'Registar'}
-          </button>
+          <BusyButton busy="A guardar…" disabled={!canSave} onClick={() => save()} className={primary}>
+            Registar
+          </BusyButton>
         ) : phase === 'recording' ? (
-          <button onClick={() => void stopAndRead()} className={`${primary} flex items-center justify-center gap-3`}>
+          <button
+            onClick={() => void runBusy('A perceber o treino…', stopAndRead)}
+            className={`${primary} flex items-center justify-center gap-3`}
+          >
             <span className="h-3 w-3 animate-pulse rounded-full bg-pain" /> Parar · {mmss(seconds)}
           </button>
         ) : (
-          <button
+          <BusyButton
+            busy="A perceber o treino…"
             disabled={!text.trim() || phase === 'reading'}
-            onClick={() => void read()}
+            onClick={() => read()}
             className={primary}
           >
             {phase === 'reading' ? 'A perceber o treino…' : 'Ler o treino'}
-          </button>
+          </BusyButton>
         )
       }
     >

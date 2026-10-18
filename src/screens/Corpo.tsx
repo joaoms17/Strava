@@ -19,8 +19,9 @@ import { fmt1, fmtDayMonth, fmtDayShort, monthLong } from '../lib/format'
 import {
   FAST_LOSS_KG_WEEK,
   MIN_WEIGHINGS_FOR_TREND,
-  projectWeight,
+  goalDate,
   trend7,
+  weeklyMeans,
   weeklyRate,
 } from '../../api/_lib/rules/weight'
 import { inWaterPhase } from '../../api/_lib/rules/manutencao'
@@ -31,6 +32,12 @@ import Evolucao from '../components/Evolucao'
 
 type Range = '1M' | '3M' | 'Tudo'
 const RANGE_DAYS: Record<Range, number | null> = { '1M': 30, '3M': 91, Tudo: null }
+// O Supabase devolve no máximo 1000 linhas por pedido (sem limite, vinham as
+// mais antigas). As 400 mais recentes chegam para o cartão, o ritmo e 1M/3M;
+// «Tudo» pede o resto às páginas e, com muitas, mostra a média de cada semana.
+const RECENT_WEIGHINGS = 400
+const PAGE = 1000
+const WEEKLY_ABOVE = 180
 
 function rateText(rate: number): string {
   const abs = fmt1(Math.abs(rate))
@@ -47,23 +54,50 @@ export default function Corpo() {
   const colors = useThemeColors()
   const [weights, setWeights] = useState<WeightRow[] | null>(null)
   const [range, setRange] = useState<Range>('3M')
+  const [all, setAll] = useState<WeightRow[] | null>(null)
   const today = localCalendarDate()
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('weights').select('date,kg').order('date')
-    setWeights(((data ?? []) as WeightRow[]).map((w) => ({ date: w.date, kg: Number(w.kg) })))
+    const { data } = await supabase
+      .from('weights')
+      .select('date,kg')
+      .order('date', { ascending: false })
+      .limit(RECENT_WEIGHINGS)
+    setWeights(((data ?? []) as WeightRow[]).map((w) => ({ date: w.date, kg: Number(w.kg) })).reverse())
   }, [])
 
   useEffect(() => {
     void load()
   }, [load, version])
 
+  useEffect(() => {
+    if (range !== 'Tudo') return
+    let alive = true
+    void (async () => {
+      const rows: WeightRow[] = []
+      for (;;) {
+        const { data, error } = await supabase
+          .from('weights')
+          .select('date,kg')
+          .order('date')
+          .range(rows.length, rows.length + PAGE - 1)
+        // Sem rede a meio, fica o gráfico com as recentes.
+        if (error) return
+        if (!data.length) break
+        rows.push(...(data as WeightRow[]).map((w) => ({ date: w.date, kg: Number(w.kg) })))
+      }
+      if (alive) setAll(rows)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [range, version])
+
   const derived = useMemo(() => {
     if (!weights) return null
     const series = weights.map((w) => ({ date: w.date, value: w.kg }))
     const trend = trend7(series)
     const rate = weeklyRate(series)
-    const projection = projectWeight(trend, Number(profile.target_weight_kg))
     // Estável há 3 semanas: o peso médio não mexeu mais de 0,3 kg em 21 dias.
     const last = trend[trend.length - 1]
     const threeWeeksAgo = last ? trend.find((p) => p.date >= shiftDate(last.date, -21)) : undefined
@@ -72,12 +106,12 @@ export default function Corpo() {
       threeWeeksAgo != null &&
       threeWeeksAgo.date <= shiftDate(last.date, -18) &&
       Math.abs(last.value - threeWeeksAgo.value) < 0.3
-    return { trend, rate, projection, stable }
-  }, [weights, profile.target_weight_kg])
+    return { trend, rate, stable }
+  }, [weights])
 
   if (!weights || !derived) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
 
-  const { trend, rate, projection, stable } = derived
+  const { trend, rate, stable } = derived
   const target = Number(profile.target_weight_kg)
   const waterPhase = inWaterPhase(profile.maintenance_anchor, today, profile.maintenance_enabled !== false)
   const lastTrend = trend[trend.length - 1]
@@ -89,7 +123,9 @@ export default function Corpo() {
   const diff = latest && previous ? Math.round((latest.kg - previous.kg) * 10) / 10 : null
 
   const from = RANGE_DAYS[range] != null ? shiftDate(today, -RANGE_DAYS[range]!) : null
-  const points = weights.filter((w) => from == null || w.date >= from)
+  const full = range === 'Tudo' ? (all ?? weights) : weights
+  const weekly = range === 'Tudo' && full.length > WEEKLY_ABOVE
+  const points = weekly ? weeklyMeans(full) : full.filter((w) => from == null || w.date >= from)
   const values = points.map((p) => p.kg)
   const showTarget = values.length > 0 && Math.min(...values) - target < 4
   const yMin = Math.floor(Math.min(...values, showTarget ? target : Infinity) - 0.5)
@@ -97,10 +133,17 @@ export default function Corpo() {
   const tickStep = yMax - yMin > 8 ? 2 : 1
   const ticks = Array.from({ length: Math.floor((yMax - yMin) / tickStep) + 1 }, (_, i) => yMin + i * tickStep)
 
+  // Ao ritmo da semana, com pesagens desta semana e fora da fase de água (a
+  // descida rápida do início prometia um mês cedo demais); o ano quando não é este.
   let goalText: string | null = null
-  if (projection.targetDate && lastTrend && lastTrend.value > target) {
-    const month = Number(projection.targetDate.slice(5, 7)) - 1
-    goalText = `Meta: cerca de ${monthLong(month)}–${monthLong((month + 1) % 12)}`
+  const recent = lastTrend != null && lastTrend.date >= shiftDate(today, -7)
+  const goal = recent && !waterPhase ? goalDate(lastTrend.date, lastTrend.value, target, rate) : null
+  if (goal) {
+    // «dezembro–janeiro» em outubro dispensa o ano; «março–abril de 2027» não.
+    const month = Number(goal.slice(5, 7)) - 1
+    const goalYear = Number(goal.slice(0, 4))
+    const year = goalYear !== Number(today.slice(0, 4)) ? ` de ${goalYear}` : ''
+    goalText = `Meta: cerca de ${monthLong(month)}–${monthLong((month + 1) % 12)}${year}`
   }
 
   return (
@@ -205,7 +248,7 @@ export default function Corpo() {
                         className="rounded-xl px-3 py-2 text-[13px] tabular-nums shadow"
                         style={{ background: colors.surface, border: `1px solid ${colors.line}`, color: colors.ink }}
                       >
-                        <p className="text-dim">{fmtDayMonth(point.date)}</p>
+                        <p className="text-dim">{weekly ? `semana de ${fmtDayMonth(point.date)}` : fmtDayMonth(point.date)}</p>
                         <p>{fmt1(point.kg)} kg</p>
                       </div>
                     )
@@ -224,13 +267,14 @@ export default function Corpo() {
                   stroke={colors.body}
                   strokeWidth={2.5}
                   isAnimationActive={false}
-                  dot={{ r: 3, fill: colors.body, stroke: 'none' }}
+                  dot={points.length <= 120 ? { r: 3, fill: colors.body, stroke: 'none' } : false}
                   activeDot={{ r: 5, fill: colors.body, stroke: 'none' }}
                 />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
           {goalText && <p className="text-[15px]">{goalText}</p>}
+          {weekly && <p className="text-[13px] text-dim">Em «Tudo», cada ponto é a média de uma semana.</p>}
           <p className="text-[13px] text-dim">O peso varia ±1 kg de um dia para o outro com água e sal.</p>
         </section>
       )}

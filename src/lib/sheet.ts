@@ -33,7 +33,8 @@ export function useSheet() {
 
   function open(sheet: SheetName, extra: Record<string, string> = {}) {
     const query = new URLSearchParams({ folha: sheet, ...extra })
-    const alreadyOpen = name != null
+    // Lido agora (um aviso pode abrir a folha depois de esta já ter fechado).
+    const alreadyOpen = new URLSearchParams(window.location.search).has('folha')
     // Trocar de folha mantém a entrada: se a primeira veio da URL (recarregar),
     // fechar a segunda não pode recuar para fora da app.
     const current = (window.history.state as { sheet?: boolean } | null)?.sheet === true

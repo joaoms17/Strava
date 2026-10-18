@@ -337,7 +337,7 @@ export interface BodyMeasurement {
   arm_cm: number | null
   thigh_cm: number | null
   calf_cm: number | null
-  readings: Record<string, number[]> | null
+  readings: Record<string, number[] | string> | null // leituras por zona e waist_site
   weight_used_kg: number
   fasted: boolean
   flags: string[]

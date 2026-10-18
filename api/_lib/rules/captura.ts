@@ -1,5 +1,6 @@
 // Hora de uma foto e agrupamento das fotos da galeria em refeições.
 import { lisbonInstant } from './momentos.js'
+import { shiftDate } from './nutritional-day.js'
 
 export interface ExifDateTime {
   date: string // AAAA-MM-DD, hora local do telemóvel (Lisboa)
@@ -49,4 +50,13 @@ export function groupPhotos<T extends { at: Date | null }>(photos: T[]): T[][] {
   }
   for (const photo of photos) if (photo.at == null) groups.push([photo])
   return groups
+}
+
+// A mesma foto (mesmo SHA-256) só conta como repetida perto do dia da
+// refeição: enviada outra vez (a fila, a galeria duas vezes) cai no mesmo
+// dia; dias depois é o iogurte de sempre, fotografado igual, e regista-se.
+export const DUPLICATE_PHOTO_WINDOW_DAYS = 1
+
+export function duplicatePhotoWindow(day: string): { from: string; to: string } {
+  return { from: shiftDate(day, -DUPLICATE_PHOTO_WINDOW_DAYS), to: shiftDate(day, DUPLICATE_PHOTO_WINDOW_DAYS) }
 }

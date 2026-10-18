@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { fmtKcal } from '../../lib/format'
@@ -56,7 +57,6 @@ export default function JaFizSheet() {
   const [deviceKcal, setDeviceKcal] = useState('')
   // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
   const [match, setMatch] = useState<Workout | null>(null)
-  const [busy, setBusy] = useState(false)
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
@@ -114,8 +114,7 @@ export default function JaFizSheet() {
 
   // Sem decisão, vê primeiro se já há um treino parecido nesse dia.
   async function save(decision?: 'merge' | 'new') {
-    if (!canSave || effectiveMinutes == null || busy) return
-    setBusy(true)
+    if (!canSave || effectiveMinutes == null) return
     const startedAt = time
       ? instantInNutritionalDay(day, time, profile.nutrition_day_cutoff_hour).toISOString()
       : day !== today
@@ -126,7 +125,6 @@ export default function JaFizSheet() {
       const found = await sameDaySession({ type, sport, date: day, minutes: effectiveMinutes, started_at: time ? startedAt : null })
       if (found) {
         setMatch(found)
-        setBusy(false)
         return
       }
     }
@@ -148,7 +146,6 @@ export default function JaFizSheet() {
       },
       toast,
     )
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -161,15 +158,16 @@ export default function JaFizSheet() {
       onClose={sheet.close}
       footer={
         match ? (
-          <SameSession workout={match} busy={busy} onMerge={() => void save('merge')} onNew={() => void save('new')} />
+          <SameSession workout={match} onMerge={() => save('merge')} onNew={() => save('new')} />
         ) : (
-          <button
-            disabled={!canSave || busy}
-            onClick={() => void save()}
+          <BusyButton
+            busy="A guardar…"
+            disabled={!canSave}
+            onClick={() => save()}
             className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
-            {busy ? 'A guardar…' : `Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
-          </button>
+            {`Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
+          </BusyButton>
         )
       }
     >

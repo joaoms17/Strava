@@ -106,6 +106,29 @@ export function weeklyRate(weights: DatedValue[]): number | null {
   return Math.round(linearSlope(trend) * 7 * 100) / 100
 }
 
+// «Meta: cerca de <mês>»: o peso médio de hoje ao ritmo da semana (o mesmo
+// de «a descer 0,4 kg por semana», com 8 pesagens em 14 dias). Sem ritmo, a
+// subir, estável ou a mais de um ano, não há data.
+export function goalDate(fromDate: string, fromKg: number, targetKg: number, ratePerWeek: number | null): string | null {
+  if (ratePerWeek == null || ratePerWeek > -0.05 || fromKg <= targetKg) return null
+  const days = Math.ceil((fromKg - targetKg) / (-ratePerWeek / 7))
+  return days <= 365 ? dateFromDayNumber(dayNumber(fromDate) + days) : null
+}
+
+// O gráfico «Tudo» com anos de pesagens: um ponto por semana, com a média
+// dessa semana, na segunda-feira.
+export function weeklyMeans(weights: { date: string; kg: number }[]): { date: string; kg: number }[] {
+  const weeks = new Map<string, number[]>()
+  for (const w of [...weights].sort((a, b) => a.date.localeCompare(b.date))) {
+    const day = dayNumber(w.date)
+    const monday = dateFromDayNumber(day - ((new Date(day * DAY_MS).getUTCDay() + 6) % 7))
+    const list = weeks.get(monday) ?? []
+    list.push(w.kg)
+    weeks.set(monday, list)
+  }
+  return [...weeks].map(([date, kgs]) => ({ date, kg: round2(kgs.reduce((a, b) => a + b, 0) / kgs.length) }))
+}
+
 // Faixa segura: perder mais de 0,85 kg por semana gasta músculo.
 export const FAST_LOSS_KG_WEEK = 0.85
 
