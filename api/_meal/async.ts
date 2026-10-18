@@ -16,6 +16,7 @@ import { shareAfterAnalysis } from './share.js'
 import { learnFoods } from '../_lib/foods.js'
 import { itemsToLearn } from '../_lib/rules/aprender.js'
 import { MAX_SHARE_WITH, shareTargets } from '../_lib/rules/partilha.js'
+import { isSplit, splitFor } from '../_lib/rules/porcoes.js'
 
 // Comida sem espera (Fase 2): a captura responde 202 logo e a análise corre
 // em segundo plano; o telemóvel pergunta pelo estado e, se preciso, pede
@@ -38,6 +39,8 @@ const CaptureSchema = z.object({
   date: DATE.optional(), // dia nutricional, quando a hora é desconhecida ou é um dia passado
   slot: SLOT.optional(),
   share_with: z.array(z.string().uuid()).max(MAX_SHARE_WITH).default([]), // «Também para …»: segue no fim da análise
+  // A parte de quem regista ao partilhar (0,5 a meias); sem ela, cada um comeu isto tudo.
+  share_split: z.number().refine(isSplit).nullable().optional(),
 })
 
 const MealIdSchema = z.object({ meal_id: z.string().uuid() })
@@ -135,8 +138,12 @@ function analyseInBackground(admin: SupabaseClient, mealId: string) {
   inBackground(
     claimAndAnalyse(admin, mealId).then(async (meal) => {
       // Uma partilha que falhe não tira o aviso.
-      await shareAfterAnalysis(admin, meal).catch((err) => console.error('Partilhar falhou:', err))
-      await notifyMealAnalysed(admin, meal)
+      // Numa divisão («A meias»), o aviso diz as kcal da parte de quem registou.
+      const shared = await shareAfterAnalysis(admin, meal).catch((err) => {
+        console.error('Partilhar falhou:', err)
+        return meal
+      })
+      await notifyMealAnalysed(admin, shared ?? meal)
     }),
   )
 }
@@ -211,11 +218,19 @@ export const capture = post(async ({ db, userId, body, res }) => {
     status: overLimit ? 'sem_analise' : 'a_analisar',
     is_estimate: withPhotos,
   }
-  let { data: meal, error } = await db
-    .from('meals')
-    .insert(shareWith.length ? { ...row, share_with: shareWith } : row)
-    .select()
-    .single()
+  const split = splitFor(shareWith.length, input.share_split)
+  const withShare: Record<string, unknown> = {
+    ...row,
+    ...(shareWith.length ? { share_with: shareWith } : {}),
+    ...(split != null ? { share_split: split } : {}),
+  }
+  let { data: meal, error } = await db.from('meals').insert(withShare).select().single()
+  // Sem a migração 20261018210000 não há `share_split`: partilha na mesma,
+  // cada um com a refeição toda (a divisão faz-se depois, pela porção).
+  if (error && split != null && /share_split/.test(error.message)) {
+    delete withShare.share_split
+    ;({ data: meal, error } = await db.from('meals').insert(withShare).select().single())
+  }
   // Sem a migração 20261018160000 não há `share_with`: regista na mesma
   // (fica por partilhar à mão, na folha da refeição).
   if (error && shareWith.length && /share_with/.test(error.message)) {

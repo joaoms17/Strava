@@ -12,7 +12,8 @@ import { nutritionalDay } from '../../lib/day'
 import { recomputeFrom } from '../../lib/recompute'
 import { fmtInt, fmtKcal, timeOf } from '../../lib/format'
 import { diffText } from '../../lib/meal-diff'
-import { PORTION_FACTORS, portionLabel } from '../../../api/_lib/rules/favoritos'
+import { portionLabel } from '../../../api/_lib/rules/favoritos'
+import { factorOf, portionRow, sameFactor } from '../../../api/_lib/rules/porcoes'
 import { sharedFrom } from '../../../api/_lib/rules/partilha'
 import { SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
 import type { Meal, MealItem } from '../../lib/types'
@@ -86,8 +87,8 @@ export default function ReviewSheet() {
   // A porção certa (a da cópia é a de quem partilhou): muda e confirma.
   async function setPortion(factor: number) {
     if (!meal) return
-    const before = Number(meal.portion_factor ?? 1)
-    if (factor === before) return confirm()
+    const before = factorOf(meal.portion_factor)
+    if (sameFactor(factor, before)) return confirm()
     try {
       const { meal: changed } = await postApi<{ meal: Meal }>('/api/meal/portion', { meal_id: meal.id, factor })
       setMeals((list) => list?.map((m) => (m.id === changed.id ? { ...m, ...changed } : m)) ?? list)
@@ -159,21 +160,28 @@ export default function ReviewSheet() {
 
   const photo = photos[meal.photo_paths?.[0] ?? meal.photo_path ?? '']
   const from = sharedFrom(meal.note)
-  const factor = Number(meal.portion_factor ?? 1)
+  // A porção da cópia é a que veio da divisão (0,4 de «João 60 · Joana 40»):
+  // aparece também, escolhida.
+  const factor = factorOf(meal.portion_factor)
+  const row = portionRow(factor)
   const when = `${SLOT_LABEL[meal.slot ?? slotOf(new Date(meal.logged_at))]} · ${timeOf(meal.logged_at)}`
   const portions = (
     <div className="space-y-1.5">
       <p className="text-[13px] text-dim">{from ? 'A tua porção' : 'Porção'} · toca e fica confirmada</p>
-      <div className="grid grid-cols-4 gap-2" role="group" aria-label={from ? 'A tua porção' : 'Porção'}>
-        {PORTION_FACTORS.map((f) => (
+      <div
+        className={`grid gap-2 ${row.length > 4 ? 'grid-cols-5' : 'grid-cols-4'}`}
+        role="group"
+        aria-label={from ? 'A tua porção' : 'Porção'}
+      >
+        {row.map((f) => (
           <BusyButton
             key={f}
             compact
-            busy={f === factor ? 'A confirmar…' : 'A mudar a porção…'}
-            aria-pressed={f === factor}
+            busy={sameFactor(f, factor) ? 'A confirmar…' : 'A mudar a porção…'}
+            aria-pressed={sameFactor(f, factor)}
             onClick={() => setPortion(f)}
             className={`min-h-12 rounded-xl border text-[17px] font-semibold tabular-nums ${
-              f === factor ? 'border-eat bg-eat text-bg' : 'border-line'
+              sameFactor(f, factor) ? 'border-eat bg-eat text-bg' : 'border-line'
             }`}
           >
             {portionLabel(f)}

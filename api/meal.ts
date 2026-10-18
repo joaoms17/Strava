@@ -2,9 +2,9 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import save from './_meal/save.js'
 import barcode, { foodSearch, label } from './_meal/barcode.js'
 import menu from './_meal/menu.js'
-import { logFavorite, portion, remove, repeat, restore } from './_meal/quick.js'
+import { logFavorite, portion, portionUndo, remove, repeat, restore } from './_meal/quick.js'
 import { analyse, attach, capture, correct, detach, estimate, quick, update } from './_meal/async.js'
-import { favoriteCopy, people, share } from './_meal/share.js'
+import { favoriteCopy, people, share, shareUndo } from './_meal/share.js'
 import recipe from './_meal/recipe.js'
 import { leftovers, leftoversUndo } from './_meal/leftovers.js'
 
@@ -21,6 +21,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   'log-favorite': logFavorite,
   repeat,
   portion,
+  'portion-undo': portionUndo,
   delete: remove,
   restore,
   capture,
@@ -34,6 +35,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   quick,
   estimate,
   share,
+  'share-undo': shareUndo,
   people,
   recipe,
   'favorite-copy': favoriteCopy,

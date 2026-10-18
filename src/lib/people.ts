@@ -3,11 +3,15 @@ import { getApi } from './api'
 import { activeUserId } from './scoped'
 
 // As outras pessoas da casa, para «Também para …» no ＋ e «Partilhar com …»
-// na folha da refeição. `shared`: esta refeição já está partilhada com ela.
+// na folha da refeição. `shared`: esta refeição já está partilhada com ela;
+// `shared_in`: das refeições do mesmo momento («Todo o jantar»), as que já
+// têm cópia dela; `from`: foi ela que partilhou esta refeição.
 export interface Person {
   user_id: string
   name: string
   shared?: boolean
+  shared_in?: string[]
+  from?: boolean
 }
 
 // A lista lê-se uma vez por pessoa da app enquanto a app está aberta (o ＋
@@ -27,13 +31,16 @@ function loadPeople(): Promise<Person[]> {
 }
 
 // Com `mealId`, pergunta sempre ao servidor (com quem já está partilhada);
-// `refresh` volta a perguntar (ex.: quando a análise acaba).
-export function usePeople(mealId?: string | null, refresh?: unknown): Person[] {
+// `refresh` volta a perguntar (ex.: quando a análise acaba). Com `scope` (as
+// outras refeições do mesmo momento), diz também quais já estão partilhadas.
+export function usePeople(mealId?: string | null, refresh?: unknown, scope: readonly string[] = []): Person[] {
   const [people, setPeople] = useState<Person[]>([])
+  const others = scope.filter((id) => id !== mealId).join(',')
   useEffect(() => {
     let alive = true
+    const query = mealId ? `meal_id=${encodeURIComponent(mealId)}${others ? `&meal_ids=${others}` : ''}` : ''
     const request = mealId
-      ? getApi<{ people: Person[] }>(`/api/meal/people?meal_id=${encodeURIComponent(mealId)}`).then((r) => r.people)
+      ? getApi<{ people: Person[] }>(`/api/meal/people?${query}`).then((r) => r.people)
       : loadPeople()
     request
       .then((list) => {
@@ -43,6 +50,6 @@ export function usePeople(mealId?: string | null, refresh?: unknown): Person[] {
     return () => {
       alive = false
     }
-  }, [mealId, refresh])
+  }, [mealId, refresh, others])
   return people
 }
