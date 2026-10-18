@@ -5,7 +5,7 @@ import { PROMPT_REVIEW_NEUTRAL, readPrompt } from './prompts.js'
 import { shiftDate } from './rules/nutritional-day.js'
 import { cleanStarts, waterWeekDuring } from './rules/ciclo.js'
 import { mean } from './rules/sono.js'
-import { dataFingerprint, weekHasData } from './rules/resumo.js'
+import { REVIEW_WEIGHT_DAYS, dataFingerprint, reviewHeadline, weekHasData } from './rules/resumo.js'
 
 const ReviewSchema = z.object({ text: z.string() })
 
@@ -20,40 +20,55 @@ export async function generateWeeklyReview(
   weekStart: string, // segunda-feira da semana a resumir
 ): Promise<boolean> {
   const weekEnd = shiftDate(weekStart, 6)
-  const [{ data: existing }, { data: days }, { data: meals }, { data: workouts }, { data: health }, { data: profile }] =
-    await Promise.all([
-      admin
-        .from('weekly_reviews')
-        .select('data')
-        .eq('user_id', userId)
-        .eq('week_start', weekStart)
-        .eq('kind', 'neutro')
-        .maybeSingle(),
-      admin
-        .from('days')
-        .select('date,kcal_in,protein,kcal_target,kcal_exercise,kcal_out_est,is_complete,flags,weight_trend')
-        .eq('user_id', userId)
-        .gte('date', weekStart)
-        .lte('date', weekEnd)
-        .order('date'),
-      admin
-        .from('meals_counted')
-        .select('is_estimate')
-        .eq('user_id', userId)
-        .gte('date', weekStart)
-        .lte('date', weekEnd),
-      admin
-        .from('workouts_active')
-        .select('date,type,sport,minutes,watts,avg_hr')
-        .eq('user_id', userId)
-        .gte('date', weekStart)
-        .lte('date', weekEnd)
-        // Por ordem fixa (dois treinos no mesmo dia): a impressão digital só muda com os dados.
-        .order('date')
-        .order('id'),
-      admin.from('health_daily').select('*').eq('user_id', userId).gte('date', weekStart).lte('date', weekEnd),
-      admin.from('profile').select('protein_g,base_kcal,kcal_floor_week,sex,goals').eq('user_id', userId).single(),
-    ])
+  const [
+    { data: existing },
+    { data: days },
+    { data: meals },
+    { data: workouts },
+    { data: health },
+    { data: profile },
+    { data: weights },
+  ] = await Promise.all([
+    admin
+      .from('weekly_reviews')
+      .select('data')
+      .eq('user_id', userId)
+      .eq('week_start', weekStart)
+      .eq('kind', 'neutro')
+      .maybeSingle(),
+    admin
+      .from('days')
+      .select('date,kcal_in,protein,kcal_target,kcal_exercise,kcal_out_est,is_complete,flags')
+      .eq('user_id', userId)
+      .gte('date', weekStart)
+      .lte('date', weekEnd)
+      .order('date'),
+    admin
+      .from('meals_counted')
+      .select('date,is_estimate')
+      .eq('user_id', userId)
+      .gte('date', weekStart)
+      .lte('date', weekEnd),
+    admin
+      .from('workouts_active')
+      .select('date,type,sport,minutes,watts,avg_hr')
+      .eq('user_id', userId)
+      .gte('date', weekStart)
+      .lte('date', weekEnd)
+      // Por ordem fixa (dois treinos no mesmo dia): a impressão digital só muda com os dados.
+      .order('date')
+      .order('id'),
+    admin.from('health_daily').select('*').eq('user_id', userId).gte('date', weekStart).lte('date', weekEnd),
+    admin.from('profile').select('protein_g,base_kcal,kcal_floor_week,sex,goals').eq('user_id', userId).single(),
+    // As pesagens que o Balanço usa para o ritmo da semana (40 dias até domingo).
+    admin
+      .from('weights')
+      .select('date,kg')
+      .eq('user_id', userId)
+      .gte('date', shiftDate(weekEnd, -REVIEW_WEIGHT_DAYS))
+      .lte('date', weekEnd)
+      .order('date'),
+  ])
 
   const complete = (days ?? []).filter((d) => d.is_complete)
   // Sem dados nenhuns, não há resumo a escrever.
@@ -62,7 +77,14 @@ export async function generateWeeklyReview(
   }
 
   const average = (values: number[]) => (values.length ? Math.round(values.reduce((a, b) => a + b, 0) / values.length) : null)
-  const trends = (days ?? []).map((d) => d.weight_trend).filter((t): t is number => t != null)
+  // Os mesmos números do topo do Balanço (a diferença, o ritmo do peso e os
+  // dias de fora): o resumo e a frase de cima nunca se contradizem.
+  const headline = reviewHeadline({
+    weekStart,
+    days: (days ?? []) as { date: string; kcal_in: number | null; kcal_out_est: number | null; is_complete: boolean }[],
+    mealDates: (meals ?? []).map((m) => m.date as string),
+    weights: (weights ?? []).map((w) => ({ date: w.date as string, kg: Number(w.kg) })),
+  })
   const wellness = (health ?? []) as { steps?: number | null; sleep_minutes?: number | null; hrv?: number | null }[]
   const roundTo = (v: number | null, step: number) => (v == null ? null : Math.round(v / step) * step)
   const steps = roundTo(mean(wellness.map((h) => h.steps)), 100)
@@ -77,13 +99,16 @@ export async function generateWeeklyReview(
       comeu: average(complete.map((d) => Number(d.kcal_in))),
       gasto_estimado: average(complete.filter((d) => d.kcal_out_est != null).map((d) => Number(d.kcal_out_est))),
       proteina: average(complete.map((d) => Number(d.protein))),
+      comeu_menos_gasto: headline.comeuMenosGasto,
     },
     refeicoes: {
       total: (meals ?? []).length,
       estimadas: (meals ?? []).filter((m) => m.is_estimate).length,
     },
     treinos: workouts ?? [],
-    peso_medio: { inicio: trends[0] ?? null, fim: trends[trends.length - 1] ?? null },
+    // kg por semana (negativo: a descer); null sem uma pesagem a 4 dias ou menos do domingo.
+    ritmo_do_peso_kg_semana: headline.ritmoKgSemana,
+    dias_de_fora: { total: headline.diasDeFora.length, datas: headline.diasDeFora },
     metas: profile
       ? { protein_g: profile.protein_g, base_kcal: profile.base_kcal, kcal_floor_week: profile.kcal_floor_week }
       : null,

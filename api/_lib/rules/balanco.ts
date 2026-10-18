@@ -28,9 +28,14 @@ export function countedDays<T extends BalanceDay>(days: T[], today: string): T[]
   return days.filter((d) => d.date < today && d.complete)
 }
 
-// Dias acabados com refeições que não contam (incompletos ou «faltou algo»).
-export function leftOutDays(days: BalanceDay[], today: string): number {
-  return days.filter((d) => d.date < today && d.meals > 0 && !d.complete).length
+// Dias acabados com refeições que não contam (incompletos ou «faltou algo»):
+// as datas (para os abrir no Hoje e responder «Foi tudo?») e quantos são.
+export function leftOutDates(days: Pick<BalanceDay, 'date' | 'meals' | 'complete'>[], today: string): string[] {
+  return days.filter((d) => d.date < today && d.meals > 0 && !d.complete).map((d) => d.date)
+}
+
+export function leftOutDays(days: Pick<BalanceDay, 'date' | 'meals' | 'complete'>[], today: string): number {
+  return leftOutDates(days, today).length
 }
 
 export function weekAverages(days: BalanceDay[], today: string): WeekAverages | null {

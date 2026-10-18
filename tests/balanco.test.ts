@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { belowFloor, leftOutDays, weekAverages, weekSoFar, type BalanceDay } from '../api/_lib/rules/balanco'
+import { belowFloor, leftOutDates, leftOutDays, weekAverages, weekSoFar, type BalanceDay } from '../api/_lib/rules/balanco'
 
 const day = (date: string, eaten: number, extra: Partial<BalanceDay> = {}): BalanceDay => ({
   date,
@@ -70,5 +70,19 @@ describe('a semana até agora (Hoje)', () => {
   it('à segunda-feira (sem dias completos antes) não há', () => {
     expect(weekSoFar([], '2026-10-12', 1800, 2300)).toBeNull()
     expect(weekSoFar([row('2026-10-12', 0, 0)], '2026-10-13', 1800, 1000)).toBeNull()
+  })
+})
+
+describe('dias que ficaram de fora', () => {
+  it('as datas dos dias acabados com refeições que não contam (para os abrir no Hoje)', () => {
+    const days = [
+      day('2026-09-22', 1800),
+      day('2026-09-23', 430, { meals: 1, complete: false }),
+      day('2026-09-24', 0, { meals: 0, complete: false }),
+      day('2026-09-25', 900, { meals: 2, complete: false }),
+      day('2026-09-26', 300, { meals: 1, complete: false }),
+    ]
+    expect(leftOutDates(days, '2026-09-26')).toEqual(['2026-09-23', '2026-09-25'])
+    expect(leftOutDays(days, '2026-09-26')).toBe(2)
   })
 })
