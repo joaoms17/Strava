@@ -8,6 +8,7 @@ import {
   kcalOut,
   lossQuality,
   measuredVsFormula,
+  minBaseKcal,
   mifflinBase,
   paceFromDiff,
   persistentGap,
@@ -63,10 +64,27 @@ describe('frases do Balanço', () => {
     expect(COHERENCE_TEXT.ainda_nao).toMatch(/água e sal/)
   })
 
-  it('sugestão de plano base, a 50 e nunca abaixo de 1 500', () => {
-    expect(baseSuggestion(2400, 250, 1500)).toBe(1600)
+  it('sugestão de plano base, a 50 e nunca abaixo de 1 500 nos homens', () => {
+    // a perder 1,05 kg por semana com 1 500: subir para 2 100 dá 0,5
+    expect(baseSuggestion(2900, 250, 1500)).toEqual({ base: 2100, pace: -0.5, atMinimum: false })
     expect(baseSuggestion(2320, 250, 1500)).toBeNull() // 1 500 → 1 500 (muda menos de 100)
-    expect(baseSuggestion(1900, 300, 1600)).toBe(1500)
+    // 1 900 − 300 − 550 = 1 050 → o mínimo, 1 500: perde-se menos de 0,5
+    expect(baseSuggestion(1900, 300, 1600)).toEqual({ base: 1500, pace: -0.09, atMinimum: true })
+  })
+
+  it('não sugere comer mais a quem perde dentro da faixa segura', () => {
+    // com 1 500 perde 0,59 kg por semana: fica como está
+    expect(baseSuggestion(2400, 250, 1500)).toBeNull()
+  })
+
+  it('nas mulheres o mínimo é 1 200', () => {
+    expect(minBaseKcal('f')).toBe(1200)
+    expect(minBaseKcal('m')).toBe(1500)
+    // gasto 1 750, treino 50: 1 150 → 1 200, a 50 de 1 250 (não sugere)
+    expect(baseSuggestion(1750, 50, 1250, 'f')).toBeNull()
+    // com o mínimo dos homens dizia «podia ser 1 500» a quem come 1 250
+    expect(baseSuggestion(1750, 50, 1250, 'm')).toBeNull()
+    expect(baseSuggestion(1750, 50, 1400, 'f')).toEqual({ base: 1200, pace: -0.45, atMinimum: true })
   })
 })
 

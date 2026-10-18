@@ -86,3 +86,18 @@ describe('cycleInfo com pílula', () => {
     expect(cycleOptions(null)).toEqual({ pill: false, defaultLength: 28 })
   })
 })
+
+describe('semana de água num período (Balanço, resumo da semana)', () => {
+  it('só mulheres com o ciclo marcado, em algum dia do período', async () => {
+    const { waterWeekDuring } = await import('../api/_lib/rules/ciclo')
+    const joana = { sex: 'f', goals: { ciclo: ['2026-09-01'], ciclo_pilula: true, ciclo_dias: 91 } }
+    // previsto a 1/12: a semana de água começa a 24/11
+    expect(waterWeekDuring(joana, '2026-11-16', '2026-11-22')).toBe(false)
+    expect(waterWeekDuring(joana, '2026-11-23', '2026-11-29')).toBe(true)
+    expect(waterWeekDuring(joana, '2026-08-31', '2026-09-06')).toBe(true) // os 3 primeiros dias
+    // mais de uma semana de atraso já não conta
+    expect(waterWeekDuring(joana, '2026-12-14', '2026-12-20')).toBe(false)
+    expect(waterWeekDuring({ sex: 'm', goals: joana.goals }, '2026-11-23', '2026-11-29')).toBe(false)
+    expect(waterWeekDuring({ sex: 'f', goals: {} }, '2026-11-23', '2026-11-29')).toBe(false)
+  })
+})

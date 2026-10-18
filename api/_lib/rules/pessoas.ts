@@ -1,7 +1,7 @@
 // Várias pessoas na mesma app (cada uma com a sua conta e os seus dados):
 // os alvos de partida de um perfil novo e os nomes no separador. Sem imports
 // de servidor: o telemóvel usa este ficheiro diretamente.
-import { PLAN_DEFICIT_KCAL, mifflinBase } from './gasto.js'
+import { PLAN_DEFICIT_KCAL, minBaseKcal, mifflinBase } from './gasto.js'
 import { isTransientFailure, type Failure } from './falhas.js'
 
 export const MAX_PEOPLE = 4
@@ -31,7 +31,7 @@ export function startingTargets(person: NewPerson, year: number): StartingTarget
   const age = person.birthYear ? Math.min(90, Math.max(16, year - person.birthYear)) : 35
   const weightKg = person.weightKg ?? person.targetWeightKg
   const tdee = mifflinBase({ weightKg, heightCm: person.heightCm, age, sex: person.sex })
-  const floor = person.sex === 'f' ? 1200 : 1500
+  const floor = minBaseKcal(person.sex)
   const base = Math.max(floor, round(tdee - PLAN_DEFICIT_KCAL, 50))
   const protein = Math.min(220, Math.max(60, round(1.8 * person.targetWeightKg, 5)))
   return {

@@ -4,6 +4,7 @@
 // partir da fórmula (o peso que cai no início é água, não gordura). Só
 // mostrar com >= 10 dias completos.
 // Se |tdee_est - expected_tdee| > 250, propor ajustar base_kcal.
+import { trustedTdee } from './gasto.js'
 
 export interface ClosedDay {
   date: string
@@ -42,6 +43,25 @@ export function smoothTdee(previous: number | null, raw: number, alpha = TDEE_AL
   if (previous == null) return round1(raw)
   const step = Math.max(-TDEE_MAX_STEP_KCAL, Math.min(TDEE_MAX_STEP_KCAL, alpha * (raw - previous)))
   return round1(previous + step)
+}
+
+// O gasto medido guardado num dia fechado. Só um dia completo dá um passo
+// (é o único que traz dados novos à janela); um dia incompleto fica com o
+// valor anterior, para uma semana sem registos não mexer no gasto. O valor
+// fica a ±400 da referência (fórmula + treino médio) e a primeira estimativa
+// parte dela, não do peso (que no início cai com água).
+export function dayTdee(input: {
+  complete: boolean
+  previous: number | null
+  raw: number | null
+  reference: number | null
+}): number | null {
+  if (!input.complete) return input.previous
+  if (input.raw == null) return null
+  const reference = input.reference
+  const limit = (v: number | null) => (reference != null ? trustedTdee(v, reference) : v)
+  const start = limit(input.previous) ?? (reference != null ? Math.round(reference) : null)
+  return limit(smoothTdee(start, limit(input.raw)!))
 }
 
 export function shouldAdjustBase(tdeeEst: number, expectedTdee: number): boolean {

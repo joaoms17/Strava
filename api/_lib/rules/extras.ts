@@ -1,7 +1,9 @@
-// Proteína por refeição, água e lista de compras: regras puras (o telemóvel
-// usa-as diretamente). Sem supabase nem node.
+// Proteína por refeição, água, lista de compras e o que se come depois de
+// noites más ou com poucos passos: regras puras (o telemóvel usa-as
+// diretamente). Sem supabase nem node.
 import type { MealItem } from './meal-totals.js'
 import type { Slot } from './momentos.js'
+import { hasSleep, poorNight, type NightSleep } from './sono.js'
 
 // --- Proteína por refeição -------------------------------------------------
 // Média de proteína em cada refeição, nos dias em que essa refeição existiu.
@@ -62,4 +64,46 @@ export function shoppingText(lines: ShoppingLine[]): string {
   return lines
     .map((l) => `• ${l.name}${l.grams > 0 ? ` — ${l.grams >= 1000 ? `${(l.grams / 1000).toFixed(1).replace('.', ',')} kg` : `${l.grams} g`}` : l.times > 1 ? ` × ${l.times}` : ''}`)
     .join('\n')
+}
+
+// --- Comer, sono e passos (Balanço › Mês) ----------------------------------
+// Nos dias completos: o que se comeu depois de noites más (pontuação abaixo de
+// 60, qualidade fraca ou menos de 6 h) contra os outros dias, e nos dias com
+// menos passos (abaixo da mediana) contra os outros. Só com 4 dias ou mais em
+// cada grupo. `diff` (a 10) positivo = comeu mais no primeiro grupo.
+export const LINK_MIN_DAYS = 4
+
+export interface IntakeLink {
+  diff: number
+  days: number
+}
+
+function compareIntake(rows: { kcal: number; inGroup: boolean }[]): IntakeLink | null {
+  const group = rows.filter((r) => r.inGroup).map((r) => r.kcal)
+  const others = rows.filter((r) => !r.inGroup).map((r) => r.kcal)
+  if (group.length < LINK_MIN_DAYS || others.length < LINK_MIN_DAYS) return null
+  const mean = (values: number[]) => values.reduce((a, b) => a + b, 0) / values.length
+  return { diff: Math.round((mean(group) - mean(others)) / 10) * 10, days: group.length }
+}
+
+export function intakeLinks(
+  completeDays: { date: string; kcal_in: number }[],
+  health: ({ date: string; steps?: number | null } & Partial<NightSleep>)[],
+): { sleep: IntakeLink | null; steps: (IntakeLink & { below: number }) | null } {
+  const byDate = new Map(health.map((h) => [h.date, h]))
+  const nights = completeDays.flatMap((d) => {
+    const h = byDate.get(d.date)
+    return hasSleep(h) ? [{ kcal: Number(d.kcal_in), inGroup: poorNight(h) }] : []
+  })
+  const walked = completeDays.flatMap((d) => {
+    const steps = byDate.get(d.date)?.steps
+    return steps != null && steps > 0 ? [{ kcal: Number(d.kcal_in), steps }] : []
+  })
+  const sorted = walked.map((d) => d.steps).sort((a, b) => a - b)
+  const median = sorted[Math.floor(sorted.length / 2)] ?? 0
+  const steps = compareIntake(walked.map((d) => ({ kcal: d.kcal, inGroup: d.steps < median })))
+  return {
+    sleep: compareIntake(nights),
+    steps: steps ? { ...steps, below: Math.round(median / 100) * 100 } : null,
+  }
 }

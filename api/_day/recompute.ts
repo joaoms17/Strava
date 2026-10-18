@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
-import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, type CloseDayProfile } from '../_lib/close-day.js'
+import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, maintenanceAnchor, type CloseDayProfile } from '../_lib/close-day.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 
 // Recalcula os dias a partir de uma data (pesagem num dia passado, refeição
@@ -33,9 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const oldest = shiftDate(today, -400)
     let date = body.data.from < oldest ? oldest : body.data.from
     const startedAt = Date.now()
+    // A mesma âncora da semana de pausa que a cron usa.
+    const anchor = await maintenanceAnchor(admin, profile as CloseDayProfile)
     let done = 0
     while (date <= yesterday && done < BLOCK && Date.now() - startedAt < BUDGET_MS) {
-      await closeDay(admin, profile as CloseDayProfile, date, profile.maintenance_anchor ?? null)
+      await closeDay(admin, profile as CloseDayProfile, date, anchor)
       date = shiftDate(date, 1)
       done++
     }

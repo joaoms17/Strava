@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dismissNudge, isNudgeHidden, nextStep, type NextStepInput } from '../api/_lib/rules/proximo-passo'
+import { dismissNudge, isNudgeHidden, lowDayKcal, nextStep, type NextStepInput } from '../api/_lib/rules/proximo-passo'
 
 const base: NextStepInput = {
   today: '2026-09-28',
@@ -44,9 +44,30 @@ describe('próximo passo', () => {
     expect(nextStep({ ...base, yesterdayMeals: 0 })).toBeNull()
   })
 
-  it('depois das 20:00 com pouco comido', () => {
-    expect(nextStep({ ...base, minutesOfDay: 20 * 60 + 30 })).toBe('pouco')
-    expect(nextStep({ ...base, minutesOfDay: 20 * 60 + 30, mealsToday: 0, kcalToday: 0 })).toBeNull()
+  it('ontem incompleto, mesmo com 3 refeições, pergunta se foi tudo', () => {
+    expect(nextStep({ ...base, yesterdayMeals: 3, yesterdayComplete: false })).toBe('ontem')
+    expect(nextStep({ ...base, yesterdayMeals: 3, yesterdayComplete: true })).toBeNull()
+    expect(nextStep({ ...base, yesterdayMeals: 3, yesterdayComplete: false, yesterdayAnswered: true })).toBeNull()
+  })
+
+  it('fotos de ontem sem números aparecem no cartão de ontem', () => {
+    expect(nextStep({ ...base, yesterdayMeals: 0, yesterdayUncounted: 1 })).toBe('ontem')
+    expect(nextStep({ ...base, yesterdayMeals: 3, yesterdayComplete: true, yesterdayUncounted: 1 })).toBe('ontem')
+  })
+
+  it('depois das 21:30 com pouco comido', () => {
+    expect(nextStep({ ...base, minutesOfDay: 21 * 60 + 45 })).toBe('pouco')
+    expect(nextStep({ ...base, minutesOfDay: 20 * 60 + 30, proteinToday: 120 })).toBeNull()
+    expect(nextStep({ ...base, minutesOfDay: 21 * 60 + 45, mealsToday: 0, kcalToday: 0 })).toBeNull()
+  })
+
+  it('«comeste pouco» conta com o plano: com 1 200, só abaixo de 800', () => {
+    const night = { ...base, minutesOfDay: 21 * 60 + 45, proteinToday: 120 }
+    expect(lowDayKcal(1200)).toBe(800)
+    expect(lowDayKcal(2000)).toBe(1200)
+    expect(nextStep({ ...night, planKcal: 1200, kcalToday: 1150 })).toBeNull()
+    expect(nextStep({ ...night, planKcal: 1200, kcalToday: 700 })).toBe('pouco')
+    expect(nextStep({ ...night, planKcal: 1900, kcalToday: 1150 })).toBe('pouco')
   })
 
   it('depois das 19:00 com menos de 60 % da proteína', () => {
