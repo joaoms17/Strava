@@ -15,6 +15,8 @@ import { analysedStatus, foodRefs, guardedWrite, mergeAdded, toMealItems } from 
 import { mealIsEstimate } from './rules/estimativas.js'
 import { clockTime, lisbonClock, lisbonInstant } from './rules/momentos.js'
 import { dailyVisionCapReached, monthlyCapReached } from './rules/custos.js'
+import { itemsToLearn } from './rules/aprender.js'
+import { learnFoods } from './foods.js'
 
 // Análise de refeições em segundo plano (Fase 2): a refeição já existe com
 // estado 'a_analisar'; aqui lê-se a foto e/ou o texto, e o resultado grava-se
@@ -237,11 +239,12 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
   try {
     const { analysis, refs, model, prompt, cost } = await runModel(admin, meal)
     const analysed = toMealItems(analysis.items, refs)
-    const items = addingToItems(meal) ? mergeAdded(meal.items, analysed) : analysed
+    const adding = addingToItems(meal)
+    const items = adding ? mergeAdded(meal.items, analysed) : analysed
     const tags = meal.tags ?? []
     const inputType = meal.input_type === 'photo' ? 'photo' : 'text'
 
-    return await guardedWrite(items, meal.note, claimedAt, {
+    const written = await guardedWrite(items, meal.note, claimedAt, {
       write: async (finalItems, noteUsed) => {
         const status = analysedStatus(finalItems, analysis.meal_confidence)
         let query = admin
@@ -283,6 +286,12 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
         return (await correctItems(admin, meal.user_id, current, note)).items
       },
     })
+    // Uma refeição de texto ensina logo o que tem confiança alta (as fotos
+    // e o que se juntou por foto só depois de confirmados).
+    if (written && !adding && meal.input_type === 'text') {
+      await learnFoods(admin, meal.user_id, itemsToLearn('analisada', 'text', written.items as MealItem[]), 'text')
+    }
+    return written
   } catch (err) {
     console.error('Análise falhou:', err)
     // Um erro passageiro (demora, sobrecarga) solta a análise para o telemóvel

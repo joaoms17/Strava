@@ -11,6 +11,8 @@ import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, type MealRow } from '../_lib/meal-analysis.js'
+import { learnFoods } from '../_lib/foods.js'
+import { itemsToLearn } from '../_lib/rules/aprender.js'
 
 // Comida sem espera (Fase 2): a captura responde 202 logo e a análise corre
 // em segundo plano; o telemóvel pergunta pelo estado e, se preciso, pede
@@ -109,9 +111,10 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
   return data?.nutrition_day_cutoff_hour ?? 4
 }
 
-// A análise continua depois da resposta (até aos 60 s da função).
+// A análise (e a aprendizagem dos alimentos) continua depois da resposta
+// (até aos 60 s da função).
 function inBackground(task: Promise<unknown>) {
-  const safe = task.catch((err) => console.error('Análise em segundo plano falhou:', err))
+  const safe = task.catch((err) => console.error('Em segundo plano falhou:', err))
   waitUntil(safe)
 }
 
@@ -330,6 +333,7 @@ export const correct = post(async ({ db, userId, body, res }) => {
     .select()
     .single()
   if (error) throw new HttpError(500, error.message)
+  inBackground(learnFoods(db, userId, itemsToLearn('editada', meal.input_type, items, meal.items), meal.input_type))
   res.status(200).json({ meal: data, previous })
 })
 
@@ -400,6 +404,13 @@ export const update = post(async ({ db, userId, body, res }) => {
   }
   const { data, error } = await db.from('meals').update(patch).eq('id', meal.id).select().single()
   if (error) throw new HttpError(500, error.message)
+  // O que a pessoa corrigiu, ou confirmou com «Está certo», ensina a biblioteca.
+  const learned = items
+    ? itemsToLearn('editada', meal.input_type, patch.items as MealItem[], meal.items)
+    : input.confirm === true && meal.status === 'por_rever'
+      ? itemsToLearn('confirmada', meal.input_type, meal.items)
+      : []
+  if (learned.length) inBackground(learnFoods(db, userId, learned, meal.input_type))
   res.status(200).json({ meal: data, previous })
 })
 
