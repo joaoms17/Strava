@@ -220,8 +220,14 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   const admin = adminClient()
   const reset = input.reset === true || meal.status === 'sem_analise' || meal.status === 'erro'
   if (!input.force && (await aiLimitReached(admin, userId, (meal.photo_paths ?? []).length > 0))) {
-    if (meal.status === 'a_analisar') await admin.from('meals').update({ status: 'sem_analise' }).eq('id', meal.id)
-    res.status(200).json({ meal: { ...meal, status: 'sem_analise' }, limit: true })
+    // Uma foto junta a uma refeição com itens não a tira das contas: fica
+    // por rever com os itens que tinha e o aviso de que a foto não foi lida.
+    const adding = addingToItems(meal)
+    const stopped = adding
+      ? { status: 'por_rever', analysis_error: 'Chegaste ao limite da IA que definiste.' }
+      : { status: 'sem_analise' }
+    if (meal.status === 'a_analisar') await admin.from('meals').update(stopped).eq('id', meal.id)
+    res.status(200).json({ meal: { ...meal, ...(!adding || meal.status === 'a_analisar' ? stopped : {}) }, limit: true })
     return
   }
   const result = await claimAndAnalyse(admin, meal.id, reset)

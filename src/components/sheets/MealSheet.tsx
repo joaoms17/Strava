@@ -490,7 +490,7 @@ export default function MealSheet() {
               </p>
             </div>
 
-            {current.analysis_error && current.deleted_at == null && (
+            {current.analysis_error && (current.photo_paths?.length ?? 0) > 0 && current.deleted_at == null && (
               <p className="text-[14px] text-attn">
                 A foto nova não foi analisada. {splitStoredError(current.analysis_error).message} Junta o que faltava
                 em «Corrigir por texto».
