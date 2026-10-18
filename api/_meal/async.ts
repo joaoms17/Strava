@@ -11,6 +11,7 @@ import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 import { aiLimitReached, claimAndAnalyse, correctItems, type MealRow } from '../_lib/meal-analysis.js'
+import { notifyMealAnalysed } from '../_lib/push.js'
 
 // Comida sem espera (Fase 2): a captura responde 202 logo e a análise corre
 // em segundo plano; o telemóvel pergunta pelo estado e, se preciso, pede
@@ -99,9 +100,12 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
   return data?.nutrition_day_cutoff_hour ?? 4
 }
 
-// A análise continua depois da resposta (até aos 60 s da função).
-function inBackground(task: Promise<unknown>) {
-  const safe = task.catch((err) => console.error('Análise em segundo plano falhou:', err))
+// A análise continua depois da resposta (até aos 60 s da função) e, no fim,
+// avisa o telemóvel («Almoço analisado · 640 kcal») se a pessoa o quiser.
+function analyseInBackground(admin: SupabaseClient, mealId: string) {
+  const safe = claimAndAnalyse(admin, mealId)
+    .then((meal) => notifyMealAnalysed(admin, meal))
+    .catch((err) => console.error('Análise em segundo plano falhou:', err))
   waitUntil(safe)
 }
 
@@ -190,7 +194,7 @@ export const capture = post(async ({ db, userId, body, res }) => {
     throw new HttpError(500, error.message)
   }
 
-  if (meal.status === 'a_analisar') inBackground(claimAndAnalyse(admin, meal.id as string))
+  if (meal.status === 'a_analisar') analyseInBackground(admin, meal.id as string)
   res.status(202).json({ meal })
 })
 
@@ -255,7 +259,7 @@ export const attach = post(async ({ db, userId, body, res }) => {
     .select()
     .single()
   if (error) throw new HttpError(500, error.message)
-  if (data.status === 'a_analisar') inBackground(claimAndAnalyse(admin, meal.id))
+  if (data.status === 'a_analisar') analyseInBackground(admin, meal.id)
   res.status(202).json({ meal: data })
 })
 

@@ -35,7 +35,8 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: 'autoUpdate',
       // As letras (Barlow) ficam no telemóvel para a app abrir igual sem rede.
-      workbox: { globPatterns: ['**/*.{js,css,html,woff2,png,svg}'] },
+      // As notificações (push e o toque) vêm de public/push-sw.js.
+      workbox: { globPatterns: ['**/*.{js,css,html,woff2,png,svg}'], importScripts: ['push-sw.js'] },
       manifest: {
         name: 'Daily Track',
         short_name: 'Daily Track',
