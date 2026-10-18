@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { GLASS_ML, waterGoalMl } from '../../api/_lib/rules/extras'
@@ -11,6 +11,9 @@ export default function Agua({ date }: { date: string }) {
   const toast = useToast()
   const [ml, setMl] = useState<number | null>(null)
   const [goal, setGoal] = useState(2000)
+  // Os copos mudam logo no ecrã (vários toques seguidos contam todos) e a
+  // gravação segue por ordem: a última a chegar é sempre a do último toque.
+  const saving = useRef<Promise<void>>(Promise.resolve())
 
   useEffect(() => {
     let alive = true
@@ -33,17 +36,20 @@ export default function Agua({ date }: { date: string }) {
     if (ml == null) return
     const next = Math.max(0, ml + delta)
     setMl(next)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return
-    const { error } = await supabase
-      .from('days')
-      .upsert({ user_id: user.id, date, water_ml: next }, { onConflict: 'user_id,date' })
-    if (error) {
-      setMl(ml)
-      toast('Não consegui guardar a água.')
-    }
+    saving.current = saving.current.then(async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+      const { error } = await supabase
+        .from('days')
+        .upsert({ user_id: user.id, date, water_ml: next }, { onConflict: 'user_id,date' })
+      if (error) {
+        setMl(ml)
+        toast('Não consegui guardar a água.')
+      }
+    })
+    await saving.current
   }
 
   if (ml == null) return null

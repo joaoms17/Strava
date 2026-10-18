@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from './supabase'
-import { postApi, isNetworkError } from './api'
+import { ApiError, postApi, isNetworkError } from './api'
 import { emitDataChanged } from './events'
 import { STORES, inStore } from './idb'
 import { prepareImage, sha256Hex } from './image'
+import { activeUserId } from './scoped'
+import { failureText, isTransientFailure, retryDelayMs } from '../../api/_lib/rules/falhas'
 import type { Slot } from './types'
 
 // Captura sem espera: cada foto (ou texto) entra primeiro na base local com o
 // ficheiro original, e só sai quando o servidor responde. Envia-se uma de cada
 // vez (o iOS fecha a app se a memória encher), ao abrir, ao voltar a rede e
-// quando a app volta ao primeiro plano.
+// quando a app volta ao primeiro plano. Uma falha passageira (rede fraca,
+// servidor ocupado) não é erro: fica por enviar e tenta outra vez sozinha.
 
 export interface CaptureEntry {
   client_id: string
@@ -24,9 +27,10 @@ export interface CaptureEntry {
   state: 'pendente' | 'erro'
   error: string | null
   user_id?: string | null // de quem é (várias pessoas no mesmo telemóvel)
+  attempts?: number // falhas passageiras seguidas (a espera cresce com elas)
 }
 
-export type NewCapture = Omit<CaptureEntry, 'client_id' | 'created_at' | 'state' | 'error' | 'user_id'>
+export type NewCapture = Omit<CaptureEntry, 'client_id' | 'created_at' | 'state' | 'error' | 'user_id' | 'attempts'>
 
 // Só as da pessoa que está a usar a app (as antigas, sem dono, contam para todas).
 export function ownCapture(entry: CaptureEntry, userId: string | null): boolean {
@@ -58,13 +62,22 @@ export async function discardCapture(clientId: string): Promise<void> {
   changed()
 }
 
+// «Anular» depois de «Descartar»: a captura volta, com a foto, e segue.
+export async function restoreCapture(entry: CaptureEntry): Promise<void> {
+  const { preview: _preview, ...stored } = entry as CaptureEntry & { preview?: unknown }
+  await putCapture({ ...stored, state: 'pendente', error: null, attempts: 0 })
+  changed()
+  void processCaptures()
+}
+
 export async function enqueueCapture(capture: NewCapture): Promise<string> {
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const entry: CaptureEntry = {
     ...capture,
-    user_id: session?.user.id ?? null,
+    // Sem rede a sessão pode não vir (token por renovar): fica de quem está na app.
+    user_id: session?.user.id ?? activeUserId(),
     client_id: crypto.randomUUID(),
     created_at: new Date().toISOString(),
     state: 'pendente',
@@ -79,12 +92,13 @@ export async function enqueueCapture(capture: NewCapture): Promise<string> {
 export async function retryCapture(clientId: string): Promise<void> {
   const entry = (await listCaptures()).find((e) => e.client_id === clientId)
   if (!entry) return
-  await putCapture({ ...entry, state: 'pendente', error: null })
+  await putCapture({ ...entry, state: 'pendente', error: null, attempts: 0 })
   changed()
   void processCaptures()
 }
 
-class HttpFailure extends Error {}
+// Rede fraca ou servidor ocupado: a captura fica por enviar.
+class TransientFailure extends Error {}
 
 async function send(entry: CaptureEntry, userId: string) {
   const photo_paths: string[] = []
@@ -104,8 +118,10 @@ async function send(entry: CaptureEntry, userId: string) {
         .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
       // Um envio repetido do mesmo ficheiro conta como feito.
       if (error && !/exists|duplicate/i.test(error.message)) {
-        if (!navigator.onLine) throw new TypeError('offline')
-        throw new Error(error.message)
+        // O supabase-js devolve a falha de rede como StorageUnknownError (não lança).
+        const failure = { name: error.name, message: error.message, status: (error as { status?: number }).status ?? null }
+        if (!navigator.onLine || isTransientFailure(failure)) throw new TransientFailure(failureText(failure))
+        throw new Error(failureText(failure, 'Não consegui enviar a foto.'))
       }
     }
     photo_paths.push(`${base}.jpg`)
@@ -129,9 +145,33 @@ async function send(entry: CaptureEntry, userId: string) {
       window.dispatchEvent(new CustomEvent(DUPLICATE_EVENT, { detail: result.meal }))
     }
   } catch (err) {
-    if (isNetworkError(err)) throw err
-    throw new HttpFailure(err instanceof Error ? err.message : 'Não consegui enviar.')
+    const status = err instanceof ApiError ? err.status : null
+    if (isNetworkError(err) || (status != null && isTransientFailure({ status }))) {
+      throw new TransientFailure(err instanceof Error ? err.message : 'Não consegui enviar.')
+    }
+    throw err
   }
+}
+
+// O que a captura diz enquanto espera por outra tentativa.
+export const RETRY_TEXT = 'Rede fraca: vou tentar outra vez sozinha.'
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null
+
+function retryLater(attempts: number) {
+  if (retryTimer) clearTimeout(retryTimer)
+  retryTimer = setTimeout(() => {
+    retryTimer = null
+    void processCaptures()
+  }, retryDelayMs(attempts))
+}
+
+// Uma captura que já falhou por causa da rede (antes destas regras ficava em
+// «erro» com «Load failed») volta a seguir sozinha.
+function sendable(entry: CaptureEntry): boolean {
+  if (entry.state === 'pendente') return true
+  const legacyStatus = Number(/^Erro (\d{3})$/.exec(entry.error ?? '')?.[1]) || null
+  return isTransientFailure({ message: entry.error, status: legacyStatus })
 }
 
 let running: Promise<void> | null = null
@@ -153,18 +193,29 @@ export function processCaptures(): Promise<void> {
         } = await supabase.auth.getSession()
         if (!session) return
         for (const entry of await listCaptures()) {
-          if (entry.state !== 'pendente' || !ownCapture(entry, session.user.id)) continue
+          if (!sendable(entry) || !ownCapture(entry, session.user.id)) continue
           if (!navigator.onLine) return
           try {
             await send(entry, session.user.id)
             await discardCapture(entry.client_id)
             emitDataChanged()
           } catch (err) {
-            if (isNetworkError(err)) return // sem rede: fica para depois
+            if (err instanceof TransientFailure) {
+              // Sem rede ou rede fraca: fica por enviar e tenta mais tarde (o
+              // servidor reconhece o client_id, por isso repetir não duplica).
+              const attempts = (entry.attempts ?? 0) + 1
+              await putCapture({ ...entry, state: 'pendente', error: navigator.onLine ? RETRY_TEXT : null, attempts })
+              changed()
+              if (navigator.onLine) retryLater(attempts)
+              return
+            }
             await putCapture({
               ...entry,
               state: 'erro',
-              error: err instanceof Error ? err.message : 'Não consegui enviar.',
+              error: failureText(
+                { message: err instanceof Error ? err.message : null, status: err instanceof ApiError ? err.status : null },
+                'Não consegui enviar.',
+              ),
             })
             changed()
           }

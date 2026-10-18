@@ -1,12 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearch } from 'wouter'
+import { runBusy } from './busy'
 
 // Aviso de 10 s acima da barra, com Anular (e outras ações curtas, como as
 // porções de um favorito). Substitui as perguntas «tens a certeza?».
 export interface ToastAction {
   label: string
   run: () => void | Promise<void>
+  busy?: string // o que diz enquanto espera pelo servidor (por omissão, pelo rótulo)
 }
+
+const BUSY_TEXT: Record<string, string> = { Anular: 'A anular…', Repor: 'A repor…', Tentar: 'A tentar outra vez…' }
 
 interface Toast {
   id: number
@@ -57,7 +61,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 className="shrink-0 rounded-lg px-2 py-1.5 text-[15px] font-semibold text-eat"
                 onClick={() => {
                   setToast(null)
-                  void action.run()
+                  // Anular (e as porções) também esperam pelo servidor: nada muda a meio.
+                  void runBusy(action.busy ?? BUSY_TEXT[action.label] ?? 'Um momento…', action.run)
                 }}
               >
                 {action.label}

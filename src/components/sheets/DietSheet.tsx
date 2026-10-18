@@ -5,6 +5,7 @@ import Thumb from '../ui/Thumb'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { useSignedUrls } from '../../lib/photos'
@@ -42,7 +43,6 @@ export default function DietSheet() {
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [picking, setPicking] = useState<Slot | null>(null)
   const [query, setQuery] = useState('')
-  const [busy, setBusy] = useState(false)
   const urls = useSignedUrls(favorites.map((f) => f.photo_path))
 
   useEffect(() => {
@@ -84,8 +84,7 @@ export default function DietSheet() {
   const kcalDiff = totals.kcal - profile.base_kcal
 
   async function save() {
-    if (!hasMeals || busy) return
-    setBusy(true)
+    if (!hasMeals) return
     try {
       await saveDiet({ id, name, meals, active })
       emitDataChanged()
@@ -93,8 +92,6 @@ export default function DietSheet() {
       toast(active ? `«${name.trim() || 'A minha dieta'}» guardada e a seguir.` : 'Dieta guardada.')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar a dieta.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -156,13 +153,14 @@ export default function DietSheet() {
               <span className="text-dim">Junta pelo menos uma favorita a uma refeição.</span>
             )}
           </p>
-          <button
-            disabled={!loaded || !hasMeals || busy}
-            onClick={() => void save()}
+          <BusyButton
+            busy="A guardar…"
+            disabled={!loaded || !hasMeals}
+            onClick={save}
             className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
           >
-            {busy ? 'A guardar…' : 'Guardar dieta'}
-          </button>
+            Guardar dieta
+          </BusyButton>
         </div>
       }
     >
@@ -295,9 +293,9 @@ export default function DietSheet() {
           </label>
 
           {id && (
-            <button onClick={() => void remove()} className="min-h-11 w-full text-[15px] text-pain">
+            <BusyButton busy="A apagar…" onClick={remove} className="min-h-11 w-full text-[15px] text-pain">
               Apagar esta dieta
-            </button>
+            </BusyButton>
           )}
         </div>
       )}

@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, runBusy } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { emitDataChanged } from '../../lib/events'
@@ -39,7 +40,8 @@ export default function DizerTreinoSheet() {
   const [minutes, setMinutes] = useState('')
   const [day, setDay] = useState(sheet.params.get('data') ?? today)
   const [keep, setKeep] = useState(false)
-  const [busy, setBusy] = useState(false)
+  // Um por folha: tocar outra vez depois de uma falha de rede não grava a dobrar.
+  const [clientId] = useState(() => crypto.randomUUID())
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const recording = useRef<Recording | null>(null)
 
@@ -61,7 +63,7 @@ export default function DizerTreinoSheet() {
     const timer = window.setInterval(() => {
       const s = Math.floor((Date.now() - started) / 1000)
       setSeconds(s)
-      if (s >= MAX_AUDIO_SECONDS) void stopAndRead()
+      if (s >= MAX_AUDIO_SECONDS) void runBusy('A perceber o treino…', stopAndRead)
     }, 250)
     return () => window.clearInterval(timer)
   }, [phase])
@@ -116,14 +118,13 @@ export default function DizerTreinoSheet() {
 
   async function save() {
     if (!said || !canSave) return
-    setBusy(true)
     const startedAt = day !== today ? lisbonInstant(day, '18:00').toISOString() : null
     const name = title.trim() || null
     let saved: Workout | null = null
     if (said.type === 'strength') {
       try {
         const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
-          client_id: crypto.randomUUID(),
+          client_id: clientId,
           started_at: startedAt,
           minutes: mins,
           sets: strengthSets(said.exercises),
@@ -175,7 +176,6 @@ export default function DizerTreinoSheet() {
         toast(`Registado e guardado em «Os meus treinos».`)
       }
     }
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -193,21 +193,25 @@ export default function DizerTreinoSheet() {
       onClose={sheet.close}
       footer={
         phase === 'review' ? (
-          <button disabled={!canSave || busy} onClick={() => void save()} className={primary}>
-            {busy ? 'A guardar…' : 'Registar'}
-          </button>
+          <BusyButton busy="A guardar…" disabled={!canSave} onClick={save} className={primary}>
+            Registar
+          </BusyButton>
         ) : phase === 'recording' ? (
-          <button onClick={() => void stopAndRead()} className={`${primary} flex items-center justify-center gap-3`}>
+          <button
+            onClick={() => void runBusy('A perceber o treino…', stopAndRead)}
+            className={`${primary} flex items-center justify-center gap-3`}
+          >
             <span className="h-3 w-3 animate-pulse rounded-full bg-pain" /> Parar · {mmss(seconds)}
           </button>
         ) : (
-          <button
+          <BusyButton
+            busy="A perceber o treino…"
             disabled={!text.trim() || phase === 'reading'}
-            onClick={() => void read()}
+            onClick={() => read()}
             className={primary}
           >
             {phase === 'reading' ? 'A perceber o treino…' : 'Ler o treino'}
-          </button>
+          </BusyButton>
         )
       }
     >

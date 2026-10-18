@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useLocation } from 'wouter'
+import { runBusy } from '../lib/busy'
 import Thumb from './ui/Thumb'
 import Icon from './ui/Icon'
 import { useToast } from '../lib/toast'
@@ -52,12 +53,8 @@ export default function DietToday({
     const isToday = date === today
     // Na refeição desta hora fica agora; nas outras, à hora habitual dela.
     const now = isToday && slotOf(new Date()) === slot
-    void logFavorite(
-      fav,
-      now ? null : date,
-      toast,
-      slot,
-      `${dayLabel(date, today)} · ${SLOT_LABEL[slot].toLowerCase()}`,
+    void runBusy('A registar…', () =>
+      logFavorite(fav, now ? null : date, toast, slot, `${dayLabel(date, today)} · ${SLOT_LABEL[slot].toLowerCase()}`),
     )
   }
 

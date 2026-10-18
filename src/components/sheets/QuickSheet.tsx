@@ -4,6 +4,7 @@ import WhenPicker from '../ui/WhenPicker'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { nutritionalDay } from '../../lib/day'
@@ -19,19 +20,20 @@ export default function QuickSheet() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [values, setValues] = useState({ kcal: '', protein: '', carbs: '', fat: '', name: '' })
   const [when, setWhen] = useState<When>(() => whenFromParams(sheet.params, today))
-  const [busy, setBusy] = useState(false)
+  // Um por folha: tocar outra vez depois de uma falha de rede (com o servidor
+  // já a ter gravado) não regista a dobrar.
+  const [clientId] = useState(() => crypto.randomUUID())
   const kcal = parseDecimal(values.kcal)
   const protein = parseDecimal(values.protein)
   const valid =
     Number.isFinite(kcal) && kcal > 0 && Number.isFinite(protein) && protein >= 0 && !needsSlot(when)
 
   async function save() {
-    setBusy(true)
     try {
       const carbs = parseDecimal(values.carbs)
       const fat = parseDecimal(values.fat)
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/quick', {
-        client_id: crypto.randomUUID(),
+        client_id: clientId,
         kcal,
         protein,
         ...(Number.isFinite(carbs) ? { carbs } : {}),
@@ -52,8 +54,6 @@ export default function QuickSheet() {
       ])
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -77,13 +77,14 @@ export default function QuickSheet() {
       title="Só números"
       onClose={sheet.close}
       footer={
-        <button
-          disabled={busy || !valid}
-          onClick={() => void save()}
+        <BusyButton
+          busy="A guardar…"
+          disabled={!valid}
+          onClick={save}
           className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
         >
           Guardar
-        </button>
+        </BusyButton>
       }
     >
       <div className="space-y-3 pb-2">

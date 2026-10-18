@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { isBusy, useBusy } from '../../lib/busy'
 
 // A parte do ecrã que se vê (sem o teclado). No iPhone o teclado não encolhe
 // a página: a folha segue o visualViewport para o topo nunca sair do ecrã.
@@ -37,19 +38,24 @@ export default function BottomSheet({
   const startY = useRef<number | null>(null)
   // Teclado aberto: a área visível é bem mais baixa do que a janela.
   const keyboardOpen = area != null && window.innerHeight - area.height > 120
+  const busy = useBusy() != null
+  // A meio de um «A guardar…» a folha não fecha (fundo, arrastar, Esc, Fechar).
+  const close = useCallback(() => {
+    if (!isBusy()) onClose()
+  }, [onClose])
 
   useEffect(() => {
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') close()
     }
     window.addEventListener('keydown', onKey)
     return () => {
       document.body.style.overflow = previous
       window.removeEventListener('keydown', onKey)
     }
-  }, [onClose])
+  }, [close])
 
   return (
     <div
@@ -57,8 +63,9 @@ export default function BottomSheet({
       style={area ? { top: area.top, height: area.height } : undefined}
       role="dialog"
       aria-modal="true"
+      aria-busy={busy || undefined}
     >
-      <div className="fade-in absolute inset-0 bg-black/55" onClick={onClose} />
+      <div className="fade-in absolute inset-0 bg-black/55" onClick={close} />
       <div
         className="sheet-in absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col rounded-t-3xl bg-surface shadow-2xl"
         style={{
@@ -71,7 +78,7 @@ export default function BottomSheet({
         <div
           className="flex shrink-0 cursor-grab justify-center pt-2.5 pb-2 touch-none"
           onTouchStart={(e) => {
-            startY.current = e.touches[0]?.clientY ?? null
+            startY.current = isBusy() ? null : (e.touches[0]?.clientY ?? null)
           }}
           onTouchMove={(e) => {
             if (startY.current == null) return
@@ -81,7 +88,7 @@ export default function BottomSheet({
             const shouldClose = drag > 90
             startY.current = null
             setDrag(0)
-            if (shouldClose) onClose()
+            if (shouldClose) close()
           }}
         >
           <span className="h-1.5 w-10 rounded-full bg-line" />
@@ -89,7 +96,7 @@ export default function BottomSheet({
         {title && (
           <div className="flex shrink-0 items-center justify-between px-4 pb-2">
             <h2 className="font-display text-[22px] font-bold uppercase">{title}</h2>
-            <button onClick={onClose} className="-mr-2 px-2 py-1 text-[15px] text-dim" aria-label="Fechar">
+            <button onClick={close} className="-mr-2 px-2 py-1 text-[15px] text-dim" aria-label="Fechar">
               Fechar
             </button>
           </div>

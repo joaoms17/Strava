@@ -3,6 +3,7 @@ import BottomSheet from '../ui/BottomSheet'
 import PersonFields, { EMPTY_PERSON, personPayload } from '../PersonFields'
 import { useSheet } from '../../lib/sheet'
 import { addExisting, createPerson } from '../../lib/accounts'
+import { BusyButton } from '../../lib/busy'
 
 type Mode = 'nova' | 'existente'
 
@@ -15,23 +16,23 @@ export default function PersonSheet() {
   const [draft, setDraft] = useState(EMPTY_PERSON)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
+  // Correu bem: a app recarrega com a pessoa nova (nada a tocar até lá).
+  const [leaving, setLeaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const payload = personPayload(draft)
   const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())
   const canSubmit = emailOk && password.length >= (mode === 'nova' ? 8 : 1) && (mode === 'existente' || payload != null)
 
   async function submit() {
-    if (!canSubmit || busy) return
-    setBusy(true)
+    if (!canSubmit || leaving) return
     setError(null)
     try {
       if (mode === 'nova') await createPerson({ ...payload!, email: email.trim(), password })
       else await addExisting(email, password)
       // A app recarrega já com a pessoa nova.
+      setLeaving(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não consegui.')
-      setBusy(false)
     }
   }
 
@@ -55,13 +56,14 @@ export default function PersonSheet() {
       title="Juntar pessoa"
       onClose={sheet.close}
       footer={
-        <button
-          disabled={!canSubmit || busy}
-          onClick={() => void submit()}
+        <BusyButton
+          busy={mode === 'nova' ? 'A criar a conta…' : 'A entrar…'}
+          disabled={!canSubmit || leaving}
+          onClick={submit}
           className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
         >
-          {busy ? 'Um momento…' : mode === 'nova' ? 'Criar conta e mudar' : 'Entrar e mudar'}
-        </button>
+          {leaving ? 'A mudar…' : mode === 'nova' ? 'Criar conta e mudar' : 'Entrar e mudar'}
+        </BusyButton>
       }
     >
       <div className="space-y-4 pb-2">

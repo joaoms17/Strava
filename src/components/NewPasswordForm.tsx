@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { PASSWORD_MIN, newPasswordProblem, passwordUpdateError } from '../lib/auth-messages'
+import { busyContent, runBusy, useBusyKey } from '../lib/busy'
 
 // Nova palavra-passe (duas vezes) → supabase.auth.updateUser. O campo do
 // email, escondido, ajuda o iPhone a guardar a nova palavra-passe no porta-chaves.
@@ -16,20 +17,17 @@ export default function NewPasswordForm({
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [show, setShow] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [busyKey, busy] = useBusyKey()
   const [error, setError] = useState<string | null>(null)
 
-  async function submit(event: FormEvent) {
-    event.preventDefault()
+  async function save() {
     const problem = newPasswordProblem(password, confirm)
     if (problem) {
       setError(problem)
       return
     }
-    setBusy(true)
     setError(null)
     const { error: updateError } = await supabase.auth.updateUser({ password })
-    setBusy(false)
     if (updateError) {
       setError(passwordUpdateError(updateError.message))
       return
@@ -43,7 +41,13 @@ export default function NewPasswordForm({
     'w-full rounded-xl border border-line bg-surface px-4 py-3 text-[17px] text-ink placeholder:text-dim focus:border-eat focus:outline-none'
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form
+      onSubmit={(event: FormEvent) => {
+        event.preventDefault()
+        void runBusy('A guardar…', save, busyKey)
+      }}
+      className="space-y-3"
+    >
       {email && (
         <input type="email" name="email" autoComplete="username" value={email} readOnly className="sr-only" tabIndex={-1} />
       )}
@@ -75,7 +79,7 @@ export default function NewPasswordForm({
         disabled={busy || !password || !confirm}
         className="min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50"
       >
-        {busy ? 'A guardar…' : submitLabel}
+        {busyContent(busy, 'A guardar…', submitLabel)}
       </button>
     </form>
   )

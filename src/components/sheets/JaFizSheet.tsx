@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { fmtKcal } from '../../lib/format'
@@ -52,7 +53,6 @@ export default function JaFizSheet() {
   const [watts, setWatts] = useState<number | null>(null)
   const [avgHr, setAvgHr] = useState('')
   const [deviceKcal, setDeviceKcal] = useState('')
-  const [busy, setBusy] = useState(false)
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
@@ -107,7 +107,6 @@ export default function JaFizSheet() {
 
   async function save() {
     if (!canSave || effectiveMinutes == null) return
-    setBusy(true)
     const startedAt = time
       ? instantInNutritionalDay(day, time, profile.nutrition_day_cutoff_hour).toISOString()
       : day !== today
@@ -127,7 +126,6 @@ export default function JaFizSheet() {
       },
       toast,
     )
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -139,13 +137,14 @@ export default function JaFizSheet() {
       title="Já fiz"
       onClose={sheet.close}
       footer={
-        <button
-          disabled={!canSave || busy}
-          onClick={() => void save()}
+        <BusyButton
+          busy="A guardar…"
+          disabled={!canSave}
+          onClick={save}
           className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
-          {busy ? 'A guardar…' : `Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
-        </button>
+          {`Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
+        </BusyButton>
       }
     >
       <div className="space-y-5 pb-2">

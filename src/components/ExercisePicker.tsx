@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import {
   EXERCISE_GROUPS,
   mergeCatalog,
@@ -85,9 +86,9 @@ export default function ExercisePicker({
         ))}
       </div>
       {typed && !exists && (
-        <button onClick={() => void create()} className="min-h-11 w-full rounded-xl bg-surface2 px-3 text-left text-[15px]">
+        <BusyButton busy="A guardar…" onClick={create} className="min-h-11 w-full rounded-xl bg-surface2 px-3 text-left text-[15px]">
           ＋ Adicionar «{typed}»{group ? ` em ${group}` : ''}
-        </button>
+        </BusyButton>
       )}
       <div className="flex max-h-72 flex-wrap gap-2 overflow-y-auto">
         {matches.map((c) => (

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { postApi } from './api'
+import { ApiError, postApi } from './api'
 import { emitDataChanged } from './events'
 import { recomputeFrom } from './recompute'
 import { useProfile } from './profile'
@@ -153,7 +153,11 @@ async function syncWindow(window: Window, cancelled?: () => boolean): Promise<Sy
       if (!retryableImportError(err) || cancelled?.()) throw err
       // O servidor esgotou o tempo com este bloco: repetir o mesmo não
       // adianta muito; à segunda, divide-se ao meio.
-      const slow = !(err instanceof TypeError) && /erro 50[234]|timeout|demorou/i.test(err instanceof Error ? err.message : '')
+      const status = err instanceof ApiError ? err.status : null
+      const slow =
+        !(err instanceof TypeError) &&
+        ((status != null && status >= 502 && status <= 504) ||
+          /erro 50[234]|timeout|demorou/i.test(err instanceof Error ? err.message : ''))
       if (slow && attempt >= 1 && windowDays(window) > 7) break
       await sleep(1500 * 2 ** attempt)
     }

@@ -15,7 +15,14 @@ import { logFavorite, repeatMeal } from '../../lib/meal-actions'
 import { enqueueCapture } from '../../lib/capture-queue'
 import { exifDateTimeOf } from '../../lib/exif'
 import { mealName, mealSlot } from '../../lib/repetir'
-import { MAX_MEAL_PHOTOS, clearPendingCamera, peekPendingCamera } from '../../lib/capture'
+import {
+  MAX_MEAL_PHOTOS,
+  clearPendingCamera,
+  loadCaptureDraft,
+  peekPendingCamera,
+  saveCaptureDraft,
+} from '../../lib/capture'
+import { BusyLabel, runBusy, useBusyKey } from '../../lib/busy'
 import { loadActiveDiet } from '../../lib/diets'
 import { useSignedUrls } from '../../lib/photos'
 import Thumb from '../ui/Thumb'
@@ -56,8 +63,18 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     (peekPendingCamera() ?? []).map((file) => ({ file, url: URL.createObjectURL(file) })),
   )
   const [tags, setTags] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
+  const [sendKey, busy] = useBusyKey()
   const [askSlot, setAskSlot] = useState(false)
+  // O rascunho guardado (fotos e texto de antes): lê-se uma vez ao abrir;
+  // até lá nada se grava por cima. A foto da câmara vem primeiro.
+  const [draftReady, setDraftReady] = useState(() => photos.length > 0)
+  const sent = useRef(false)
+  const latest = useRef({ photos, text, tags })
+  latest.current = { photos, text, tags }
+  const ready = useRef(draftReady)
+  ready.current = draftReady
+  // Dia da foto (hora EXIF) quando se regista «Agora»: pode não ser hoje.
+  const [photoDay, setPhotoDay] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<Favorite[] | null>(null)
   const [sameAsYesterday, setSameAsYesterday] = useState<Meal | null>(null)
   const [weighedToday, setWeighedToday] = useState(true)
@@ -75,6 +92,57 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   }, [focus])
 
   useEffect(() => clearPendingCamera(), [])
+
+  useEffect(() => {
+    if (draftReady) return
+    let alive = true
+    void loadCaptureDraft().then((draft) => {
+      if (!alive) return
+      if (draft) {
+        setPhotos(draft.photos.map((file) => ({ file, url: URL.createObjectURL(file) })))
+        setText(draft.text)
+        setTags(draft.tags)
+      }
+      setDraftReady(true)
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // O rascunho acompanha o que se escreve e as fotos (e grava-se ao fechar).
+  useEffect(() => {
+    if (!draftReady || sent.current) return
+    const timer = setTimeout(() => {
+      if (!sent.current) void saveCaptureDraft({ photos: photos.map((p) => p.file), text, tags })
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [draftReady, photos, text, tags])
+  useEffect(
+    () => () => {
+      if (!ready.current || sent.current) return
+      const { photos: files, text: written, tags: marks } = latest.current
+      void saveCaptureDraft({ photos: files.map((p) => p.file), text: written, tags: marks })
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const first = photos[0]?.file
+    if (!first) {
+      setPhotoDay(null)
+      return
+    }
+    let alive = true
+    void exifDateTimeOf(first).then((exif) => {
+      const at = photoInstant({ exif, lastModified: null, now: new Date() })
+      if (alive) setPhotoDay(at ? nutritionalDay(at, profile.nutrition_day_cutoff_hour) : null)
+    })
+    return () => {
+      alive = false
+    }
+  }, [photos, profile.nutrition_day_cutoff_hour])
 
   function addPhotos(files: File[]) {
     const room = MAX_MEAL_PHOTOS - photos.length
@@ -155,8 +223,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   }
 
   async function send() {
-    if (!hasContent || busy || !slotChosen()) return
-    setBusy(true)
+    if (!hasContent || !slotChosen()) return
     try {
       let takenAt: string | null = null
       if (isNow) {
@@ -174,13 +241,32 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
         date: api.date ?? null,
         slot: api.slot ?? null,
       })
+      sent.current = true
+      await saveCaptureDraft(null)
       sheet.close()
       if (!isNow) toast(`A analisar · ${label}`, seeDay())
+      // «Agora» com uma foto antiga: vai para o dia da foto, e diz-se.
+      else if (takenAt && otherPhotoDay) {
+        const day = nutritionalDay(new Date(takenAt), profile.nutrition_day_cutoff_hour)
+        const shown = viewing ?? today
+        toast(
+          `A analisar · ${dayLabel(day, today).toLowerCase()}, à hora da foto`,
+          day === shown ? [] : [{ label: 'Ver', run: () => navigate(day === today ? '/hoje' : `/hoje/${day}`) }],
+        )
+      }
     } catch {
       toast('Não consegui guardar. Tenta outra vez.')
-    } finally {
-      setBusy(false)
     }
+  }
+
+  const sendNow = () => void runBusy('A guardar…', send, sendKey)
+
+  // Fechar com uma foto por registar: fica no rascunho e o aviso leva lá.
+  function close() {
+    if (photos.length > 0 && !sent.current) {
+      toast('A foto ficou guardada para registar.', [{ label: 'Abrir', run: () => sheet.open('registar') }])
+    }
+    sheet.close()
   }
 
   // Favorita (ou da dieta) no «Quando» escolhido; da dieta fica na refeição
@@ -188,7 +274,9 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   function pickFavorite(favorite: Favorite, dietSlot: Slot | null = null) {
     if (!slotChosen()) return
     sheet.close()
-    void logFavorite(favorite, api.date ?? null, toast, api.slot ?? dietSlot, isNow ? null : label)
+    void runBusy('A registar…', () =>
+      logFavorite(favorite, api.date ?? null, toast, api.slot ?? dietSlot, isNow ? null : label),
+    )
   }
 
   function open(name: 'barras' | 'numeros' | 'repetir') {
@@ -198,18 +286,26 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   const big =
     'flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-2xl font-display text-[18px] font-bold tracking-[0.06em] uppercase'
   const pastParam: Record<string, string> = when.date !== today ? { data: when.date } : {}
+  const otherPhotoDay = isNow && reviewing && photoDay != null && photoDay !== today
 
   return (
     <BottomSheet
-      onClose={sheet.close}
+      onClose={close}
       footer={
         hasContent ? (
           <button
             disabled={busy}
-            onClick={() => void send()}
-            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
+            aria-busy={busy || undefined}
+            onClick={sendNow}
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase"
           >
-            {busy ? 'A guardar…' : <>Registar · {isNow ? 'agora' : label}</>}
+            {busy ? (
+              <BusyLabel text="A guardar…" />
+            ) : otherPhotoDay ? (
+              <>Registar · {dayLabel(photoDay, today).toLowerCase()} (hora da foto)</>
+            ) : (
+              <>Registar · {isNow ? 'agora' : label}</>
+            )}
           </button>
         ) : undefined
       }
@@ -273,7 +369,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && text.trim()) {
                 e.preventDefault()
-                void send()
+                sendNow()
               }
             }}
             placeholder={
@@ -418,12 +514,14 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
               onClick={() => {
                 if (!slotChosen()) return
                 sheet.close()
-                void repeatMeal(
-                  sameAsYesterday.id,
-                  api.date ?? null,
-                  `Registado · ${isNow ? `igual a ontem (${SLOT_LABEL[refSlot].toLowerCase()})` : label}`,
-                  toast,
-                  api.slot ?? refSlot,
+                void runBusy('A registar…', () =>
+                  repeatMeal(
+                    sameAsYesterday.id,
+                    api.date ?? null,
+                    `Registado · ${isNow ? `igual a ontem (${SLOT_LABEL[refSlot].toLowerCase()})` : label}`,
+                    toast,
+                    api.slot ?? refSlot,
+                  ),
                 )
               }}
               className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"

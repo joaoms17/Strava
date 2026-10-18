@@ -15,7 +15,8 @@ import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
 import { workoutTitle } from '../lib/workout-actions'
-import { discardCapture, retryCapture, useCaptures } from '../lib/capture-queue'
+import { discardCapture, restoreCapture, retryCapture, useCaptures, type CaptureEntry } from '../lib/capture-queue'
+import { BusyButton, runBusy } from '../lib/busy'
 import { recomputeFrom } from '../lib/recompute'
 import { answerDay, type DayAnswer } from '../lib/day-flag'
 import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
@@ -111,6 +112,8 @@ export default function Hoje() {
   const retried = useRef(new Set<string>())
   // Refeições com «Tentar outra vez» em curso (mostram «A analisar…» já).
   const [retrying, setRetrying] = useState<Set<string>>(new Set())
+  // Sobe a cada pergunta pelo estado das fotos a analisar (sem recarregar o dia).
+  const [pollTick, setPollTick] = useState(0)
 
   const load = useCallback(async () => {
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
@@ -219,16 +222,39 @@ export default function Hoje() {
     void load()
   }, [load, version])
 
-  // Fotos a analisar: pergunta pelo estado de 3 em 3 s (de 15 em 15 s depois
-  // de 2 min) e pede outra tentativa quando uma análise parou a meio.
+  // Fotos a analisar: pergunta só pelo estado delas de 3 em 3 s (de 15 em 15 s
+  // depois de 2 min) e recarrega o dia quando alguma muda; as que pararam de
+  // vez (com «Tentar») já não se perguntam. Pede outra tentativa quando uma
+  // análise parou a meio.
   useEffect(() => {
     const analysing = (data?.meals ?? []).filter((m) => m.status === 'a_analisar')
     if (analysing.length === 0) return
     const now = Date.now()
-    const oldest = Math.min(...analysing.map((m) => Date.parse(m.created_at)))
-    const timer = setTimeout(() => {
-      if (!document.hidden) void load()
-    }, now - oldest > 120_000 ? 15_000 : 3_000)
+    const watched = analysing.filter((m) => !analysisStuck(m, now))
+    const oldest = Math.min(...watched.map((m) => Date.parse(m.created_at)))
+    let alive = true
+    const timer =
+      watched.length > 0
+        ? setTimeout(async () => {
+            if (document.hidden) return
+            const { data: rows } = await supabase
+              .from('meals')
+              .select('id,status,analysis_started_at,analysis_attempts')
+              .in('id', watched.map((m) => m.id))
+            if (!alive) return
+            const changed = watched.some((m) => {
+              const row = rows?.find((r) => r.id === m.id)
+              return (
+                !row ||
+                row.status !== m.status ||
+                row.analysis_started_at !== m.analysis_started_at ||
+                row.analysis_attempts !== m.analysis_attempts
+              )
+            })
+            if (changed) void load()
+            else setPollTick((t) => t + 1)
+          }, now - oldest > 120_000 ? 15_000 : 3_000)
+        : null
     for (const meal of analysing) {
       const key = `${meal.id}:${meal.analysis_started_at ?? '-'}:${meal.analysis_attempts}`
       if (analysisStalled(meal, now) && meal.analysis_attempts < 3 && !retried.current.has(key)) {
@@ -238,8 +264,11 @@ export default function Hoje() {
           .catch(() => undefined)
       }
     }
-    return () => clearTimeout(timer)
-  }, [data, load])
+    return () => {
+      alive = false
+      if (timer) clearTimeout(timer)
+    }
+  }, [data, load, pollTick])
 
   if (!data) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
 
@@ -255,7 +284,11 @@ export default function Hoje() {
   )
   const limitMeals = data.meals.filter((m) => m.status === 'sem_analise')
   const reviewMeals = data.meals.filter((m) => m.status === 'por_rever')
-  const localCaptures = captures.filter((c) => (c.date ?? today) === date)
+  // Uma captura sem dia escolhido fica no dia nutricional da hora da foto (ou
+  // de quando foi registada), não no dia de hoje.
+  const localCaptures = captures.filter(
+    (c) => (c.date ?? nutritionalDay(new Date(c.taken_at ?? c.created_at), profile.nutrition_day_cutoff_hour)) === date,
+  )
   const stillCounting =
     data.meals.filter((m) => m.status === 'a_analisar' && !analysisStuck(m, nowMs)).length +
     localCaptures.filter((c) => c.state === 'pendente').length
@@ -354,6 +387,12 @@ export default function Hoje() {
 
   async function dismissHint(hint: string) {
     await update({ dismissed_hints: [...hints, hint] })
+  }
+
+  // «Descartar» apaga a foto deste telemóvel: com Anular.
+  async function discard(capture: CaptureEntry) {
+    await discardCapture(capture.client_id)
+    toast('Foto descartada', [{ label: 'Anular', run: () => restoreCapture(capture) }])
   }
 
   async function answerYesterday(flag: DayAnswer) {
@@ -562,7 +601,7 @@ export default function Hoje() {
           {fresh && analysed && (
             <p className="pl-[72px] text-[13px] text-dim">
               acabado de registar ·{' '}
-              <button className="text-eat" onClick={() => void deleteMeal(meal.id, toast)}>
+              <button className="text-eat" onClick={() => void runBusy('A anular…', () => deleteMeal(meal.id, toast))}>
                 Anular
               </button>
             </p>
@@ -593,17 +632,19 @@ export default function Hoje() {
             <span className={`block truncate text-[14px] ${capture.state === 'erro' ? 'text-eat' : 'text-dim'}`}>
               {capture.state === 'erro'
                 ? (capture.error ?? 'Não consegui enviar.')
-                : navigator.onLine
-                  ? 'A enviar…'
-                  : 'À espera de rede · fica guardada'}
+                : !navigator.onLine
+                  ? 'À espera de rede · fica guardada'
+                  : (capture.attempts ?? 0) > 0
+                    ? (capture.error ?? 'Rede fraca: vou tentar outra vez sozinha.')
+                    : 'A enviar…'}
             </span>
           </span>
-          {capture.state === 'erro' && (
+          {(capture.state === 'erro' || (capture.attempts ?? 0) > 0) && (
             <span className="flex shrink-0 gap-1">
               <button onClick={() => void retryCapture(capture.client_id)} className="min-h-11 px-2 text-[13px] text-eat">
                 Tentar
               </button>
-              <button onClick={() => void discardCapture(capture.client_id)} className="min-h-11 px-2 text-[13px] text-dim">
+              <button onClick={() => void discard(capture)} className="min-h-11 px-2 text-[13px] text-dim">
                 Descartar
               </button>
             </span>
@@ -769,20 +810,29 @@ export default function Hoje() {
           yesterdayMeals={data.yesterday.meals}
           favorites={proteinFavorites}
           onWeigh={() => sheet.open('peso')}
-          onYesterday={(flag) => void answerYesterday(flag)}
-          onFavorite={(fav) => void logFavorite(fav, null, toast)}
+          onYesterday={(flag) => void runBusy('A guardar…', () => answerYesterday(flag))}
+          onFavorite={(fav) => void runBusy('A registar…', () => logFavorite(fav, null, toast))}
           onDismiss={() => void dismiss(step)}
           errorMeals={errorMeals}
           onRetry={(id) => void retry(id)}
           limitMeal={limitMeals[0] ?? null}
+          limitAnalysing={limitMeals[0] != null && retrying.has(limitMeals[0].id)}
           reviewCount={reviewMeals.length}
           onOpenMeal={(id) => sheet.open('refeicao', { id })}
           onAnalyse={async (id, body) => {
+            // Corre por trás, como «Tentar»: a refeição mostra «A analisar outra vez…».
+            if (retrying.has(id)) return
+            setRetrying((prev) => new Set(prev).add(id))
             try {
               await postApi('/api/meal/analyse', { meal_id: id, ...body })
             } catch (err) {
               toast(err instanceof Error ? err.message : 'Não consegui analisar.')
             }
+            setRetrying((prev) => {
+              const next = new Set(prev)
+              next.delete(id)
+              return next
+            })
             emitDataChanged()
           }}
           onReview={() => sheet.open('rever')}
@@ -843,7 +893,7 @@ export default function Hoje() {
         <div className="flex items-center gap-2 rounded-2xl border border-dashed border-line px-3 py-2 text-[15px]">
           <span className="flex-1 text-dim">Ainda sem {SLOT_LABEL[nowSlot].toLowerCase()}</span>
           <button
-            onClick={() => void logFavorite(gapFavorite, null, toast)}
+            onClick={() => void runBusy('A registar…', () => logFavorite(gapFavorite, null, toast))}
             className="rounded-full bg-surface2 px-3 py-1.5"
           >
             {gapFavorite.name}
@@ -868,7 +918,8 @@ export default function Hoje() {
                 <span className="min-w-0 truncate text-dim">
                   {timeOf(meal.logged_at)} · {meal.items.map((i) => i.name).join(', ') || 'Refeição'}
                 </span>
-                <button
+                <BusyButton
+                  busy="A repor…"
                   className="shrink-0 pl-3 text-eat"
                   onClick={async () => {
                     try {
@@ -881,7 +932,7 @@ export default function Hoje() {
                   }}
                 >
                   Repor
-                </button>
+                </BusyButton>
               </div>
             ))}
         </div>
@@ -976,6 +1027,7 @@ function NextStepCard({
   errorMeals,
   onRetry,
   limitMeal,
+  limitAnalysing,
   reviewCount,
   onOpenMeal,
   onAnalyse,
@@ -995,6 +1047,7 @@ function NextStepCard({
   errorMeals: Meal[]
   onRetry: (id: string) => void
   limitMeal: Meal | null
+  limitAnalysing: boolean
   reviewCount: number
   onOpenMeal: (id: string) => void
   onAnalyse: (id: string, body: Record<string, boolean>) => Promise<void>
@@ -1085,10 +1138,11 @@ function NextStepCard({
           </p>
           <div className="grid grid-cols-3 gap-2">
             <button
+              disabled={limitAnalysing}
               onClick={() => void onAnalyse(limitMeal.id, { force: true })}
-              className="min-h-12 rounded-xl bg-eat px-1 text-[13px] font-semibold text-bg"
+              className="min-h-12 rounded-xl bg-eat px-1 text-[13px] font-semibold text-bg disabled:opacity-50"
             >
-              Analisar esta mesmo assim
+              {limitAnalysing ? 'A analisar…' : 'Analisar esta mesmo assim'}
             </button>
             <button onClick={onRaiseLimit} className="min-h-12 rounded-xl bg-surface2 px-1 text-[13px]">
               Subir limite

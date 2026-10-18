@@ -44,8 +44,10 @@ export async function syncQueuedMeals(): Promise<void> {
   }
 }
 
-export function useQueueCount(): number {
-  const [count, setCount] = useState(0)
+// O que ainda não chegou ao servidor: as que falharam também contam (senão
+// uma foto com erro desaparecia do topo e ninguém dava por ela).
+export function useQueueCount(): { count: number; failed: number } {
+  const [count, setCount] = useState({ count: 0, failed: 0 })
   const refresh = useCallback(async () => {
     try {
       const [legacy, captures, { data }] = await Promise.all([
@@ -54,9 +56,10 @@ export function useQueueCount(): number {
         supabase.auth.getSession(),
       ])
       const userId = data.session?.user.id ?? null
-      setCount(legacy.length + captures.filter((c) => c.state === 'pendente' && ownCapture(c, userId)).length)
+      const own = captures.filter((c) => ownCapture(c, userId))
+      setCount({ count: legacy.length + own.length, failed: own.filter((c) => c.state === 'erro').length })
     } catch {
-      setCount(0)
+      setCount({ count: 0, failed: 0 })
     }
   }, [])
 

@@ -52,6 +52,7 @@ function showRegistered(meal: Meal, text: string, toast: ShowToast) {
   toast(text, [
     ...PORTIONS.filter(([, f]) => f !== Number(meal.portion_factor)).map(([label, factor]) => ({
       label,
+      busy: 'A mudar a porção…',
       run: async () => {
         try {
           const { meal: updated } = await postApi<{ meal: Meal }>('/api/meal/portion', {
