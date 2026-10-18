@@ -14,33 +14,17 @@ import {
   confirmationSentence,
   daysSinceMeasure,
   earlyDietWeeks,
+  sameWaistSite,
   scaleFatAverage,
   targetBodyFatPct,
   targetWaist,
+  wrongWaistSite,
 } from '../../api/_lib/rules/composicao'
 import { lossQuality } from '../../api/_lib/rules/gasto'
 import type { BodyMeasurement } from '../lib/types'
 import Icon from './ui/Icon'
+import Sparkline from './ui/Sparkline'
 import FatScale from './FatScale'
-
-function Sparkline({ values }: { values: number[] }) {
-  if (values.length < 2) return null
-  const min = Math.min(...values) - 0.5
-  const max = Math.max(...values) + 0.5
-  const w = 120
-  const h = 36
-  const points = values
-    .map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / (max - min)) * h}`)
-    .join(' ')
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className="text-body">
-      <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {values.map((v, i) => (
-        <circle key={i} cx={(i / (values.length - 1)) * w} cy={h - ((v - min) / (max - min)) * h} r="3" fill="currentColor" />
-      ))}
-    </svg>
-  )
-}
 
 // Corpo › Gordura e massa magra e Cintura (Fase 4). Os pontos são só as
 // datas medidas: nunca se projeta a %G para o peso de cada dia.
@@ -53,16 +37,23 @@ export default function CompositionCards() {
   const [details, setDetails] = useState(false)
   const height = Number(profile.height_cm ?? 183)
   const today = localCalendarDate()
+  const female = profile.sex === 'f'
 
   const load = useCallback(async () => {
     const [{ data }, { data: fat }] = await Promise.all([
       supabase.from('body_measurements').select('*').order('date'),
       profile.scale_has_bodyfat
-        ? supabase.from('weights').select('body_fat_pct').not('body_fat_pct', 'is', null).order('date').limit(60)
+        ? supabase
+            .from('weights')
+            .select('body_fat_pct')
+            .not('body_fat_pct', 'is', null)
+            .order('date', { ascending: false })
+            .limit(60)
         : Promise.resolve({ data: [] as { body_fat_pct: number }[] }),
     ])
     setRows((data ?? []) as BodyMeasurement[])
-    setScale((fat ?? []).map((f) => Number(f.body_fat_pct)))
+    // As 60 mais recentes, da mais antiga para a mais nova (a média segue a última).
+    setScale((fat ?? []).map((f) => Number(f.body_fat_pct)).reverse())
   }, [profile.scale_has_bodyfat])
 
   useEffect(() => {
@@ -76,7 +67,8 @@ export default function CompositionCards() {
       <section className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
         <p className="label">Gordura e massa magra</p>
         <p className="text-[15px]">
-          Mede a cintura e o pescoço: 2 minutos com uma fita métrica chegam para estimar a gordura e a massa magra.
+          Mede {female ? 'a cintura, a anca e o pescoço' : 'a cintura e o pescoço'}: 2 minutos com uma fita métrica chegam
+          para estimar a gordura e a massa magra.
         </p>
         <div className="grid grid-cols-2 gap-2">
           <button onClick={() => sheet.open('medidas')} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
@@ -109,13 +101,17 @@ export default function CompositionCards() {
     }))
     .filter((x) => x.c != null) as { m: BodyMeasurement; c: NonNullable<ReturnType<typeof composition>> }[]
   const last = withComp[withComp.length - 1]
-  const firstOne = withComp[0]
+  // Só se compara com medições com a cintura no mesmo sítio (as antigas das
+  // mulheres foram no umbigo: davam uma descida que não houve).
+  const comparable = last ? withComp.filter((x) => sameWaistSite(x.m, last.m)) : []
+  const firstOne = comparable[0]
   const change = last && firstOne && firstOne !== last ? compareCompositions(firstOne.c, last.c) : null
   const days = last ? daysSinceMeasure(last.m.date, today) : null
   const scaleAvg = scaleFatAverage(scale)
   const lastWaist = rows[rows.length - 1]!
+  const oldSite = wrongWaistSite(lastWaist, profile.sex)
   const lastTarget =
-    lastWaist.neck_cm != null
+    lastWaist.neck_cm != null && !oldSite
       ? targetWaist(
           height,
           Number(lastWaist.neck_cm),
@@ -126,7 +122,7 @@ export default function CompositionCards() {
       : null
   const bmi = last ? Number(last.m.weight_used_kg) / (height / 100) ** 2 : null
   // Que parte do peso perdido foi gordura (3 medições ou mais, 3 kg ou mais).
-  const quality = lossQuality(withComp.map((x) => ({ weight_used_kg: Number(x.m.weight_used_kg), fatKg: x.c.fatKg })))
+  const quality = lossQuality(comparable.map((x) => ({ weight_used_kg: Number(x.m.weight_used_kg), fatKg: x.c.fatKg })))
 
   return (
     <>
@@ -141,6 +137,12 @@ export default function CompositionCards() {
             <div className="bg-body" style={{ width: `${last.c.pct}%` }} />
           </div>
           <FatScale pct={last.c.pct} sex={profile.sex} />
+          {female && wrongWaistSite(last.m, profile.sex) && (
+            <p className="rounded-xl bg-attn/15 px-3 py-2 text-[14px] text-attn">
+              Esta medição tem a cintura no umbigo, o que dá gordura a mais. Nas mulheres mede-se na parte mais estreita:
+              mede outra vez (vê «Como medir»).
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="num text-[34px] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>
@@ -177,8 +179,9 @@ export default function CompositionCards() {
           {details && (
             <div className="space-y-2 rounded-xl bg-surface2 p-3 text-[14px]">
               <p>
-                Método da fita (Marinha dos EUA): pescoço, cintura no umbigo e a tua altura ({height} cm), com o peso médio
-                desse dia ({fmt1(Number(last.m.weight_used_kg))} kg).
+                Método da fita (Marinha dos EUA): pescoço,{' '}
+                {female ? 'cintura na parte mais estreita, anca' : 'cintura no umbigo'} e a tua altura ({height} cm), com o
+                peso médio desse dia ({fmt1(Number(last.m.weight_used_kg))} kg).
               </p>
               <p>
                 Intervalo provável: {last.c.range.pct[0]}–{last.c.range.pct[1]} % de gordura ({fmt1(last.c.range.fatKg[0])}–
@@ -201,7 +204,9 @@ export default function CompositionCards() {
             <p className="num text-[34px] leading-none font-extrabold">{fmt1(Number(lastWaist.waist_cm))} cm</p>
             {lastTarget != null && <p className="text-[14px] text-dim">alvo cerca de {Math.round(lastTarget)} cm</p>}
           </div>
-          <Sparkline values={rows.filter((r) => r.waist_cm != null).map((r) => Number(r.waist_cm))} />
+          <Sparkline
+            values={rows.filter((r) => r.waist_cm != null && sameWaistSite(r, lastWaist)).map((r) => Number(r.waist_cm))}
+          />
         </div>
         <p className="text-[13px] text-dim">A cintura em cm é o número mais honesto: não passa por nenhum modelo.</p>
         <div className="grid grid-cols-2 gap-2">

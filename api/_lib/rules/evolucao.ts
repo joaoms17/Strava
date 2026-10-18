@@ -4,6 +4,20 @@ import { shiftDate } from './nutritional-day.js'
 import { trend7, weeklyRate } from './weight.js'
 import { cleanWellness, type WellnessRow } from './plano.js'
 import { isDayComplete } from './day-close.js'
+import {
+  ZONE_ORDER,
+  changeSentence,
+  compareCompositions,
+  confirmationSentence,
+  daysSinceMeasure,
+  fatCategory,
+  measurementComposition,
+  sameWaistSite,
+  scaleFatAverage,
+  wrongWaistSite,
+  zoneValue,
+  type MeasureRow,
+} from './composicao.js'
 
 export const AREAS = ['peso', 'medidas', 'comida', 'treino', 'sono', 'coracao', 'passos'] as const
 export const ESTADOS = ['melhor', 'igual', 'pior', 'sem_dados'] as const
@@ -112,6 +126,10 @@ export function daysToConfirm(
     }))
 }
 
+// Pesagens a pedir para o resumo: a média de há 90 dias precisa de um ponto
+// até 7 dias antes e da semana anterior a esse ponto (90 + 7 + 7).
+export const WEIGHT_HISTORY_DAYS = 104
+
 // O peso: o último, a média de 7 dias hoje, há 30 e há 90 dias, e o ritmo.
 export function weightSummary(weights: { date: string; kg: number }[], today: string) {
   const series = weights.filter((w) => w.date <= today).map((w) => ({ date: w.date, value: Number(w.kg) }))
@@ -140,12 +158,17 @@ export interface FoodDay {
   kcal_target: number | null
   kcal_out_est?: number | null
   is_complete: boolean
+  water_ml?: number | null
 }
 export function foodWeeks(days: FoodDay[], today: string) {
   return [3, 2, 1, 0].map((k) => {
     const end = shiftDate(today, -7 * k - 1)
     const start = shiftDate(end, -6)
     const week = days.filter((d) => d.is_complete && d.date >= start && d.date <= end)
+    // A água conta em todos os dias em que foi registada (completos ou não).
+    const water = mean(
+      days.filter((d) => d.date >= start && d.date <= end && Number(d.water_ml ?? 0) > 0).map((d) => Number(d.water_ml)),
+    )
     const avg = (key: keyof FoodDay) => {
       const m = mean(week.map((d) => d[key]).filter((v): v is number => typeof v === 'number').map(Number))
       return m == null ? null : Math.round(m)
@@ -158,8 +181,67 @@ export function foodWeeks(days: FoodDay[], today: string) {
       alvo_kcal: avg('kcal_target'),
       proteina_g: avg('protein'),
       gasto_estimado_kcal: avg('kcal_out_est'),
+      agua_ml: water == null ? null : Math.round(water),
     }
   })
+}
+
+const ZONE_KEY = { waist: 'cintura', hips: 'anca', neck: 'pescoco', chest: 'peito', arm: 'braco', thigh: 'coxa', calf: 'gemeo' } as const
+
+// As medidas com fita como o Corpo as mostra: as últimas 4 (da mais recente
+// para a mais antiga) com a gordura e a massa magra já calculadas com a
+// fórmula do sexo certo, e o que mudou desde a primeira com a cintura no
+// mesmo sítio. `rows` da mais antiga para a mais recente.
+export function measurementSummary(
+  rows: (MeasureRow & { weight_used_kg: number | string })[],
+  heightCm: number,
+  sex: string | null,
+  today: string,
+) {
+  const last = rows[rows.length - 1]
+  if (!last) return null
+  const withComp = rows.map((m) => ({ m, c: measurementComposition(heightCm, m, sex) }))
+  const counted = withComp.filter((x) => x.c != null)
+  const latest = counted[counted.length - 1]
+  const comparable = latest ? counted.filter((x) => sameWaistSite(x.m, latest.m)) : []
+  const first = comparable[0]
+  const newest = comparable[comparable.length - 1]
+  const change = first && newest && first !== newest ? compareCompositions(first.c!, newest.c!) : null
+  return {
+    dias_desde_a_ultima: daysSinceMeasure(last.date, today),
+    ultimas: withComp
+      .slice(-4)
+      .reverse()
+      .map(({ m, c }) => ({
+        data: m.date,
+        zonas_cm: Object.fromEntries(
+          ZONE_ORDER.filter((z) => zoneValue(m, z) != null).map((z) => [ZONE_KEY[z], zoneValue(m, z)]),
+        ),
+        peso_usado_kg: Number(m.weight_used_kg),
+        gordura_pct: c ? Math.round(c.pct) : null,
+        gordura_kg: c?.shown.fatKg ?? null,
+        massa_magra_kg: c?.shown.leanKg ?? null,
+        categoria: c ? fatCategory(c.pct, sex).label : null,
+        ...(sex === 'f' && wrongWaistSite(m, sex) ? { cintura_no_umbigo: true } : {}),
+      })),
+    desde_a_primeira:
+      change && first && newest
+        ? { de: first.m.date, a: newest.m.date, texto: `${changeSentence(change)} · ${confirmationSentence(change)}` }
+        : null,
+  }
+}
+
+// A % de gordura da balança (série à parte, suavizada): hoje e há 30 dias.
+// `rows` da mais antiga para a mais recente.
+export function scaleFatSummary(rows: { date: string; body_fat_pct: number | string }[], today: string) {
+  const values = rows.map((r) => Number(r.body_fat_pct))
+  const media = scaleFatAverage(values)
+  if (media == null) return null
+  const before = shiftDate(today, -30)
+  return {
+    media_pct: media,
+    ha_30_dias_pct: scaleFatAverage(rows.filter((r) => r.date <= before).map((r) => Number(r.body_fat_pct))),
+  }
 }
 
 // O relógio: os últimos 30 dias contra os 30 antes (FC em repouso só com

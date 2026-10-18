@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { cleanAnalysis, daysToConfirm, foodWeeks, weightSummary, wellnessMonths } from '../api/_lib/rules/evolucao'
+import {
+  WEIGHT_HISTORY_DAYS,
+  cleanAnalysis,
+  daysToConfirm,
+  foodWeeks,
+  measurementSummary,
+  scaleFatSummary,
+  weightSummary,
+  wellnessMonths,
+} from '../api/_lib/rules/evolucao'
+import { shiftDate } from '../api/_lib/rules/nutritional-day'
 
 // Corpo › Evolução: o que vai para a IA e o que se mostra do que ela devolve.
 describe('análise da evolução', () => {
@@ -102,5 +112,68 @@ describe('análise da evolução', () => {
       { data: '2026-10-07', dia: '7/10', refeicoes: 1, kcal: 1100 },
       { data: '2026-10-03', dia: '3/10', refeicoes: 3, kcal: 700 },
     ])
+  })
+
+  it('peso há 90 dias: a média de 7 dias com as pesagens pedidas (não uma pesagem solta)', () => {
+    const today = '2026-10-18'
+    // pesagens de −95 a −88 dias e hoje; só entram as da janela pedida
+    const weights = [
+      ...[95, 94, 93, 92, 91, 90, 89, 88].map((d, i) => ({ date: shiftDate(today, -d), kg: 90 - i * 0.2 })),
+      { date: shiftDate(today, -120), kg: 99 },
+      { date: today, kg: 85 },
+    ].filter((w) => w.date >= shiftDate(today, -WEIGHT_HISTORY_DAYS))
+    const w = weightSummary(weights, today)!
+    // a −90: média de −95 a −90 (90; 89,8; …; 89) = 89,5
+    expect(w.media_7_dias.ha_90_dias).toBe(89.5)
+    // com só 90 dias pedidos ficava a pesagem crua de −90 (89)
+    const narrow = weights.filter((x) => x.date >= shiftDate(today, -90))
+    expect(weightSummary(narrow, today)!.media_7_dias.ha_90_dias).toBe(89)
+  })
+
+  it('comida: a água média nos dias em que foi registada, completos ou não', () => {
+    const days = [
+      { date: '2026-10-04', kcal_in: 1800, protein: 130, kcal_target: 1700, is_complete: true, water_ml: 2000 },
+      { date: '2026-10-03', kcal_in: 400, protein: 20, kcal_target: 1700, is_complete: false, water_ml: 1500 },
+      { date: '2026-10-02', kcal_in: 1700, protein: 120, kcal_target: 1700, is_complete: true, water_ml: 0 },
+    ]
+    const weeks = foodWeeks(days, '2026-10-05')
+    expect(weeks[3]).toMatchObject({ dias_completos: 2, agua_ml: 1750 })
+    expect(weeks[2]!.agua_ml).toBeNull()
+  })
+
+  it('medidas: gordura com a fórmula do sexo, e o «desde» só com a cintura no mesmo sítio', () => {
+    const rows = [
+      { date: '2026-08-01', neck_cm: 32, waist_cm: 81, hips_cm: 99, weight_used_kg: 62, readings: null },
+      { date: '2026-09-01', neck_cm: 32, waist_cm: 80, hips_cm: 98, weight_used_kg: 61, readings: null },
+      { date: '2026-10-01', neck_cm: 32, waist_cm: 74, hips_cm: 98, weight_used_kg: 60.5, readings: { waist_site: 'natural' } },
+      { date: '2026-10-15', neck_cm: 32, waist_cm: 73, hips_cm: 97, weight_used_kg: 60, readings: { waist_site: 'natural' } },
+    ]
+    const m = measurementSummary(rows, 165, 'f', '2026-10-18')!
+    expect(m.dias_desde_a_ultima).toBe(3)
+    expect(m.ultimas.map((x) => x.data)).toEqual(['2026-10-15', '2026-10-01', '2026-09-01', '2026-08-01'])
+    expect(m.ultimas[0]).toMatchObject({ zonas_cm: { cintura: 73, anca: 97, pescoco: 32 }, peso_usado_kg: 60, gordura_pct: 27 })
+    expect(m.ultimas[0]!.categoria).toBe('Saudável')
+    expect(m.ultimas[0]).not.toHaveProperty('cintura_no_umbigo')
+    expect(m.ultimas[2]).toMatchObject({ cintura_no_umbigo: true })
+    // compara 1/10 com 15/10, não com as do umbigo
+    expect(m.desde_a_primeira).toMatchObject({ de: '2026-10-01', a: '2026-10-15' })
+    expect(measurementSummary([], 165, 'f', '2026-10-18')).toBeNull()
+    // nos homens não há «no umbigo» a assinalar
+    const men = measurementSummary([{ date: '2026-10-01', neck_cm: 40, waist_cm: 94, weight_used_kg: 85 }], 183, 'm', '2026-10-18')!
+    expect(men.ultimas[0]).toMatchObject({ gordura_pct: 21, gordura_kg: 17.5, massa_magra_kg: 67.5 })
+    expect(men.ultimas[0]).not.toHaveProperty('cintura_no_umbigo')
+    expect(men.desde_a_primeira).toBeNull()
+  })
+
+  it('balança: a média suavizada hoje e há 30 dias', () => {
+    const rows = [
+      { date: '2026-09-01', body_fat_pct: 24 },
+      { date: '2026-09-10', body_fat_pct: 20 },
+      { date: '2026-10-10', body_fat_pct: 23 },
+      { date: '2026-10-17', body_fat_pct: '25' },
+    ]
+    // há 30 dias só entram 1/9 e 10/9
+    expect(scaleFatSummary(rows, '2026-10-18')).toEqual({ media_pct: 23.7, ha_30_dias_pct: 23.6 })
+    expect(scaleFatSummary([], '2026-10-18')).toBeNull()
   })
 })

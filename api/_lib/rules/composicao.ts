@@ -27,6 +27,44 @@ export const ZONE_LABEL: Record<Zone, string> = {
   calf: 'Gémeo',
 }
 
+export const ZONE_COLUMN = {
+  neck: 'neck_cm',
+  waist: 'waist_cm',
+  chest: 'chest_cm',
+  hips: 'hips_cm',
+  arm: 'arm_cm',
+  thigh: 'thigh_cm',
+  calf: 'calf_cm',
+} as const satisfies Record<Zone, string>
+
+// Ordem para mostrar (histórico, zonas): primeiro as da fórmula.
+export const ZONE_ORDER: Zone[] = ['waist', 'hips', 'neck', 'chest', 'arm', 'thigh', 'calf']
+
+// Onde se mede a cintura: a fórmula dos homens usa a cintura no umbigo; a das
+// mulheres, a parte mais estreita (a cintura natural). Cada medição guarda o
+// sítio em readings.waist_site; as antigas, sem ele, foram no umbigo.
+export type WaistSite = 'umbigo' | 'natural'
+
+export function waistSiteFor(sex: string | null): WaistSite {
+  return sex === 'f' ? 'natural' : 'umbigo'
+}
+
+export function measuredWaistSite(readings: unknown): WaistSite {
+  const site = readings && typeof readings === 'object' ? (readings as Record<string, unknown>).waist_site : null
+  return site === 'natural' ? 'natural' : 'umbigo'
+}
+
+// A cintura (e a gordura, que sai dela) só se compara no mesmo sítio.
+export function sameWaistSite(a: { readings?: unknown }, b: { readings?: unknown }): boolean {
+  return measuredWaistSite(a.readings) === measuredWaistSite(b.readings)
+}
+
+// A medição não foi onde a fórmula pede (as medições antigas das mulheres, no
+// umbigo): a gordura sai a mais e a cintura alvo não se aplica.
+export function wrongWaistSite(m: { readings?: unknown }, sex: string | null): boolean {
+  return measuredWaistSite(m.readings) !== waistSiteFor(sex)
+}
+
 export const METHOD_ERROR_PP = 4 // erro típico do método (±)
 export const DETECTABLE_CHANGE_PP = 1.5 // mínima mudança detetável com 1 leitura
 export const LEAN_STABLE_KG = 0.5
@@ -109,6 +147,70 @@ export function composition(
       fatKg: [round1((m.weight_used_kg * low) / 100), round1((m.weight_used_kg * high) / 100)],
     },
   }
+}
+
+// Uma medição como vem da base de dados (os numeric podem vir em texto).
+type Cm = number | string | null | undefined
+export type MeasureRow = { date: string; readings?: unknown } & { [K in (typeof ZONE_COLUMN)[Zone]]?: Cm }
+
+export function measurementComposition(
+  heightCm: number,
+  m: MeasureRow & { weight_used_kg: number | string },
+  sex: string | null,
+): Composition | null {
+  if (m.neck_cm == null || m.waist_cm == null) return null
+  return composition(
+    heightCm,
+    {
+      neck_cm: Number(m.neck_cm),
+      waist_cm: Number(m.waist_cm),
+      hips_cm: m.hips_cm != null ? Number(m.hips_cm) : null,
+      weight_used_kg: Number(m.weight_used_kg),
+    },
+    sex,
+  )
+}
+
+export function zoneValue(m: MeasureRow, zone: Zone): number | null {
+  const v = m[ZONE_COLUMN[zone]]
+  return v == null ? null : Number(v)
+}
+
+// Mudança de uma zona desde a medição anterior que a tem (a cintura só no
+// mesmo sítio). `rows` da mais antiga para a mais recente.
+export function zoneDelta(rows: MeasureRow[], index: number, zone: Zone): number | null {
+  const row = rows[index]
+  const now = row ? zoneValue(row, zone) : null
+  if (row == null || now == null) return null
+  for (let i = index - 1; i >= 0; i--) {
+    const before = zoneValue(rows[i]!, zone)
+    if (before == null) continue
+    if (zone === 'waist' && !sameWaistSite(rows[i]!, row)) return null
+    return round1(now - before)
+  }
+  return null
+}
+
+// Cada zona medida 2 vezes ou mais: os valores, a primeira e a última (a
+// cintura só no sítio da última). `rows` da mais antiga para a mais recente.
+export interface ZoneTrend {
+  zone: Zone
+  values: number[]
+  firstDate: string
+  last: number
+  change: number
+}
+
+export function zoneTrends(rows: MeasureRow[]): ZoneTrend[] {
+  return ZONE_ORDER.flatMap((zone) => {
+    let measured = rows.filter((r) => zoneValue(r, zone) != null)
+    const lastRow = measured[measured.length - 1]
+    if (zone === 'waist' && lastRow) measured = measured.filter((r) => sameWaistSite(r, lastRow))
+    if (measured.length < 2) return []
+    const values = measured.map((r) => zoneValue(r, zone)!)
+    const last = values[values.length - 1]!
+    return [{ zone, values, firstDate: measured[0]!.date, last, change: round1(last - values[0]!) }]
+  })
 }
 
 // Diferenças a partir dos valores já arredondados, para o texto bater certo

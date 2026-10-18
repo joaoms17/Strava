@@ -11,6 +11,7 @@ import { fmt1, fmtDayMonth, parseDecimal } from '../../lib/format'
 import { isMaintenanceWeek } from '../../../api/_lib/rules/manutencao'
 import {
   FLAG_TEXT,
+  ZONE_COLUMN,
   ZONE_LABEL,
   averageReadings,
   changeSentence,
@@ -19,11 +20,14 @@ import {
   composition,
   confirmationSentence,
   measureFlags,
+  measuredWaistSite,
   needsThirdReading,
   referenceWeight,
   targetBodyFatPct,
   targetWaist,
+  waistSiteFor,
   type MeasureFlag,
+  type WaistSite,
   type Zone,
 } from '../../../api/_lib/rules/composicao'
 import type { BodyMeasurement } from '../../lib/types'
@@ -33,15 +37,6 @@ import Icon from '../ui/Icon'
 const ALL_ZONES: Zone[] = ['neck', 'waist', 'hips', 'chest', 'arm', 'thigh', 'calf']
 // Nas mulheres a anca entra na fórmula: passa a essencial.
 const essentialZones = (sex: string | null): Zone[] => (sex === 'f' ? ['neck', 'waist', 'hips'] : ['neck', 'waist'])
-const COLUMN: Record<Zone, keyof BodyMeasurement> = {
-  neck: 'neck_cm',
-  waist: 'waist_cm',
-  chest: 'chest_cm',
-  hips: 'hips_cm',
-  arm: 'arm_cm',
-  thigh: 'thigh_cm',
-  calf: 'calf_cm',
-}
 
 type Readings = Record<Zone, string[]>
 
@@ -90,8 +85,9 @@ export default function MedidasSheet() {
           setDate(editing.date)
           const r = emptyReadings()
           for (const zone of ALL_ZONES) {
-            const list = editing.readings?.[zone]
-            const value = editing[COLUMN[zone]] as number | null
+            const raw = editing.readings?.[zone]
+            const list = Array.isArray(raw) ? raw : null
+            const value = editing[ZONE_COLUMN[zone]] as number | null
             r[zone] = list?.length ? [...list.map(String), '', ''].slice(0, 3) : [value != null ? String(value) : '', '', '']
             if ((list?.length ?? 0) > 1) setTwice(true)
             if (OPTIONAL.includes(zone) && value != null) setShowOptional(true)
@@ -127,6 +123,10 @@ export default function MedidasSheet() {
   const waist = value('waist')
   const hips = value('hips')
   const needsHips = profile.sex === 'f'
+  // Onde se mede a cintura: ao corrigir, onde foi essa medição; numa nova, o
+  // sítio da fórmula (umbigo nos homens, parte mais estreita nas mulheres).
+  const site: WaistSite = editId && existing ? measuredWaistSite(existing.readings) : waistSiteFor(profile.sex)
+  const sameSiteBefore = previous != null && measuredWaistSite(previous.readings) === site
   const liveComposition =
     neck != null && waist != null && weightUsed != null
       ? composition(height, { neck_cm: neck, waist_cm: waist, hips_cm: hips, weight_used_kg: weightUsed }, profile.sex)
@@ -166,7 +166,9 @@ export default function MedidasSheet() {
       pct,
       neck,
       waist,
-      previous: previous ? { date: previous.date, neck_cm: previous.neck_cm, waist_cm: previous.waist_cm } : null,
+      previous: previous
+        ? { date: previous.date, neck_cm: previous.neck_cm, waist_cm: sameSiteBefore ? previous.waist_cm : null }
+        : null,
       date,
       maintenance,
       dinnerOutYesterday: dinnerOut,
@@ -178,13 +180,16 @@ export default function MedidasSheet() {
       measured_at: new Date().toISOString(),
       weight_used_kg: weightUsed,
       flags,
-      readings: Object.fromEntries(
-        ALL_ZONES
-          .map((z) => [z, readings[z].map(parse).filter((n): n is number => n != null)] as const)
-          .filter(([, list]) => list.length > 0),
-      ),
+      readings: {
+        ...Object.fromEntries(
+          ALL_ZONES
+            .map((z) => [z, readings[z].map(parse).filter((n): n is number => n != null)] as const)
+            .filter(([, list]) => list.length > 0),
+        ),
+        waist_site: site,
+      },
     }
-    for (const zone of ALL_ZONES) row[COLUMN[zone]] = value(zone)
+    for (const zone of ALL_ZONES) row[ZONE_COLUMN[zone]] = value(zone)
     const { data, error } = await supabase
       .from('body_measurements')
       .upsert(row, { onConflict: 'user_id,date,method' })
@@ -244,7 +249,7 @@ export default function MedidasSheet() {
           )
         : null
     const before =
-      previous?.neck_cm != null && previous.waist_cm != null
+      sameSiteBefore && previous?.neck_cm != null && previous.waist_cm != null
         ? composition(
             height,
             {
@@ -258,7 +263,7 @@ export default function MedidasSheet() {
         : null
     const change = c && before ? compareCompositions(before, c) : null
     const savedTarget =
-      saved.neck_cm != null
+      saved.neck_cm != null && site === waistSiteFor(profile.sex)
         ? targetWaist(
             height,
             Number(saved.neck_cm),
@@ -306,6 +311,12 @@ export default function MedidasSheet() {
                 <p className="text-[15px]">
                   Desde {fmtDayMonth(previous.date)}: {changeSentence(change)} · {confirmationSentence(change)}
                 </p>
+              ) : previous && !sameSiteBefore ? (
+                <p className="text-[15px] text-dim">
+                  A anterior tinha a cintura{' '}
+                  {measuredWaistSite(previous.readings) === 'umbigo' ? 'no umbigo' : 'na parte mais estreita'}: mostro o que
+                  mudou a partir da próxima medição.
+                </p>
               ) : (
                 <p className="text-[15px] text-dim">Na próxima medição mostro o que mudou.</p>
               )}
@@ -324,7 +335,9 @@ export default function MedidasSheet() {
   }
 
   const zoneInput = (zone: Zone, essential: boolean) => {
-    const last = previous?.[COLUMN[zone]] as number | null | undefined
+    // A última cintura noutro sítio não serve de referência.
+    const last =
+      zone === 'waist' && !sameSiteBefore ? null : (previous?.[ZONE_COLUMN[zone]] as number | null | undefined)
     const first = parse(readings[zone][0] ?? '')
     const second = parse(readings[zone][1] ?? '')
     const count = !twice ? 1 : needsThirdReading(first, second) ? 3 : 2
@@ -335,7 +348,11 @@ export default function MedidasSheet() {
         <div className="flex items-baseline justify-between">
           <span className="label">
             {ZONE_LABEL[zone]}
-            {zone === 'waist' ? ' (umbigo)' : zone === 'thigh' ? ` (${profile.thigh_landmark_cm ?? 15} cm acima da rótula)` : ''}
+            {zone === 'waist'
+              ? site === 'natural' ? ' (parte mais estreita)' : ' (umbigo)'
+              : zone === 'thigh'
+                ? ` (${profile.thigh_landmark_cm ?? 15} cm acima da rótula)`
+                : ''}
           </span>
           {last != null && <span className="text-[13px] text-dim">última: {fmt1(Number(last))}</span>}
         </div>
@@ -449,8 +466,11 @@ export default function MedidasSheet() {
   )
 }
 
+// Os sítios do método da Marinha: nas mulheres a cintura é a parte mais
+// estreita e a anca entra na fórmula; nos homens a cintura é no umbigo.
 export function ComoMedirSheet() {
   const sheet = useSheet()
+  const female = useReadyProfile().sex === 'f'
   return (
     <BottomSheet title="Como medir" onClose={sheet.close}>
       <div className="space-y-4 pb-2 text-[15px]">
@@ -460,17 +480,31 @@ export function ComoMedirSheet() {
         </p>
         <div>
           <p className="label">Pescoço</p>
-          <p>Logo abaixo da maçã de Adão, com a fita a descer ligeiramente para a frente; olha em frente.</p>
+          <p>
+            Logo abaixo {female ? 'da laringe' : 'da maçã de Adão'}, com a fita a descer ligeiramente para a frente; olha em
+            frente.
+          </p>
         </div>
         <div>
           <p className="label">Cintura</p>
-          <p>Na horizontal, à altura do umbigo; lê no fim de uma expiração normal, sem encolher a barriga.</p>
+          <p>
+            {female
+              ? 'Na horizontal, na parte mais estreita da barriga (costuma ser a meio entre o umbigo e a ponta de baixo do esterno)'
+              : 'Na horizontal, à altura do umbigo'}
+            ; lê no fim de uma expiração normal, sem encolher a barriga.
+          </p>
         </div>
+        {female && (
+          <div>
+            <p className="label">Anca</p>
+            <p>No maior volume das nádegas, pés juntos.</p>
+          </div>
+        )}
         <div>
           <p className="label">Opcionais</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>Peito: na linha dos mamilos, no fim da expiração.</li>
-            <li>Anca: no maior volume das nádegas, pés juntos.</li>
+            {!female && <li>Anca: no maior volume das nádegas, pés juntos.</li>}
             <li>Braço direito: a meio entre ombro e cotovelo, relaxado.</li>
             <li>Coxa direita: 15 cm acima do topo da rótula, de pé, com o peso nos dois pés.</li>
             <li>Gémeo direito: no maior volume.</li>
