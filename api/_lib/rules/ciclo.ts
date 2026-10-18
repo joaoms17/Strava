@@ -82,6 +82,24 @@ export function cycleInfo(starts: string[], today: string, options: CycleOptions
   }
 }
 
+// Algum dia de [from, to] na semana de água: o Balanço, a Conta da gordura e
+// o resumo da semana não leem essa subida como gordura nem como comida por
+// registar. Só para mulheres com o ciclo marcado.
+export function waterWeekDuring(
+  profile: { sex?: string | null; goals?: Record<string, unknown> | null },
+  from: string,
+  to: string,
+): boolean {
+  if (profile.sex !== 'f') return false
+  const starts = cleanStarts(profile.goals?.ciclo)
+  if (starts.length === 0) return false
+  const options = cycleOptions(profile.goals)
+  for (let d = from; d <= to; d = shiftDate(d, 1)) {
+    if (cycleInfo(starts, d, options)?.waterWeek) return true
+  }
+  return false
+}
+
 export const PHASE_LABEL: Record<CyclePhase, string> = {
   menstrual: 'período',
   folicular: 'fase folicular',

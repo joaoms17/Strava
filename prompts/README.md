@@ -14,3 +14,4 @@ Uma alteração ao prompt é sempre um ficheiro novo (`v2`, `v3`, …), nunca um
 - `workout-shot.v1.md` — Fase 3: prints do Garmin Connect, Strava e foto da consola; copiar só o que está impresso.
 - `menu-pick.v1.md` — ＋ › «Escolher pelo menu»: lê os pratos do menu e estima a dose de restaurante de cada um (kcal e macros), com o tipo (prato, entrada, sobremesa…) e o preço.
 - `workout-said.v2.md` — Treino › «Dizer ou escrever»: recebe os exercícios que a pessoa já fez e os do catálogo e usa esses nomes, para o histórico de um exercício não se partir em dois.
+- `weekly-review.v3.md` — resumo neutro da semana: recebe também as médias do relógio (`bem_estar`) e a semana de água do ciclo (`ciclo`), e não lê essa subida do peso como gordura.
