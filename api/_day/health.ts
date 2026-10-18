@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { timingSafeEqual } from 'node:crypto'
 import { adminClient } from '../_lib/supabase.js'
+import { sameSecret } from '../_lib/secret.js'
 import { aiProvider, anthropic, MODELS } from '../_lib/anthropic.js'
 import { geminiModels } from '../_lib/rules/gemini.js'
 import {
@@ -36,12 +36,6 @@ interface Check {
   ok: boolean
   ms?: number
   detail?: string
-}
-
-function sameSecret(given: string, expected: string): boolean {
-  const a = Buffer.from(given)
-  const b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
 }
 
 function providedToken(req: VercelRequest): string {
