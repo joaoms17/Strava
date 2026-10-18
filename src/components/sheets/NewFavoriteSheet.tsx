@@ -145,10 +145,14 @@ export default function NewFavoriteSheet() {
   async function readRecipe() {
     const input = source.trim()
     if (!input) return
+    // Partilhar a partir de outra app cola muitas vezes «Vê esta receita https://…»:
+    // com um só link e pouco texto à volta, conta o link.
+    const links = input.match(/https?:\/\/\S+/gi) ?? []
+    const link = links.length === 1 && input.length - links[0]!.length < 120 ? links[0]! : null
     try {
       const result = await postApi<{ title: string; doses: number | null; items: MealItem[] }>(
         '/api/meal/recipe',
-        /^https?:\/\/\S+$/i.test(input) ? { url: input } : { text: input },
+        link ? { url: link } : { text: input },
       )
       setRecipe({ items: result.items, doses: result.doses ?? 4, dosesKnown: result.doses != null })
       if (!name.trim() && result.title) setName(result.title.slice(0, 60))
