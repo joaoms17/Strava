@@ -16,6 +16,7 @@ import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
 import AiCheck from '../AiCheck'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
+import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
 import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
@@ -481,6 +482,13 @@ export default function MealSheet() {
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
+
+            {current.analysis_error && current.deleted_at == null && (
+              <p className="text-[14px] text-attn">
+                A foto nova não foi analisada. {splitStoredError(current.analysis_error).message} Junta o que faltava
+                em «Corrigir por texto».
+              </p>
+            )}
 
             <ul className="divide-y divide-line rounded-2xl bg-surface2">
               {items.map((item, i) => (

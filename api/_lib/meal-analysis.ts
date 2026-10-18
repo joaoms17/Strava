@@ -4,13 +4,14 @@ import { AiError, describeAiError, errorForStorage } from './rules/resposta-ia.j
 import { MealAnalysisSchema, type MealAnalysis } from './schemas.js'
 import {
   PROMPT_MEAL_CORRECT,
+  PROMPT_MEAL_PHOTO_ADD,
   PROMPT_MEAL_PHOTO_V2,
   PROMPT_MEAL_TEXT_V2,
   promptVersion,
   readPrompt,
 } from './prompts.js'
 import { mealTotals, type MealItem } from './rules/meal-totals.js'
-import { analysedStatus, foodRefs, guardedWrite, toMealItems } from './rules/analise.js'
+import { analysedStatus, foodRefs, guardedWrite, mergeAdded, toMealItems } from './rules/analise.js'
 import { mealIsEstimate } from './rules/estimativas.js'
 import { clockTime, lisbonClock, lisbonInstant } from './rules/momentos.js'
 import { dailyVisionCapReached, monthlyCapReached } from './rules/custos.js'
@@ -138,13 +139,36 @@ export async function correctItems(
   return { items: corrected, title: parsed.title, confidence: parsed.meal_confidence }
 }
 
+// Fotos juntas a uma refeição que já tinha itens («Juntar foto» numa refeição
+// analisada, de código de barras, favorita…): os itens ficam e a IA só junta
+// o que é novo.
+export function addingToItems(meal: Pick<MealRow, 'items' | 'photo_paths'>): boolean {
+  return (meal.items?.length ?? 0) > 0 && (meal.photo_paths?.length ?? 0) > 0
+}
+
 async function runModel(
   admin: SupabaseClient,
   meal: MealRow,
 ): Promise<{ analysis: MealAnalysis; refs: Record<string, string>; model: string; prompt: string; cost: number }> {
   const { refs, forPrompt } = await foodLibrary(admin, meal.user_id)
   const photos = meal.photo_paths ?? []
+  const adding = addingToItems(meal)
+  const byFood = new Map(Object.entries(refs).map(([ref, id]) => [id, ref]))
   const payload = JSON.stringify({
+    ...(adding
+      ? {
+          itens_atuais: meal.items.map((i) => ({
+            name: i.name,
+            grams: i.grams,
+            kcal: i.kcal,
+            protein: i.protein,
+            carbs: i.carbs,
+            fat: i.fat,
+            confidence: i.confidence ?? (i.estimated ? 'media' : 'alta'),
+            food_ref: i.food_id ? (byFood.get(i.food_id) ?? null) : null,
+          })),
+        }
+      : {}),
     texto: meal.raw_text || null,
     nota: meal.note || null,
     etiquetas: meal.tags ?? [],
@@ -152,6 +176,7 @@ async function runModel(
     momento: meal.slot,
     alimentos: forPrompt,
   })
+  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V2
 
   if (photos.length > 0) {
     const images = await Promise.all(
@@ -175,13 +200,16 @@ async function runModel(
         model: MODELS.vision,
         max_tokens: 4096,
         thinking: NO_THINKING,
-        system: readPrompt(PROMPT_MEAL_PHOTO_V2),
+        system: readPrompt(photoPrompt),
         messages: [{ role: 'user', content: [...images, { type: 'text', text: payload }] }],
       },
       MealAnalysisSchema,
     )
-    if (analysis.items.length === 0) throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
-    return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_PHOTO_V2), cost }
+    // A juntar, «nada de novo» é uma resposta válida: ficam os itens que havia.
+    if (analysis.items.length === 0 && !adding) {
+      throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
+    }
+    return { analysis, refs, model, prompt: promptVersion(photoPrompt), cost }
   }
 
   const { output: analysis, cost, model } = await structuredCall(
@@ -208,7 +236,8 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
   const startedAt = Date.now()
   try {
     const { analysis, refs, model, prompt, cost } = await runModel(admin, meal)
-    const items = toMealItems(analysis.items, refs)
+    const analysed = toMealItems(analysis.items, refs)
+    const items = addingToItems(meal) ? mergeAdded(meal.items, analysed) : analysed
     const tags = meal.tags ?? []
     const inputType = meal.input_type === 'photo' ? 'photo' : 'text'
 
@@ -260,12 +289,15 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
     // pedir outra tentativa já; um erro que se ia repetir (chave, pedido
     // recusado, foto em falta) ou a 3.ª tentativa passam logo a «erro», com o
     // motivo e o botão «Tentar outra vez».
+    // A juntar fotos a uma refeição com itens, a falha não a tira das contas:
+    // volta a «por rever» com os itens que tinha e o motivo à vista.
     const retry = describeAiError(err).transient && meal.analysis_attempts < 3
+    const failed = addingToItems(meal) ? { status: 'por_rever', analysis_started_at: null } : { status: 'erro' }
     await admin
       .from('meals')
       .update({
         analysis_error: errorForStorage(err),
-        ...(retry ? { analysis_started_at: null } : { status: 'erro' }),
+        ...(retry ? { analysis_started_at: null } : failed),
       })
       .eq('id', meal.id)
       .eq('analysis_started_at', claimedAt)

@@ -3,7 +3,7 @@ import { postApi } from './api'
 import { prepareImage, sha256Hex } from './image'
 import { STORES, inStore } from './idb'
 import { scopedKey } from './scoped'
-import type { Slot } from './types'
+import type { MealItem, Slot } from './types'
 
 export const MAX_MEAL_PHOTOS = 4
 
@@ -88,13 +88,23 @@ export function clearPendingGallery(): void {
   pendingGallery = null
 }
 
+// O que a refeição tinha antes de «Juntar foto» (para Anular), quando já
+// tinha itens: esses ficam e a IA só junta o que é novo.
+export interface AttachPrevious {
+  items: MealItem[]
+  status: 'ok' | 'por_rever'
+  photo_paths: string[]
+  thumb_paths: string[]
+  image_hashes: string[]
+}
+
 // Juntar fotos a uma refeição que já existe (não carregou, ficou com erro ou
 // faltava a foto do rótulo). Precisa de rede: as fotos sobem logo e a
-// refeição volta a ser analisada com todas.
+// refeição volta a ser analisada.
 export async function attachPhotos(
   meal: { id: string; client_id: string | null; photo_paths: string[] | null },
   files: File[],
-): Promise<void> {
+): Promise<AttachPrevious | null> {
   if (!navigator.onLine) throw new Error('Sem rede. Junta a foto quando tiveres rede.')
   const {
     data: { user },
@@ -127,5 +137,17 @@ export async function attachPhotos(
     thumb_paths.push(`${base}_t.jpg`)
     image_hashes.push(hash)
   }
-  await postApi('/api/meal/attach', { meal_id: meal.id, photo_paths, thumb_paths, image_hashes })
+  const { previous } = await postApi<{ previous: AttachPrevious | null }>('/api/meal/attach', {
+    meal_id: meal.id,
+    photo_paths,
+    thumb_paths,
+    image_hashes,
+  })
+  return previous ?? null
+}
+
+// Anular «Juntar foto»: volta aos itens, ao estado e às fotos de antes (uma
+// análise ainda a correr já não grava).
+export async function detachPhotos(mealId: string, previous: AttachPrevious): Promise<void> {
+  await postApi('/api/meal/detach', { meal_id: mealId, ...previous })
 }

@@ -10,7 +10,7 @@ import { duplicatePhotoWindow } from '../_lib/rules/captura.js'
 import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
-import { aiLimitReached, claimAndAnalyse, correctItems, type MealRow } from '../_lib/meal-analysis.js'
+import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, type MealRow } from '../_lib/meal-analysis.js'
 
 // Comida sem espera (Fase 2): a captura responde 202 logo e a análise corre
 // em segundo plano; o telemóvel pergunta pelo estado e, se preciso, pede
@@ -50,6 +50,16 @@ const AttachSchema = MealIdSchema.extend({
 })
 
 export const MAX_MEAL_PHOTOS = 4
+
+// Anular «Juntar foto»: os itens, o estado e as fotos de antes. Só tira
+// fotos (as que ficam têm de já lá estar).
+const DetachSchema = MealIdSchema.extend({
+  items: z.array(MealItemInputSchema).min(1).max(30),
+  status: z.enum(['ok', 'por_rever']),
+  photo_paths: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+  thumb_paths: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+  image_hashes: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+})
 
 const CorrectSchema = MealIdSchema.extend({ text: z.string().trim().min(1).max(500) })
 
@@ -236,6 +246,15 @@ export const attach = post(async ({ db, userId, body, res }) => {
   const photoPaths = [...current, ...added]
   const admin = adminClient()
   const overLimit = await aiLimitReached(admin, userId, true)
+  // Numa refeição com itens (analisada, de código de barras, favorita, só
+  // números…) os itens ficam: a IA só junta o que é novo nas fotos, e o tipo
+  // de registo não muda. Acima do limite não se junta (os itens deixavam de
+  // contar até haver análise).
+  const keeping = (meal.status === 'ok' || meal.status === 'por_rever') && addingToItems({ items: meal.items, photo_paths: photoPaths })
+  if (keeping && overLimit) throw new HttpError(429, 'Chegaste ao limite da IA que definiste. A foto não foi junta.')
+  const previous = keeping
+    ? { items: meal.items, status: meal.status, photo_paths: current, thumb_paths: thumbs, image_hashes: hashes }
+    : null
   const { data, error } = await db
     .from('meals')
     .update({
@@ -243,8 +262,7 @@ export const attach = post(async ({ db, userId, body, res }) => {
       photo_path: photoPaths[0],
       thumb_paths: [...thumbs, ...input.thumb_paths.filter((p) => !thumbs.includes(p))],
       image_hashes: [...hashes, ...input.image_hashes.filter((h) => !hashes.includes(h))],
-      input_type: 'photo',
-      is_estimate: true,
+      ...(keeping ? {} : { input_type: 'photo', is_estimate: true }),
       status: overLimit ? 'sem_analise' : 'a_analisar',
       analysis_attempts: 0,
       analysis_started_at: null,
@@ -256,7 +274,38 @@ export const attach = post(async ({ db, userId, body, res }) => {
     .single()
   if (error) throw new HttpError(500, error.message)
   if (data.status === 'a_analisar') inBackground(claimAndAnalyse(admin, meal.id))
-  res.status(202).json({ meal: data })
+  res.status(202).json({ meal: data, previous })
+})
+
+export const detach = post(async ({ db, body, res }) => {
+  const input = parse(DetachSchema, body)
+  const meal = await ownMeal(db, input.meal_id)
+  if (meal.deleted_at) throw new HttpError(404, 'Refeição apagada.')
+  const keep = (list: string[] | null | undefined, wanted: string[]) => (list ?? []).filter((x) => wanted.includes(x))
+  const photoPaths = keep(meal.photo_paths, input.photo_paths)
+  const items = (input.items as MealItem[]).map((i) => ({ ...i, grams: round1(i.grams) }))
+  const tags = (meal.tags ?? []) as string[]
+  // Sem a reivindicação, uma análise ainda a correr já não grava por cima.
+  const { data, error } = await db
+    .from('meals')
+    .update({
+      items,
+      ...mealTotals(items),
+      is_estimate: mealIsEstimate(meal.input_type === 'photo' ? 'photo' : 'text', tags.includes('jantar_fora'), items),
+      photo_paths: photoPaths,
+      photo_path: photoPaths[0] ?? null,
+      thumb_paths: keep(meal.thumb_paths as string[] | null, input.thumb_paths),
+      image_hashes: keep(meal.image_hashes as string[] | null, input.image_hashes),
+      status: input.status,
+      confirmed_at: input.status === 'ok' ? new Date().toISOString() : null,
+      analysis_started_at: null,
+      analysis_error: null,
+    })
+    .eq('id', meal.id)
+    .select()
+    .single()
+  if (error) throw new HttpError(500, error.message)
+  res.status(200).json({ meal: data })
 })
 
 export const correct = post(async ({ db, userId, body, res }) => {
@@ -275,6 +324,7 @@ export const correct = post(async ({ db, userId, body, res }) => {
       is_estimate: mealIsEstimate(meal.input_type === 'photo' ? 'photo' : 'text', tags.includes('jantar_fora'), items),
       status: 'ok',
       confirmed_at: new Date().toISOString(),
+      analysis_error: null,
     })
     .eq('id', meal.id)
     .select()
@@ -337,6 +387,8 @@ export const update = post(async ({ db, userId, body, res }) => {
     patch.status = 'ok'
     patch.confirmed_at = new Date().toISOString()
   }
+  // Mexer nos itens ou confirmar dá por visto o aviso da foto que não foi analisada.
+  if ((items || input.confirm === true) && meal.status !== 'a_analisar' && meal.analysis_error) patch.analysis_error = null
   // Anular um «Está certo».
   if (input.confirm === false && meal.status === 'ok') {
     patch.status = 'por_rever'

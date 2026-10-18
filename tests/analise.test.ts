@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { analysedStatus, foodRefs, guardedWrite, implausibleItem, toMealItems } from '../api/_lib/rules/analise'
+import { analysedStatus, foodRefs, guardedWrite, implausibleItem, mergeAdded, toMealItems } from '../api/_lib/rules/analise'
 import type { MealItem } from '../api/_lib/rules/meal-totals'
 
 const item = (confidence: 'alta' | 'media' | 'baixa', food_ref: string | null = null) => ({
@@ -98,5 +98,33 @@ describe('escrita protegida da nota', () => {
     row.note = 'x'
     row.deleted = true
     expect(await guardedWrite(base, null, 'T1', deps)).toBeNull()
+  })
+})
+
+describe('juntar fotos a uma refeição com itens', () => {
+  const exact = (name: string, kcal: number): MealItem => ({
+    name, grams: 125, kcal, protein: 10, carbs: 5, fat: 2, food_id: 'f1', estimated: false, confidence: 'alta',
+  })
+  const guess = (name: string, kcal: number): MealItem => ({
+    name, grams: 125, kcal, protein: 10, carbs: 5, fat: 2, food_id: null, estimated: true, confidence: 'media',
+  })
+
+  it('os itens que lá estavam ficam e entra o que é novo', () => {
+    const merged = mergeAdded([exact('Iogurte grego', 120)], [guess('Pudim flan', 210)])
+    expect(merged.map((i) => i.name)).toEqual(['Iogurte grego', 'Pudim flan'])
+    expect(merged[0]).toMatchObject({ kcal: 120, food_id: 'f1' })
+  })
+
+  it('um item exato nunca muda nem se repete; um estimado dá lugar ao rótulo', () => {
+    const labelled = { ...exact('Arroz', 160), food_id: null }
+    const merged = mergeAdded([exact('Iogurte grego', 120), guess('arroz', 230)], [guess('Iogurte Grego', 300), labelled])
+    expect(merged).toHaveLength(2)
+    expect(merged[0]).toMatchObject({ name: 'Iogurte grego', kcal: 120 })
+    expect(merged[1]).toMatchObject({ name: 'Arroz', kcal: 160, confidence: 'alta' })
+  })
+
+  it('nada de novo: fica tudo igual', () => {
+    const current = [exact('Iogurte grego', 120)]
+    expect(mergeAdded(current, [])).toEqual(current)
   })
 })

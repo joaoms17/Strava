@@ -67,6 +67,27 @@ export function toMealItems(items: AnalysedItem[], refs: Record<string, string>)
     })
 }
 
+const foldName = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+
+// Fotos juntas a uma refeição já analisada («Juntar foto»): o que lá estava
+// fica (valores do código de barras, da favorita, as correções, os × e os
+// −/+) e entra só o que é novo. Um item estimado com o mesmo nome dá lugar ao
+// que a IA leu no rótulo; um item exato nunca muda nem se repete.
+export function mergeAdded(current: MealItem[], added: MealItem[]): MealItem[] {
+  const merged = [...current]
+  for (const item of added) {
+    const i = merged.findIndex((m) => foldName(m.name) === foldName(item.name))
+    if (i < 0) merged.push(item)
+    else if (i < current.length && merged[i]!.estimated) merged[i] = item
+  }
+  return merged
+}
+
 // Por rever quando algum item tem confiança baixa ou a refeição não é «alta».
 // Contam as duas (ok e por_rever); as por rever aparecem com ≈ e «confirma».
 export function analysedStatus(items: { confidence?: Confidence }[], mealConfidence: Confidence): MealStatus {
