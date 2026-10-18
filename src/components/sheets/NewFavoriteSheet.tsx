@@ -185,12 +185,13 @@ export default function NewFavoriteSheet() {
         {
           label: 'Anular',
           run: async () => {
-            await deleteFavorite(favId, path)
+            // As cópias primeiro: o servidor confirma que vêm desta favorita.
             for (const c of copies) {
               await postApi('/api/meal/favorite-copy', { favorite_id: favId, to_user_id: c.userId, undo_id: c.id }).catch(
                 () => null,
               )
             }
+            await deleteFavorite(favId, path)
             emitDataChanged()
           },
         },

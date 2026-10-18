@@ -146,13 +146,19 @@ export async function favoriteCopy(req: VercelRequest, res: VercelResponse) {
     if (to_user_id === user.id) throw new HttpError(400, 'Escolhe outra pessoa.')
     const admin = adminClient()
 
+    // A favorita tem de ser de quem a copia (RLS).
+    const { data: source } = await db.from('favorites').select('*').eq('id', favorite_id).eq('kind', 'meal').maybeSingle()
+    if (!source) throw new HttpError(404, 'Favorita não encontrada.')
+
     if (undo_id) {
-      // Só uma cópia acabada de fazer (nos últimos 15 min).
+      // Só uma cópia desta favorita acabada de fazer (nos últimos 15 min): o
+      // admin client não apaga outra favorita da outra pessoa.
       const { data: removed } = await admin
         .from('favorites')
         .delete()
         .eq('id', undo_id)
         .eq('user_id', to_user_id)
+        .eq('name', source.name as string)
         .gte('created_at', new Date(Date.now() - 15 * 60_000).toISOString())
         .select('photo_path')
       const photo = removed?.[0]?.photo_path as string | null | undefined
@@ -160,10 +166,6 @@ export async function favoriteCopy(req: VercelRequest, res: VercelResponse) {
       res.status(200).json({ ok: true })
       return
     }
-
-    // A favorita tem de ser de quem a copia (RLS).
-    const { data: source } = await db.from('favorites').select('*').eq('id', favorite_id).eq('kind', 'meal').maybeSingle()
-    if (!source) throw new HttpError(404, 'Favorita não encontrada.')
     const { data: target } = await admin.from('profile').select('user_id').eq('user_id', to_user_id).maybeSingle()
     if (!target) throw new HttpError(404, 'Pessoa não encontrada.')
 
