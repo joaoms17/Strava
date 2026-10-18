@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useThemeColors } from '../lib/colors'
+import { exerciseKey } from '../../api/_lib/rules/exercicios'
 import type { ExerciseLogRow } from '../lib/types'
 
 
@@ -17,7 +18,9 @@ function fmtDate(date: string): string {
   return `${day}/${month}`
 }
 
-// Carga por exercício (12 semanas): melhor série de cada sessão.
+// Carga por exercício (12 semanas): melhor série de cada sessão. O mesmo
+// exercício escrito de outra maneira (maiúsculas, acentos) é uma só linha,
+// com o nome da última vez.
 export default function LoadChart({
   logs,
   workoutDates,
@@ -28,29 +31,32 @@ export default function LoadChart({
   const colors = useThemeColors()
   const { exercises, seriesFor } = useMemo(() => {
     const byExercise = new Map<string, Map<string, number>>() // exercise -> date -> top load
+    const names = new Map<string, { name: string; date: string }>()
     for (const log of logs) {
       if (log.load_kg == null) continue
       const date = workoutDates.get(log.workout_id)
       if (!date) continue
-      const perDate = byExercise.get(log.exercise) ?? new Map<string, number>()
-      perDate.set(date, Math.max(perDate.get(date) ?? 0, log.load_kg))
-      byExercise.set(log.exercise, perDate)
+      const key = exerciseKey(log.exercise)
+      const perDate = byExercise.get(key) ?? new Map<string, number>()
+      perDate.set(date, Math.max(perDate.get(date) ?? 0, Number(log.load_kg)))
+      byExercise.set(key, perDate)
+      if (!names.has(key) || names.get(key)!.date <= date) names.set(key, { name: log.exercise, date })
     }
     const ranked = [...byExercise.entries()]
       .sort(([, a], [, b]) => b.size - a.size)
       .slice(0, 4)
-      .map(([name]) => name)
+      .map(([key]) => key)
     return {
-      exercises: ranked,
-      seriesFor: (name: string) =>
-        [...(byExercise.get(name) ?? new Map<string, number>()).entries()]
+      exercises: ranked.map((key) => ({ key, name: names.get(key)?.name ?? key })),
+      seriesFor: (key: string) =>
+        [...(byExercise.get(key) ?? new Map<string, number>()).entries()]
           .map(([date, load]) => ({ date, load }))
           .sort((a, b) => a.date.localeCompare(b.date)),
     }
   }, [logs, workoutDates])
 
   const [selected, setSelected] = useState<string | null>(null)
-  const exercise = selected ?? exercises[0] ?? null
+  const exercise = exercises.some((e) => e.key === selected) ? selected : (exercises[0]?.key ?? null)
 
   if (!exercise) {
     return (
@@ -70,12 +76,12 @@ export default function LoadChart({
     <div className="rounded-2xl border border-edge bg-card p-4">
       <h2 className="text-sm font-semibold text-dim">Carga por exercício — 12 semanas</h2>
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {exercises.map((name) => (
+        {exercises.map(({ key, name }) => (
           <button
-            key={name}
-            onClick={() => setSelected(name)}
+            key={key}
+            onClick={() => setSelected(key)}
             className={`rounded-lg border px-2.5 py-1 text-xs ${
-              name === exercise ? 'border-accent text-accent' : 'border-edge text-dim'
+              key === exercise ? 'border-accent text-accent' : 'border-edge text-dim'
             }`}
           >
             {name}

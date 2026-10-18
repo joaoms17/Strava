@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { deloadSets, nextLoad, readyForIncrease, readyForIncreaseFree, setsSummary, suggestExercise } from '../api/_lib/rules/progressao-forca'
+import {
+  deloadSets,
+  loadStep,
+  loadStepDown,
+  nextLoad,
+  readyForIncrease,
+  readyForIncreaseFree,
+  setsSummary,
+  suggestExercise,
+} from '../api/_lib/rules/progressao-forca'
 
 const set = (reps: number, rpe: number, load = 20) => ({ reps, rpe, load_kg: load })
 
@@ -89,6 +98,21 @@ describe('ginásio livre (regra 11 revista)', () => {
       { reps: 10, load_kg: 40, rpe: null },
     ]
     expect(suggestExercise([top(40), last])).toMatchObject({ ready: false, today: 40 })
+  })
+
+  it('o topo das repetições é o do teu treino: 5–8 sobe aos 8, 15–20 só aos 20', () => {
+    const at = (reps: number, load: number) => [1, 2, 3].map(() => ({ reps, load_kg: load, rpe: null }))
+    expect(suggestExercise([at(8, 100), at(8, 100)], 8)).toMatchObject({ ready: true, today: 102 })
+    expect(suggestExercise([at(8, 100), at(8, 100)])).toMatchObject({ ready: false, today: 100 })
+    expect(suggestExercise([at(12, 30), at(12, 30)], 20)).toMatchObject({ ready: false, today: 30 })
+    expect(suggestExercise([at(20, 30), at(20, 30)], 20)).toMatchObject({ ready: true, today: 32 })
+  })
+
+  it('abaixo de 10 kg sobe-se 1 kg (2 kg em 4 kg eram +50 %)', () => {
+    expect(suggestExercise([top(4), top(4)])).toMatchObject({ ready: true, today: 5 })
+    expect(suggestExercise([top(10), top(10)])).toMatchObject({ today: 12 })
+    expect([loadStep(null), loadStep(0), loadStep(9.5), loadStep(10), loadStep(40)]).toEqual([2, 1, 1, 2, 2])
+    expect([loadStepDown(12), loadStepDown(10), loadStepDown(5)]).toEqual([2, 1, 1])
   })
 
   it('resumo das séries', () => {
