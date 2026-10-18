@@ -47,6 +47,7 @@ export default function MealSheet() {
   const [mode, setMode] = useState<Mode>('view')
   // As outras pessoas da app, para «Partilhar com …» (comeram o mesmo).
   const [people, setPeople] = useState<{ user_id: string; name: string }[]>([])
+  const [shared, setShared] = useState<string[]>([])
   useEffect(() => {
     let alive = true
     getApi<{ people: { user_id: string; name: string }[] }>('/api/meal/people')
@@ -238,11 +239,17 @@ export default function MealSheet() {
   }
 
   async function shareWith(person: { user_id: string; name: string }) {
-    const result = await call<{ ok: boolean; to: string }>('/api/meal/share', {
+    const result = await call<{ ok: boolean; to: string; already?: boolean }>('/api/meal/share', {
       meal_id: current.id,
       to_user_id: person.user_id,
     })
-    if (result) toast(`Partilhada com ${result.to}. As quantidades ajustam-se na conta de ${result.to}.`)
+    if (!result) return
+    setShared([...shared, person.user_id])
+    toast(
+      result.already
+        ? `Já estava partilhada com ${result.to}.`
+        : `Partilhada com ${result.to}. Fica em «Rever» na conta de ${result.to}, para ajustar a porção.`,
+    )
   }
 
   async function confirm() {
@@ -585,11 +592,17 @@ export default function MealSheet() {
                           Juntar foto
                         </AttachPhotoButton>
                       )}
-                      {people.map((p) => (
-                        <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareWith(p)} className="text-eat">
-                          Partilhar com {p.name}
-                        </BusyButton>
-                      ))}
+                      {people.map((p) =>
+                        shared.includes(p.user_id) ? (
+                          <span key={p.user_id} className="text-dim">
+                            Partilhada com {p.name} ✓
+                          </span>
+                        ) : (
+                          <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareWith(p)} className="text-eat">
+                            Partilhar com {p.name}
+                          </BusyButton>
+                        ),
+                      )}
                     </div>
                   )
                 )}

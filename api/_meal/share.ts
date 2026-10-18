@@ -6,7 +6,9 @@ import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
 
 // Partilhar uma refeição com outra pessoa da app (ex.: o João e a Joana a
 // comer o mesmo): copia-a para a conta dela, no mesmo dia, refeição e hora,
-// com as fotos copiadas para a pasta dela. Ela ajusta depois as quantidades.
+// com as fotos copiadas para a pasta dela. A cópia entra por rever (com as
+// quantidades de quem partilhou, que ela ajusta em «Rever») e guarda a
+// refeição de origem: partilhar outra vez a mesma não a duplica.
 // A app é de uma casa (no máximo 4 pessoas): quem tem sessão pode partilhar
 // com qualquer outro perfil.
 
@@ -60,6 +62,19 @@ export async function share(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
     if (!target) throw new HttpError(404, 'Pessoa não encontrada.')
 
+    const toName = await personName(admin, body.data.to_user_id)
+    const { data: already } = await admin
+      .from('meals')
+      .select('id')
+      .eq('user_id', body.data.to_user_id)
+      .eq('source_meal_id', source.id)
+      .is('deleted_at', null)
+      .limit(1)
+    if (already?.length) {
+      res.status(200).json({ ok: true, to: toName, already: true })
+      return
+    }
+
     const items = source.items as MealItem[]
     const fromName = await personName(admin, user.id)
     const { data: meal, error } = await admin
@@ -76,8 +91,8 @@ export async function share(req: VercelRequest, res: VercelResponse) {
         date: source.date,
         logged_at: source.logged_at,
         slot: source.slot,
-        status: 'ok',
-        confirmed_at: new Date().toISOString(),
+        source_meal_id: source.id,
+        status: 'por_rever',
         items,
         ...mealTotals(items),
       })
@@ -104,7 +119,7 @@ export async function share(req: VercelRequest, res: VercelResponse) {
         .eq('id', meal.id)
     }
 
-    res.status(200).json({ ok: true, to: await personName(admin, body.data.to_user_id) })
+    res.status(200).json({ ok: true, to: toName })
   } catch (err) {
     respondError(res, err)
   }
