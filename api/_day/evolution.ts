@@ -88,7 +88,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .lte('date', today),
       db.from('meals_counted').select('date,kcal').gte('date', shiftDate(today, -28)).lt('date', today),
       // A forma do intervals.icu (sem a migração ou sem dados, fica a da app).
-      db.from('health_daily').select('date,ctl,atl,vo2max').gte('date', shiftDate(today, -28)).lte('date', today),
+      db.from('health_daily').select('date,ctl,atl').gte('date', shiftDate(today, -28)).lte('date', today),
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
@@ -100,9 +100,8 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
       day.kcal += Number(m.kcal ?? 0)
     }
     const toConfirm = daysToConfirm((days.data ?? []) as { date: string; flags: string[] | null }[], mealsByDate, today)
-    const icuRows = (icu.data ?? []) as (IcuForm & { vo2max: number | null })[]
-    const form = preferIcuForm(fitnessSeries(allWorkouts, shiftDate(today, -125), today).slice(-29), icuRows).points
-    const vo2max = icuRows.filter((r) => r.vo2max != null).sort((a, b) => b.date.localeCompare(a.date))[0]?.vo2max ?? null
+    // A forma de hoje e de há 4 semanas: a do intervals.icu se cobre o período.
+    const form = preferIcuForm(fitnessSeries(allWorkouts, shiftDate(today, -125), today).slice(-29), (icu.data ?? []) as IcuForm[]).points
     const payload = {
       pessoa: {
         sexo: profile.sex === 'f' ? 'mulher' : 'homem',
@@ -138,7 +137,6 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         forma: {
           hoje: form[form.length - 1]?.ctl ?? null,
           ha_4_semanas: form[form.length - 29]?.ctl ?? null,
-          vo2max: vo2max != null ? Number(vo2max) : null,
         },
       },
       dias_por_confirmar: toConfirm,

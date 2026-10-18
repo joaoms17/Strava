@@ -40,6 +40,8 @@ export interface SaveWorkoutBody {
   started_at?: string | null
   // A hora foi suposta (as 18:00 de um dia passado).
   started_at_estimated?: boolean
+  // «Não, é outro» à pergunta «É este treino?».
+  not_duplicate?: boolean
   watts?: number | null
   watts_source?: Workout['watts_source']
   avg_hr?: number | null

@@ -103,7 +103,8 @@ export function missingInfo(w: SessionLike & { source?: string | null }): string
 // desporto), duração parecida (±10 %, no mínimo 3 min), não vieram os dois do
 // relógio (as cópias do relógio já ficam de fora) e não se sabe que começaram
 // a mais de 30 min um do outro (uma hora suposta ou de um registo à mão não
-// conta). Só avisa: quem decide é a pessoa.
+// conta). Só avisa: quem decide é a pessoa, e um «Não, é outro» ao guardar
+// (raw.outro_treino) cala o aviso.
 export const DUPLICATE_START_GAP_MIN = 30
 
 export function possibleDuplicates<
@@ -111,6 +112,7 @@ export function possibleDuplicates<
 >(sessions: T[]): Set<string> {
   const out = new Set<string>()
   const fromWatch = (w: T) => w.external_id != null || w.source === 'intervals'
+  const confirmed = (w: T) => !!w.raw && typeof w.raw === 'object' && (w.raw as { outro_treino?: unknown }).outro_treino === true
   const knownStart = (w: T) => (w.started_at && w.source !== 'manual' && !startGuessed(w) ? Date.parse(w.started_at) : NaN)
   for (let i = 0; i < sessions.length; i++) {
     for (let j = i + 1; j < sessions.length; j++) {
@@ -118,7 +120,7 @@ export function possibleDuplicates<
       const b = sessions[j]!
       if (!a.id || !b.id || a.date !== b.date || !sameKind(a, b)) continue
       if (a.minutes == null || b.minutes == null || !durationsMatch(a.minutes, b.minutes)) continue
-      if (fromWatch(a) && fromWatch(b)) continue
+      if ((fromWatch(a) && fromWatch(b)) || confirmed(a) || confirmed(b)) continue
       const gap = Math.abs(knownStart(a) - knownStart(b)) / 60_000
       if (gap > DUPLICATE_START_GAP_MIN) continue
       out.add(a.id)

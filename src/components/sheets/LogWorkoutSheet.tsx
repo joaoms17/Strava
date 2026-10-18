@@ -81,6 +81,7 @@ export default function LogWorkoutSheet() {
         started_at: startedAt,
         started_at_estimated: startedAt != null,
         merge_into: decision === 'merge' ? match?.id : null,
+        not_duplicate: decision === 'new',
       },
       toast,
     )

@@ -144,6 +144,7 @@ export default function JaFizSheet() {
         kcal_device: type === 'other' ? toInt(deviceKcal) : null,
         favorite_id: favId,
         merge_into: decision === 'merge' ? match?.id : null,
+        not_duplicate: decision === 'new',
       },
       toast,
     )

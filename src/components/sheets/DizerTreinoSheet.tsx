@@ -166,6 +166,7 @@ export default function DizerTreinoSheet() {
           note: said.note,
           name,
           merge_into: decision === 'merge' ? match?.id : null,
+          not_duplicate: decision === 'new',
         },
         toast,
       )

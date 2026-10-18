@@ -129,3 +129,13 @@ describe('minutos por zona', () => {
     expect(zoneMinutes([{ hr_zones: null }, {}], 2)).toBeNull()
   })
 })
+
+describe('possível duplicado depois de «Não, é outro»', () => {
+  it('a pessoa já disse que eram dois treinos: não avisa', async () => {
+    const { possibleDuplicates } = await import('../api/_lib/rules/sessoes')
+    const ride = { id: 'r', date: '2026-10-14', type: 'bike' as const, source: 'intervals', external_id: 'i1', started_at: '2026-10-14T06:02:00Z', minutes: 47 }
+    const evening = { id: 'e', date: '2026-10-14', type: 'bike' as const, source: 'manual', started_at: '2026-10-14T19:15:00Z', minutes: 45 }
+    expect(possibleDuplicates([ride, evening]).size).toBe(2)
+    expect(possibleDuplicates([ride, { ...evening, raw: { hora_estimada: true, outro_treino: true } }]).size).toBe(0)
+  })
+})

@@ -63,14 +63,12 @@ export default function Treino() {
         .eq('kind', 'workout')
         .eq('archived', false)
         .order('use_count', { ascending: false }),
-      // Os prints lidos ficam até serem guardados ou descartados (nunca contam
-      // sozinhos); os que estão a ler ou deram erro, só os da última semana.
       supabase
         .from('workout_imports')
         .select('*')
         .in('status', ['a_ler', 'por_confirmar', 'erro'])
-        .or(`status.eq.por_confirmar,created_at.gte."${new Date(Date.now() - 7 * 86_400_000).toISOString()}"`)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(30),
       // As séries mais recentes (as mais antigas ficavam e as de agora saíam do gráfico).
       supabase
         .from('exercise_log')
@@ -82,7 +80,11 @@ export default function Treino() {
     setData({
       workouts: (workouts ?? []) as Workout[],
       favorites: (favorites ?? []) as Favorite[],
-      pending: (pending ?? []) as WorkoutImport[],
+      // Os prints lidos ficam até serem guardados ou descartados (nunca contam
+      // sozinhos); os que estão a ler ou deram erro, só os da última semana.
+      pending: ((pending ?? []) as WorkoutImport[]).filter(
+        (row) => row.status === 'por_confirmar' || Date.now() - Date.parse(row.created_at) < 7 * 86_400_000,
+      ),
       logs: ((logs ?? []) as ExerciseLogRow[]).reverse(),
       sleep: hasSleep(health as Partial<NightSleep> | null) ? (health as NightSleep) : null,
     })

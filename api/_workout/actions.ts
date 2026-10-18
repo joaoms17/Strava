@@ -28,6 +28,8 @@ const SaveSchema = z.object({
   started_at: z.string().nullable().optional(),
   // A hora foi suposta pelo telemóvel (as 18:00 de um dia passado).
   started_at_estimated: z.boolean().optional(),
+  // «Não, é outro»: havia um parecido nesse dia e a pessoa disse que não é o mesmo.
+  not_duplicate: z.boolean().optional(),
   watts: int(20, 700).nullable().optional(),
   watts_source: WATTS_SOURCE.nullable().optional(),
   avg_hr: int(35, 220).nullable().optional(),
@@ -394,7 +396,7 @@ export const save = post(async ({ db, userId, body, res }) => {
       source_paths: importRow?.source_paths ?? [],
       image_hashes: importRow?.image_hashes ?? [],
       note: input.note?.trim() || null,
-      raw: withGuess(sport ? { sport } : null, guessed),
+      raw: withGuess({ ...(sport ? { sport } : {}), ...(input.not_duplicate ? { outro_treino: true } : {}) }, guessed),
     })
     .select()
     .single()
