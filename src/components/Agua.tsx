@@ -19,6 +19,8 @@ export default function Agua({ date }: { date: string }) {
   // atrás (para o gravado) quando já não há outro toque a caminho.
   const saved = useRef(0)
   const pending = useRef(0)
+  // Cada toque conta: uma leitura que começou antes de um toque já não serve.
+  const taps = useRef(0)
   // Copos juntados noutro sítio (a «Pergunta à app», Anular): volta a ler.
   const version = useDataVersion()
 
@@ -26,11 +28,12 @@ export default function Agua({ date }: { date: string }) {
     // Com um toque a gravar, o que está no ecrã é o mais recente.
     if (pending.current > 0) return
     let alive = true
+    const tapsAtStart = taps.current
     void Promise.all([
       supabase.from('days').select('water_ml').eq('date', date).maybeSingle(),
       supabase.from('weights').select('kg').lte('date', date).order('date', { ascending: false }).limit(1),
     ]).then(([day, weight]) => {
-      if (!alive) return
+      if (!alive || taps.current !== tapsAtStart) return
       // Sem a migração 12 a coluna não existe: o cartão não aparece.
       if (day.error) return setMl(null)
       saved.current = Number(day.data?.water_ml ?? 0)
@@ -46,6 +49,7 @@ export default function Agua({ date }: { date: string }) {
     if (ml == null) return
     const next = Math.max(0, ml + delta)
     setMl(next)
+    taps.current += 1
     pending.current += 1
     let ok = false
     saving.current = saving.current
