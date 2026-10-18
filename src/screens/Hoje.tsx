@@ -46,6 +46,7 @@ import { MAX_MEAL_PHOTOS } from '../lib/capture'
 import WeekStrip from '../components/ui/WeekStrip'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
+import { proteinPicks } from '../../api/_lib/rules/favoritos'
 
 interface DayData {
   meals: (Meal & { created_at: string })[]
@@ -349,10 +350,8 @@ export default function Hoje() {
         nudges,
       })
     : null
-  const proteinFavorites = [...data.favorites]
-    .filter((f) => Number(f.protein) >= 15)
-    .sort((a, b) => Number(b.protein) - Number(a.protein))
-    .slice(0, 3)
+  // As que fecham a proteína sem passar das calorias que faltam.
+  const proteinFavorites = proteinPicks(data.favorites, left)
 
   const hints = profile.dismissed_hints ?? []
   const firstCards = isToday
@@ -820,6 +819,7 @@ export default function Hoje() {
           id={step}
           yesterdayMeals={data.yesterday.meals}
           favorites={proteinFavorites}
+          gap={{ protein: Math.max(0, Math.round(profile.protein_g - proteinIn)), kcal: Math.round(left) }}
           onWeigh={() => sheet.open('peso')}
           onYesterday={(flag) => void runBusy('A guardar…', () => answerYesterday(flag))}
           onFavorite={(fav) => void runBusy('A registar…', () => logFavorite(fav, null, toast))}
@@ -1031,6 +1031,7 @@ function NextStepCard({
   id,
   yesterdayMeals,
   favorites,
+  gap,
   onWeigh,
   onYesterday,
   onFavorite,
@@ -1051,6 +1052,7 @@ function NextStepCard({
   id: NextStepId
   yesterdayMeals: number
   favorites: Favorite[]
+  gap: { protein: number; kcal: number }
   onWeigh: () => void
   onYesterday: (flag: DayAnswer) => void
   onFavorite: (favorite: Favorite) => void
@@ -1229,7 +1231,11 @@ function NextStepCard({
       )}
       {id === 'proteina' && (
         <>
-          <p className="text-[17px]">Ainda tens espaço para proteína.</p>
+          <p className="text-[17px]">
+            {gap.kcal > 0
+              ? `Faltam ${fmtInt(gap.protein)} g de proteína e cabem ${fmtKcal(gap.kcal)} kcal.`
+              : `Faltam ${fmtInt(gap.protein)} g de proteína e as calorias de hoje já chegaram: escolhe algo leve.`}
+          </p>
           {chips}
           <div className="flex justify-end">{later}</div>
         </>

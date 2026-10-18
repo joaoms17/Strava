@@ -13,10 +13,13 @@ function per100(value: number, grams: number): number {
   return round1((value / grams) * 100)
 }
 
-// Depois de guardar uma refeição:
+// Depois de guardar uma refeição (e de a confirmar ou corrigir: o que entra
+// sai de itemsToLearn, rules/aprender.ts):
 // - itens com food_id: use_count +1 e porção habitual ajustada;
 // - itens novos de texto, não estimados: entram em foods com source 'claude'
 //   (fotografia não cria alimentos — as estimativas poluíam a biblioteca).
+// Filtra sempre pela pessoa: a análise em segundo plano usa a service role,
+// e uma refeição partilhada traz os food_id de quem a partilhou.
 export async function learnFoods(
   db: SupabaseClient,
   userId: string,
@@ -30,6 +33,7 @@ export async function learnFoods(
           .from('foods')
           .select('id,use_count,default_portion_g')
           .eq('id', item.food_id)
+          .eq('user_id', userId)
           .maybeSingle()
         if (!food) continue
         await db
@@ -49,6 +53,7 @@ export async function learnFoods(
       const { data: match } = await db
         .from('foods')
         .select('id,use_count,default_portion_g')
+        .eq('user_id', userId)
         .ilike('name', pattern)
         .limit(1)
         .maybeSingle()

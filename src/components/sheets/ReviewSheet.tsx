@@ -84,7 +84,7 @@ export default function ReviewSheet() {
         {
           label: 'Anular',
           run: async () => {
-            await postApi('/api/meal/update', { meal_id: corrected, items: result.previous.items })
+            await postApi('/api/meal/update', { meal_id: corrected, items: result.previous.items, undo: true })
             emitDataChanged()
           },
         },
@@ -146,6 +146,7 @@ export default function ReviewSheet() {
         <p className="text-[15px] text-dim">
           {SLOT_LABEL[meal.slot ?? slotOf(new Date(meal.logged_at))]} · {timeOf(meal.logged_at)}
         </p>
+        {meal.note && <p className="text-[15px]">Nota: {meal.note}</p>}
         <ul className="divide-y divide-line rounded-2xl bg-surface2">
           {meal.items.map((item, i) => (
             <li key={i} className="flex justify-between gap-3 px-3 py-2.5 text-[15px]">

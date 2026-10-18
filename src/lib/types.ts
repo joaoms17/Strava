@@ -10,17 +10,6 @@ export interface MealItem {
   confidence?: 'alta' | 'media' | 'baixa'
 }
 
-export interface ParsedMealResponse {
-  items: MealItem[]
-  confidence: number
-  questions: string[]
-  assumed_portions?: string[]
-  is_estimate: boolean
-  prompt_version: string
-  model: string
-  cost_usd: number
-}
-
 export interface Profile {
   id: string
   target_weight_kg: number
@@ -178,6 +167,13 @@ export interface Food {
   fat_100g: number
   source: 'user' | 'off' | 'claude'
   barcode: string | null
+  // Migração de 18/10 (produtos de marca): por 100 g, quando se sabe.
+  fiber_100g?: number | null
+  sugars_100g?: number | null
+  sat_fat_100g?: number | null
+  salt_100g?: number | null
+  nutriscore?: 'a' | 'b' | 'c' | 'd' | 'e' | null
+  serving_label?: string | null
 }
 
 export interface WeightRow {

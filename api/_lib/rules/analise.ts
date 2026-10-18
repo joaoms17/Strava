@@ -28,20 +28,71 @@ export function foodRefs(foodIds: string[]): { refs: Record<string, string>; byI
 
 const nonNegative = (n: number) => (Number.isFinite(n) && n > 0 ? round1(n) : 0)
 
-export function toMealItems(items: AnalysedItem[], refs: Record<string, string>): MealItem[] {
+// Números que não podem estar certos (um rótulo lido por embalagem, um zero a
+// mais ou a menos): mais de 1,5 kg num item, mais de 9 kcal por grama (o
+// azeite tem 8,8) ou macros que dão bem mais calorias do que as escritas. O
+// contrário (kcal acima dos macros) é normal no álcool, por isso não conta.
+export const MAX_ITEM_GRAMS = 1500
+export const MAX_KCAL_PER_GRAM = 9
+
+export function implausibleItem(
+  item: Pick<MealItem, 'grams' | 'kcal' | 'protein' | 'carbs' | 'fat'>,
+  maxGrams = MAX_ITEM_GRAMS,
+): boolean {
+  if (item.grams > maxGrams) return true
+  if (item.grams > 0 && item.kcal > item.grams * MAX_KCAL_PER_GRAM) return true
+  const fromMacros = 4 * item.protein + 4 * item.carbs + 9 * item.fat
+  return fromMacros > item.kcal * 1.25 + 20
+}
+
+// Um item com números impossíveis fica com confiança baixa (e a refeição por
+// rever): os números não mudam, mas aparece «confirma» em vez de entrar
+// como certo. Numa receita inteira (várias doses) cabem mais gramas.
+export function toMealItems(
+  items: AnalysedItem[],
+  refs: Record<string, string>,
+  maxGrams = MAX_ITEM_GRAMS,
+): MealItem[] {
   return items
     .filter((item) => item.name.trim())
-    .map((item) => ({
-      name: item.name.trim(),
-      grams: nonNegative(item.grams),
-      kcal: nonNegative(item.kcal),
-      protein: nonNegative(item.protein),
-      carbs: nonNegative(item.carbs),
-      fat: nonNegative(item.fat),
-      food_id: item.food_ref ? (refs[item.food_ref] ?? null) : null,
-      estimated: item.confidence !== 'alta',
-      confidence: item.confidence,
-    }))
+    .map((item) => {
+      const numbers = {
+        grams: nonNegative(item.grams),
+        kcal: nonNegative(item.kcal),
+        protein: nonNegative(item.protein),
+        carbs: nonNegative(item.carbs),
+        fat: nonNegative(item.fat),
+      }
+      const confidence: Confidence = implausibleItem(numbers, maxGrams) ? 'baixa' : item.confidence
+      return {
+        name: item.name.trim(),
+        ...numbers,
+        food_id: item.food_ref ? (refs[item.food_ref] ?? null) : null,
+        estimated: confidence !== 'alta',
+        confidence,
+      }
+    })
+}
+
+const foldName = (name: string) =>
+  name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .trim()
+
+// Fotos juntas a uma refeição já analisada («Juntar foto»): o que lá estava
+// fica (valores do código de barras, da favorita, as correções, os × e os
+// −/+) e entra só o que é novo. Um item estimado com o mesmo nome dá lugar ao
+// que a IA leu no rótulo; um item exato nunca muda nem se repete.
+export function mergeAdded(current: MealItem[], added: MealItem[]): MealItem[] {
+  const merged = [...current]
+  for (const item of added) {
+    const i = merged.findIndex((m) => foldName(m.name) === foldName(item.name))
+    if (i < 0) merged.push(item)
+    else if (i < current.length && merged[i]!.estimated) merged[i] = item
+  }
+  return merged
 }
 
 // Por rever quando algum item tem confiança baixa ou a refeição não é «alta».

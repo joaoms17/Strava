@@ -7,30 +7,42 @@ import { useToast } from '../../lib/toast'
 import { BusyButton, runBusy } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
-import { postApi } from '../../lib/api'
+import { getApi, postApi } from '../../lib/api'
 import { nutritionalDay } from '../../lib/day'
 import { fmtInt, fmtKcal } from '../../lib/format'
 import { stepItem } from '../../lib/meal-diff'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { deleteFavorite, favoriteFromMeal, insertFavorite, uploadFavoritePhoto } from '../../lib/favorites'
-import { favoriteName } from '../../../api/_lib/rules/favoritos'
+import { favoriteName, scaleItems } from '../../../api/_lib/rules/favoritos'
+import { MAX_DOSES } from '../../../api/_lib/rules/receita'
 import { addOption } from '../../../api/_lib/rules/dieta'
 import { peekDietDraft, saveDietDraft } from '../../lib/diets'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL } from '../../../api/_lib/rules/momentos'
 import { chip } from '../ui/Chips'
-import type { MealItem, ParsedMealResponse, Slot } from '../../lib/types'
+import type { MealItem, Slot } from '../../lib/types'
 
-type Mode = 'escrever' | 'refeicao'
+type Mode = 'escrever' | 'receita' | 'refeicao'
+const MODES: Mode[] = ['escrever', 'receita', 'refeicao']
+
+// Uma receita lida: os itens da receita toda e em quantas doses se divide.
+interface Recipe {
+  items: MealItem[]
+  doses: number
+  dosesKnown: boolean
+}
 
 // Nova refeição favorita: escrever o que leva (e juntar a foto que vai
-// aparecer sempre que a usares) ou escolher uma refeição já registada.
+// aparecer sempre que a usares), importar uma receita (link ou texto, a
+// conta da receita toda dividida pelas doses; também para a outra pessoa)
+// ou escolher uma refeição já registada.
 export default function NewFavoriteSheet() {
   const profile = useReadyProfile()
   const sheet = useSheet()
   const toast = useToast()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-  const [mode, setMode] = useState<Mode>(sheet.params.get('modo') === 'refeicao' ? 'refeicao' : 'escrever')
+  const asked = sheet.params.get('modo') as Mode | null
+  const [mode, setMode] = useState<Mode>(asked && MODES.includes(asked) ? asked : 'escrever')
   const [favId] = useState(() => crypto.randomUUID())
   const [name, setName] = useState('')
   const [text, setText] = useState('')
@@ -39,10 +51,30 @@ export default function NewFavoriteSheet() {
   const initialSlot = sheet.params.get('momento') as Slot | null
   const [slot, setSlot] = useState<Slot | null>(initialSlot && SLOTS.includes(initialSlot) ? initialSlot : null)
   const [items, setItems] = useState<MealItem[] | null>(null)
+  const [source, setSource] = useState('')
+  const [recipe, setRecipe] = useState<Recipe | null>(null)
+  // As outras pessoas da casa: a receita fica também nas favoritas delas.
+  const [people, setPeople] = useState<{ user_id: string; name: string }[]>([])
+  const [alsoFor, setAlsoFor] = useState<string[]>([])
 
   useEffect(() => () => {
     if (photo) URL.revokeObjectURL(photo.url)
   }, [photo])
+
+  useEffect(() => {
+    if (mode !== 'receita' || people.length) return
+    let alive = true
+    getApi<{ people: { user_id: string; name: string }[] }>('/api/meal/people')
+      .then((r) => {
+        if (!alive) return
+        setPeople(r.people)
+        setAlsoFor(r.people.map((p) => p.user_id))
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [mode, people.length])
 
   const totals = items ? mealTotals(items) : null
 
@@ -69,15 +101,15 @@ export default function NewFavoriteSheet() {
   async function calculate() {
     if (!text.trim() && !photo) return
     try {
-      // Com texto contam as palavras (mais exatas); só com foto, a IA olha para a foto.
-      const parsed = text.trim()
-        ? await postApi<ParsedMealResponse>('/api/meal/parse-text', { text: text.trim() })
-        : await postApi<ParsedMealResponse>('/api/meal/parse-photo', {
-            photo_path: await photoPath(),
-            note: name.trim(),
-          })
-      if (parsed.items.length === 0) toast('Não percebi o que leva. Escreve os alimentos e as quantidades.')
-      setItems(parsed.items.length ? parsed.items : null)
+      // Com texto contam as palavras (mais exatas); só com foto, a IA olha para
+      // a foto (com o nome como descrição). As mesmas contas das refeições.
+      const estimated = await postApi<{ items: MealItem[]; title: string }>(
+        '/api/meal/estimate',
+        text.trim() ? { text: text.trim() } : { text: name.trim() || undefined, photo_path: (await photoPath()) ?? undefined },
+      )
+      if (estimated.items.length === 0) toast('Não percebi o que leva. Escreve os alimentos e as quantidades.')
+      setItems(estimated.items.length ? estimated.items : null)
+      if (estimated.items.length && !name.trim() && estimated.title) setName(estimated.title.slice(0, 60))
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui calcular. Tenta outra vez.')
     }
@@ -99,6 +131,70 @@ export default function NewFavoriteSheet() {
         {
           label: 'Anular',
           run: async () => {
+            await deleteFavorite(favId, path)
+            emitDataChanged()
+          },
+        },
+      ])
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Não consegui guardar.')
+    }
+  }
+
+  // Um link (https://…) ou o texto da receita colado.
+  async function readRecipe() {
+    const input = source.trim()
+    if (!input) return
+    // Partilhar a partir de outra app cola muitas vezes «Vê esta receita https://…»:
+    // com um só link e pouco texto à volta, conta o link.
+    const links = input.match(/https?:\/\/\S+/gi) ?? []
+    const link = links.length === 1 && input.length - links[0]!.length < 120 ? links[0]! : null
+    try {
+      const result = await postApi<{ title: string; doses: number | null; items: MealItem[] }>(
+        '/api/meal/recipe',
+        link ? { url: link } : { text: input },
+      )
+      setRecipe({ items: result.items, doses: result.doses ?? 4, dosesKnown: result.doses != null })
+      if (!name.trim() && result.title) setName(result.title.slice(0, 60))
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Não consegui ler a receita. Tenta outra vez.')
+    }
+  }
+
+  // Guarda uma dose (a favorita regista-se depois com ½ · 1 · 1½ · 2).
+  async function saveRecipe() {
+    if (!recipe) return
+    const perDose = scaleItems(recipe.items, 1 / recipe.doses)
+    try {
+      const path = await photoPath()
+      const finalName = name.trim() || favoriteName(perDose)
+      await insertFavorite({ id: favId, name: finalName, items: perDose, slot, photoPath: path })
+      const copies: { id: string; to: string; userId: string }[] = []
+      for (const userId of alsoFor) {
+        // A cópia é um extra: se falhar, a favorita desta pessoa já ficou.
+        const copy = await postApi<{ id: string; to: string }>('/api/meal/favorite-copy', {
+          favorite_id: favId,
+          to_user_id: userId,
+        }).catch(() => null)
+        if (copy) copies.push({ ...copy, userId })
+      }
+      emitDataChanged()
+      const done = `Guardada nas favoritas · ${finalName}${copies.length ? ` (também para ${copies.map((c) => c.to).join(' e ')})` : ''}`
+      if (backToDiet(favId)) {
+        toast(done)
+        return
+      }
+      sheet.close()
+      toast(done, [
+        {
+          label: 'Anular',
+          run: async () => {
+            // As cópias primeiro: o servidor confirma que vêm desta favorita.
+            for (const c of copies) {
+              await postApi('/api/meal/favorite-copy', { favorite_id: favId, to_user_id: c.userId, undo_id: c.id }).catch(
+                () => null,
+              )
+            }
             await deleteFavorite(favId, path)
             emitDataChanged()
           },
@@ -135,6 +231,8 @@ export default function NewFavoriteSheet() {
 
   const field =
     'w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none'
+  const big =
+    'min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40'
   const segment = (m: Mode, label: string) => (
     <button
       onClick={() => setMode(m)}
@@ -144,37 +242,37 @@ export default function NewFavoriteSheet() {
       {label}
     </button>
   )
+  const perDose = recipe ? mealTotals(scaleItems(recipe.items, 1 / recipe.doses)) : null
+
+  let footer = null
+  if (mode === 'escrever') {
+    footer = items ? (
+      <BusyButton busy="A guardar…" onClick={save} className={big}>
+        Guardar favorita
+      </BusyButton>
+    ) : (
+      <BusyButton busy="A calcular…" disabled={!text.trim() && !photo} onClick={calculate} className={big}>
+        Calcular
+      </BusyButton>
+    )
+  } else if (mode === 'receita') {
+    footer = recipe ? (
+      <BusyButton busy="A guardar…" onClick={saveRecipe} className={big}>
+        Guardar · 1 dose
+      </BusyButton>
+    ) : (
+      <BusyButton busy="A ler a receita…" disabled={!source.trim()} onClick={readRecipe} className={big}>
+        Ler a receita
+      </BusyButton>
+    )
+  }
 
   return (
-    <BottomSheet
-      title="Nova favorita"
-      onClose={sheet.close}
-      footer={
-        mode === 'escrever' ? (
-          items ? (
-            <BusyButton
-              busy="A guardar…"
-              onClick={save}
-              className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
-            >
-              Guardar favorita
-            </BusyButton>
-          ) : (
-            <BusyButton
-              busy="A calcular…"
-              disabled={!text.trim() && !photo}
-              onClick={calculate}
-              className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
-            >
-              Calcular
-            </BusyButton>
-          )
-        ) : undefined
-      }
-    >
+    <BottomSheet title="Nova favorita" onClose={sheet.close} footer={footer ?? undefined}>
       <div className="space-y-4 pb-2">
-        <div className="grid grid-cols-2 rounded-xl bg-surface2 p-1 text-[15px]">
+        <div className="grid grid-cols-3 rounded-xl bg-surface2 p-1 text-[15px]">
           {segment('escrever', 'Escrever')}
+          {segment('receita', 'Receita')}
           {segment('refeicao', 'De uma refeição')}
         </div>
 
@@ -211,7 +309,7 @@ export default function NewFavoriteSheet() {
                     if (!file) return
                     setPhoto({ file, url: URL.createObjectURL(file) })
                     setUploaded(null)
-                    if (!text.trim()) setItems(null)
+                    if (mode === 'escrever' && !text.trim()) setItems(null)
                   }}
                 />
               </label>
@@ -220,7 +318,7 @@ export default function NewFavoriteSheet() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={60}
-                  placeholder="Nome (ex.: Papas de aveia)"
+                  placeholder={mode === 'receita' ? 'Nome (ex.: Arroz de pato)' : 'Nome (ex.: Papas de aveia)'}
                   aria-label="Nome da favorita"
                   className={`${field} h-11`}
                 />
@@ -232,70 +330,119 @@ export default function NewFavoriteSheet() {
               </div>
             </div>
 
-            <textarea
-              rows={3}
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value)
-                setItems(null)
-              }}
-              placeholder="O que leva? Ex.: 60 g de aveia, 200 ml de leite meio-gordo, 1 banana"
-              aria-label="O que leva"
-              className={`${field} block resize-none py-3 text-[17px]`}
-            />
-            <p className="-mt-2 text-[13px] text-dim">
-              Com texto, a conta sai das quantidades; só com a foto, a IA estima pela foto.
-            </p>
-
-            {items && totals && (
-              <div className="space-y-2">
-                <ul className="divide-y divide-line rounded-2xl bg-surface2 text-[15px]">
-                  {items.map((item, i) => (
-                    <li key={`${item.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
-                      <span className="min-w-0 flex-1 truncate">
-                        {item.name} <span className="text-dim tabular-nums">· {fmtInt(item.grams)} g</span>
-                      </span>
-                      <span className="shrink-0 text-dim tabular-nums">{fmtInt(item.kcal)}</span>
-                      {item.grams > 0 && (
-                        <>
-                          <button
-                            aria-label={`menos 10 g de ${item.name}`}
-                            onClick={() => setItems(items.map((x, j) => (j === i ? stepItem(x, -10) : x)))}
-                            className="h-9 w-9 rounded-lg text-dim"
-                          >
-                            −
-                          </button>
-                          <button
-                            aria-label={`mais 10 g de ${item.name}`}
-                            onClick={() => setItems(items.map((x, j) => (j === i ? stepItem(x, 10) : x)))}
-                            className="h-9 w-9 rounded-lg text-dim"
-                          >
-                            +
-                          </button>
-                        </>
-                      )}
-                      <button
-                        aria-label={`Tirar ${item.name}`}
-                        onClick={() => {
-                          const next = items.filter((_, j) => j !== i)
-                          setItems(next.length ? next : null)
-                        }}
-                        className="h-9 w-9 rounded-lg text-dim"
-                      >
-                        <Icon name="close" size={16} />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-[14px] tabular-nums">
-                  <span className="font-semibold">{fmtKcal(totals.kcal)} kcal</span>
-                  <span className="text-dim">
-                    {' '}
-                    · Proteína {fmtInt(totals.protein)} g · Hidratos {fmtInt(totals.carbs)} g · Gordura{' '}
-                    {fmtInt(totals.fat)} g
-                  </span>
+            {mode === 'escrever' ? (
+              <>
+                <textarea
+                  rows={3}
+                  value={text}
+                  onChange={(e) => {
+                    setText(e.target.value)
+                    setItems(null)
+                  }}
+                  placeholder="O que leva? Ex.: 60 g de aveia, 200 ml de leite meio-gordo, 1 banana"
+                  aria-label="O que leva"
+                  className={`${field} block resize-none py-3 text-[17px]`}
+                />
+                <p className="-mt-2 text-[13px] text-dim">
+                  Com texto, a conta sai das quantidades; só com a foto, a IA estima pela foto.
                 </p>
-              </div>
+
+                {items && totals && (
+                  <div className="space-y-2">
+                    <ItemList items={items} onChange={setItems} />
+                    <p className="text-[14px] tabular-nums">
+                      <span className="font-semibold">{fmtKcal(totals.kcal)} kcal</span>
+                      <span className="text-dim">
+                        {' '}
+                        · Proteína {fmtInt(totals.protein)} g · Hidratos {fmtInt(totals.carbs)} g · Gordura{' '}
+                        {fmtInt(totals.fat)} g
+                      </span>
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <textarea
+                  rows={4}
+                  value={source}
+                  onChange={(e) => {
+                    setSource(e.target.value)
+                    setRecipe(null)
+                  }}
+                  placeholder="Cola o link da receita (https://…) ou o texto, com os ingredientes e as quantidades"
+                  aria-label="Link ou texto da receita"
+                  className={`${field} block resize-none py-3 text-[17px]`}
+                />
+                <p className="-mt-2 text-[13px] text-dim">
+                  Pingo Doce, Continente, Teleculinária, blogs… A conta sai dos ingredientes da receita toda e
+                  divide-se pelas doses.
+                </p>
+
+                {recipe && perDose && (
+                  <div className="space-y-3">
+                    <p className="label">A receita toda</p>
+                    <ItemList
+                      items={recipe.items}
+                      onChange={(next) => setRecipe(next ? { ...recipe, items: next } : null)}
+                    />
+                    <div className="flex items-center gap-3 rounded-2xl border border-line p-3">
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] font-semibold">Doses</span>
+                        {!recipe.dosesKnown && (
+                          <span className="block text-[13px] text-attn">A receita não diz para quantos. Confirma.</span>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => setRecipe({ ...recipe, doses: Math.max(1, recipe.doses - 1), dosesKnown: true })}
+                        aria-label="Menos uma dose"
+                        className="h-11 w-11 rounded-xl bg-surface2 text-[17px]"
+                      >
+                        −
+                      </button>
+                      <span className="num w-10 text-center text-[24px] tabular-nums">{recipe.doses}</span>
+                      <button
+                        onClick={() =>
+                          setRecipe({ ...recipe, doses: Math.min(MAX_DOSES, recipe.doses + 1), dosesKnown: true })
+                        }
+                        aria-label="Mais uma dose"
+                        className="h-11 w-11 rounded-xl bg-surface2 text-[17px]"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="text-[14px] tabular-nums">
+                      <span className="text-dim">Por dose: </span>
+                      <span className="font-semibold">{fmtKcal(perDose.kcal)} kcal</span>
+                      <span className="text-dim">
+                        {' '}
+                        · Proteína {fmtInt(perDose.protein)} g · Hidratos {fmtInt(perDose.carbs)} g · Gordura{' '}
+                        {fmtInt(perDose.fat)} g
+                      </span>
+                    </p>
+                    {people.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {people.map((p) => (
+                          <button
+                            key={p.user_id}
+                            aria-pressed={alsoFor.includes(p.user_id)}
+                            onClick={() =>
+                              setAlsoFor(
+                                alsoFor.includes(p.user_id)
+                                  ? alsoFor.filter((id) => id !== p.user_id)
+                                  : [...alsoFor, p.user_id],
+                              )
+                            }
+                            className={chip(alsoFor.includes(p.user_id))}
+                          >
+                            Também nas favoritas de {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             <div className="space-y-2">
@@ -317,5 +464,50 @@ export default function NewFavoriteSheet() {
         )}
       </div>
     </BottomSheet>
+  )
+}
+
+// Os itens calculados, com −/+ (10 g) e × para tirar.
+function ItemList({ items, onChange }: { items: MealItem[]; onChange: (next: MealItem[] | null) => void }) {
+  return (
+    <ul className="divide-y divide-line rounded-2xl bg-surface2 text-[15px]">
+      {items.map((item, i) => (
+        <li key={`${item.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
+          <span className="min-w-0 flex-1 truncate">
+            {item.name} <span className="text-dim tabular-nums">· {fmtInt(item.grams)} g</span>
+            {item.confidence === 'baixa' && <span className="ml-1 text-[13px] text-attn">confirma</span>}
+          </span>
+          <span className="shrink-0 text-dim tabular-nums">{fmtInt(item.kcal)}</span>
+          {item.grams > 0 && (
+            <>
+              <button
+                aria-label={`menos 10 g de ${item.name}`}
+                onClick={() => onChange(items.map((x, j) => (j === i ? stepItem(x, -10) : x)))}
+                className="h-9 w-9 rounded-lg text-dim"
+              >
+                −
+              </button>
+              <button
+                aria-label={`mais 10 g de ${item.name}`}
+                onClick={() => onChange(items.map((x, j) => (j === i ? stepItem(x, 10) : x)))}
+                className="h-9 w-9 rounded-lg text-dim"
+              >
+                +
+              </button>
+            </>
+          )}
+          <button
+            aria-label={`Tirar ${item.name}`}
+            onClick={() => {
+              const next = items.filter((_, j) => j !== i)
+              onChange(next.length ? next : null)
+            }}
+            className="h-9 w-9 rounded-lg text-dim"
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }

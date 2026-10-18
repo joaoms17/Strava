@@ -9,16 +9,21 @@
 | `/api/meal/correct` | POST | «Corrigir por texto»: Haiku sobre os itens atuais, sem foto; devolve os itens anteriores para Anular. |
 | `/api/meal/update` | POST | Itens (passos de 10 g), dia e momento, nota (corrige se a análise já acabou), marcas, confirmar e anular a confirmação. |
 | `/api/meal/quick` | POST | Só números, com item sintético «Registo rápido». |
-| `/api/meal/parse-text` | POST | (Fluxo antigo, só para esvaziar a fila da Fase 1.) Haiku, temperatura 0. Texto shorthand + top 100 foods pessoais por `use_count`. Devolve `{items[], confidence, questions[]}`. |
-| `/api/meal/parse-photo` | POST | (Fluxo antigo.) Sonnet, sem thinking. Foto (Supabase Storage) + texto opcional. Mesmo JSON + `assumed_portions`. |
+| `/api/meal/estimate` | POST | Analisar sem gravar («Nova favorita»): o texto, ou a foto (em `<user>/…`) com o nome, pelo mesmo caminho das refeições (biblioteca com referências curtas, confiança por item e as guardas dos números). Devolve `{items[], title, confidence}`. |
 | `/api/meal/save` | POST | Grava a refeição confirmada: valida com Zod, calcula dia nutricional (regra 1) e totais no servidor. |
 | `/api/meal/log-favorite` | POST | Favorito com 1 toque, sem IA: itens × porção, dia nutricional e totais no servidor; num dia passado usa a hora habitual do momento. |
 | `/api/meal/repeat` | POST | «Igual a ontem», «Repetir hoje» e «Copiar para outro dia». |
 | `/api/meal/portion` | POST | Muda a porção (½ · 1 · 1½ · 2) de uma refeição já registada. |
 | `/api/meal/delete` · `/api/meal/restore` | POST | Apagar reversível (`deleted_at`); a refeição sai das contas e pode voltar. |
-| `/api/food/barcode/:ean` | GET | Proxy ao Open Food Facts (User-Agent identificado), guarda em `foods` com source `off`. Vive na função `meal`. |
+| `/api/food/barcode/:ean` | GET | Primeiro os alimentos da pessoa, depois os das outras pessoas da casa (copiado para a conta de quem lê), por fim o Open Food Facts (User-Agent identificado): guarda em `foods` com source `off`, com fibra, açúcares, saturada, sal, Nutri-Score e dose quando há (`rules/off.ts`). Vive na função `meal`. |
+| `/api/meal/label` | POST | O produto não está no Open Food Facts: a IA lê a foto da tabela nutricional (JPEG em `<user>/rotulo/`, apaga-se depois; `prompts/label-read.v1.md`) e o alimento fica ligado ao código (source `user`). Conta para o limite diário de fotos. |
+| `/api/meal/food-search` | GET | `?q=`: produtos de marca pelo nome no Open Food Facts (search.openfoodfacts.org, com a pesquisa antiga como recurso), só a pedido. Cache de 7 dias (`off_searches`) e no máximo 5 pesquisas por minuto para a casa (o Open Food Facts aceita 10). |
+| `/api/meal/recipe` | POST | Favoritas › «Importar receita»: `url` (só https e endereços públicos, verificados na ligação; até 3 redirecionamentos, 2 MB e 8 s — `_lib/safe-fetch.ts`) ou `text`. Lê o schema.org Recipe (JSON-LD) e, sem ele, o texto visível (`rules/receita.ts`); a IA de texto dá os itens da receita toda com a biblioteca pessoal (`prompts/recipe.v1.md`). Não grava: a app divide pelas doses. |
+| `/api/meal/favorite-copy` | POST | Copia uma favorita para outra pessoa da casa (sem os `food_id`, com a foto); com `undo_id`, Anular apaga essa cópia (só nos 15 min seguintes). |
+| `/api/meal/people` · `/api/meal/share` | GET · POST | As outras pessoas da app e «Partilhar com …»: copia a refeição para a conta da outra pessoa, por rever, com as fotos; partilhar outra vez a mesma não a duplica (`source_meal_id`). |
 | `/api/meal/menu` | POST | «Escolher pelo menu»: 1 a 3 fotos do menu (JPEG já no Storage, em `<user>/menu/`; apagam-se depois de lidas) e preferências opcionais; o modelo das fotos estima cada prato (`prompts/menu-pick.v1.md`), `rules/menu.ts` arruma e ordena pelo que falta comer hoje (calorias e proteína). Não grava: «Vou comer este» usa `/api/meal/save`. Conta para o limite diário de fotos. |
-| `/api/meal/attach` | POST | Junta até 4 fotos a uma refeição que já existe e volta a analisá-la com todas. |
+| `/api/meal/attach` | POST | Junta até 4 fotos a uma refeição que já existe. Sem itens, volta a analisá-la com todas; com itens (analisada, código de barras, favorita…), os itens ficam e a IA só junta o que é novo (`prompts/meal-photo-add.v1.md`); devolve `previous` para Anular. |
+| `/api/meal/detach` | POST | Anular «Juntar foto»: volta aos itens, ao estado e às fotos de antes (só tira fotos) e solta a análise que ainda estiver a correr. |
 | `/api/workout/save` | POST | Guarda um treino (favorito, «Já fiz» ou rascunho de um print), com a cadeia de watts e as kcal da regra 2 revista; com `merge_into` junta o print a uma sessão existente sem duplicar. |
 | `/api/workout/strength` | POST | Sessão de ginásio livre: cria ou corrige a sessão e as séries (`exercise_log`). |
 | `/api/workout/shot` · `shot-add` · `parse-shot` · `discard` | POST | Print do relógio: rascunho em `workout_imports`, leitura em segundo plano (Sonnet 5), outra tentativa e descartar. O mesmo print outra vez devolve o treino. |

@@ -19,9 +19,11 @@ const EAN_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e']
 export default function BarcodeScanner({
   onDetect,
   onClose,
+  onSearch,
 }: {
   onDetect: (ean: string) => void
   onClose: () => void
+  onSearch?: () => void
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [manual, setManual] = useState('')
@@ -119,6 +121,11 @@ export default function BarcodeScanner({
           OK
         </button>
       </div>
+      {onSearch && (
+        <button onClick={onSearch} className="mt-2 min-h-12 w-full rounded-xl border border-edge text-[15px]">
+          Procurar pelo nome
+        </button>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useToast } from '../../lib/toast'
 import { emitDataChanged } from '../../lib/events'
-import { attachPhotos } from '../../lib/capture'
+import { attachPhotos, detachPhotos } from '../../lib/capture'
 import { BusyLabel, runBusy, useBusyKey } from '../../lib/busy'
 
 // Juntar uma ou mais fotos a uma refeição que já existe. Sem «capture», o
@@ -36,9 +36,22 @@ export default function AttachPhotoButton({
             'A enviar a foto…',
             () =>
               attachPhotos(meal, files)
-                .then(() => {
+                .then((previous) => {
                   emitDataChanged()
                   onDone?.()
+                  // Os itens que já lá estavam ficam; Anular tira a foto nova.
+                  if (previous) {
+                    toast('A juntar o que é novo na foto. O que já estava fica.', [
+                      {
+                        label: 'Anular',
+                        run: async () => {
+                          await detachPhotos(meal.id, previous)
+                          emitDataChanged()
+                          onDone?.()
+                        },
+                      },
+                    ])
+                  }
                 })
                 .catch((err) => toast(err instanceof Error ? err.message : 'Não consegui juntar a foto.')),
             key,
