@@ -6,7 +6,9 @@ import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
 
 // Partilhar uma refeição com outra pessoa da app (ex.: o João e a Joana a
 // comer o mesmo): copia-a para a conta dela, no mesmo dia, refeição e hora,
-// com as fotos copiadas para a pasta dela. Ela ajusta depois as quantidades.
+// com as fotos copiadas para a pasta dela. A cópia entra por rever (com as
+// quantidades de quem partilhou, que ela ajusta em «Rever») e guarda a
+// refeição de origem: partilhar outra vez a mesma não a duplica.
 // A app é de uma casa (no máximo 4 pessoas): quem tem sessão pode partilhar
 // com qualquer outro perfil.
 
@@ -60,6 +62,19 @@ export async function share(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
     if (!target) throw new HttpError(404, 'Pessoa não encontrada.')
 
+    const toName = await personName(admin, body.data.to_user_id)
+    const { data: already } = await admin
+      .from('meals')
+      .select('id')
+      .eq('user_id', body.data.to_user_id)
+      .eq('source_meal_id', source.id)
+      .is('deleted_at', null)
+      .limit(1)
+    if (already?.length) {
+      res.status(200).json({ ok: true, to: toName, already: true })
+      return
+    }
+
     const items = source.items as MealItem[]
     const fromName = await personName(admin, user.id)
     const { data: meal, error } = await admin
@@ -76,8 +91,8 @@ export async function share(req: VercelRequest, res: VercelResponse) {
         date: source.date,
         logged_at: source.logged_at,
         slot: source.slot,
-        status: 'ok',
-        confirmed_at: new Date().toISOString(),
+        source_meal_id: source.id,
+        status: 'por_rever',
         items,
         ...mealTotals(items),
       })
@@ -104,7 +119,79 @@ export async function share(req: VercelRequest, res: VercelResponse) {
         .eq('id', meal.id)
     }
 
-    res.status(200).json({ ok: true, to: await personName(admin, body.data.to_user_id) })
+    res.status(200).json({ ok: true, to: toName })
+  } catch (err) {
+    respondError(res, err)
+  }
+}
+
+// Uma favorita nova (por exemplo uma receita importada) também nas
+// favoritas de outra pessoa da casa: copia o nome, os itens por dose, as
+// contas, a refeição habitual e a foto (para a pasta dela). Os food_id ficam
+// de fora (são da biblioteca de quem a criou). Com `undo_id`, Anular apaga
+// essa cópia acabada de criar.
+const FavoriteCopySchema = z.object({
+  favorite_id: z.string().uuid(),
+  to_user_id: z.string().uuid(),
+  undo_id: z.string().uuid().optional(),
+})
+
+export async function favoriteCopy(req: VercelRequest, res: VercelResponse) {
+  try {
+    if (req.method !== 'POST') throw new HttpError(405, 'Método não suportado.')
+    const { user, db } = await requireUser(req)
+    const body = FavoriteCopySchema.safeParse(req.body)
+    if (!body.success) throw new HttpError(400, 'Pedido inválido.')
+    const { favorite_id, to_user_id, undo_id } = body.data
+    if (to_user_id === user.id) throw new HttpError(400, 'Escolhe outra pessoa.')
+    const admin = adminClient()
+
+    // A favorita tem de ser de quem a copia (RLS).
+    const { data: source } = await db.from('favorites').select('*').eq('id', favorite_id).eq('kind', 'meal').maybeSingle()
+    if (!source) throw new HttpError(404, 'Favorita não encontrada.')
+
+    if (undo_id) {
+      // Só uma cópia desta favorita acabada de fazer (nos últimos 15 min): o
+      // admin client não apaga outra favorita da outra pessoa.
+      const { data: removed } = await admin
+        .from('favorites')
+        .delete()
+        .eq('id', undo_id)
+        .eq('user_id', to_user_id)
+        .eq('name', source.name as string)
+        .gte('created_at', new Date(Date.now() - 15 * 60_000).toISOString())
+        .select('photo_path')
+      const photo = removed?.[0]?.photo_path as string | null | undefined
+      if (photo) await admin.storage.from('meal-photos').remove([photo])
+      res.status(200).json({ ok: true })
+      return
+    }
+    const { data: target } = await admin.from('profile').select('user_id').eq('user_id', to_user_id).maybeSingle()
+    if (!target) throw new HttpError(404, 'Pessoa não encontrada.')
+
+    const id = crypto.randomUUID()
+    let photoPath: string | null = null
+    if (source.photo_path) {
+      const dest = `${to_user_id}/fav/${id}.jpg`
+      const { error: copyError } = await admin.storage.from('meal-photos').copy(source.photo_path as string, dest)
+      if (!copyError) photoPath = dest
+    }
+    const items = ((source.items ?? []) as MealItem[]).map((i) => ({ ...i, food_id: null }))
+    const { error } = await admin.from('favorites').insert({
+      id,
+      user_id: to_user_id,
+      kind: 'meal',
+      name: source.name,
+      items,
+      kcal: source.kcal,
+      protein: source.protein,
+      carbs: source.carbs,
+      fat: source.fat,
+      photo_path: photoPath,
+      default_slot: source.default_slot,
+    })
+    if (error) throw new HttpError(500, error.message)
+    res.status(200).json({ id, to: await personName(admin, to_user_id) })
   } catch (err) {
     respondError(res, err)
   }

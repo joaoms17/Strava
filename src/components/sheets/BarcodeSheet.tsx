@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import BarcodeScanner from '../BarcodeScanner'
-import { getApi, postApi } from '../../lib/api'
+import { ApiError, getApi, postApi } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
-import { BusyButton, runBusy } from '../../lib/busy'
+import { BusyButton, BusyLabel, busyContent, runBusy, useBusyKey } from '../../lib/busy'
 import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { nutritionalDay } from '../../lib/day'
 import { fmtInt } from '../../lib/format'
+import { prepareMenuPhoto } from '../../lib/image'
+import { foodExtrasText } from '../../lib/food-extras'
 import { dayLabel, whenFromParams } from '../../lib/when'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { round1 } from '../../../api/_lib/rules/meal-totals'
 import { SLOT_LABEL, SLOT_TIME, loggedAtFor, slotOf } from '../../../api/_lib/rules/momentos'
+import type { OffHit } from '../../../api/_lib/rules/off'
 import type { Food, Meal, MealItem } from '../../lib/types'
 
 type Target = Pick<Meal, 'id' | 'items' | 'status' | 'slot' | 'logged_at' | 'date' | 'input_type' | 'raw_text'>
@@ -36,7 +39,9 @@ function itemOf(food: Food, grams: number): MealItem {
 // Código de barras (Open Food Facts, sem IA): lê vários produtos para a mesma
 // refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
 // juntos a uma já registada (?refeicao=id, a partir da folha da refeição, ou
-// escolhida aqui entre as desse dia).
+// escolhida aqui entre as desse dia). Também se procura pelo nome, e um
+// produto que o Open Food Facts não tem lê-se pela foto do rótulo (fica
+// ligado ao código para a próxima vez, também para a outra pessoa).
 export default function BarcodeSheet() {
   const profile = useReadyProfile()
   const sheet = useSheet()
@@ -51,6 +56,13 @@ export default function BarcodeSheet() {
   const [grams, setGrams] = useState(100)
   const [basket, setBasket] = useState<MealItem[]>([])
   const [error, setError] = useState<string | null>(null)
+  // O código que o Open Food Facts não tem (ou sem tabela): «Fotografar o rótulo».
+  const [missing, setMissing] = useState<string | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [query, setQuery] = useState('')
+  const [results, setResults] = useState<OffHit[] | null>(null)
+  const [searchBusyKey, searchBusy] = useBusyKey()
+  const [labelKey, labelBusy] = useBusyKey()
   // Tocar outra vez depois de uma falha de rede não grava a dobrar; outros
   // produtos (ou outro dia) são outro registo.
   const clientIdFor = useClientId()
@@ -84,12 +96,57 @@ export default function BarcodeSheet() {
   async function lookup(ean: string) {
     setScanning(false)
     setError(null)
+    setMissing(null)
     try {
       const { food: found } = await getApi<{ food: Food }>(`/api/food/barcode/${ean}`)
-      setFood(found)
-      setGrams(Number(found.default_portion_g) || 100)
+      showFood(found)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não encontrei este código.')
+      if (err instanceof ApiError && (err.status === 404 || err.status === 422)) setMissing(ean)
+    }
+  }
+
+  function showFood(found: Food) {
+    setFood(found)
+    setGrams(Number(found.default_portion_g) || 100)
+    setSearching(false)
+    setResults(null)
+  }
+
+  // Só ao carregar em «Procurar» (o Open Food Facts limita as pesquisas).
+  async function search() {
+    const q = query.trim()
+    if (q.length < 3) return
+    try {
+      const { results: found } = await getApi<{ results: OffHit[] }>(`/api/meal/food-search?q=${encodeURIComponent(q)}`)
+      setResults(found)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Não consegui procurar. Tenta outra vez.')
+    }
+  }
+
+  // O produto não está no Open Food Facts: a IA lê a tabela do rótulo e o
+  // alimento fica com este código.
+  async function readLabel(file: File) {
+    const ean = missing
+    if (!ean) return
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) throw new Error('Sessão expirada. Volta a entrar.')
+      const path = `${user.id}/rotulo/${ean}-${Date.now().toString(36)}.jpg`
+      const { error: upload } = await supabase.storage
+        .from('meal-photos')
+        .upload(path, await prepareMenuPhoto(file), { contentType: 'image/jpeg', upsert: true })
+      if (upload) throw new Error('Não consegui enviar a foto. Tenta outra vez.')
+      const { food: read } = await postApi<{ food: Food }>('/api/meal/label', { ean, photo_path: path })
+      setError(null)
+      setMissing(null)
+      showFood(read)
+      toast('Li o rótulo. Da próxima vez este código já é conhecido.')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Não consegui ler o rótulo.')
     }
   }
 
@@ -155,7 +212,7 @@ export default function BarcodeSheet() {
         {
           label: 'Anular',
           run: async () => {
-            await postApi('/api/meal/update', { meal_id: meal.id, items: previous.items })
+            await postApi('/api/meal/update', { meal_id: meal.id, items: previous.items, undo: true })
             emitDataChanged()
           },
         },
@@ -171,6 +228,12 @@ export default function BarcodeSheet() {
       <BarcodeScanner
         onDetect={(ean) => void runBusy('A procurar o produto…', () => lookup(ean))}
         onClose={() => (basket.length > 0 ? setScanning(false) : sheet.close())}
+        onSearch={() => {
+          setScanning(false)
+          setError(null)
+          setMissing(null)
+          setSearching(true)
+        }}
       />
     )
   }
@@ -198,10 +261,101 @@ export default function BarcodeSheet() {
         {error && (
           <div className="space-y-3">
             <p className="text-[15px]">{error}</p>
-            <p className="text-[15px] text-dim">Tira uma foto ao rótulo: a IA lê os valores.</p>
-            <button onClick={() => setScanning(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px]">
-              Ler outra vez
+            {missing && (
+              <>
+                <p className="text-[15px] text-dim">
+                  Tira uma foto à tabela nutricional: a IA lê os valores e o código fica conhecido para a próxima vez.
+                </p>
+                <label
+                  className={`flex min-h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-eat text-[16px] font-semibold text-bg ${labelBusy ? 'pointer-events-none' : ''}`}
+                  aria-busy={labelBusy || undefined}
+                >
+                  {labelBusy ? <BusyLabel text="A ler o rótulo…" /> : 'Fotografar o rótulo'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={labelBusy}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      e.target.value = ''
+                      if (file) void runBusy('A ler o rótulo…', () => readLabel(file), labelKey)
+                    }}
+                  />
+                </label>
+              </>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setScanning(true)} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+                Ler outra vez
+              </button>
+              <button
+                onClick={() => {
+                  setError(null)
+                  setMissing(null)
+                  setSearching(true)
+                }}
+                className="min-h-12 rounded-xl bg-surface2 text-[15px]"
+              >
+                Procurar pelo nome
+              </button>
+            </div>
+          </div>
+        )}
+
+        {searching && !food && !error && (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                maxLength={80}
+                enterKeyHint="search"
+                aria-label="Nome do produto"
+                placeholder="Ex.: iogurte proteico Pingo Doce"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing && query.trim().length >= 3) {
+                    e.preventDefault()
+                    void runBusy('A procurar…', search, searchBusyKey)
+                  }
+                }}
+                className="h-12 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+              />
+              <button
+                disabled={searchBusy || query.trim().length < 3}
+                aria-busy={searchBusy || undefined}
+                onClick={() => void runBusy('A procurar…', search, searchBusyKey)}
+                className="min-h-12 shrink-0 rounded-xl bg-eat px-4 font-semibold text-bg disabled:opacity-40"
+              >
+                {busyContent(searchBusy, 'A procurar…', 'Procurar')}
+              </button>
+            </div>
+            {results &&
+              (results.length === 0 ? (
+                <p className="text-[15px] text-dim">Não encontrei nada com esse nome. Tenta outras palavras ou lê o código.</p>
+              ) : (
+                <ul className="divide-y divide-line rounded-2xl bg-surface2" aria-label="Produtos encontrados">
+                  {results.map((r) => (
+                    <li key={r.code}>
+                      <BusyButton
+                        busy="A abrir…"
+                        onClick={() => lookup(r.code)}
+                        className="flex min-h-12 w-full items-baseline justify-between gap-3 px-3 py-2.5 text-left"
+                      >
+                        <span className="min-w-0 flex-1 text-[15px]">{r.name}</span>
+                        <span className="shrink-0 text-[13px] text-dim tabular-nums">
+                          {r.kcal_100g != null ? `${fmtInt(r.kcal_100g)} kcal/100 g` : 'sem valores'}
+                        </span>
+                      </BusyButton>
+                    </li>
+                  ))}
+                </ul>
+              ))}
+            <button onClick={() => setScanning(true)} className="min-h-10 text-[15px] text-eat">
+              Ler o código
             </button>
+            <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>
           </div>
         )}
 
@@ -248,6 +402,11 @@ export default function BarcodeSheet() {
               <span className="text-protein">Proteína {fmtInt((food.protein_100g * grams) / 100)} g</span> · Hidratos{' '}
               {fmtInt((food.carbs_100g * grams) / 100)} g · Gordura {fmtInt((food.fat_100g * grams) / 100)} g
             </p>
+            {foodExtrasText(food, grams) && (
+              <p className="text-[13px] text-dim tabular-nums">{foodExtrasText(food, grams)}</p>
+            )}
+            {food.serving_label && <p className="text-[13px] text-dim">Dose do rótulo: {food.serving_label}</p>}
+            {food.source === 'off' && <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>}
           </div>
         )}
 

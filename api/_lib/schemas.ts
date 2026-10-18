@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
-// JSON estrito devolvido pelo Claude nos parses de refeição.
-// Macros em valores absolutos para os gramas do item, não por 100 g.
+// Item de refeição (gravar, editar, anular): macros em valores absolutos
+// para os gramas do item, não por 100 g.
 export const ParsedItemSchema = z.object({
   name: z.string(),
   grams: z.number(),
@@ -13,22 +13,7 @@ export const ParsedItemSchema = z.object({
   estimated: z.boolean(),
 })
 
-export const ParsedMealSchema = z.object({
-  items: z.array(ParsedItemSchema),
-  confidence: z.number(),
-  questions: z.array(z.string()),
-})
-
-export const ParsedPhotoMealSchema = z.object({
-  items: z.array(ParsedItemSchema),
-  confidence: z.number(),
-  questions: z.array(z.string()),
-  assumed_portions: z.array(z.string()),
-})
-
 export type ParsedItem = z.infer<typeof ParsedItemSchema>
-export type ParsedMeal = z.infer<typeof ParsedMealSchema>
-export type ParsedPhotoMeal = z.infer<typeof ParsedPhotoMealSchema>
 
 // Análise em segundo plano (Fase 2): confiança por item e referências curtas
 // aos alimentos pessoais (a1…a40) em vez de UUIDs.
