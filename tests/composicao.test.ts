@@ -230,3 +230,67 @@ describe('fatCategory', () => {
     expect(fatCategory(41, 'f').label).toBe('Muita gordura')
   })
 })
+
+// O sítio da cintura: umbigo nos homens, parte mais estreita nas mulheres.
+// As medições antigas (sem sítio) foram no umbigo.
+describe('sítio da cintura', () => {
+  it('nas mulheres a cintura natural dá menos gordura do que no umbigo', async () => {
+    const { navyBodyFat } = await import('../api/_lib/rules/composicao')
+    // altura 165, pescoço 32, anca 98: 80 cm no umbigo contra 73 cm na parte mais estreita
+    expect(navyBodyFat(165, 32, 80, 98, 'f')).toBeCloseTo(31.4, 1)
+    expect(navyBodyFat(165, 32, 73, 98, 'f')).toBeCloseTo(27.9, 1)
+  })
+
+  it('o sítio de cada sexo e o de cada medição', async () => {
+    const { measuredWaistSite, sameWaistSite, waistSiteFor, wrongWaistSite } = await import('../api/_lib/rules/composicao')
+    expect(waistSiteFor('m')).toBe('umbigo')
+    expect(waistSiteFor('f')).toBe('natural')
+    expect(measuredWaistSite(null)).toBe('umbigo')
+    expect(measuredWaistSite({ waist: [80] })).toBe('umbigo')
+    expect(measuredWaistSite({ waist: [73], waist_site: 'natural' })).toBe('natural')
+    expect(sameWaistSite({ readings: null }, { readings: { waist_site: 'umbigo' } })).toBe(true)
+    expect(sameWaistSite({ readings: null }, { readings: { waist_site: 'natural' } })).toBe(false)
+    expect(wrongWaistSite({ readings: null }, 'f')).toBe(true)
+    expect(wrongWaistSite({ readings: { waist_site: 'natural' } }, 'f')).toBe(false)
+    expect(wrongWaistSite({ readings: null }, 'm')).toBe(false)
+  })
+})
+
+describe('zonas', () => {
+  const rows = [
+    { date: '2026-09-01', waist_cm: 80, hips_cm: 100, neck_cm: 32, thigh_cm: 58, readings: null },
+    { date: '2026-09-15', waist_cm: 79, hips_cm: 99, neck_cm: 32, readings: null },
+    { date: '2026-10-01', waist_cm: 73, hips_cm: '98.5', neck_cm: 32, thigh_cm: 57, readings: { waist_site: 'natural' } },
+  ]
+
+  it('mudança desde a medição anterior que tem a zona; a cintura só no mesmo sítio', async () => {
+    const { zoneDelta } = await import('../api/_lib/rules/composicao')
+    expect(zoneDelta(rows, 1, 'waist')).toBe(-1)
+    expect(zoneDelta(rows, 2, 'waist')).toBeNull()
+    expect(zoneDelta(rows, 2, 'hips')).toBe(-0.5)
+    expect(zoneDelta(rows, 2, 'thigh')).toBe(-1)
+    expect(zoneDelta(rows, 2, 'neck')).toBe(0)
+    expect(zoneDelta(rows, 0, 'hips')).toBeNull()
+    expect(zoneDelta(rows, 1, 'thigh')).toBeNull()
+  })
+
+  it('zonas com 2 medições ou mais, com a mudança desde a primeira', async () => {
+    const { zoneTrends } = await import('../api/_lib/rules/composicao')
+    const trends = zoneTrends(rows)
+    expect(trends.map((t) => t.zone)).toEqual(['hips', 'neck', 'thigh'])
+    expect(trends[0]).toEqual({ zone: 'hips', values: [100, 99, 98.5], firstDate: '2026-09-01', last: 98.5, change: -1.5 })
+    expect(trends[2]).toMatchObject({ zone: 'thigh', values: [58, 57], change: -1 })
+    // duas cinturas no mesmo sítio já aparecem
+    const more = [...rows, { date: '2026-10-15', waist_cm: 72, readings: { waist_site: 'natural' } }]
+    expect(zoneTrends(more)[0]).toMatchObject({ zone: 'waist', values: [73, 72], firstDate: '2026-10-01', change: -1 })
+  })
+
+  it('composição de uma medição guardada (os numeric podem vir em texto)', async () => {
+    const { measurementComposition } = await import('../api/_lib/rules/composicao')
+    expect(measurementComposition(183, { date: '2026-10-01', neck_cm: '40', waist_cm: 94, weight_used_kg: '85' }, 'm')!.pct).toBeCloseTo(
+      20.71,
+      2,
+    )
+    expect(measurementComposition(183, { date: '2026-10-01', neck_cm: null, waist_cm: 94, weight_used_kg: 85 }, 'm')).toBeNull()
+  })
+})
