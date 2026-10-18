@@ -7,7 +7,7 @@ import { respondError } from '../_lib/http.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { painStatus } from '../_lib/rules/semaforo.js'
 import { estimatedStart, exerciseKcal, mergePatch, startGuessed, type WattsSource } from '../_lib/rules/treino.js'
-import { OTHER_SPORTS, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
+import { OTHER_SPORTS, isOtherSport, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { claimAndParse, type ImportRow } from '../_lib/workout-shot.js'
 
@@ -339,15 +339,20 @@ export const save = post(async ({ db, userId, body, res }) => {
     if (target.source === 'intervals' && input.kcal_device != null && input.kcal_device !== target.kcal_device) {
       patch.kcal_device = input.kcal_device
     }
-    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts.
+    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts
+    // ou noutro desporto (as do «Já fiz» numa caminhada do relógio).
     const wattsNow = (patch.watts ?? target.watts) as number | null
-    if (patch.watts != null || (target.type === 'bike' && wattsNow == null && patch.kcal_device != null)) {
+    const newDeviceKcal = patch.kcal_device != null && ((target.type === 'bike' && wattsNow == null) || target.type === 'other')
+    if (patch.watts != null || newDeviceKcal) {
+      const targetSport = (target.sport ?? (target.raw as { sport?: unknown } | null)?.sport) as string | null | undefined
       const again = exerciseKcal({
         type: target.type as WorkoutType,
         minutes: (target.minutes as number | null) ?? input.minutes,
-        watts: wattsNow,
+        watts: target.type === 'bike' ? wattsNow : null,
         wattsSource: (patch.watts_source ?? target.watts_source) as WattsSource,
-        deviceCalories: target.type === 'bike' ? ((patch.kcal_device ?? target.kcal_device) as number | null) : null,
+        deviceCalories:
+          target.type === 'bike' || target.type === 'other' ? ((patch.kcal_device ?? target.kcal_device) as number | null) : null,
+        sport: target.type === 'other' && isOtherSport(targetSport) ? targetSport : null,
       })
       Object.assign(patch, { kcal_est: again.kcal, kcal_rule: again.rule, kcal_estimated: again.estimated })
     }
