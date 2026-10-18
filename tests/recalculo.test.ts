@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { recomputeRange } from '../api/_lib/close-day'
+import { nightOrder, recomputeRange } from '../api/_lib/close-day'
 
 describe('dias a recalcular numa noite', () => {
   it('sem dias sujos: os últimos 3 até ontem', () => {
@@ -30,5 +30,16 @@ describe('dias a recalcular numa noite', () => {
   it('com a cadeia atrasada, os últimos 3 dias fecham na mesma (primeiro)', () => {
     const { dates } = recomputeRange('2026-10-09', '2026-07-25', 21)
     expect(dates.slice(0, 3)).toEqual(['2026-10-06', '2026-10-07', '2026-10-08'])
+  })
+})
+
+describe('ordem das pessoas na cron', () => {
+  it('fixa e a começar noutra pessoa em cada noite', () => {
+    const people = [{ user_id: 'b' }, { user_id: 'a' }]
+    const first = nightOrder(people, '2026-10-18').map((p) => p.user_id)
+    const next = nightOrder(people, '2026-10-19').map((p) => p.user_id)
+    expect([...first].sort()).toEqual(['a', 'b'])
+    expect(next).toEqual([...first].reverse())
+    expect(nightOrder([], '2026-10-18')).toEqual([])
   })
 })

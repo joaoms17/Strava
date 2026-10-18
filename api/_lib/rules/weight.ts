@@ -106,6 +106,18 @@ export function weeklyRate(weights: DatedValue[]): number | null {
   return Math.round(linearSlope(trend) * 7 * 100) / 100
 }
 
+// O ritmo de uma semana (Balanço) só com uma pesagem recente: a última a 4
+// dias ou menos do fim da semana (ou de hoje). Depois de 2–3 semanas sem
+// pesar, o ritmo antigo aparecia como o desta semana.
+export const RATE_MAX_AGE_DAYS = 4
+
+export function weeklyRateAsOf(weights: DatedValue[], asOf: string): number | null {
+  const upTo = weights.filter((w) => w.date <= asOf)
+  const last = upTo.reduce((a, w) => (w.date > a ? w.date : a), '')
+  if (!last || dayNumber(asOf) - dayNumber(last) > RATE_MAX_AGE_DAYS) return null
+  return weeklyRate(upTo)
+}
+
 // «Meta: cerca de <mês>»: o peso médio de hoje ao ritmo da semana (o mesmo
 // de «a descer 0,4 kg por semana», com 8 pesagens em 14 dias). Sem ritmo, a
 // subir, estável ou a mais de um ano, não há data.

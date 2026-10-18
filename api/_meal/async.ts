@@ -10,8 +10,10 @@ import { duplicatePhotoWindow } from '../_lib/rules/captura.js'
 import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
-import { aiLimitReached, claimAndAnalyse, correctItems, type MealRow } from '../_lib/meal-analysis.js'
+import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
 import { notifyMealAnalysed } from '../_lib/push.js'
+import { learnFoods } from '../_lib/foods.js'
+import { itemsToLearn } from '../_lib/rules/aprender.js'
 
 // Comida sem espera (Fase 2): a captura responde 202 logo e a análise corre
 // em segundo plano; o telemóvel pergunta pelo estado e, se preciso, pede
@@ -52,7 +54,23 @@ const AttachSchema = MealIdSchema.extend({
 
 export const MAX_MEAL_PHOTOS = 4
 
+// Anular «Juntar foto»: os itens, o estado e as fotos de antes. Só tira
+// fotos (as que ficam têm de já lá estar).
+const DetachSchema = MealIdSchema.extend({
+  items: z.array(MealItemInputSchema).min(1).max(30),
+  status: z.enum(['ok', 'por_rever']),
+  photo_paths: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+  thumb_paths: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+  image_hashes: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+})
+
 const CorrectSchema = MealIdSchema.extend({ text: z.string().trim().min(1).max(500) })
+
+// Analisar sem gravar (Nova favorita): o que leva, ou a foto (com o nome).
+const EstimateSchema = z.object({
+  text: z.string().max(1000).optional(),
+  photo_path: z.string().min(3).optional(),
+})
 
 const UpdateSchema = MealIdSchema.extend({
   items: z.array(MealItemInputSchema).min(1).max(30).optional(),
@@ -62,6 +80,7 @@ const UpdateSchema = MealIdSchema.extend({
   note: z.string().max(500).nullable().optional(),
   tags: z.array(TAG).max(5).optional(),
   confirm: z.boolean().optional(),
+  undo: z.boolean().optional(), // Anular uma edição: volta atrás sem ensinar a biblioteca
 })
 
 const QuickSchema = z.object({
@@ -100,13 +119,17 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
   return data?.nutrition_day_cutoff_hour ?? 4
 }
 
-// A análise continua depois da resposta (até aos 60 s da função) e, no fim,
-// avisa o telemóvel («Almoço analisado · 640 kcal») se a pessoa o quiser.
-function analyseInBackground(admin: SupabaseClient, mealId: string) {
-  const safe = claimAndAnalyse(admin, mealId)
-    .then((meal) => notifyMealAnalysed(admin, meal))
-    .catch((err) => console.error('Análise em segundo plano falhou:', err))
+// A análise (e a aprendizagem dos alimentos) continua depois da resposta
+// (até aos 60 s da função).
+function inBackground(task: Promise<unknown>) {
+  const safe = task.catch((err) => console.error('Em segundo plano falhou:', err))
   waitUntil(safe)
+}
+
+// No fim da análise, avisa o telemóvel («Almoço analisado · 640 kcal») se a
+// pessoa o quiser.
+function analyseInBackground(admin: SupabaseClient, mealId: string) {
+  inBackground(claimAndAnalyse(admin, mealId).then((meal) => notifyMealAnalysed(admin, meal)))
 }
 
 async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
@@ -205,8 +228,14 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   const admin = adminClient()
   const reset = input.reset === true || meal.status === 'sem_analise' || meal.status === 'erro'
   if (!input.force && (await aiLimitReached(admin, userId, (meal.photo_paths ?? []).length > 0))) {
-    if (meal.status === 'a_analisar') await admin.from('meals').update({ status: 'sem_analise' }).eq('id', meal.id)
-    res.status(200).json({ meal: { ...meal, status: 'sem_analise' }, limit: true })
+    // Uma foto junta a uma refeição com itens não a tira das contas: fica
+    // por rever com os itens que tinha e o aviso de que a foto não foi lida.
+    const adding = addingToItems(meal)
+    const stopped = adding
+      ? { status: 'por_rever', analysis_error: 'Chegaste ao limite da IA que definiste.' }
+      : { status: 'sem_analise' }
+    if (meal.status === 'a_analisar') await admin.from('meals').update(stopped).eq('id', meal.id)
+    res.status(200).json({ meal: { ...meal, ...(!adding || meal.status === 'a_analisar' ? stopped : {}) }, limit: true })
     return
   }
   const result = await claimAndAnalyse(admin, meal.id, reset)
@@ -240,6 +269,15 @@ export const attach = post(async ({ db, userId, body, res }) => {
   const photoPaths = [...current, ...added]
   const admin = adminClient()
   const overLimit = await aiLimitReached(admin, userId, true)
+  // Numa refeição com itens (analisada, de código de barras, favorita, só
+  // números…) os itens ficam: a IA só junta o que é novo nas fotos, e o tipo
+  // de registo não muda. Acima do limite não se junta (os itens deixavam de
+  // contar até haver análise).
+  const keeping = (meal.status === 'ok' || meal.status === 'por_rever') && addingToItems({ items: meal.items, photo_paths: photoPaths })
+  if (keeping && overLimit) throw new HttpError(429, 'Chegaste ao limite da IA que definiste. A foto não foi junta.')
+  const previous = keeping
+    ? { items: meal.items, status: meal.status, photo_paths: current, thumb_paths: thumbs, image_hashes: hashes }
+    : null
   const { data, error } = await db
     .from('meals')
     .update({
@@ -247,8 +285,7 @@ export const attach = post(async ({ db, userId, body, res }) => {
       photo_path: photoPaths[0],
       thumb_paths: [...thumbs, ...input.thumb_paths.filter((p) => !thumbs.includes(p))],
       image_hashes: [...hashes, ...input.image_hashes.filter((h) => !hashes.includes(h))],
-      input_type: 'photo',
-      is_estimate: true,
+      ...(keeping ? {} : { input_type: 'photo', is_estimate: true }),
       status: overLimit ? 'sem_analise' : 'a_analisar',
       analysis_attempts: 0,
       analysis_started_at: null,
@@ -260,7 +297,38 @@ export const attach = post(async ({ db, userId, body, res }) => {
     .single()
   if (error) throw new HttpError(500, error.message)
   if (data.status === 'a_analisar') analyseInBackground(admin, meal.id)
-  res.status(202).json({ meal: data })
+  res.status(202).json({ meal: data, previous })
+})
+
+export const detach = post(async ({ db, body, res }) => {
+  const input = parse(DetachSchema, body)
+  const meal = await ownMeal(db, input.meal_id)
+  if (meal.deleted_at) throw new HttpError(404, 'Refeição apagada.')
+  const keep = (list: string[] | null | undefined, wanted: string[]) => (list ?? []).filter((x) => wanted.includes(x))
+  const photoPaths = keep(meal.photo_paths, input.photo_paths)
+  const items = (input.items as MealItem[]).map((i) => ({ ...i, grams: round1(i.grams) }))
+  const tags = (meal.tags ?? []) as string[]
+  // Sem a reivindicação, uma análise ainda a correr já não grava por cima.
+  const { data, error } = await db
+    .from('meals')
+    .update({
+      items,
+      ...mealTotals(items),
+      is_estimate: mealIsEstimate(meal.input_type === 'photo' ? 'photo' : 'text', tags.includes('jantar_fora'), items),
+      photo_paths: photoPaths,
+      photo_path: photoPaths[0] ?? null,
+      thumb_paths: keep(meal.thumb_paths as string[] | null, input.thumb_paths),
+      image_hashes: keep(meal.image_hashes as string[] | null, input.image_hashes),
+      status: input.status,
+      confirmed_at: input.status === 'ok' ? new Date().toISOString() : null,
+      analysis_started_at: null,
+      analysis_error: null,
+    })
+    .eq('id', meal.id)
+    .select()
+    .single()
+  if (error) throw new HttpError(500, error.message)
+  res.status(200).json({ meal: data })
 })
 
 export const correct = post(async ({ db, userId, body, res }) => {
@@ -279,11 +347,13 @@ export const correct = post(async ({ db, userId, body, res }) => {
       is_estimate: mealIsEstimate(meal.input_type === 'photo' ? 'photo' : 'text', tags.includes('jantar_fora'), items),
       status: 'ok',
       confirmed_at: new Date().toISOString(),
+      analysis_error: null,
     })
     .eq('id', meal.id)
     .select()
     .single()
   if (error) throw new HttpError(500, error.message)
+  inBackground(learnFoods(db, userId, itemsToLearn('editada', meal.input_type, items, meal.items), meal.input_type))
   res.status(200).json({ meal: data, previous })
 })
 
@@ -341,6 +411,8 @@ export const update = post(async ({ db, userId, body, res }) => {
     patch.status = 'ok'
     patch.confirmed_at = new Date().toISOString()
   }
+  // Mexer nos itens ou confirmar dá por visto o aviso da foto que não foi analisada.
+  if ((items || input.confirm === true) && meal.status !== 'a_analisar' && meal.analysis_error) patch.analysis_error = null
   // Anular um «Está certo».
   if (input.confirm === false && meal.status === 'ok') {
     patch.status = 'por_rever'
@@ -352,7 +424,29 @@ export const update = post(async ({ db, userId, body, res }) => {
   }
   const { data, error } = await db.from('meals').update(patch).eq('id', meal.id).select().single()
   if (error) throw new HttpError(500, error.message)
+  // O que a pessoa corrigiu, ou confirmou com «Está certo», ensina a biblioteca
+  // (Anular não ensina outra vez o que já lá estava).
+  let learned: MealItem[] = []
+  if (input.undo) learned = []
+  else if (items) learned = itemsToLearn('editada', meal.input_type, patch.items as MealItem[], meal.items)
+  else if (input.confirm === true && meal.status === 'por_rever') learned = itemsToLearn('confirmada', meal.input_type, meal.items)
+  if (learned.length) inBackground(learnFoods(db, userId, learned, meal.input_type))
   res.status(200).json({ meal: data, previous })
+})
+
+export const estimate = post(async ({ userId, body, res }) => {
+  const input = parse(EstimateSchema, body)
+  const text = input.text?.trim() || null
+  const photo = input.photo_path ?? null
+  if (!text && !photo) throw new HttpError(400, 'Falta a foto ou o texto.')
+  // A foto é lida com a service role: tem de estar na pasta de quem pede.
+  if (photo && (!photo.startsWith(`${userId}/`) || photo.includes('..'))) throw new HttpError(403, 'Fotografia inválida.')
+  const admin = adminClient()
+  if (await aiLimitReached(admin, userId, photo != null)) {
+    throw new HttpError(429, 'Chegaste ao limite da IA (Definições › Avançado).')
+  }
+  const result = await estimateItems(admin, userId, { text, photo_paths: photo ? [photo] : [] })
+  res.status(200).json(result)
 })
 
 // Só números: um item sintético «Registo rápido», para uma edição futura

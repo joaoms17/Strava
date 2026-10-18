@@ -4,13 +4,14 @@ import { sameSecret } from '../_lib/secret.js'
 import { aiProvider, anthropic, MODELS } from '../_lib/anthropic.js'
 import { geminiModels } from '../_lib/rules/gemini.js'
 import {
-  PROMPT_MEAL_PHOTO,
-  PROMPT_MEAL_TEXT,
   PROMPT_REVIEW,
   PROMPT_REVIEW_NEUTRAL,
   PROMPT_MEAL_PHOTO_V2,
   PROMPT_MEAL_TEXT_V2,
   PROMPT_MEAL_CORRECT,
+  PROMPT_MEAL_PHOTO_ADD,
+  PROMPT_LABEL_READ,
+  PROMPT_RECIPE,
   PROMPT_WORKOUT_SHOT,
   readPrompt,
 } from '../_lib/prompts.js'
@@ -74,13 +75,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const prompts = Object.fromEntries(
     [
-      PROMPT_MEAL_TEXT,
-      PROMPT_MEAL_PHOTO,
-          PROMPT_REVIEW,
+      PROMPT_REVIEW,
       PROMPT_REVIEW_NEUTRAL,
       PROMPT_MEAL_PHOTO_V2,
       PROMPT_MEAL_TEXT_V2,
       PROMPT_MEAL_CORRECT,
+      PROMPT_MEAL_PHOTO_ADD,
+      PROMPT_LABEL_READ,
+      PROMPT_RECIPE,
       PROMPT_WORKOUT_SHOT,
     ].map((file) => {
       try {

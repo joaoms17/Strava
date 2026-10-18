@@ -21,6 +21,8 @@ import { recomputeFrom } from '../lib/recompute'
 import { answerDay, type DayAnswer } from '../lib/day-flag'
 import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
 import { kcalOut, paceFromDiff, round10 } from '../../api/_lib/rules/gasto'
+import { isDayComplete } from '../../api/_lib/rules/day-close'
+import { weekSoFar, type WeekSoFarDay } from '../../api/_lib/rules/balanco'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { useAutoSync } from '../lib/intervals'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
@@ -46,14 +48,20 @@ import { MAX_MEAL_PHOTOS } from '../lib/capture'
 import WeekStrip from '../components/ui/WeekStrip'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
+import { proteinPicks } from '../../api/_lib/rules/favoritos'
 
 interface DayData {
+  date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
   meals: (Meal & { created_at: string })[]
   deleted: Meal[]
   workouts: Workout[]
   yesterdayWorkouts: Workout[]
   weights: WeightRow[]
-  yesterday: { meals: number; flags: string[] }
+  // Ontem: refeições contadas e as kcal, e as fotos ainda sem números.
+  yesterday: { meals: number; kcal: number; uncounted: Meal[]; flags: string[] }
+  // O plano base guardado no fecho deste dia (null: o de hoje) e os dias da semana até este.
+  dayBase: number | null
+  week: WeekSoFarDay[]
   latestTdee: number | null
   favorites: Favorite[]
   diet: Diet | null
@@ -116,8 +124,12 @@ export default function Hoje() {
   const [retrying, setRetrying] = useState<Set<string>>(new Set())
   // Sobe a cada pergunta pelo estado das fotos a analisar (sem recarregar o dia).
   const [pollTick, setPollTick] = useState(0)
+  // Só a resposta do último pedido conta: ao mudar de dia depressa, a de um
+  // dia anterior pode chegar depois.
+  const loads = useRef(0)
 
   const load = useCallback(async () => {
+    const request = ++loads.current
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     const [
       { data: meals, error: mealsError, status: mealsStatus },
@@ -136,6 +148,7 @@ export default function Hoje() {
       { data: lastMeasure },
       { data: health },
       { data: stepRows },
+      { data: weekRows },
       expenditure,
       diet,
     ] = await Promise.all([
@@ -149,7 +162,7 @@ export default function Hoje() {
       supabase.from('workouts_active').select('*').eq('date', date).order('created_at'),
       supabase.from('workouts_active').select('*').eq('date', shiftDate(date, -1)),
       supabase.from('weights').select('date,kg,measured_at,created_at').eq('date', date),
-      supabase.from('meals_counted').select('id').eq('date', shiftDate(date, -1)),
+      supabase.from('meals').select('*').eq('date', shiftDate(date, -1)).is('deleted_at', null).order('logged_at'),
       supabase.from('days').select('flags').eq('date', shiftDate(date, -1)).maybeSingle(),
       supabase
         .from('days')
@@ -185,6 +198,8 @@ export default function Hoje() {
         .select('date,steps')
         .lte('date', date)
         .gte('date', shiftDate(date, -STEPS_AVG_DAYS)),
+      // Os dias desta semana até este: o plano base de cada um e a semana até agora.
+      supabase.from('days').select('*').gte('date', mondayOf(date)).lte('date', date),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
       // A dieta que segue (migração 10; sem ela fica null).
       loadActiveDiet(),
@@ -194,16 +209,25 @@ export default function Hoje() {
     const photos = await signedUrls(
       mealRows.map((m) => mealThumb(m, favoriteRows)).filter((p): p is string => !!p),
     )
+    if (request !== loads.current) return
+    const yesterdayRows = (yMeals ?? []) as Meal[]
+    const yesterdayCounted = yesterdayRows.filter((m) => m.status === 'ok' || m.status === 'por_rever')
+    const dayRow = ((weekRows ?? []) as { date: string; base_kcal?: number | null }[]).find((d) => d.date === date)
     setData({
+      date,
       meals: mealRows,
       deleted: (deleted ?? []) as Meal[],
       workouts: (workouts ?? []) as Workout[],
       yesterdayWorkouts: (yWorkouts ?? []) as Workout[],
       weights: ((weights ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })),
       yesterday: {
-        meals: (yMeals ?? []).length,
+        meals: yesterdayCounted.length,
+        kcal: yesterdayCounted.reduce((a, m) => a + Number(m.kcal), 0),
+        uncounted: yesterdayRows.filter((m) => m.status !== 'ok' && m.status !== 'por_rever'),
         flags: Array.isArray(yDay?.flags) ? (yDay.flags as string[]) : [],
       },
+      dayBase: dayRow?.base_kcal != null ? Number(dayRow.base_kcal) : null,
+      week: (weekRows ?? []) as WeekSoFarDay[],
       latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
       favorites: favoriteRows,
       diet,
@@ -275,7 +299,17 @@ export default function Hoje() {
     }
   }, [data, load, pollTick])
 
-  if (!data) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+  const pickDay = (picked: string) => navigate(picked === today ? '/hoje' : `/hoje/${picked}`)
+
+  // Ao mudar de dia, os números do dia anterior não ficam por baixo da data nova.
+  if (!data || data.date !== date) {
+    return (
+      <div className="space-y-4 pt-1">
+        <WeekStrip selected={date} today={today} onPick={pickDay} />
+        <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+      </div>
+    )
+  }
 
   // Só contam as refeições analisadas (ok e por rever); as outras avisam.
   const counted = data.meals.filter((m) => m.status === 'ok' || m.status === 'por_rever')
@@ -298,7 +332,8 @@ export default function Hoje() {
     data.meals.filter((m) => m.status === 'a_analisar' && !analysisStuck(m, nowMs)).length +
     localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
-  // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa.
+  // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa. Um dia passado
+  // usa o plano base desse dia (mudar o plano não reescreve os dias antigos).
   // Um treino partido em dois pelo relógio aparece (e conta) como um.
   const workoutKcals = mergeSessions(data.workouts).map((w) => ({
     workout: w,
@@ -317,12 +352,28 @@ export default function Hoje() {
     profile.maintenance_enabled !== false &&
     profile.maintenance_anchor != null &&
     isMaintenanceWeek(profile.maintenance_anchor, date)
-  const plan = maintenance ? maintenanceTarget(data.latestTdee) : profile.base_kcal + kcalExercise
+  const dayBase = isToday ? profile.base_kcal : (data.dayBase ?? profile.base_kcal)
+  const plan = maintenance ? maintenanceTarget(data.latestTdee) : dayBase + kcalExercise
   const left = plan - kcalIn
   const over = left < 0
   // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
   const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
   const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
+  // A semana até agora (só hoje): dias completos desde segunda mais hoje.
+  const week = isToday ? weekSoFar(data.week, today, plan, kcalIn) : null
+  const weekText =
+    week == null
+      ? null
+      : Math.abs(week.diff) < 50
+        ? 'no plano'
+        : `${fmtInt(Math.abs(week.diff))} ${week.diff > 0 ? 'abaixo' : 'acima'} do plano`
+  const yesterdayComplete = isDayComplete({
+    mealCount: data.yesterday.meals,
+    kcalIn: data.yesterday.kcal,
+    manuallyClosed: data.yesterday.flags.includes('dia_fechado'),
+    missingSomething: data.yesterday.flags.includes('faltou_algo'),
+    uncountedMeals: data.yesterday.uncounted.length,
+  })
 
   const clock = lisbonClock(now)
   const minutesOfDay = clock.hour * 60 + clock.minute
@@ -335,8 +386,11 @@ export default function Hoje() {
         yesterdayMeals: data.yesterday.meals,
         yesterdayAnswered:
           data.yesterday.flags.includes('dia_fechado') || data.yesterday.flags.includes('faltou_algo'),
+        yesterdayComplete,
+        yesterdayUncounted: data.yesterday.uncounted.length,
         mealsToday: counted.length,
         kcalToday: kcalIn,
+        planKcal: plan,
         proteinToday: proteinIn,
         proteinTarget: profile.protein_g,
         mealsWithError: errorMeals.length,
@@ -349,10 +403,8 @@ export default function Hoje() {
         nudges,
       })
     : null
-  const proteinFavorites = [...data.favorites]
-    .filter((f) => Number(f.protein) >= 15)
-    .sort((a, b) => Number(b.protein) - Number(a.protein))
-    .slice(0, 3)
+  // As que fecham a proteína sem passar das calorias que faltam.
+  const proteinFavorites = proteinPicks(data.favorites, left)
 
   const hints = profile.dismissed_hints ?? []
   const firstCards = isToday
@@ -696,11 +748,7 @@ export default function Hoje() {
 
   return (
     <div className="space-y-4 pt-1">
-      <WeekStrip
-        selected={date}
-        today={today}
-        onPick={(picked) => navigate(picked === today ? '/hoje' : `/hoje/${picked}`)}
-      />
+      <WeekStrip selected={date} today={today} onPick={pickDay} />
 
       {data.offline && (
         <p className="rounded-xl border border-attn/50 bg-attn/10 px-3 py-2 text-[15px]" role="status">
@@ -743,7 +791,9 @@ export default function Hoje() {
         </p>
         {isToday && over && (
           <p className="mt-1 text-[15px] text-dim">
-            {underSpend ? 'Mas continuas a comer menos do que gastas.' : 'A semana conta mais do que o dia.'}
+            {underSpend
+              ? 'Mas continuas a comer menos do que gastas.'
+              : `A semana conta mais do que o dia.${weekText ? ` Com hoje, a semana está ${weekText}.` : ''}`}
           </p>
         )}
         {stillCounting > 0 && (
@@ -819,7 +869,11 @@ export default function Hoje() {
         <NextStepCard
           id={step}
           yesterdayMeals={data.yesterday.meals}
+          yesterdayKcal={data.yesterday.kcal}
+          yesterdayUncounted={data.yesterday.uncounted}
+          retrying={retrying}
           favorites={proteinFavorites}
+          gap={{ protein: Math.max(0, Math.round(profile.protein_g - proteinIn)), kcal: Math.round(left) }}
           onWeigh={() => sheet.open('peso')}
           onYesterday={(flag) => void runBusy('A guardar…', () => answerYesterday(flag))}
           onFavorite={(fav) => void runBusy('A registar…', () => logFavorite(fav, null, toast))}
@@ -894,7 +948,7 @@ export default function Hoje() {
         </div>
       )}
 
-      {date <= today && <Agua date={date} />}
+      {date <= today && <Agua key={date} date={date} />}
 
       {data.diet && date <= today && (
         <DietToday diet={data.diet} favorites={data.favorites} meals={data.meals} date={date} today={today} />
@@ -972,7 +1026,7 @@ export default function Hoje() {
               </p>
             ) : (
               <p className="tabular-nums">
-                Plano: {fmtInt(profile.base_kcal)}
+                Plano: {fmtInt(dayBase)}
                 {kcalExercise > 0 && (
                   <>
                     {' '}
@@ -986,6 +1040,14 @@ export default function Hoje() {
               {isToday && !over && <> · Podes comer mais {fmtInt(left)}</>}
               {over && <> · Passaste {fmtInt(-left)} do plano</>}
             </p>
+            {week && weekText && (
+              <p className="tabular-nums">
+                Esta semana, com hoje: {weekText}{' '}
+                <span className="text-dim">
+                  ({week.days} {week.days === 1 ? 'dia completo' : 'dias completos'} e hoje)
+                </span>
+              </p>
+            )}
             <p className="text-dim tabular-nums">
               <span className="text-protein">Proteína {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g</span> ·
               Hidratos {fmtInt(carbsIn)} g · Gordura {fmtInt(fatIn)} g
@@ -1030,7 +1092,11 @@ export default function Hoje() {
 function NextStepCard({
   id,
   yesterdayMeals,
+  yesterdayKcal,
+  yesterdayUncounted,
+  retrying,
   favorites,
+  gap,
   onWeigh,
   onYesterday,
   onFavorite,
@@ -1050,7 +1116,11 @@ function NextStepCard({
 }: {
   id: NextStepId
   yesterdayMeals: number
+  yesterdayKcal: number
+  yesterdayUncounted: Meal[]
+  retrying: Set<string>
   favorites: Favorite[]
+  gap: { protein: number; kcal: number }
   onWeigh: () => void
   onYesterday: (flag: DayAnswer) => void
   onFavorite: (favorite: Favorite) => void
@@ -1205,10 +1275,52 @@ function NextStepCard({
           </div>
         </>
       )}
-      {id === 'ontem' && (
+      {id === 'ontem' && yesterdayUncounted.length > 0 && (
         <>
           <p className="text-[17px]">
-            Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'}. Foi tudo?
+            {yesterdayUncounted.length === 1
+              ? 'Ontem ficou uma refeição sem números.'
+              : `Ontem ficaram ${yesterdayUncounted.length} refeições sem números.`}
+          </p>
+          <p className="-mt-2 text-[14px] text-dim">Até ter números, ontem fica fora das contas do gasto.</p>
+          <div className="divide-y divide-line/60">
+            {yesterdayUncounted.map((meal) => {
+              const analysing =
+                retrying.has(meal.id) || (meal.status === 'a_analisar' && !analysisStuck(meal, Date.now()))
+              return (
+                <div key={meal.id} className="flex min-h-12 items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[15px]">
+                    {timeOf(meal.logged_at)} · {SLOT_LABEL[meal.slot ?? slotOf(new Date(meal.logged_at))]}
+                  </span>
+                  {analysing ? (
+                    <span className="text-[14px] text-dim">A analisar…</span>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() =>
+                          meal.status === 'sem_analise' ? void onAnalyse(meal.id, { force: true }) : onRetry(meal.id)
+                        }
+                        className="min-h-11 rounded-xl border border-eat/50 px-3 text-[14px] font-semibold text-eat"
+                      >
+                        {meal.status === 'sem_analise' ? 'Analisar' : 'Tentar'}
+                      </button>
+                      <button onClick={() => onOpenMeal(meal.id)} className="min-h-11 rounded-xl bg-surface2 px-3 text-[14px]">
+                        Escrever
+                      </button>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex justify-end">{later}</div>
+        </>
+      )}
+      {id === 'ontem' && yesterdayUncounted.length === 0 && (
+        <>
+          <p className="text-[17px]">
+            Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'} ({fmtInt(yesterdayKcal)}{' '}
+            kcal). Foi tudo?
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => onYesterday('dia_fechado')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
@@ -1229,7 +1341,11 @@ function NextStepCard({
       )}
       {id === 'proteina' && (
         <>
-          <p className="text-[17px]">Ainda tens espaço para proteína.</p>
+          <p className="text-[17px]">
+            {gap.kcal > 0
+              ? `Faltam ${fmtInt(gap.protein)} g de proteína e cabem ${fmtKcal(gap.kcal)} kcal.`
+              : `Faltam ${fmtInt(gap.protein)} g de proteína e as calorias de hoje já chegaram: escolhe algo leve.`}
+          </p>
           {chips}
           <div className="flex justify-end">{later}</div>
         </>

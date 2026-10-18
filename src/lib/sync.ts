@@ -4,10 +4,10 @@ import { listQueuedMeals, removeQueuedMeal, type QueuedMeal } from './queue'
 import { listCaptures, ownCapture } from './capture-queue'
 import { supabase } from './supabase'
 import { emitDataChanged } from './events'
-import type { Meal, ParsedMealResponse } from './types'
 
-// Fila offline das refeições de texto: envia ao abrir, ao voltar a rede e
-// quando a app regressa ao primeiro plano.
+// Fila offline antiga das refeições de texto: envia ao abrir, ao voltar a
+// rede e quando a app regressa ao primeiro plano, pela captura de agora (a
+// análise corre no servidor; o id da entrada não deixa gravar a dobrar).
 let running = false
 
 export async function syncQueuedMeals(): Promise<void> {
@@ -17,21 +17,11 @@ export async function syncQueuedMeals(): Promise<void> {
     const queued = await listQueuedMeals().catch(() => [] as QueuedMeal[])
     for (const entry of queued) {
       try {
-        const parsed = await postApi<ParsedMealResponse>('/api/meal/parse-text', {
+        await postApi('/api/meal/capture', {
+          client_id: entry.id,
           text: entry.text,
-          jantar_fora: entry.jantar_fora,
-        })
-        await postApi<{ meal: Meal }>('/api/meal/save', {
-          input_type: 'text',
-          raw_text: entry.text,
-          photo_path: null,
-          items: parsed.items,
-          is_estimate: parsed.is_estimate,
-          confidence: parsed.confidence,
-          prompt_version: parsed.prompt_version,
-          model: parsed.model,
-          cost_usd: parsed.cost_usd,
-          logged_at: entry.logged_at,
+          tags: entry.jantar_fora ? ['jantar_fora'] : [],
+          taken_at: entry.logged_at,
         })
         await removeQueuedMeal(entry.id)
         emitDataChanged()

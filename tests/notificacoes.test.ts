@@ -12,7 +12,6 @@ import {
   mealAnalysedNotice,
   needsDinnerReminder,
   pushEndpointAllowed,
-  reminderSlot,
   sameServerKey,
   vapidSubject,
   wantsPush,
@@ -109,17 +108,7 @@ describe('lembrete do jantar', () => {
   })
 })
 
-describe('horas da cron dos lembretes', () => {
-  it('decide pela hora de Lisboa, com e sem hora de verão', () => {
-    // 20:45 UTC: 21:45 em julho, 20:45 em janeiro; 08:00 UTC: 09:00 e 08:00.
-    expect(reminderSlot(new Date('2026-07-06T20:45:00Z'))).toBe('noite')
-    expect(reminderSlot(new Date('2026-01-05T20:45:00Z'))).toBe('noite')
-    expect(reminderSlot(new Date('2026-07-06T08:00:00Z'))).toBe('manha')
-    expect(reminderSlot(new Date('2026-01-05T08:59:00Z'))).toBe('manha')
-    // Mesmo fora da hora marcada continua a ser a da noite.
-    expect(reminderSlot(new Date('2026-07-06T21:44:00Z'))).toBe('noite')
-  })
-
+describe('cron dos lembretes', () => {
   it('segunda-feira', () => {
     expect(isMonday('2026-10-19')).toBe(true)
     expect(isMonday('2026-10-18')).toBe(false)

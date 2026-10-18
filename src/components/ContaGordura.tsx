@@ -7,6 +7,7 @@ import { BusyButton } from '../lib/busy'
 import { shiftDate } from '../lib/day'
 import { fmt1, fmtDayMonth, fmtInt } from '../lib/format'
 import { fatTally, type FatTally, type TallyDay } from '../../api/_lib/rules/conta-gordura'
+import { waterWeekDuring } from '../../api/_lib/rules/ciclo'
 
 // Balanço › Mês › «Conta da gordura»: quanto se devia ter perdido pelas contas
 // (défice dos dias completos ÷ 7700) contra o que o peso médio desceu, desde o
@@ -62,6 +63,8 @@ export default function ContaGordura({ today }: { today: string }) {
         ? 'Pelas contas, estás ela por ela.'
         : `Pelas contas, devias ter ${kg > 0 ? 'perdido' : 'ganho'} cerca de ${fmt1(Math.abs(kg))} kg de gordura.`
   const gap = realKg != null && tally.diasContados > 0 ? realKg - kg : null
+  // O peso médio é de 7 dias: uma semana de água do ciclo nesses dias mexe nele.
+  const waterWeek = waterWeekDuring(profile, shiftDate(today, -6), today)
   const note =
     gap == null
       ? null
@@ -69,7 +72,9 @@ export default function ContaGordura({ today }: { today: string }) {
         ? 'Bate certo.'
         : gap > 0
           ? 'A balança desceu mais do que as contas: no início sai água, ou o gasto real é maior do que o estimado.'
-          : 'As contas dizem mais do que a balança: água e sal escondem gordura perdida, ou ficou comida por registar.'
+          : waterWeek
+            ? 'As contas dizem mais do que a balança: é a semana de água do ciclo, que esconde gordura perdida.'
+            : 'As contas dizem mais do que a balança: água e sal escondem gordura perdida, ou ficou comida por registar.'
 
   return (
     <section className="space-y-2 rounded-[18px] border border-line bg-surface p-5" aria-label="Conta da gordura">

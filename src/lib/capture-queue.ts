@@ -105,7 +105,7 @@ async function send(entry: CaptureEntry, userId: string) {
   for (let i = 0; i < entry.files.length; i++) {
     const original = entry.files[i]!
     const hash = await sha256Hex(original)
-    const { full, thumb } = await prepareImage(original)
+    const { full, thumb } = await prepareImage(original, entry.files.length > 1)
     const base = `${userId}/${entry.client_id}/${i}`
     for (const [path, blob] of [
       [`${base}.jpg`, full],

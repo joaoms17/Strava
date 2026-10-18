@@ -18,8 +18,10 @@ async function toJpegBlob(bitmap: ImageBitmap, maxDim: number, quality: number):
 }
 
 // Foto de 1024 px (JPEG q0,75, ~150 KB) e miniatura de 256 px, a partir do
-// ficheiro original; o bitmap fecha-se logo a seguir.
-export async function prepareImage(file: Blob): Promise<{ full: Blob; thumb: Blob }> {
+// ficheiro original; o bitmap fecha-se logo a seguir. Com `detail` (refeição
+// com 2 ou mais fotos, muitas vezes o prato e o rótulo) sobe a 1568 px
+// (q0,8), para a letra pequena da tabela nutricional se ler.
+export async function prepareImage(file: Blob, detail = false): Promise<{ full: Blob; thumb: Blob }> {
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
@@ -27,7 +29,7 @@ export async function prepareImage(file: Blob): Promise<{ full: Blob; thumb: Blo
     throw new Error('Este formato de foto não é suportado. Tenta outra foto.')
   }
   try {
-    const full = await toJpegBlob(bitmap, 1024, 0.75)
+    const full = detail ? await toJpegBlob(bitmap, 1568, 0.8) : await toJpegBlob(bitmap, 1024, 0.75)
     const thumb = await toJpegBlob(bitmap, 256, 0.7)
     return { full, thumb }
   } finally {

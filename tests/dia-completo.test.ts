@@ -20,6 +20,12 @@ describe('isDayComplete', () => {
     expect(isDayComplete({ mealCount: 1, kcalIn: 500, manuallyClosed: true })).toBe(true)
   })
 
+  it('uma foto ainda sem números deixa o dia incompleto, até «Sim, foi tudo»', () => {
+    expect(isDayComplete({ mealCount: 2, kcalIn: 1100, manuallyClosed: false, uncountedMeals: 1 })).toBe(false)
+    expect(isDayComplete({ mealCount: 2, kcalIn: 1100, manuallyClosed: true, uncountedMeals: 1 })).toBe(true)
+    expect(isDayComplete({ mealCount: 2, kcalIn: 1100, manuallyClosed: false, uncountedMeals: 0 })).toBe(true)
+  })
+
   it('"faltou algo" tira o dia das contas, mesmo com refeições suficientes', () => {
     expect(
       isDayComplete({ mealCount: 3, kcalIn: 1800, manuallyClosed: false, missingSomething: true }),
@@ -72,8 +78,19 @@ describe('completeStreak', () => {
     expect(completeStreak(days, '2026-10-13')).toBe(2)
   })
 
-  it('«faltou algo» quebra; hoje soma se completo mas não quebra', () => {
+  it('«faltou algo» com refeições não soma nem quebra; sem nada quebra', () => {
     expect(completeStreak({ '2026-10-12': { ...full, flags: ['faltou_algo'] } }, '2026-10-13')).toBe(0)
+    const honest = {
+      '2026-10-12': full,
+      '2026-10-11': { mealCount: 2, kcalIn: 900, flags: ['faltou_algo'] },
+      '2026-10-10': full,
+      '2026-10-09': { mealCount: 0, kcalIn: 0, flags: ['faltou_algo'] }, // quebra: nada registado
+      '2026-10-08': full,
+    }
+    expect(completeStreak(honest, '2026-10-13')).toBe(2)
+  })
+
+  it('hoje soma se completo mas não quebra', () => {
     expect(completeStreak({ '2026-10-13': full, '2026-10-12': full }, '2026-10-13')).toBe(2)
     expect(completeStreak({ '2026-10-13': { mealCount: 1, kcalIn: 300 }, '2026-10-12': full }, '2026-10-13')).toBe(1)
   })

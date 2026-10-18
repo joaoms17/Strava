@@ -32,7 +32,8 @@ function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   return result.data
 }
 
-// Perfil com os alvos de partida e, se veio, a primeira pesagem.
+// Perfil com os alvos de partida, a âncora da semana de pausa da dieta (hoje:
+// a dieta começa agora) e, se veio, a primeira pesagem.
 async function insertProfile(admin: SupabaseClient, userId: string, person: Person): Promise<void> {
   const now = new Date()
   const targets = startingTargets(
@@ -51,6 +52,7 @@ async function insertProfile(admin: SupabaseClient, userId: string, person: Pers
     height_cm: person.height_cm,
     birth_year: person.birth_year,
     target_weight_kg: person.target_weight_kg,
+    maintenance_anchor: lisbonClock(now).date,
     ...targets,
   })
   if (error) throw new HttpError(500, `Não consegui criar o perfil: ${error.message}`)

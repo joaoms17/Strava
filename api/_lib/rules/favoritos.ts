@@ -1,6 +1,7 @@
 // Favoritos de refeição: registar com 1 toque, sem IA. Os totais saem sempre
 // dos itens (decisão 20), escalados pela porção escolhida (½ · 1 · 1½ · 2).
 import { round1, type MealItem } from './meal-totals.js'
+import { rankDishes } from './menu.js'
 import type { Slot } from './momentos.js'
 
 export const PORTION_FACTORS = [0.5, 1, 1.5, 2] as const
@@ -39,6 +40,33 @@ export function rankFavorites<T extends RankableFavorite>(favorites: T[], slot: 
     if (a.use_count !== b.use_count) return b.use_count - a.use_count
     return (b.last_used_at ?? '').localeCompare(a.last_used_at ?? '')
   })
+}
+
+// O cartão da proteína no Hoje: as favoritas com proteína (15 g ou mais) que
+// cabem no que falta comer hoje, pela proteína por caloria (como os pratos do
+// menu, rankDishes); as que passam só entram depois, das mais leves.
+export const PROTEIN_PICK_MIN_G = 15
+
+export function proteinPicks<T extends { kcal: number; protein: number; carbs: number; fat: number }>(
+  favorites: T[],
+  kcalLeft: number | null,
+  max = 3,
+): T[] {
+  const pool = favorites.filter((f) => Number(f.protein) >= PROTEIN_PICK_MIN_G && Number(f.kcal) > 0)
+  const dishes = pool.map((f, i) => ({
+    name: String(i),
+    type: 'prato' as const,
+    description: null,
+    grams: null,
+    kcal: Number(f.kcal),
+    protein: Number(f.protein),
+    carbs: Number(f.carbs),
+    fat: Number(f.fat),
+    price: null,
+  }))
+  return rankDishes(dishes, kcalLeft)
+    .slice(0, max)
+    .map((d) => pool[Number(d.name)]!)
 }
 
 // Nome curto para um favorito novo, a partir dos itens («Iogurte + aveia + banana»).

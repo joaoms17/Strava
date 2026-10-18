@@ -31,7 +31,7 @@ const KINDS: { kind: PushKind; label: string; help: string }[] = [
   {
     kind: 'semana',
     label: 'Resumo da semana',
-    help: 'À segunda de manhã, quando o resumo da semana que passou está pronto.',
+    help: 'À segunda à noite, quando o resumo da semana que passou está pronto.',
   },
 ]
 

@@ -6,7 +6,7 @@ App pessoal para registar o dia: comida, treino, peso e sono. Para uma casa: cad
 
 ## Stack
 
-React + Vite + TypeScript, Tailwind, Recharts, vite-plugin-pwa (service worker com `public/push-sw.js` para as notificações). Supabase (Postgres, Auth, Storage, RLS). Vercel Hobby (frontend, 6 funções em `/api`, crons às 04:30 UTC e dos lembretes às 20:45 UTC e às 08:00 UTC à segunda). IA só em `/api`: o Gemini (plano gratuito) com `GEMINI_API_KEY`, senão o Claude; Zod valida todo o JSON. Notificações por Web Push (`web-push`, chaves VAPID). Timezone Europe/Lisbon em tudo.
+React + Vite + TypeScript, Tailwind, Recharts, vite-plugin-pwa (service worker com `public/push-sw.js` para as notificações). Supabase (Postgres, Auth, Storage, RLS). Vercel Hobby (frontend, 6 funções em `/api`, crons às 04:30 UTC e dos lembretes às 20:45 UTC). IA só em `/api`: o Gemini (plano gratuito) com `GEMINI_API_KEY`, senão o Claude; Zod valida todo o JSON. Notificações por Web Push (`web-push`, chaves VAPID). Timezone Europe/Lisbon em tudo.
 
 ## Estrutura de pastas
 

@@ -3,6 +3,7 @@ import {
   favoriteName,
   itemNameSet,
   jaccard,
+  proteinPicks,
   patternKey,
   rankFavorites,
   rescaleItems,
@@ -90,5 +91,27 @@ describe('sugestão de favorito', () => {
     ]
     expect(similarCount(today, others)).toBe(3)
     expect(patternKey(today)).toBe(patternKey(others[0]!))
+  })
+})
+
+describe('proteinPicks (cartão da proteína no Hoje)', () => {
+  const fav = (id: string, kcal: number, protein: number) => ({ id, kcal, protein, carbs: 10, fat: 5 })
+  const favorites = [
+    fav('frango', 650, 50), // 7,7 g por 100 kcal
+    fav('skyr', 150, 18), // 12 g por 100 kcal
+    fav('bolo', 400, 5), // pouca proteína: não entra
+    fav('atum', 300, 30), // 10 g por 100 kcal
+    fav('bife', 900, 60), // não cabe em 600
+  ]
+
+  it('as que cabem no que falta, pela proteína por caloria', () => {
+    expect(proteinPicks(favorites, 600).map((f) => f.id)).toEqual(['skyr', 'atum', 'frango'])
+  })
+
+  it('sem nada que caiba, as mais leves primeiro; sem conta do dia, só pela proteína por caloria', () => {
+    expect(proteinPicks(favorites, 100).map((f) => f.id)).toEqual(['skyr', 'atum', 'frango'])
+    expect(proteinPicks(favorites, -200, 2).map((f) => f.id)).toEqual(['skyr', 'atum'])
+    expect(proteinPicks(favorites, null).map((f) => f.id)).toEqual(['skyr', 'atum', 'frango'])
+    expect(proteinPicks([fav('agua', 0, 20)], 500)).toEqual([])
   })
 })

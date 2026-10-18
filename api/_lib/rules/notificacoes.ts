@@ -2,7 +2,7 @@
 // que cada uma diz (neutro no ecrã bloqueado: sem pesos nem gordura), quem as
 // quer, a que horas a cron as manda e as chaves VAPID. Sem imports de
 // servidor: o telemóvel usa este ficheiro diretamente.
-import { SLOT_LABEL, lisbonClock, type Slot } from './momentos.js'
+import { SLOT_LABEL, type Slot } from './momentos.js'
 import { isDayComplete } from './day-close.js'
 
 // Cada uma liga-se à parte em Definições › Notificações (por telemóvel).
@@ -105,16 +105,10 @@ export const PUSH_TTL_S: Record<PushKind | 'teste', number> = {
   teste: 600,
 }
 
-// A cron dos lembretes corre duas vezes (às 08:00 UTC à segunda e às 20:45
-// UTC todos os dias; no Hobby do Vercel corre num minuto qualquer dessa hora
-// UTC, por isso entre as 20:00 e as 22:00 em Lisboa): decide
-// pela hora de Lisboa, com ou sem hora de verão.
-export type ReminderSlot = 'manha' | 'noite'
-
-export function reminderSlot(now: Date): ReminderSlot {
-  return lisbonClock(now).hour < 15 ? 'manha' : 'noite'
-}
-
+// A cron dos lembretes corre uma vez por noite (20:45 UTC; no Hobby do Vercel
+// num minuto qualquer dessa hora UTC, por isso entre as 20:00 e as 22:00 em
+// Lisboa). À segunda leva também o resumo da semana: o Hobby pode aceitar só
+// duas crons, e a das 04:30 é a do fecho do dia.
 export function isMonday(date: string): boolean {
   return new Date(`${date}T12:00:00Z`).getUTCDay() === 1
 }

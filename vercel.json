@@ -7,8 +7,7 @@
   },
   "crons": [
     { "path": "/api/cron/daily", "schedule": "30 4 * * *" },
-    { "path": "/api/cron/lembretes", "schedule": "45 20 * * *" },
-    { "path": "/api/cron/lembretes", "schedule": "0 8 * * 1" }
+    { "path": "/api/cron/lembretes", "schedule": "45 20 * * *" }
   ],
   "rewrites": [
     { "source": "/api/meal/:action", "destination": "/api/meal?action=:action" },

@@ -2,7 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { adminClient } from '../_lib/supabase.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { mondayOf } from '../_lib/rules/manutencao.js'
-import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, recomputeRange, type CloseDayProfile } from '../_lib/close-day.js'
+import {
+  CLOSE_DAY_PROFILE_COLUMNS,
+  closeDay,
+  maintenanceAnchor,
+  nightOrder,
+  recomputeRange,
+  type CloseDayProfile,
+} from '../_lib/close-day.js'
 import { generateWeeklyReview } from '../_lib/review.js'
 import { syncUser } from '../_lib/intervals-sync.js'
 import { cronAuthorized } from '../_lib/secret.js'
@@ -12,11 +19,17 @@ import { cronAuthorized } from '../_lib/secret.js'
 // (marcados pelo trigger mark_day_dirty) e sempre os últimos 3 — no máximo 21
 // por noite, a noite seguinte continua —, com o gasto adaptativo e a semana de
 // pausa da dieta; o resumo neutro da semana anterior, na primeira noite em
-// que falte; ao domingo, limpa refeições apagadas há mais de 7 dias, fotos
-// sem dono e as imagens dos prints com mais de 90 dias.
+// que falte e quando os dados dessa semana mudam; ao domingo, limpa refeições
+// apagadas há mais de 7 dias, fotos sem dono e as imagens dos prints com mais
+// de 90 dias. Primeiro fecham-se os dias de toda a gente (cada noite começa
+// por outra pessoa); os resumos (IA) vêm depois, com o tempo que sobra.
 
 const MAX_DAYS_PER_NIGHT = 21
 const TIME_BUDGET_MS = 45_000
+// A sincronização (até 8 s) só começa com tempo para fechar os dias; um
+// resumo (até 20 s de IA) só começa a tempo de acabar antes dos 60 s do Vercel.
+const SYNC_BUDGET_MS = 25_000
+const REVIEW_BUDGET_MS = 35_000
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!cronAuthorized(req.headers.authorization, process.env.CRON_SECRET)) {
@@ -51,27 +64,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .eq('status', 'a_analisar')
       .lt('created_at', new Date(Date.now() - 86_400_000).toISOString())
     let synced = 0
-    for (const profile of (profiles ?? []) as CloseDayProfile[]) {
+    const people = nightOrder((profiles ?? []) as CloseDayProfile[], nutritionalDay(new Date(), 4))
+    for (const profile of people) {
       const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
 
       // Passo 1: treinos do relógio (intervals.icu), últimos 3 dias, no máximo 8 s.
-      try {
-        if (await syncUser(admin, profile.user_id, { days: 3, timeoutMs: 8_000 })) synced++
-      } catch {
-        // o erro fica no estado da ligação; o fecho do dia continua
+      if (Date.now() - startedAt < SYNC_BUDGET_MS) {
+        try {
+          if (await syncUser(admin, profile.user_id, { days: 3, timeoutMs: 8_000 })) synced++
+        } catch {
+          // o erro fica no estado da ligação; o fecho do dia continua
+        }
+      } else {
+        console.warn('Cron: sem tempo para sincronizar', profile.user_id)
       }
 
-      // Âncora da regra 7: fixa no perfil; sem ela, a semana do primeiro dia registado.
-      let anchor = profile.maintenance_anchor ?? null
-      if (!anchor) {
-        const { data: firstDay } = await admin
-          .from('days')
-          .select('date')
-          .eq('user_id', profile.user_id)
-          .order('date')
-          .limit(1)
-        anchor = firstDay?.[0]?.date ?? null
-      }
+      // Âncora da regra 7: fixa no perfil (a mesma do recálculo).
+      const anchor = await maintenanceAnchor(admin, profile)
 
       const { data: dirtyRows } = await admin
         .from('days')
@@ -86,6 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       let stoppedAt: string | null = next
       for (const date of dates) {
         if (Date.now() - startedAt > TIME_BUDGET_MS) {
+          console.warn('Cron: sem tempo, continua na noite seguinte', profile.user_id, date)
           stoppedAt = date
           break
         }
@@ -114,16 +124,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           await admin.from('profile').update({ expected_tdee: formula }).eq('user_id', profile.user_id)
         }
       }
+    }
 
-      // O resumo da semana que terminou, na primeira noite em que falte.
-      if (Date.now() - startedAt < TIME_BUDGET_MS) {
-        try {
-          if (await generateWeeklyReview(admin, profile.user_id, mondayOf(shiftDate(today, -7)))) {
-            reviews++
-          }
-        } catch (err) {
-          console.error('Resumo semanal falhou:', err)
-        }
+    // O resumo da semana que terminou: na primeira noite em que falte e
+    // quando os dados dessa semana mudam (só com tempo para a chamada à IA).
+    for (const profile of people) {
+      if (Date.now() - startedAt >= REVIEW_BUDGET_MS) {
+        console.warn('Cron: resumo semanal fica para a noite seguinte', profile.user_id)
+        continue
+      }
+      const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+      try {
+        if (await generateWeeklyReview(admin, profile.user_id, mondayOf(shiftDate(today, -7)))) reviews++
+      } catch (err) {
+        console.error('Resumo semanal falhou:', err)
       }
     }
 
