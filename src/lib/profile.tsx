@@ -1,14 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { supabase } from './supabase'
 import { applyTheme } from './theme'
+import { readScoped, writeScoped } from './scoped'
+import { isTransientFailure } from '../../api/_lib/rules/falhas'
 import type { Profile } from './types'
 
-// O perfil carrega uma vez e fica disponível para todos os ecrãs.
+// O perfil carrega uma vez e fica disponível para todos os ecrãs. Fica
+// também guardado no telemóvel (de cada pessoa): sem rede a app abre com ele
+// (offline) para se poder registar, e volta a ler quando o token renova.
 type Status = 'loading' | 'ready' | 'no-profile' | 'needs-migration' | 'error'
+const CACHE = 'regresso.perfil'
 
 interface ProfileState {
   profile: Profile | null
   status: Status
+  offline: boolean
   missingMigrations: string[]
   reload: () => Promise<void>
   update: (patch: Partial<Profile>) => Promise<boolean>
@@ -17,6 +23,7 @@ interface ProfileState {
 const ProfileContext = createContext<ProfileState>({
   profile: null,
   status: 'loading',
+  offline: false,
   missingMigrations: [],
   reload: async () => {},
   update: async () => false,
@@ -33,22 +40,43 @@ export function useReadyProfile(): Profile {
   return profile
 }
 
-export function ProfileProvider({ children }: { children: ReactNode }) {
+export function ProfileProvider({ children, token }: { children: ReactNode; token?: string }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [status, setStatus] = useState<Status>('loading')
   const [missingMigrations, setMissing] = useState<string[]>([])
+  const [offline, setOffline] = useState(false)
 
   const reload = useCallback(async () => {
-    const [{ data, error }, migration] = await Promise.all([
+    const [{ data, error, status: httpStatus }, migration] = await Promise.all([
       supabase.from('profile').select('*').maybeSingle(),
       supabase.from('favorites').select('id', { count: 'exact', head: true }),
     ])
+    // Sem rede (ou sem sessão renovada): o último perfil deste telemóvel.
+    const fromCache = async () => {
+      // Uma falha de rede, ou nenhuma linha por a sessão ainda não ter renovado.
+      const usable = error
+        ? isTransientFailure({ message: error.message, status: httpStatus })
+        : !(await supabase.auth.getSession()).data.session
+      if (!usable) return false
+      try {
+        const cached = readScoped(localStorage, CACHE)
+        if (!cached) return false
+        const saved = JSON.parse(cached) as Profile
+        setProfile(saved)
+        applyTheme(saved.theme)
+        setOffline(true)
+        setStatus('ready')
+        return true
+      } catch {
+        return false
+      }
+    }
     if (error) {
-      setStatus('error')
+      if (!(await fromCache())) setStatus('error')
       return
     }
     if (!data) {
-      setStatus('no-profile')
+      if (!(await fromCache())) setStatus('no-profile')
       return
     }
     // Cada fase nova do redesenho traz uma migração para correr no Supabase.
@@ -75,6 +103,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     }
     setProfile(data as Profile)
     applyTheme((data as Profile).theme)
+    writeScoped(localStorage, CACHE, JSON.stringify(data))
+    setOffline(false)
     setStatus('ready')
   }, [])
 
@@ -98,8 +128,18 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     void reload()
   }, [reload])
 
+  // Aberta sem rede: lê outra vez quando a rede volta ou o token renova.
+  useEffect(() => {
+    if (!offline) return
+    void reload()
+    const again = () => void reload()
+    window.addEventListener('online', again)
+    return () => window.removeEventListener('online', again)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, offline])
+
   return (
-    <ProfileContext.Provider value={{ profile, status, missingMigrations, reload, update }}>
+    <ProfileContext.Provider value={{ profile, status, offline, missingMigrations, reload, update }}>
       {children}
     </ProfileContext.Provider>
   )

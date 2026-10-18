@@ -12,7 +12,8 @@ import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
 import Welcome from './components/Welcome'
 import PeopleSwitcher from './components/PeopleSwitcher'
-import { startAccountTracking, useAccounts } from './lib/accounts'
+import { startAccountTracking, storedSession, useAccounts } from './lib/accounts'
+import { sessionEnded } from '../api/_lib/rules/pessoas'
 import { setActiveUser } from './lib/scoped'
 import { initialOf } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
@@ -300,12 +301,16 @@ export default function App() {
     if (!supabaseConfigured) return
     // Guarda a sessão de cada pessoa deste telemóvel (para o separador).
     const stopTracking = startAccountTracking()
-    supabase.auth.getSession().then(({ data }) => {
-      setActiveUser(data.session?.user.id ?? null)
-      setSession(data.session)
+    supabase.auth.getSession().then(({ data, error }) => {
+      // Sem rede, a sessão guardada (a pessoa não foi à vida: só falta renovar o token).
+      const session = data.session ?? (error && !sessionEnded(error) ? storedSession() : null)
+      setActiveUser(session?.user.id ?? null)
+      setSession(session)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      // Sem rede o supabase-js anuncia «sem sessão» ao começar; quem decide é o getSession acima.
+      if (event === 'INITIAL_SESSION' && !next) return
       setActiveUser(next?.user.id ?? null)
       setSession(next)
     })
@@ -337,7 +342,7 @@ export default function App() {
   if (!session) return <Login />
 
   return (
-    <ProfileProvider key={session.user.id}>
+    <ProfileProvider key={session.user.id} token={session.access_token}>
       <ToastProvider>
         <Shell />
         <BusyLayer />

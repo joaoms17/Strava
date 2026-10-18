@@ -29,6 +29,7 @@ import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules
 import { analysisStalled, analysisStuck } from '../../api/_lib/rules/analise'
 import { fmtSleep, hasSleep, poorNight, sleepDetail, type NightSleep } from '../../api/_lib/rules/sono'
 import { splitStoredError } from '../../api/_lib/rules/resposta-ia'
+import { isTransientFailure } from '../../api/_lib/rules/falhas'
 import {
   dismissNudge,
   nextStep,
@@ -67,6 +68,7 @@ interface DayData {
   expenditure: ExpenditureContext | null
   hasAnyWeight: boolean
   hasAnyMeal: boolean
+  offline: boolean
 }
 
 const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as const
@@ -118,7 +120,7 @@ export default function Hoje() {
   const load = useCallback(async () => {
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     const [
-      { data: meals },
+      { data: meals, error: mealsError, status: mealsStatus },
       { data: deleted },
       { data: workouts },
       { data: yWorkouts },
@@ -215,6 +217,7 @@ export default function Hoje() {
       expenditure,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
+      offline: mealsError != null && isTransientFailure({ message: mealsError.message, status: mealsStatus }),
     })
   }, [date])
 
@@ -696,6 +699,12 @@ export default function Hoje() {
         today={today}
         onPick={(picked) => navigate(picked === today ? '/hoje' : `/hoje/${picked}`)}
       />
+
+      {data.offline && (
+        <p className="rounded-xl border border-attn/50 bg-attn/10 px-3 py-2 text-[15px]" role="status">
+          Sem rede: não consigo mostrar o dia. O que registares no ＋ fica guardado e segue quando houver rede.
+        </p>
+      )}
 
       {!isToday && (
         <p className="flex items-center justify-between rounded-xl bg-surface2 px-3 py-2 text-[15px]">
