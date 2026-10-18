@@ -179,7 +179,7 @@ export default function PerguntaSheet() {
         </form>
       }
     >
-      <div className="space-y-4 pb-2">
+      <div className="space-y-4 pb-2" aria-live="polite">
         {turns.length === 0 ? (
           <div className="space-y-4">
             <p className="text-[15px] text-dim">
