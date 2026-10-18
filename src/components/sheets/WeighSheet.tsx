@@ -3,6 +3,7 @@ import BottomSheet from '../ui/BottomSheet'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, busyContent, runBusy, useBusyKey } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { recomputeFrom } from '../../lib/recompute'
@@ -24,7 +25,7 @@ export default function WeighSheet() {
   const [fatPct, setFatPct] = useState('')
   const [weights, setWeights] = useState<WeightRow[]>([])
   const [stage, setStage] = useState<Stage>({ kind: 'input' })
-  const [busy, setBusy] = useState(false)
+  const [saveKey, saving] = useBusyKey()
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
@@ -53,13 +54,11 @@ export default function WeighSheet() {
   }
 
   async function save(kg: number) {
-    setBusy(true)
     setError(null)
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      setBusy(false)
       setError('Sessão expirada. Volta a entrar.')
       return
     }
@@ -77,7 +76,6 @@ export default function WeighSheet() {
       },
       { onConflict: 'user_id,date' },
     )
-    setBusy(false)
     if (upsertError) {
       setError('Não consegui guardar. Tenta outra vez.')
       return
@@ -107,18 +105,15 @@ export default function WeighSheet() {
   // com Anular.
   async function remove() {
     if (!existing) return
-    setBusy(true)
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      setBusy(false)
       setError('Sessão expirada. Volta a entrar.')
       return
     }
     const gone = existing as WeightRow & { source?: string | null }
     const { error: deleteError } = await supabase.from('weights').delete().eq('user_id', user.id).eq('date', date)
-    setBusy(false)
     if (deleteError) {
       setError('Não consegui apagar. Tenta outra vez.')
       return
@@ -161,7 +156,7 @@ export default function WeighSheet() {
       setError('Escreve o peso em kg, por exemplo 84,6.')
       return
     }
-    if (check.kind === 'ok') void save(Math.round(kg * 10) / 10)
+    if (check.kind === 'ok') void runBusy('A guardar…', () => save(Math.round(kg * 10) / 10), saveKey)
     else setStage({ kind: 'check', value: kg, suggestion: null })
   }
 
@@ -172,21 +167,21 @@ export default function WeighSheet() {
           {stage.suggestion != null ? (
             <>
               <p className="text-[17px]">Queres dizer {fmt1(stage.suggestion)}?</p>
-              <button
-                disabled={busy}
-                onClick={() => void save(stage.suggestion!)}
+              <BusyButton
+                busy="A guardar…"
+                onClick={() => save(stage.suggestion!)}
                 className="min-h-14 w-full rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
               >
                 Sim, {fmt1(stage.suggestion)}
-              </button>
+              </BusyButton>
               {stage.value >= 30 && stage.value <= 300 ? (
-                <button
-                  disabled={busy}
-                  onClick={() => void save(Math.round(stage.value * 10) / 10)}
+                <BusyButton
+                  busy="A guardar…"
+                  onClick={() => save(Math.round(stage.value * 10) / 10)}
                   className="min-h-12 w-full rounded-2xl border border-line text-[15px]"
                 >
                   Não, está certo ({fmt1(stage.value)})
-                </button>
+                </BusyButton>
               ) : (
                 <button
                   onClick={() => setStage({ kind: 'input' })}
@@ -199,13 +194,13 @@ export default function WeighSheet() {
           ) : (
             <>
               <p className="text-[17px]">Confirma: {fmt1(stage.value)} kg?</p>
-              <button
-                disabled={busy}
-                onClick={() => void save(Math.round(stage.value * 10) / 10)}
+              <BusyButton
+                busy="A guardar…"
+                onClick={() => save(Math.round(stage.value * 10) / 10)}
                 className="min-h-14 w-full rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
               >
                 Sim, {fmt1(stage.value)} kg
-              </button>
+              </BusyButton>
               <button
                 onClick={() => setStage({ kind: 'input' })}
                 className="min-h-12 w-full rounded-2xl border border-line text-[15px]"
@@ -225,11 +220,12 @@ export default function WeighSheet() {
       onClose={sheet.close}
       footer={
         <button
-          disabled={busy || !value.trim()}
+          disabled={saving || !value.trim()}
+          aria-busy={saving || undefined}
           onClick={submit}
-          className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
+          className={`min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40 ${saving ? 'opacity-100!' : ''}`}
         >
-          Guardar
+          {busyContent(saving, 'A guardar…', 'Guardar')}
         </button>
       }
     >
@@ -292,13 +288,13 @@ export default function WeighSheet() {
         {existing && (
           <div className="flex items-center justify-between gap-3">
             <p className="text-[13px] text-dim">Já há {fmt1(existing.kg)} kg neste dia; guardar substitui.</p>
-            <button
-              disabled={busy}
-              onClick={() => void remove()}
+            <BusyButton
+              busy="A apagar…"
+              onClick={remove}
               className="min-h-11 shrink-0 px-1 text-[15px] text-pain disabled:opacity-40"
             >
               Apagar pesagem
-            </button>
+            </BusyButton>
           </div>
         )}
 

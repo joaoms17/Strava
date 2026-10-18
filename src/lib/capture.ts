@@ -1,6 +1,8 @@
 import { supabase } from './supabase'
 import { postApi } from './api'
 import { prepareImage, sha256Hex } from './image'
+import { STORES, inStore } from './idb'
+import { scopedKey } from './scoped'
 import type { Slot } from './types'
 
 export const MAX_MEAL_PHOTOS = 4
@@ -20,6 +22,46 @@ export function peekPendingCamera(): File[] | null {
 
 export function clearPendingCamera(): void {
   pendingCamera = null
+}
+
+// Rascunho do Registar (fotos, o que se escreveu e as marcas), no telemóvel de
+// cada pessoa: fechar a folha sem querer, a app recarregar com uma versão nova
+// ou o iPhone fechá-la em segundo plano não perde a foto (a da câmara não fica
+// na Fototeca). Sai com «Registar» ou «Cancelar a foto»; ao fim de um dia
+// deixa de aparecer.
+export interface CaptureDraft {
+  photos: File[]
+  text: string
+  tags: string[]
+}
+
+export const DRAFT_MAX_AGE_MS = 24 * 3_600_000
+
+export async function saveCaptureDraft(draft: CaptureDraft | null): Promise<void> {
+  const key = scopedKey('registar')
+  try {
+    if (!draft || (draft.photos.length === 0 && !draft.text.trim())) {
+      await inStore(STORES.drafts, 'readwrite', (s) => s.delete(key))
+    } else {
+      await inStore(STORES.drafts, 'readwrite', (s) => s.put({ ...draft, key, saved_at: Date.now() }))
+    }
+  } catch {
+    // sem base local: o rascunho fica só na folha aberta
+  }
+}
+
+export async function loadCaptureDraft(): Promise<CaptureDraft | null> {
+  try {
+    const row = await inStore(
+      STORES.drafts,
+      'readonly',
+      (s) => s.get(scopedKey('registar')) as IDBRequest<(CaptureDraft & { saved_at: number }) | undefined>,
+    )
+    if (!row || Date.now() - row.saved_at > DRAFT_MAX_AGE_MS) return null
+    return { photos: row.photos ?? [], text: row.text ?? '', tags: row.tags ?? [] }
+  } catch {
+    return null
+  }
 }
 
 // Galeria: as fotos escolhidas passam para a folha «Fotos da galeria» sem

@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { getApi, postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, runBusy } from '../../lib/busy'
 import { useProfile, useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
@@ -59,7 +60,9 @@ export default function MealSheet() {
   const [name, setName] = useState('')
   const [slot, setSlot] = useState<Slot>('almoco')
   const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
+  // «Tentar outra vez» e «Analisar mesmo assim» correm por trás (como no Hoje):
+  // a folha mostra «A analisar…» e pode fechar-se.
+  const [reanalysing, setReanalysing] = useState(false)
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
 
   async function load() {
@@ -138,14 +141,11 @@ export default function MealSheet() {
   const proteinOk = MAIN_SLOTS.includes(mealSlot) && totals.protein >= profile.protein_per_meal_g
 
   async function call<T>(path: string, body: unknown): Promise<T | null> {
-    setBusy(true)
     try {
       return await postApi<T>(path, body)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui gravar. Tenta outra vez.')
       return null
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -201,10 +201,14 @@ export default function MealSheet() {
   }
 
   async function analyse(body: Record<string, unknown>, message: string) {
+    if (reanalysing) return
+    setReanalysing(true)
+    toast(message)
     const result = await call<{ meal: Meal; limit?: boolean }>('/api/meal/analyse', { meal_id: current.id, ...body })
+    setReanalysing(false)
     if (!result) return
     await afterWrite(result.meal)
-    toast(result.limit ? 'Chegaste ao limite da IA. Podes analisar esta mesmo assim.' : message)
+    if (result.limit) toast('Chegaste ao limite da IA. Podes analisar esta mesmo assim.')
   }
 
   async function writeInstead() {
@@ -214,7 +218,7 @@ export default function MealSheet() {
     if (!saved) return
     setText('')
     setMode('view')
-    await analyse({ reset: true, force: current.status === 'sem_analise' }, 'A analisar com o que escreveste…')
+    void analyse({ reset: true, force: current.status === 'sem_analise' }, 'A analisar com o que escreveste…')
   }
 
   async function moveTo(date: string, newSlot: Slot) {
@@ -248,17 +252,14 @@ export default function MealSheet() {
   }
 
   async function saveFavorite() {
-    setBusy(true)
     const favName = name.trim() || favoriteName(current.items)
     let created: { id: string; photoPath: string | null }
     try {
       created = await favoriteFromMeal(current, favName, slot)
     } catch (err) {
-      setBusy(false)
       toast(err instanceof Error ? err.message : 'Não consegui guardar o favorito.')
       return
     }
-    setBusy(false)
     setFavoriteId(created.id)
     setSuggest(false)
     setMode('view')
@@ -288,15 +289,15 @@ export default function MealSheet() {
   let footer = null
   if (current.deleted_at != null) {
     footer = (
-      <button disabled={busy} onClick={() => void restore()} className={primary}>
+      <BusyButton busy="A repor…" onClick={restore} className={primary}>
         Repor esta refeição
-      </button>
+      </BusyButton>
     )
   } else if (mode === 'favorite') {
     footer = (
-      <button disabled={busy} onClick={() => void saveFavorite()} className={primary}>
+      <BusyButton busy="A guardar…" onClick={saveFavorite} className={primary}>
         Guardar favorito
-      </button>
+      </BusyButton>
     )
   } else if (analysed && dirty) {
     footer = (
@@ -304,18 +305,18 @@ export default function MealSheet() {
         <button onClick={() => setItems(current.items)} className={secondary}>
           Desfazer
         </button>
-        <button disabled={busy} onClick={() => void saveItems()} className={primary}>
+        <BusyButton busy="A guardar…" onClick={saveItems} className={primary}>
           Guardar alterações
-        </button>
+        </BusyButton>
       </div>
     )
   } else if (analysed) {
     footer = (
       <div className="space-y-2">
         {current.status === 'por_rever' && (
-          <button disabled={busy} onClick={() => void confirm()} className={primary}>
+          <BusyButton busy="A confirmar…" onClick={confirm} className={primary}>
             Está certo
-          </button>
+          </BusyButton>
         )}
         <div className="grid grid-cols-3 gap-2">
           <button
@@ -327,7 +328,7 @@ export default function MealSheet() {
           <button
             onClick={() => {
               sheet.close()
-              void repeatMeal(current.id, null, 'Registado hoje', toast)
+              void runBusy('A registar…', () => repeatMeal(current.id, null, 'Registado hoje', toast))
             }}
             className={secondary}
           >
@@ -336,8 +337,10 @@ export default function MealSheet() {
           <button
             onClick={() => {
               sheet.close()
-              void deleteMeal(current.id, toast)
-              recomputeFrom(current.date, today)
+              void runBusy('A apagar…', async () => {
+                await deleteMeal(current.id, toast)
+                recomputeFrom(current.date, today)
+              })
             }}
             className={`${secondary} text-pain`}
           >
@@ -351,7 +354,7 @@ export default function MealSheet() {
       <button
         onClick={() => {
           sheet.close()
-          void deleteMeal(current.id, toast)
+          void runBusy('A apagar…', () => deleteMeal(current.id, toast))
         }}
         className={`${secondary} w-full text-pain`}
       >
@@ -392,7 +395,7 @@ export default function MealSheet() {
         )}
         {current.note && <p className="text-[15px]">Nota: {current.note}</p>}
 
-        {current.status === 'a_analisar' && !stuck && (
+        {(reanalysing || (current.status === 'a_analisar' && !stuck)) && (
           <div className="space-y-3">
             <p className="animate-pulse text-[17px]">A analisar…</p>
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
@@ -402,7 +405,7 @@ export default function MealSheet() {
           </div>
         )}
 
-        {(failed || current.status === 'sem_analise') && current.deleted_at == null && (
+        {!reanalysing && (failed || current.status === 'sem_analise') && current.deleted_at == null && (
           <div className="space-y-3">
             {failed ? (
               <ErrorReason
@@ -414,7 +417,6 @@ export default function MealSheet() {
             )}
             {failed && (
               <button
-                disabled={busy}
                 onClick={() => void analyse({ reset: true }, 'A analisar outra vez…')}
                 className={`${primary} flex items-center justify-center gap-2`}
               >
@@ -438,7 +440,6 @@ export default function MealSheet() {
                 )
               ) : (
                 <button
-                  disabled={busy}
                   onClick={() => void analyse({ force: true }, 'A analisar outra vez…')}
                   className={secondary}
                 >
@@ -460,9 +461,9 @@ export default function MealSheet() {
                   placeholder="Ex.: bitoque com batata frita e ovo"
                   className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
                 />
-                <button disabled={busy || !text.trim()} onClick={() => void writeInstead()} className={`${primary}`}>
+                <BusyButton busy="A guardar…" disabled={!text.trim()} onClick={writeInstead} className={`${primary}`}>
                   Enviar
-                </button>
+                </BusyButton>
               </div>
             )}
           </div>
@@ -554,13 +555,13 @@ export default function MealSheet() {
                       placeholder="Ex.: o arroz era metade, sem queijo"
                       enterKeyHint="send"
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && text.trim()) void correct(text.trim())
+                        if (e.key === 'Enter' && text.trim()) void runBusy('A corrigir…', () => correct(text.trim()))
                       }}
                       className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
                     />
-                    <button disabled={busy || !text.trim()} onClick={() => void correct(text.trim())} className={primary}>
-                      {busy ? 'A corrigir…' : 'Corrigir'}
-                    </button>
+                    <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
+                      Corrigir
+                    </BusyButton>
                   </div>
                 ) : (
                   mode === 'view' && (
@@ -577,9 +578,9 @@ export default function MealSheet() {
                         </AttachPhotoButton>
                       )}
                       {people.map((p) => (
-                        <button key={p.user_id} disabled={busy} onClick={() => void shareWith(p)} className="text-eat">
+                        <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareWith(p)} className="text-eat">
                           Partilhar com {p.name}
-                        </button>
+                        </BusyButton>
                       ))}
                     </div>
                   )
@@ -619,7 +620,7 @@ export default function MealSheet() {
             initial={{ date: current.date, slot: mealSlot }}
             action="Mudar"
             unchanged={(date, slot) => date === current.date && slot === mealSlot}
-            onPick={(date, slot) => void moveTo(date, slot)}
+            onPick={(date, slot) => moveTo(date, slot)}
           />
         )}
 
@@ -640,7 +641,7 @@ function PickWhen({
   initial: When
   action: string
   unchanged?: (date: string, slot: Slot) => boolean
-  onPick: (date: string, slot: Slot, label: string) => void
+  onPick: (date: string, slot: Slot, label: string) => unknown
 }) {
   const [when, setWhen] = useState<When>(initial)
   // «Agora» é a refeição desta hora.
@@ -648,13 +649,14 @@ function PickWhen({
   return (
     <div className="space-y-3">
       <WhenPicker today={today} value={when} onChange={setWhen} />
-      <button
+      <BusyButton
+        busy="A mudar…"
         disabled={slot == null || (unchanged?.(when.date, slot) ?? false)}
         onClick={() => slot && onPick(when.date, slot, whenLabel(when, today))}
         className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-40"
       >
         {action}
-      </button>
+      </BusyButton>
     </div>
   )
 }

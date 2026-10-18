@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useDataVersion } from '../lib/events'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { shiftDate } from '../lib/day'
 import { fmt1, fmtDayMonth, fmtInt } from '../lib/format'
 import { fatTally, type FatTally, type TallyDay } from '../../api/_lib/rules/conta-gordura'
@@ -48,7 +49,7 @@ export default function ContaGordura({ today }: { today: string }) {
       return
     }
     toast('A contagem recomeça hoje.', [
-      { label: 'Anular', run: () => void update({ goals: { ...(profile.goals ?? {}), contagem_desde: previous } }) },
+      { label: 'Anular', run: async () => void (await update({ goals: { ...(profile.goals ?? {}), contagem_desde: previous } })) },
     ])
   }
 
@@ -93,9 +94,9 @@ export default function ContaGordura({ today }: { today: string }) {
       )}
       {confirm ? (
         <div className="grid grid-cols-2 gap-2 pt-1">
-          <button onClick={() => void restart()} className="min-h-11 rounded-xl bg-surface2 text-[15px]">
+          <BusyButton busy="A guardar…" onClick={restart} className="min-h-11 rounded-xl bg-surface2 text-[15px]">
             Recomeçar hoje
-          </button>
+          </BusyButton>
           <button onClick={() => setConfirm(false)} className="min-h-11 rounded-xl text-[15px] text-dim">
             Cancelar
           </button>

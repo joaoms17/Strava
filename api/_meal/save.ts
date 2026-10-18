@@ -16,6 +16,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!body.success) throw new HttpError(400, 'Refeição inválida.')
     const meal = body.data
 
+    if (meal.client_id) {
+      const { data: existing } = await db.from('meals').select('*').eq('client_id', meal.client_id).maybeSingle()
+      if (existing) {
+        res.status(200).json({ meal: existing })
+        return
+      }
+    }
+
     // O dia nutricional (regra 1) e os totais calculam-se sempre no servidor.
     const { data: profile } = await db
       .from('profile')
@@ -34,6 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .from('meals')
       .insert({
         user_id: user.id,
+        client_id: meal.client_id ?? null,
         date,
         logged_at: loggedAt.toISOString(),
         slot: meal.slot ?? slotOf(loggedAt),
@@ -56,7 +65,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       .select()
       .single()
-    if (error) throw new HttpError(500, error.message)
+    if (error) {
+      // Dois envios em simultâneo com o mesmo client_id: o outro ganhou.
+      if (error.code === '23505' && meal.client_id) {
+        const { data: again } = await db.from('meals').select('*').eq('client_id', meal.client_id).maybeSingle()
+        if (again) {
+          res.status(200).json({ meal: again })
+          return
+        }
+      }
+      throw new HttpError(500, error.message)
+    }
 
     await learnFoods(db, user.id, meal.items, meal.input_type)
 

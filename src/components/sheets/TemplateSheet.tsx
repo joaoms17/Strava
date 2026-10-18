@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, workoutKcal, type OtherSport } from '../../../api/_lib/rules/targets'
@@ -35,7 +36,6 @@ export default function TemplateSheet() {
   const [watts, setWatts] = useState<number | null>(null)
   const [exercises, setExercises] = useState<TemplateExercise[]>([])
   const [picking, setPicking] = useState(false)
-  const [busy, setBusy] = useState(false)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
   useEffect(() => {
@@ -74,7 +74,6 @@ export default function TemplateSheet() {
 
   async function save() {
     if (!canSave) return
-    setBusy(true)
     const workout: FavoriteWorkout = {
       type,
       minutes,
@@ -94,7 +93,6 @@ export default function TemplateSheet() {
       const { data: auth } = await supabase.auth.getUser()
       ;({ error } = await supabase.from('favorites').insert({ ...row, kind: 'workout', user_id: auth.user?.id }))
     }
-    setBusy(false)
     if (error) {
       toast(error.code === '23505' ? 'Já tens um treino com esse nome.' : 'Não consegui guardar.')
       return
@@ -138,13 +136,14 @@ export default function TemplateSheet() {
       title={id ? 'Editar treino' : 'Novo treino'}
       onClose={sheet.close}
       footer={
-        <button
-          disabled={!canSave || busy || !loaded}
-          onClick={() => void save()}
+        <BusyButton
+          busy="A guardar…"
+          disabled={!canSave || !loaded}
+          onClick={save}
           className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
-          {busy ? 'A guardar…' : 'Guardar treino'}
-        </button>
+          Guardar treino
+        </BusyButton>
       }
     >
       {!loaded ? (
@@ -292,9 +291,9 @@ export default function TemplateSheet() {
           )}
 
           {id && (
-            <button onClick={() => void remove()} className="min-h-11 w-full text-[15px] text-pain">
+            <BusyButton busy="A apagar…" onClick={remove} className="min-h-11 w-full text-[15px] text-pain">
               Apagar este treino
-            </button>
+            </BusyButton>
           )}
         </div>
       )}

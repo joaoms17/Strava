@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { Link, Redirect, Route, Switch, useLocation } from 'wouter'
 import { supabase, supabaseConfigured } from './lib/supabase'
@@ -12,12 +12,13 @@ import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
 import Welcome from './components/Welcome'
 import PeopleSwitcher from './components/PeopleSwitcher'
-import { startAccountTracking, useAccounts } from './lib/accounts'
+import { startAccountTracking, storedSession, useAccounts } from './lib/accounts'
 import { setActiveUser } from './lib/scoped'
-import { initialOf } from '../api/_lib/rules/pessoas'
+import { initialOf, sessionEnded } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
 import { bootUrl } from './lib/boot-url'
 import TabBar from './components/TabBar'
+import BusyLayer from './components/ui/BusyLayer'
 import CaptureSheet from './components/sheets/CaptureSheet'
 import WeighSheet from './components/sheets/WeighSheet'
 import MealSheet from './components/sheets/MealSheet'
@@ -42,14 +43,43 @@ import Hoje from './screens/Hoje'
 import Favoritos from './screens/Favoritos'
 import Definicoes from './screens/Definicoes'
 
-// Os ecrãs com gráficos carregam o recharts num chunk à parte.
-const Balanco = lazy(() => import('./screens/Balanco'))
-const Corpo = lazy(() => import('./screens/Corpo'))
-const Treino = lazy(() => import('./screens/Treino'))
-const Avancado = lazy(() => import('./screens/Avancado'))
-const Arquivo = lazy(() => import('./screens/Arquivo'))
-const MedidasHistorico = lazy(() => import('./screens/MedidasHistorico'))
-const Ginasio = lazy(() => import('./screens/Ginasio'))
+// Os ecrãs com gráficos carregam o recharts num chunk à parte. Com uma versão
+// nova à espera (main.tsx só recarrega sem nada a meio), os ficheiros da
+// antiga podem já não existir: recarrega uma vez em vez de falhar.
+const RELOADED = 'regresso.recarregou'
+function screen<T extends ComponentType>(load: () => Promise<{ default: T }>) {
+  return lazy(() =>
+    load().then(
+      (module) => {
+        try {
+          sessionStorage.removeItem(RELOADED)
+        } catch {
+          // sem armazenamento
+        }
+        return module
+      },
+      (err: unknown) => {
+        let again = true
+        try {
+          again = sessionStorage.getItem(RELOADED) === '1'
+          sessionStorage.setItem(RELOADED, '1')
+        } catch {
+          // sem armazenamento: não arrisca recarregar sem parar
+        }
+        if (again) throw err
+        window.location.reload()
+        return new Promise<never>(() => {})
+      },
+    ),
+  )
+}
+const Balanco = screen(() => import('./screens/Balanco'))
+const Corpo = screen(() => import('./screens/Corpo'))
+const Treino = screen(() => import('./screens/Treino'))
+const Avancado = screen(() => import('./screens/Avancado'))
+const Arquivo = screen(() => import('./screens/Arquivo'))
+const MedidasHistorico = screen(() => import('./screens/MedidasHistorico'))
+const Ginasio = screen(() => import('./screens/Ginasio'))
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -113,9 +143,13 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
       </div>
       {parent && <h1 className="truncate font-display text-[22px] font-bold uppercase">{title}</h1>}
       <div className="flex shrink-0 items-center gap-3">
-        {queued > 0 && (
-          <span className="rounded-full bg-surface2 px-2.5 py-1 text-[13px] text-dim">
-            {navigator.onLine ? `A enviar ${queued}` : `${queued} à espera de rede`}
+        {queued.count > 0 && (
+          <span className={`rounded-full bg-surface2 px-2.5 py-1 text-[13px] ${queued.failed > 0 ? 'text-eat' : 'text-dim'}`}>
+            {!navigator.onLine
+              ? `${queued.count} à espera de rede`
+              : queued.failed > 0
+                ? `${queued.count} por enviar`
+                : `A enviar ${queued.count}`}
           </span>
         )}
         {!location.startsWith('/definicoes') && (
@@ -266,12 +300,16 @@ export default function App() {
     if (!supabaseConfigured) return
     // Guarda a sessão de cada pessoa deste telemóvel (para o separador).
     const stopTracking = startAccountTracking()
-    supabase.auth.getSession().then(({ data }) => {
-      setActiveUser(data.session?.user.id ?? null)
-      setSession(data.session)
+    supabase.auth.getSession().then(({ data, error }) => {
+      // Sem rede, a sessão guardada: não acabou, só falta renovar o token.
+      const session = data.session ?? (error && !sessionEnded(error) ? storedSession() : null)
+      setActiveUser(session?.user.id ?? null)
+      setSession(session)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       if (event === 'PASSWORD_RECOVERY') setRecovering(true)
+      // Sem rede o supabase-js anuncia «sem sessão» ao começar; quem decide é o getSession acima.
+      if (event === 'INITIAL_SESSION' && !next) return
       setActiveUser(next?.user.id ?? null)
       setSession(next)
     })
@@ -303,9 +341,10 @@ export default function App() {
   if (!session) return <Login />
 
   return (
-    <ProfileProvider key={session.user.id}>
+    <ProfileProvider key={session.user.id} token={session.access_token}>
       <ToastProvider>
         <Shell />
+        <BusyLayer />
       </ToastProvider>
     </ProfileProvider>
   )

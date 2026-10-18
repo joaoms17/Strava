@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton, runBusy } from '../../lib/busy'
 import { emitDataChanged } from '../../lib/events'
 import { useReadyProfile } from '../../lib/profile'
 import { signedUrls } from '../../lib/photos'
@@ -206,7 +207,6 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [candidate, setCandidate] = useState<Workout | null>(null)
   const [merge, setMerge] = useState(true)
-  const [busy, setBusy] = useState(false)
   const [lastWatts, setLastWatts] = useState<number | null>(null)
   // O que o João já corrigiu à mão: sobrevive a «Juntar outro print».
   const [edited, setEdited] = useState<Partial<Draft>>({})
@@ -345,14 +345,12 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   }
 
   async function retry() {
-    setBusy(true)
     try {
       await postApi('/api/workout/parse-shot', { import_id: id, reset: true })
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui ler outra vez.')
     }
     await load()
-    setBusy(false)
   }
 
   async function discard() {
@@ -421,20 +419,20 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
           <Thumbs paths={row.thumb_paths} />
           <ErrorReason stored={row.analysis_error} fallback="Não consegui ler este print." />
           <div className="grid grid-cols-2 gap-2">
-            <button
-              disabled={busy}
-              onClick={() => void retry()}
+            <BusyButton
+              busy="A ler o print…"
+              onClick={retry}
               className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-50"
             >
               Tentar de novo
-            </button>
+            </BusyButton>
             <button onClick={startManual} className="min-h-12 rounded-xl border border-line text-[15px]">
               Preencher à mão
             </button>
           </div>
-          <button onClick={() => void discard()} className="text-[15px] text-dim">
+          <BusyButton busy="A descartar…" onClick={discard} className="text-[15px] text-dim">
             Descartar
-          </button>
+          </BusyButton>
         </div>
       </BottomSheet>
     )
@@ -521,7 +519,6 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
 
   async function save() {
     if (!canSave || minutes == null || !draft) return
-    setBusy(true)
     const saved = await saveWorkout(
       {
         type,
@@ -539,7 +536,6 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       },
       toast,
     )
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -549,16 +545,17 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       onClose={sheet.close}
       footer={
         <div className="flex gap-2">
-          <button
-            disabled={!canSave || busy}
-            onClick={() => void save()}
+          <BusyButton
+            busy="A guardar…"
+            disabled={!canSave}
+            onClick={save}
             className="min-h-14 flex-1 rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
-            {busy ? 'A guardar…' : merging ? 'Juntar' : `Guardar${kcal.kcal > 0 ? ` · +${fmtKcal(kcal.kcal)}` : ''}`}
-          </button>
-          <button onClick={() => void discard()} className="min-h-14 rounded-2xl border border-line px-4 text-[15px]">
+            {merging ? 'Juntar' : `Guardar${kcal.kcal > 0 ? ` · +${fmtKcal(kcal.kcal)}` : ''}`}
+          </BusyButton>
+          <BusyButton busy="A descartar…" onClick={discard} className="min-h-14 rounded-2xl border border-line px-4 text-[15px]">
             Descartar
-          </button>
+          </BusyButton>
         </div>
       }
     >
@@ -576,7 +573,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
               onChange={(e) => {
                 const files = [...(e.target.files ?? [])]
                 e.target.value = ''
-                void addMore(files)
+                void runBusy('A enviar o print…', () => addMore(files))
               }}
             />
           </label>
@@ -706,7 +703,6 @@ function WorkoutDetail({ id }: { id: string }) {
   const [watts, setWatts] = useState('')
   const [avgHr, setAvgHr] = useState('')
   const [maxHr, setMaxHr] = useState('')
-  const [busy, setBusy] = useState(false)
   const [templates, setTemplates] = useState<Favorite[]>([])
 
   const load = useCallback(async () => {
@@ -758,7 +754,6 @@ function WorkoutDetail({ id }: { id: string }) {
   const deviceCalories = w.kcal_device ?? w.raw?.calories ?? null
 
   async function patch(body: Record<string, unknown>, message: string) {
-    setBusy(true)
     try {
       await postApi('/api/workout/update', { workout_id: w.id, ...body })
       emitDataChanged()
@@ -767,7 +762,6 @@ function WorkoutDetail({ id }: { id: string }) {
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui gravar.')
     }
-    setBusy(false)
   }
 
   const field =
@@ -794,10 +788,10 @@ function WorkoutDetail({ id }: { id: string }) {
       onClose={sheet.close}
       footer={
         dirty ? (
-          <button
-            disabled={busy}
+          <BusyButton
+            busy="A guardar…"
             onClick={() =>
-              void patch(
+              patch(
                 {
                   minutes: toInt(minutes) ?? undefined,
                   ...(w.type === 'bike' ? { watts: toInt(watts) } : {}),
@@ -810,7 +804,7 @@ function WorkoutDetail({ id }: { id: string }) {
             className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
             Guardar alterações
-          </button>
+          </BusyButton>
         ) : undefined
       }
     >
@@ -843,9 +837,10 @@ function WorkoutDetail({ id }: { id: string }) {
               {sortTemplates(templates, w).map((f) => (
                 <button
                   key={f.id}
-                  disabled={busy}
                   onClick={() =>
-                    void patch({ favorite_id: w.favorite_id === f.id ? null : f.id }, w.favorite_id === f.id ? 'Tirado.' : `Agora é «${f.name}».`)
+                    void runBusy('A guardar…', () =>
+                      patch({ favorite_id: w.favorite_id === f.id ? null : f.id }, w.favorite_id === f.id ? 'Tirado.' : `Agora é «${f.name}».`),
+                    )
                   }
                   className={chip(w.favorite_id === f.id)}
                 >
@@ -859,7 +854,8 @@ function WorkoutDetail({ id }: { id: string }) {
         {w.deleted_at ? (
           <div className="space-y-2">
             <p className="text-[15px] text-dim">Apagado — não conta para as contas.</p>
-            <button
+            <BusyButton
+              busy="A repor…"
               onClick={async () => {
                 await postApi('/api/workout/restore', { workout_id: w.id })
                 emitDataChanged()
@@ -868,7 +864,7 @@ function WorkoutDetail({ id }: { id: string }) {
               className="min-h-12 w-full rounded-xl border border-line text-[15px]"
             >
               Repor
-            </button>
+            </BusyButton>
           </div>
         ) : (
           <>
@@ -912,8 +908,8 @@ function WorkoutDetail({ id }: { id: string }) {
               </ShotButton>
               <button
                 onClick={() => {
-                  void deleteWorkout(w, toast)
                   sheet.close()
+                  void runBusy('A apagar…', () => deleteWorkout(w, toast))
                 }}
                 className="min-h-12 rounded-xl border border-line text-[15px] text-pain"
               >

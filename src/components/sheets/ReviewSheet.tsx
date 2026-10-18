@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
@@ -25,7 +26,6 @@ export default function ReviewSheet() {
   const [index, setIndex] = useState(0)
   const [correcting, setCorrecting] = useState(false)
   const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     void (async () => {
@@ -52,7 +52,6 @@ export default function ReviewSheet() {
 
   async function confirm() {
     if (!meal) return
-    setBusy(true)
     try {
       await postApi('/api/meal/update', { meal_id: meal.id, confirm: true })
       emitDataChanged()
@@ -69,14 +68,11 @@ export default function ReviewSheet() {
       next()
     } catch {
       toast('Não consegui gravar. Tenta outra vez.')
-    } finally {
-      setBusy(false)
     }
   }
 
   async function correct() {
     if (!meal || !text.trim()) return
-    setBusy(true)
     try {
       const result = await postApi<{ meal: Meal; previous: { items: MealItem[] } }>('/api/meal/correct', {
         meal_id: meal.id,
@@ -96,8 +92,6 @@ export default function ReviewSheet() {
       next()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui corrigir.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -124,18 +118,19 @@ export default function ReviewSheet() {
       onClose={sheet.close}
       footer={
         correcting ? (
-          <button
-            disabled={busy || !text.trim()}
-            onClick={() => void correct()}
+          <BusyButton
+            busy="A corrigir…"
+            disabled={!text.trim()}
+            onClick={correct}
             className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
           >
-            {busy ? 'A corrigir…' : 'Corrigir'}
-          </button>
+            Corrigir
+          </BusyButton>
         ) : (
           <div className="grid grid-cols-3 gap-2">
-            <button disabled={busy} onClick={() => void confirm()} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg">
+            <BusyButton busy="A confirmar…" onClick={confirm} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg">
               Está certo
-            </button>
+            </BusyButton>
             <button onClick={() => setCorrecting(true)} className="min-h-14 rounded-2xl bg-surface2 text-[15px]">
               Corrigir
             </button>

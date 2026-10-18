@@ -15,7 +15,7 @@ Redesenho em curso (docs/redesenho-2026-09.md). Fases 1 e 2:
 /components
   sheets/             folhas por URL: (+), Peso, Refeição, Galeria, Escrever, Nota, Só números, Código de barras, Rever
   ui/                 folha inferior, Quando (dia e refeição), barras, faixa da semana, botão de foto
-/lib                  supabase, perfil, tema, avisos com Anular, folhas, fila de capturas (IndexedDB), EXIF, fotos, formatação PT-PT
+/lib                  supabase, perfil, tema, avisos com Anular, espera com bloqueio (busy), folhas, fila de capturas e rascunho do Registar (IndexedDB), EXIF, fotos, formatação PT-PT
 ```
 
 As regras de negócio vivem em `/api/_lib/rules` (funções puras testadas) e o cliente importa-as de lá. Sem segredos no cliente. Interface em PT-PT, tema Sistema/Escuro/Claro, uso a uma mão.

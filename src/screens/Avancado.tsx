@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { useReadyProfile, useProfile } from '../lib/profile'
 import { fmtInt } from '../lib/format'
 import { USD_TO_EUR, nearMonthlyCap } from '../../api/_lib/rules/custos'
@@ -128,7 +129,8 @@ export default function Avancado() {
             className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
           />
         </label>
-        <button
+        <BusyButton
+          busy="A guardar…"
           onClick={async () => {
             const eur = Number(cap.replace(',', '.'))
             const perDay = Number(visionCap)
@@ -143,7 +145,7 @@ export default function Avancado() {
           className="min-h-11 w-full rounded-xl bg-eat font-semibold text-bg"
         >
           Guardar limites
-        </button>
+        </BusyButton>
       </section>
 
       <section className="space-y-3 rounded-2xl bg-surface p-4">
@@ -158,7 +160,8 @@ export default function Avancado() {
             onChange={(e) => setFloor(e.target.value.replace(/\D/g, ''))}
             className="h-11 flex-1 rounded-xl border border-line bg-bg px-3 tabular-nums focus:border-eat focus:outline-none"
           />
-          <button
+          <BusyButton
+            busy="A guardar…"
             onClick={async () => {
               const n = Number(floor)
               if (n < 1000 || n > 3000) {
@@ -170,7 +173,7 @@ export default function Avancado() {
             className="min-h-11 rounded-xl bg-eat px-4 font-semibold text-bg"
           >
             Guardar
-          </button>
+          </BusyButton>
         </div>
       </section>
 
@@ -199,13 +202,14 @@ export default function Avancado() {
             />
           </div>
         ))}
-        <button
+        <BusyButton
+          busy="A guardar…"
           disabled={dirty.size === 0}
-          onClick={() => void saveCatalog()}
+          onClick={saveCatalog}
           className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-40"
         >
           Guardar exercícios
-        </button>
+        </BusyButton>
       </section>
 
       <section className="space-y-2 rounded-2xl bg-surface p-4 text-[13px] text-dim">

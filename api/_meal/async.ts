@@ -6,6 +6,7 @@ import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { MealItemInputSchema } from '../_lib/schemas.js'
 import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
+import { duplicatePhotoWindow } from '../_lib/rules/captura.js'
 import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
@@ -126,20 +127,6 @@ export const capture = post(async ({ db, userId, body, res }) => {
     res.status(202).json({ meal: existing })
     return
   }
-  // A mesma foto já registada: não se analisa outra vez.
-  if (input.image_hashes.length) {
-    const { data: same } = await db
-      .from('meals')
-      .select('*')
-      .is('deleted_at', null)
-      .overlaps('image_hashes', input.image_hashes)
-      .limit(1)
-    if (same?.[0]) {
-      res.status(200).json({ meal: same[0], duplicate: true })
-      return
-    }
-  }
-
   const now = new Date()
   const cutoff = await cutoffHour(db)
   const takenMs = input.taken_at ? Date.parse(input.taken_at) : NaN
@@ -147,6 +134,24 @@ export const capture = post(async ({ db, userId, body, res }) => {
   if (Number.isFinite(takenMs) && takenMs <= now.getTime()) loggedAt = new Date(takenMs)
   else if (input.date) loggedAt = loggedAtFor(input.date, SLOT_TIME[input.slot ?? slotOf(now)], cutoff, now)
   else loggedAt = now
+
+  // A mesma foto já registada perto deste dia: não se analisa outra vez.
+  // Noutro dia é o mesmo prato fotografado igual, e regista-se.
+  if (input.image_hashes.length) {
+    const near = duplicatePhotoWindow(nutritionalDay(loggedAt, cutoff))
+    const { data: same } = await db
+      .from('meals')
+      .select('*')
+      .is('deleted_at', null)
+      .gte('date', near.from)
+      .lte('date', near.to)
+      .overlaps('image_hashes', input.image_hashes)
+      .limit(1)
+    if (same?.[0]) {
+      res.status(200).json({ meal: same[0], duplicate: true })
+      return
+    }
+  }
 
   const withPhotos = input.photo_paths.length > 0
   const admin = adminClient()

@@ -5,6 +5,8 @@ import { isNetworkError, postApi } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { emitDataChanged } from '../../lib/events'
 import { prepareMenuPhoto } from '../../lib/image'
 import { fmt1, fmtInt, fmtKcal } from '../../lib/format'
@@ -37,7 +39,9 @@ export default function MenuSheet() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<MenuResult | null>(null)
   const [showAll, setShowAll] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null)
+  // Tocar outra vez no mesmo prato depois de uma falha de rede não regista a
+  // dobrar; outro prato é outro registo.
+  const clientIdFor = useClientId()
 
   function addPhotos(files: File[]) {
     const room = MAX_PHOTOS - photos.length
@@ -90,10 +94,10 @@ export default function MenuSheet() {
   }
 
   async function eat(dish: Dish) {
-    if (!result || busy) return
-    setBusy(dish.name)
+    if (!result) return
     try {
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/save', {
+        client_id: clientIdFor(dish.name),
         input_type: 'text',
         raw_text: `Do menu: ${dish.name}`,
         items: [dishItem(dish)],
@@ -114,7 +118,6 @@ export default function MenuSheet() {
       ])
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui registar.')
-      setBusy(null)
     }
   }
 
@@ -136,9 +139,9 @@ export default function MenuSheet() {
       onClose={sheet.close}
       footer={
         result ? undefined : (
-          <button disabled={photos.length === 0 || reading} onClick={() => void read()} className={primary}>
-            {reading ? 'A ler o menu…' : 'Escolher por mim'}
-          </button>
+          <BusyButton busy="A ler o menu…" disabled={photos.length === 0} onClick={read} className={primary}>
+            Escolher por mim
+          </BusyButton>
         )
       }
     >
@@ -259,15 +262,15 @@ export default function MenuSheet() {
                     </p>
                   </div>
                 </div>
-                <button
-                  disabled={busy != null}
-                  onClick={() => void eat(d)}
+                <BusyButton
+                  busy="A registar…"
+                  onClick={() => eat(d)}
                   className={`mt-3 min-h-12 w-full rounded-xl font-display text-[16px] font-bold tracking-[0.04em] uppercase disabled:opacity-40 ${
                     i === 0 ? 'bg-eat text-bg' : 'border border-line bg-surface2'
                   }`}
                 >
-                  {busy === d.name ? 'A registar…' : 'Vou comer este'}
-                </button>
+                  Vou comer este
+                </BusyButton>
               </li>
             ))}
           </ol>
@@ -281,9 +284,9 @@ export default function MenuSheet() {
                 <ul className="divide-y divide-line rounded-2xl border border-line" aria-label="Outros pratos">
                   {rest.map((d) => (
                     <li key={d.name}>
-                      <button
-                        disabled={busy != null}
-                        onClick={() => void eat(d)}
+                      <BusyButton
+                        busy="A registar…"
+                        onClick={() => eat(d)}
                         aria-label={`Vou comer ${d.name}`}
                         className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left disabled:opacity-40"
                       >
@@ -295,7 +298,7 @@ export default function MenuSheet() {
                           {fmtKcal(d.kcal)} kcal
                           <span className="block text-protein">{fmtInt(d.protein)} g</span>
                         </span>
-                      </button>
+                      </BusyButton>
                     </li>
                   ))}
                 </ul>

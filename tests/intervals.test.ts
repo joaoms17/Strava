@@ -168,6 +168,9 @@ describe('importação resistente', () => {
     expect(retryableImportError(new Error('O intervals.icu respondeu com erro (429).'))).toBe(true)
     expect(retryableImportError(new Error('A chave do intervals.icu não é válida.'))).toBe(false)
     expect(retryableImportError(new Error('Pedido inválido.'))).toBe(false)
+    // Com o estado do servidor (a mensagem do telemóvel já vem em português).
+    expect(retryableImportError(Object.assign(new Error('O servidor falhou.'), { status: 502 }))).toBe(true)
+    expect(retryableImportError(Object.assign(new Error('Pedido inválido.'), { status: 400 }))).toBe(false)
   })
 })
 

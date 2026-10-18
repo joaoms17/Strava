@@ -3,6 +3,7 @@ import { useLocation, useSearch } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { emitDataChanged } from '../lib/events'
 import {
   FREE_REP_MAX,
@@ -66,7 +67,6 @@ export default function Ginasio() {
   const [editing, setEditing] = useState<Workout | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [picking, setPicking] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
   const [favName, setFavName] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
@@ -189,7 +189,6 @@ export default function Ginasio() {
   }
 
   async function finish() {
-    setBusy(true)
     const sets = d.exercises.flatMap((ex) =>
       ex.sets
         .filter((s) => s.done)
@@ -211,7 +210,6 @@ export default function Ginasio() {
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar. Tenta outra vez.')
     }
-    setBusy(false)
   }
 
   async function saveAsFavorite() {
@@ -266,13 +264,14 @@ export default function Ginasio() {
               aria-label="Nome do favorito"
               className="h-12 flex-1 rounded-xl border border-line bg-bg px-3 text-[17px]"
             />
-            <button
+            <BusyButton
+              busy="A guardar…"
               disabled={!favName.trim()}
-              onClick={() => void saveAsFavorite()}
+              onClick={saveAsFavorite}
               className="min-h-12 rounded-xl bg-cta px-4 font-semibold text-on-cta disabled:opacity-40"
             >
               Guardar
-            </button>
+            </BusyButton>
           </div>
         )}
         <button
@@ -458,13 +457,14 @@ export default function Ginasio() {
       )}
 
       {d.exercises.length > 0 && (
-        <button
-          disabled={doneSets === 0 || busy}
-          onClick={() => void finish()}
+        <BusyButton
+          busy="A guardar…"
+          disabled={doneSets === 0}
+          onClick={finish}
           className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
-          {busy ? 'A guardar…' : editId ? 'Guardar correções' : 'Terminar'}
-        </button>
+          {editId ? 'Guardar correções' : 'Terminar'}
+        </BusyButton>
       )}
     </div>
   )

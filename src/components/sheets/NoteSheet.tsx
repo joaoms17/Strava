@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
 import { timeOf } from '../../lib/format'
@@ -19,7 +20,6 @@ export default function NoteSheet() {
   const [thumb, setThumb] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [tags, setTags] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -36,7 +36,6 @@ export default function NoteSheet() {
 
   async function save() {
     if (!meal) return
-    setBusy(true)
     try {
       await postApi('/api/meal/update', { meal_id: meal.id, note: note.trim() || null, tags })
       emitDataChanged()
@@ -44,8 +43,6 @@ export default function NoteSheet() {
       toast(meal.status === 'a_analisar' ? 'Nota guardada · entra na análise' : 'Nota aplicada')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar a nota.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -54,13 +51,14 @@ export default function NoteSheet() {
       title="Nota"
       onClose={sheet.close}
       footer={
-        <button
-          disabled={busy || !meal}
-          onClick={() => void save()}
+        <BusyButton
+          busy="A guardar…"
+          disabled={!meal}
+          onClick={save}
           className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
         >
-          {busy ? 'A guardar…' : 'Guardar'}
-        </button>
+          Guardar
+        </BusyButton>
       }
     >
       <div className="space-y-4 pb-2">

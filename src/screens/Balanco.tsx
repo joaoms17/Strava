@@ -14,6 +14,7 @@ import {
 import { supabase } from '../lib/supabase'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { shareWeekReport } from '../lib/week-report'
 import ProteinaRefeicao from '../components/ProteinaRefeicao'
@@ -294,8 +295,11 @@ export default function Balanco() {
 
   async function applyBase(value: number) {
     const previous = profile.base_kcal
-    await update({ base_kcal: value })
-    toast(`Plano base: ${fmtInt(value)}`, [{ label: 'Anular', run: () => void update({ base_kcal: previous }) }])
+    if (!(await update({ base_kcal: value }))) {
+      toast('Não consegui guardar. Tenta outra vez.')
+      return
+    }
+    toast(`Plano base: ${fmtInt(value)}`, [{ label: 'Anular', run: async () => void (await update({ base_kcal: previous })) }])
   }
 
   return (
@@ -505,12 +509,13 @@ export default function Balanco() {
                     Para perderes cerca de 0,5 kg por semana, o plano base podia ser {fmtInt(suggestion)} (hoje é{' '}
                     {fmtInt(profile.base_kcal)}).
                   </p>
-                  <button
-                    onClick={() => void applyBase(suggestion)}
+                  <BusyButton
+                    busy="A aplicar…"
+                    onClick={() => applyBase(suggestion)}
                     className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta"
                   >
                     Aplicar
-                  </button>
+                  </BusyButton>
                 </div>
               )}
               {profile.birth_year == null && (
@@ -525,13 +530,16 @@ export default function Balanco() {
                       placeholder="1986"
                       className="h-11 w-28 rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums"
                     />
-                    <button
+                    <BusyButton
+                      busy="A guardar…"
                       disabled={birthYear.length !== 4 || Number(birthYear) < 1920 || Number(birthYear) > 2015}
-                      onClick={() => void update({ birth_year: Number(birthYear) })}
+                      onClick={async () => {
+                        if (!(await update({ birth_year: Number(birthYear) }))) toast('Não consegui guardar. Tenta outra vez.')
+                      }}
                       className="min-h-11 rounded-xl border border-line px-4 disabled:opacity-40"
                     >
                       Guardar
-                    </button>
+                    </BusyButton>
                   </span>
                 </label>
               )}

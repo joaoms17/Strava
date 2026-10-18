@@ -3,6 +3,7 @@ import Thumb from './ui/Thumb'
 import Icon from './ui/Icon'
 import { useSheet } from '../lib/sheet'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { useReadyProfile } from '../lib/profile'
 import { emitDataChanged, useDataVersion } from '../lib/events'
 import { fmtInt, fmtKcal } from '../lib/format'
@@ -115,12 +116,13 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
               >
                 Editar
               </button>
-              <button
-                onClick={() => void follow(diet.active ? null : diet.id, diet.name)}
+              <BusyButton
+                busy="A mudar…"
+                onClick={() => follow(diet.active ? null : diet.id, diet.name)}
                 className={`min-h-11 flex-1 rounded-xl text-[15px] ${diet.active ? 'bg-surface2 text-dim' : 'bg-eat font-semibold text-bg'}`}
               >
                 {diet.active ? 'Deixar de seguir' : 'Seguir esta'}
-              </button>
+              </BusyButton>
             </div>
           </div>
         )

@@ -2,6 +2,7 @@
 // os alvos de partida de um perfil novo e os nomes no separador. Sem imports
 // de servidor: o telemóvel usa este ficheiro diretamente.
 import { PLAN_DEFICIT_KCAL, mifflinBase } from './gasto.js'
+import { isTransientFailure, type Failure } from './falhas.js'
 
 export const MAX_PEOPLE = 4
 
@@ -52,4 +53,14 @@ export function personName(name: unknown, email: string | null | undefined): str
 
 export function initialOf(name: string): string {
   return (name.trim().charAt(0) || '?').toUpperCase()
+}
+
+// Trocar de pessoa: só se esquece a sessão guardada quando o servidor diz que
+// acabou (token recusado). Sem rede, com rede fraca ou com o servidor em
+// baixo, a sessão continua válida e a pessoa fica no telemóvel.
+export function sessionEnded(error: Failure | null): boolean {
+  if (!error) return false
+  if (isTransientFailure(error)) return false
+  if (error.name === 'AuthSessionMissingError' || error.name === 'AuthInvalidTokenResponseError') return true
+  return error.status != null && error.status >= 400 && error.status < 500
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupPhotos, photoInstant } from '../api/_lib/rules/captura'
+import { duplicatePhotoWindow, groupPhotos, photoInstant } from '../api/_lib/rules/captura'
 import { readExifDateTime } from '../src/lib/exif'
 
 // JPEG mínimo com um bloco EXIF: IFD0 → ExifIFD → DateTimeOriginal.
@@ -77,5 +77,12 @@ describe('agrupar fotos da galeria', () => {
     const groups = groupPhotos([at(null), at('2026-09-27T12:05:00Z'), at(null)])
     expect(groups.map((g) => g.length)).toEqual([1, 1, 1])
     expect(groups[0]![0]!.at).not.toBeNull()
+  })
+})
+
+describe('foto repetida', () => {
+  it('só conta como repetida a um dia da refeição (o iogurte de sempre regista-se outra vez)', () => {
+    expect(duplicatePhotoWindow('2026-10-18')).toEqual({ from: '2026-10-17', to: '2026-10-19' })
+    expect(duplicatePhotoWindow('2026-11-01')).toEqual({ from: '2026-10-31', to: '2026-11-02' })
   })
 })
