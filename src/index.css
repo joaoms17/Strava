@@ -23,6 +23,14 @@
   /* Botão principal neutro: lima no escuro, preto no claro */
   --color-cta: #c6f432;
   --color-on-cta: #0c110e;
+  /* O escolhido nos separadores (Semana/Mês, 1M/3M, a pessoa…): uma pílula
+     levantada e neutra, mais clara do que o fundo do separador nos dois temas */
+  --color-raised: #3b4a41;
+  /* Os avisos (com Anular) são sempre escuros, também no tema escuro, para o
+     laranja das ações se ler (≥ 5:1) */
+  --color-toast: #26302a;
+  --color-on-toast: #eef2e8;
+  --color-toast-action: #ff7a3d;
 
   /* Nomes antigos, usados pelos ecrãs que ainda não mudaram */
   --color-card: var(--color-surface);
@@ -47,7 +55,8 @@
     --color-protein: #121212;
     --color-body: #a21caf;
     --color-bodyfat: #f0abfc;
-    --color-attn: #b7791f;
+    /* Âmbar escuro: ≥ 4,5:1 também sobre os fundos âmbar claros (bg-attn/10–15) */
+    --color-attn: #80520a;
     --color-pain: #d14343;
     --color-ok: #1f9d55;
     --color-chart-bike: #2743f5;
@@ -55,6 +64,10 @@
     --color-chart-health: #0d9488;
     --color-cta: #121212;
     --color-on-cta: #f1eee7;
+    --color-raised: #ffffff;
+    --color-toast: #121212;
+    --color-on-toast: #f1eee7;
+    --color-toast-action: #ff7a3d;
     color-scheme: light;
   }
 
@@ -71,7 +84,7 @@
       --color-protein: #121212;
       --color-body: #a21caf;
       --color-bodyfat: #f0abfc;
-      --color-attn: #b7791f;
+      --color-attn: #80520a;
       --color-pain: #d14343;
       --color-ok: #1f9d55;
       --color-chart-bike: #2743f5;
@@ -79,6 +92,10 @@
       --color-chart-health: #0d9488;
       --color-cta: #121212;
       --color-on-cta: #f1eee7;
+      --color-raised: #ffffff;
+      --color-toast: #121212;
+      --color-on-toast: #f1eee7;
+      --color-toast-action: #ff7a3d;
       color-scheme: light;
     }
   }

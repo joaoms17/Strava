@@ -29,6 +29,7 @@ import Ciclo from '../components/Ciclo'
 import type { WeightRow } from '../lib/types'
 import CompositionCards from '../components/CompositionCards'
 import Evolucao from '../components/Evolucao'
+import { segment } from '../components/ui/Chips'
 
 type Range = '1M' | '3M' | 'Tudo'
 const RANGE_DAYS: Record<Range, number | null> = { '1M': 30, '3M': 91, Tudo: null }
@@ -210,7 +211,8 @@ export default function Corpo() {
                 <button
                   key={r}
                   onClick={() => setRange(r)}
-                  className={`min-h-8 rounded-md px-3 ${range === r ? 'bg-surface font-semibold' : 'text-dim'}`}
+                  aria-pressed={range === r}
+                  className={`min-h-10 rounded-md px-3 ${segment(range === r)}`}
                 >
                   {r}
                 </button>

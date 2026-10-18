@@ -14,6 +14,7 @@ import { MAX_MEAL_PHOTOS } from '../../lib/capture'
 import AttachPhotoButton from '../ui/AttachPhotoButton'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
+import { chip } from '../ui/Chips'
 import AiCheck from '../AiCheck'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
@@ -267,14 +268,14 @@ export default function MealSheet() {
     try {
       created = await favoriteFromMeal(current, favName, slot)
     } catch (err) {
-      toast(err instanceof Error ? err.message : 'Não consegui guardar o favorito.')
+      toast(err instanceof Error ? err.message : 'Não consegui guardar a favorita.')
       return
     }
     setFavoriteId(created.id)
     setSuggest(false)
     setMode('view')
     emitDataChanged()
-    toast(`Guardado nos favoritos · ${favName}`, [
+    toast(`Guardada nas favoritas · ${favName}`, [
       {
         label: 'Anular',
         run: async () => {
@@ -306,7 +307,7 @@ export default function MealSheet() {
   } else if (mode === 'favorite') {
     footer = (
       <BusyButton busy="A guardar…" onClick={saveFavorite} className={primary}>
-        Guardar favorito
+        Guardar favorita
       </BusyButton>
     )
   } else if (analysed && dirty) {
@@ -333,7 +334,7 @@ export default function MealSheet() {
             onClick={() => (favoriteId ? undefined : setMode('favorite'))}
             className={`${secondary} ${favoriteId ? 'text-attn' : ''}`}
           >
-            {favoriteId ? '★ Favorito' : '☆ Favorito'}
+            {favoriteId ? '★ Favorita' : '☆ Favorita'}
           </button>
           <button
             onClick={() => {
@@ -556,7 +557,7 @@ export default function MealSheet() {
               <>
                 {suggest && mode === 'view' && (
                   <div className="space-y-2 rounded-2xl border border-line p-3">
-                    <p className="text-[15px]">Registas isto muitas vezes. Guardar como favorito?</p>
+                    <p className="text-[15px]">Registas isto muitas vezes. Guardar como favorita?</p>
                     <div className="flex gap-2">
                       <button onClick={() => setMode('favorite')} className="min-h-11 flex-1 rounded-xl bg-eat font-semibold text-bg">
                         Guardar
@@ -593,7 +594,8 @@ export default function MealSheet() {
                   </div>
                 ) : (
                   mode === 'view' && (
-                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-[15px]">
+                    // As ações que ficaram (decisão 174) em botões de 44 px, 2 por linha.
+                    <div className="grid grid-cols-2 gap-2 text-[15px] [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:justify-center [&>*]:rounded-xl [&>*]:border [&>*]:border-line [&>*]:px-3 [&>*]:text-center [&>*]:leading-tight">
                       <button onClick={() => setMode('correct')} className="text-eat">
                         Corrigir por texto
                       </button>
@@ -627,7 +629,7 @@ export default function MealSheet() {
         {mode === 'favorite' && (
           <div className="space-y-3">
             <label className="block space-y-1">
-              <span className="text-[13px] text-dim">Nome do favorito</span>
+              <span className="text-[13px] text-dim">Nome da favorita</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -639,7 +641,8 @@ export default function MealSheet() {
                 <button
                   key={s}
                   onClick={() => setSlot(s)}
-                  className={`rounded-full px-3 py-1.5 text-[13px] ${s === slot ? 'bg-eat text-bg' : 'bg-surface2'}`}
+                  aria-pressed={s === slot}
+                  className={chip(s === slot)}
                 >
                   {SLOT_LABEL[s]}
                 </button>

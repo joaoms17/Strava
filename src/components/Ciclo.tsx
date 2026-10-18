@@ -113,7 +113,7 @@ export default function Ciclo({ today }: { today: string }) {
             type="checkbox"
             checked={options.pill === true}
             onChange={(e) => void runBusy('A guardar…', () => setOptions(e.target.checked, e.target.checked ? 91 : 28))}
-            className="h-5 w-5 accent-current"
+            className="h-5 w-5 accent-cta"
           />
         </label>
         {options.pill && (
@@ -145,7 +145,7 @@ export default function Ciclo({ today }: { today: string }) {
             <button
               key={d}
               onClick={() => void runBusy('A guardar…', () => save(starts.filter((s) => s !== d), `Tirado: ${fmtDayMonth(d)}.`, starts))}
-              className="rounded-full border border-line px-2.5 py-1"
+              className="min-h-11 rounded-full border border-line px-3"
               aria-label={`tirar ${fmtDayMonth(d)}`}
             >
               {fmtDayMonth(d)} ×

@@ -365,7 +365,7 @@ export default function Hoje() {
     week == null
       ? null
       : Math.abs(week.diff) < 50
-        ? 'no plano'
+        ? 'certa com o plano'
         : `${fmtInt(Math.abs(week.diff))} ${week.diff > 0 ? 'abaixo' : 'acima'} do plano`
   const yesterdayComplete = isDayComplete({
     mealCount: data.yesterday.meals,
@@ -845,7 +845,7 @@ export default function Hoje() {
                 De manhã, antes de comer.
               </p>
               <div className="flex gap-2">
-                <button onClick={() => sheet.open('peso')} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+                <button onClick={() => sheet.open('peso')} className="min-h-12 flex-1 rounded-xl bg-cta font-semibold text-on-cta">
                   Pesar
                 </button>
                 <button onClick={() => void dismissHint(card)} className="min-h-12 px-4 text-[15px] text-dim">
@@ -1268,7 +1268,7 @@ function NextStepCard({
         <>
           <p className="text-[17px]">Bom dia. Pesa-te?</p>
           <div className="flex items-center gap-2">
-            <button onClick={onWeigh} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+            <button onClick={onWeigh} className="min-h-12 flex-1 rounded-xl bg-cta font-semibold text-on-cta">
               Pesar
             </button>
             {later}

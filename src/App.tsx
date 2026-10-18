@@ -132,7 +132,7 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
     >
       <div className="flex min-w-0 items-center gap-1">
         {parent && (
-          <button onClick={() => navigate(parent)} className="-ml-2 px-2 py-1 text-[17px] font-medium text-ink">
+          <button onClick={() => navigate(parent)} className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink">
             ‹ Voltar
           </button>
         )}
@@ -267,12 +267,12 @@ function Shell() {
         <ul className="space-y-1">
           {missingMigrations.map((file) => (
             <li key={file}>
-              <code className="text-ink">supabase/migrations/{file}</code>
+              <code className="text-[13px] break-all text-ink">supabase/migrations/{file}</code>
             </li>
           ))}
         </ul>
         <p>Cola cada um, carrega em Run. Demora segundos e não apaga nada.</p>
-        <button onClick={() => void reload()} className="mt-2 rounded-xl bg-eat px-4 py-3 font-semibold text-bg">
+        <button onClick={() => void reload()} className="mt-2 rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
           Já corri, tentar outra vez
         </button>
       </Centered>
@@ -282,7 +282,7 @@ function Shell() {
     return (
       <Centered>
         <p>Não consegui ligar ao Supabase.</p>
-        <button onClick={() => void reload()} className="rounded-xl bg-eat px-4 py-3 font-semibold text-bg">
+        <button onClick={() => void reload()} className="rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
           Tentar outra vez
         </button>
       </Centered>

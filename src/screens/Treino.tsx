@@ -23,7 +23,7 @@ function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
   if (w.source === 'strava') return 'Strava'
   if (w.source === 'intervals') return 'Relógio (auto)'
-  return w.favorite_id ? 'favorito' : 'à mão'
+  return w.favorite_id ? 'teu treino' : 'à mão'
 }
 
 interface TreinoData {
@@ -34,7 +34,7 @@ interface TreinoData {
   sleep: NightSleep | null
 }
 
-// Treino: o plano da semana, registar (print do relógio, print da app, ou
+// Treino: o plano da semana, registar (um print do relógio ou de outra app, ou
 // dizer/escrever o que fizeste) e ver o que gastou e como progride. Os treinos
 // do relógio chegam sozinhos (Definições › Ligações).
 export default function Treino() {
@@ -174,9 +174,10 @@ export default function Treino() {
           {[
             ['Sessões', String(week.length), ''],
             ['Minutos', String(weekMinutes), ''],
-            ['No plano', `+${fmtKcal(weekKcal)}`, 'text-burn'],
+            ['Kcal do treino', `+${fmtKcal(weekKcal)}`, 'text-burn'],
           ].map(([label, value, tone]) => (
-            <div key={label} className="rounded-2xl border border-line bg-surface p-3">
+            // O número em baixo nos três: «Kcal do treino» pode ocupar 2 linhas.
+            <div key={label} className="flex flex-col justify-between gap-1 rounded-2xl border border-line bg-surface p-3">
               <p className="label text-[12px]">{label}</p>
               <p className={`num text-[34px] leading-none font-extrabold ${tone}`}>{value}</p>
             </div>
@@ -210,6 +211,16 @@ export default function Treino() {
       )}
 
 
+      {/* Sem treinos (a Joana): o que fazer, em vez de um ecrã que parece por carregar. */}
+      {workouts.length === 0 && (
+        <p className="rounded-[18px] border border-line bg-surface p-4 text-[15px] text-dim">
+          <span className="block font-semibold text-ink">Ainda sem treinos.</span>
+          Uma caminhada ou uma aula registam-se com «Dizer ou escrever».
+          {!profile.integration_status?.intervals?.connected &&
+            ' Os do relógio chegam sozinhos se ligares o intervals.icu nas Definições.'}
+        </p>
+      )}
+
       {workouts.length > 0 && (
         <section>
           <p className="label mb-1">Histórico</p>
@@ -230,7 +241,7 @@ export default function Treino() {
                   <span className="flex items-center gap-2 text-[16px] font-semibold">
                     {workoutTitle(w)}
                     {duplicates.has(w.id) && (
-                      <span className="rounded bg-attn/20 px-1.5 text-[11px] font-normal text-attn">possível duplicado</span>
+                      <span className="rounded bg-attn/15 px-1.5 text-[12px] font-normal text-attn">possível duplicado</span>
                     )}
                   </span>
                   <span className="block truncate text-[14px] text-dim">

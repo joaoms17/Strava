@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { useThemeColors } from '../lib/colors'
 import { exerciseKey } from '../../api/_lib/rules/exercicios'
+import { chip } from './ui/Chips'
 import type { ExerciseLogRow } from '../lib/types'
 
 
@@ -75,14 +76,13 @@ export default function LoadChart({
   return (
     <div className="rounded-2xl border border-edge bg-card p-4">
       <h2 className="text-sm font-semibold text-dim">Carga por exercício — 12 semanas</h2>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-2">
         {exercises.map(({ key, name }) => (
           <button
             key={key}
             onClick={() => setSelected(key)}
-            className={`rounded-lg border px-2.5 py-1 text-xs ${
-              key === exercise ? 'border-accent text-accent' : 'border-edge text-dim'
-            }`}
+            aria-pressed={key === exercise}
+            className={chip(key === exercise, 'cta')}
           >
             {name}
           </button>

@@ -7,8 +7,8 @@ import type { Favorite } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import WorkoutLogOptions from '../WorkoutLogOptions'
 
-// Folha Treino (do ＋): print do relógio, print da app ou dizer/escrever o
-// que fizeste; por baixo, os teus treinos para repetir com um toque.
+// Folha Treino (do ＋): um print (do relógio ou de outra app) ou
+// dizer/escrever o que fizeste; por baixo, os teus treinos para repetir com um toque.
 export default function TreinoSheet() {
   const sheet = useSheet()
   const date = sheet.params.get('data')

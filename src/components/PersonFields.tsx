@@ -77,7 +77,7 @@ export default function PersonFields({ value, onChange }: { value: PersonDraft; 
             ['m', 'Homem'],
           ] as const
         ).map(([sex, label]) => (
-          <button key={sex} onClick={() => set({ sex })} aria-pressed={value.sex === sex} className={chip(value.sex === sex)}>
+          <button key={sex} onClick={() => set({ sex })} aria-pressed={value.sex === sex} className={chip(value.sex === sex, 'cta')}>
             {label}
           </button>
         ))}

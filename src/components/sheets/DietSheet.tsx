@@ -207,17 +207,19 @@ export default function DietSheet() {
                         </span>
                       </span>
                       {i > 0 && (
+                        // Um botão, não um estado: troca a refeição habitual por esta (em 2
+                        // linhas, para o nome caber).
                         <button
                           onClick={() => setMeals(makeHabitual(meals, slot, favId))}
-                          className="min-h-9 shrink-0 rounded-lg px-2 text-[13px] text-eat"
+                          className="min-h-11 w-[76px] shrink-0 rounded-lg border border-line px-1.5 text-[13px] leading-tight text-eat"
                         >
-                          Habitual
+                          Tornar habitual
                         </button>
                       )}
                       <button
                         onClick={() => setMeals(removeOption(meals, slot, favId))}
                         aria-label={`Tirar ${fav.name} de ${SLOT_LABEL[slot]}`}
-                        className="h-9 w-9 shrink-0 rounded-lg text-dim"
+                        className="-ml-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-dim"
                       >
                         <Icon name="close" size={16} />
                       </button>
@@ -288,7 +290,7 @@ export default function DietSheet() {
               type="checkbox"
               checked={active}
               onChange={(e) => setActive(e.target.checked)}
-              className="h-6 w-6 accent-[var(--color-eat)]"
+              className="h-6 w-6 accent-cta"
             />
           </label>
 

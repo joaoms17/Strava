@@ -44,6 +44,7 @@ import type { Meal, Workout } from '../lib/types'
 import BalancoMes from '../components/BalancoMes'
 import ContaGordura from '../components/ContaGordura'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
+import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
 
 interface WeekData {
   monday: string // a semana destes dados (ao mudar de semana, os antigos não ficam por baixo)
@@ -266,7 +267,7 @@ export default function Balanco() {
   }, [load, version])
 
   const toggle = (
-    <div className="grid grid-cols-2 rounded-xl border border-line bg-surface p-1 font-display text-[15px] font-bold tracking-[0.08em] uppercase">
+    <div className={`grid grid-cols-2 ${SEGMENT_TRACK} font-display text-[15px] font-bold tracking-[0.08em] uppercase`}>
       {(
         [
           ['semana', 'Semana'],
@@ -276,7 +277,7 @@ export default function Balanco() {
         <button
           key={id}
           onClick={() => setView(id)}
-          className={`min-h-10 rounded-lg ${view === id ? 'bg-cta text-on-cta' : 'text-dim'}`}
+          className={`min-h-10 rounded-lg ${segment(view === id)}`}
           aria-pressed={view === id}
         >
           {label}
@@ -619,7 +620,7 @@ export default function Balanco() {
               )}
               <p>
                 Treino: {sessions} {sessions === 1 ? 'sessão' : 'sessões'} · {fmtInt(minutes)} min
-                {trainingKcal > 0 && <span className="text-burn"> · +{fmtKcal(trainingKcal)} no plano</span>}
+                {trainingKcal > 0 && <span className="text-burn"> · +{fmtKcal(trainingKcal)} kcal do treino</span>}
               </p>
               {exp.tdeeFrozen != null && !exp.learning ? (
                 <p>

@@ -26,7 +26,7 @@ async function undoInsert(meal: Meal, toast: ShowToast) {
   }
 }
 
-// Favorito com 1 toque: regista e mostra «Registado · ½ · 1½ · 2 · Anular».
+// Favorita com 1 toque: regista e mostra «Registado · ×½ · ×1½ · ×2 · Anular».
 // Com uma refeição escolhida (slot), fica nela e à hora habitual dela.
 export async function logFavorite(
   favorite: Favorite,
@@ -50,8 +50,9 @@ export async function logFavorite(
 
 function showRegistered(meal: Meal, text: string, toast: ShowToast) {
   toast(text, [
+    // «×½ · ×1½ · ×2»: o × diz que é a porção (as ações vão para uma 2.ª linha).
     ...PORTIONS.filter(([, f]) => f !== Number(meal.portion_factor)).map(([label, factor]) => ({
-      label,
+      label: `×${label}`,
       busy: 'A mudar a porção…',
       run: async () => {
         try {

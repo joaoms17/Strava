@@ -4,6 +4,7 @@ import PersonFields, { EMPTY_PERSON, personPayload } from '../PersonFields'
 import { useSheet } from '../../lib/sheet'
 import { addExisting, createPerson } from '../../lib/accounts'
 import { BusyButton } from '../../lib/busy'
+import { SEGMENT_TRACK, segment as segmentStyle } from '../ui/Chips'
 
 type Mode = 'nova' | 'existente'
 
@@ -45,7 +46,7 @@ export default function PersonSheet() {
         setError(null)
       }}
       aria-pressed={mode === m}
-      className={`min-h-10 rounded-lg ${mode === m ? 'bg-surface font-semibold' : 'text-dim'}`}
+      className={`min-h-10 rounded-lg ${segmentStyle(mode === m)}`}
     >
       {label}
     </button>
@@ -60,14 +61,14 @@ export default function PersonSheet() {
           busy={mode === 'nova' ? 'A criar a conta…' : 'A entrar…'}
           disabled={!canSubmit || leaving}
           onClick={submit}
-          className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[18px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-40"
         >
           {leaving ? 'A mudar…' : mode === 'nova' ? 'Criar conta e mudar' : 'Entrar e mudar'}
         </BusyButton>
       }
     >
       <div className="space-y-4 pb-2">
-        <div className="grid grid-cols-2 rounded-xl bg-surface2 p-1 text-[15px]">
+        <div className={`grid grid-cols-2 ${SEGMENT_TRACK} text-[15px]`}>
           {segment('nova', 'Conta nova')}
           {segment('existente', 'Já tem conta')}
         </div>

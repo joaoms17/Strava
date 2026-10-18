@@ -30,3 +30,26 @@ export function dailyVisionCapReached(visionCallsToday: number, cap: number): bo
 export function nearMonthlyCap(monthUsd: number, capEur: number): boolean {
   return capEur > 0 && monthUsd * USD_TO_EUR >= 0.8 * capEur
 }
+
+// Os pedidos do mês por tipo, no Avançado: «1 menu», não «1 menus». Os
+// rótulos vêm no plural; um que não esteja aqui fica sempre no plural.
+const SINGULAR: Record<string, string> = {
+  'refeições por texto': 'refeição por texto',
+  fotos: 'foto',
+  correções: 'correção',
+  rótulos: 'rótulo',
+  receitas: 'receita',
+  menus: 'menu',
+  'prints do relógio': 'print do relógio',
+  'treinos ditos': 'treino dito',
+  'treinos ditos (áudio)': 'treino dito (áudio)',
+  'análises da evolução': 'análise da evolução',
+  'planos da semana': 'plano da semana',
+  verificações: 'verificação',
+  planos: 'plano',
+  resumos: 'resumo',
+}
+
+export function kindLabel(plural: string, count: number): string {
+  return count === 1 ? (SINGULAR[plural] ?? plural) : plural
+}

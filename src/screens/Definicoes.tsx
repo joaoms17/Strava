@@ -12,6 +12,7 @@ import PeopleSettings from '../components/PeopleSettings'
 import AtalhoSaude from '../components/AtalhoSaude'
 import Notificacoes from '../components/Notificacoes'
 import { signOutCurrent } from '../lib/accounts'
+import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
 
 interface Field {
   key: keyof Profile & string
@@ -43,20 +44,35 @@ const BODY: Field[] = [
 ]
 
 const BIKE: Field[] = [
-  { key: 'bike_hr_avg_cap', label: 'Batimentos médios máximos', unit: 'bpm', min: 80, max: 200 },
-  { key: 'bike_hr_max_cap', label: 'Batimentos máximos', unit: 'bpm', min: 90, max: 220 },
-  { key: 'bike_min_cadence', label: 'Rotações mínimas', unit: 'rpm', min: 50, max: 130 },
+  {
+    key: 'bike_hr_avg_cap',
+    label: 'Teto da FC média',
+    unit: 'bpm',
+    help: 'Com a média acima disto, a potência não sobe.',
+    min: 80,
+    max: 200,
+  },
+  {
+    key: 'bike_hr_max_cap',
+    label: 'Teto da FC máxima',
+    unit: 'bpm',
+    help: 'Com o pico acima disto, também não sobe.',
+    min: 90,
+    max: 220,
+  },
+  { key: 'bike_min_cadence', label: 'Cadência mínima', unit: 'rpm', min: 50, max: 130 },
 ]
 
-const EXPORT_TABLES: [string, string][] = [
-  ['meals', 'refeicoes'],
-  ['favorites', 'favoritos'],
-  ['days', 'dias'],
-  ['weights', 'pesagens'],
-  ['workouts', 'treinos'],
-  ['exercise_log', 'series'],
-  ['foods', 'alimentos'],
-  ['health_daily', 'saude'],
+// A tabela, o nome do ficheiro (sem acentos) e o que se lê no botão.
+const EXPORT_TABLES: [string, string, string][] = [
+  ['meals', 'refeicoes', 'Refeições'],
+  ['favorites', 'favoritos', 'Favoritas'],
+  ['days', 'dias', 'Dias'],
+  ['weights', 'pesagens', 'Pesagens'],
+  ['workouts', 'treinos', 'Treinos'],
+  ['exercise_log', 'series', 'Séries'],
+  ['foods', 'alimentos', 'Alimentos'],
+  ['health_daily', 'saude', 'Saúde'],
 ]
 
 // Mudar a palavra-passe com a sessão iniciada (sem email).
@@ -107,16 +123,16 @@ function Toggle({ label, help, value, onChange }: { label: string; help?: string
         <span className="block text-[15px]">{label}</span>
         {help && <span className="block text-[13px] text-dim">{help}</span>}
       </span>
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-[var(--color-eat)]" />
+      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-cta" />
     </label>
   )
 }
 
 function Choice<T extends string>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className="grid rounded-xl bg-surface2 p-1 text-[15px]" style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+    <div className={`grid ${SEGMENT_TRACK} text-[15px]`} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
       {options.map(([id, label]) => (
-        <button key={id} onClick={() => onChange(id)} className={`min-h-10 rounded-lg ${value === id ? 'bg-surface font-semibold' : 'text-dim'}`}>
+        <button key={id} onClick={() => onChange(id)} aria-pressed={value === id} className={`min-h-10 rounded-lg ${segment(value === id)}`}>
           {label}
         </button>
       ))}
@@ -169,10 +185,10 @@ export default function Definicoes() {
     toast(ok ? 'Guardado.' : 'Não consegui guardar. Tenta outra vez.')
   }
 
-  async function exportTable(table: string, filename: string) {
+  async function exportTable(table: string, filename: string, label: string) {
     const { data, error } = await supabase.from(table).select('*').limit(20_000)
     if (error || !data) {
-      toast(`Não consegui exportar ${filename}.`)
+      toast(`Não consegui exportar: ${label}.`)
       return
     }
     downloadCsv(`${filename}.csv`, toCsv(data as Record<string, unknown>[]))
@@ -202,7 +218,7 @@ export default function Definicoes() {
     <BusyButton
       busy="A guardar…"
       onClick={() => saveFields(fields)}
-      className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-50"
+      className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-50"
     >
       Guardar
     </BusyButton>
@@ -311,7 +327,7 @@ export default function Definicoes() {
       <Section title="Sessão">
         <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
         <ChangePassword />
-        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
+        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] text-pain">
           Terminar sessão
         </BusyButton>
       </Section>
@@ -319,14 +335,14 @@ export default function Definicoes() {
       <Section title="Os meus dados">
         <p className="text-[13px] text-dim">Exportar em CSV (abre no Excel ou no Numbers).</p>
         <div className="grid grid-cols-2 gap-2">
-          {EXPORT_TABLES.map(([table, filename]) => (
+          {EXPORT_TABLES.map(([table, filename, label]) => (
             <BusyButton
               key={table}
               busy="A exportar…"
-              onClick={() => exportTable(table, filename)}
-              className="min-h-11 rounded-xl bg-surface2 text-[15px] capitalize disabled:opacity-50"
+              onClick={() => exportTable(table, filename, label)}
+              className="min-h-11 rounded-xl bg-surface2 text-[15px] disabled:opacity-50"
             >
-              {filename}
+              {label}
             </BusyButton>
           ))}
         </div>

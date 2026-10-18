@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { BusyButton } from '../lib/busy'
+import { chip } from './ui/Chips'
 import {
   EXERCISE_GROUPS,
   mergeCatalog,
@@ -63,8 +64,8 @@ export default function ExercisePicker({
     onPick(typed)
   }
 
-  const groupChip = (active: boolean) =>
-    `min-h-9 shrink-0 rounded-full px-3 text-[14px] ${active ? 'bg-ink text-bg' : 'border border-line text-dim'}`
+  // Os grupos com o mesmo escolhido dos outros chips dos treinos.
+  const groupChip = (active: boolean) => `${chip(active, 'cta')} shrink-0 whitespace-nowrap`
 
   return (
     <div ref={box} className="scroll-mt-4 space-y-2 rounded-[18px] border border-line bg-surface p-3">
