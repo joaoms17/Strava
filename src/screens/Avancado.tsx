@@ -14,6 +14,8 @@ const KIND_LABEL: Record<string, string> = {
   meal_photo: 'fotos',
   meal_text: 'refeições por texto',
   meal_correct: 'correções',
+  label_read: 'rótulos',
+  menu_pick: 'menus',
   workout_shot: 'prints do relógio',
   ai_check: 'verificações',
   plan_generate: 'planos',

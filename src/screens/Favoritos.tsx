@@ -9,6 +9,7 @@ import { setFavoritePhoto, uploadFavoritePhoto } from '../lib/favorites'
 import Thumb from '../components/ui/Thumb'
 import DietTab from '../components/DietTab'
 import { fmtInt, fmtKcal } from '../lib/format'
+import { foodExtrasText } from '../lib/food-extras'
 import { logFavorite } from '../lib/meal-actions'
 import { SLOTS, SLOT_LABEL } from '../../api/_lib/rules/momentos'
 import type { Favorite, Food, Slot } from '../lib/types'
@@ -448,6 +449,8 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
           Por 100 g: {fmtInt(Number(food.kcal_100g))} kcal · Proteína {fmtInt(Number(food.protein_100g))} g ·
           Hidratos {fmtInt(Number(food.carbs_100g))} g · Gordura {fmtInt(Number(food.fat_100g))} g
         </p>
+        {foodExtrasText(food) && <p className="-mt-2 text-[13px] text-dim tabular-nums">{foodExtrasText(food)}</p>}
+        {food.source === 'off' && <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>}
       </div>
     </BottomSheet>
   )

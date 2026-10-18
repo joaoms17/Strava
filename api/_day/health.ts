@@ -10,6 +10,7 @@ import {
   PROMPT_MEAL_TEXT_V2,
   PROMPT_MEAL_CORRECT,
   PROMPT_MEAL_PHOTO_ADD,
+  PROMPT_LABEL_READ,
   PROMPT_WORKOUT_SHOT,
   readPrompt,
 } from '../_lib/prompts.js'
@@ -85,6 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       PROMPT_MEAL_TEXT_V2,
       PROMPT_MEAL_CORRECT,
       PROMPT_MEAL_PHOTO_ADD,
+      PROMPT_LABEL_READ,
       PROMPT_WORKOUT_SHOT,
     ].map((file) => {
       try {

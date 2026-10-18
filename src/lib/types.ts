@@ -167,6 +167,13 @@ export interface Food {
   fat_100g: number
   source: 'user' | 'off' | 'claude'
   barcode: string | null
+  // Migração de 18/10 (produtos de marca): por 100 g, quando se sabe.
+  fiber_100g?: number | null
+  sugars_100g?: number | null
+  sat_fat_100g?: number | null
+  salt_100g?: number | null
+  nutriscore?: 'a' | 'b' | 'c' | 'd' | 'e' | null
+  serving_label?: string | null
 }
 
 export interface WeightRow {
