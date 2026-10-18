@@ -79,6 +79,7 @@ const UpdateSchema = MealIdSchema.extend({
   note: z.string().max(500).nullable().optional(),
   tags: z.array(TAG).max(5).optional(),
   confirm: z.boolean().optional(),
+  undo: z.boolean().optional(), // Anular uma edição: volta atrás sem ensinar a biblioteca
 })
 
 const QuickSchema = z.object({
@@ -416,12 +417,12 @@ export const update = post(async ({ db, userId, body, res }) => {
   }
   const { data, error } = await db.from('meals').update(patch).eq('id', meal.id).select().single()
   if (error) throw new HttpError(500, error.message)
-  // O que a pessoa corrigiu, ou confirmou com «Está certo», ensina a biblioteca.
-  const learned = items
-    ? itemsToLearn('editada', meal.input_type, patch.items as MealItem[], meal.items)
-    : input.confirm === true && meal.status === 'por_rever'
-      ? itemsToLearn('confirmada', meal.input_type, meal.items)
-      : []
+  // O que a pessoa corrigiu, ou confirmou com «Está certo», ensina a biblioteca
+  // (Anular não ensina outra vez o que já lá estava).
+  let learned: MealItem[] = []
+  if (input.undo) learned = []
+  else if (items) learned = itemsToLearn('editada', meal.input_type, patch.items as MealItem[], meal.items)
+  else if (input.confirm === true && meal.status === 'por_rever') learned = itemsToLearn('confirmada', meal.input_type, meal.items)
   if (learned.length) inBackground(learnFoods(db, userId, learned, meal.input_type))
   res.status(200).json({ meal: data, previous })
 })

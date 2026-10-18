@@ -171,7 +171,9 @@ export default function MealSheet() {
       {
         label: 'Anular',
         run: async () => {
-          await postApi('/api/meal/update', { meal_id: mealId, items: result.previous.items }).catch(() => null)
+          await postApi('/api/meal/update', { meal_id: mealId, items: result.previous.items, undo: true }).catch(
+            () => null,
+          )
           emitDataChanged()
           recomputeFrom(current.date, today)
         },
@@ -196,7 +198,7 @@ export default function MealSheet() {
     setMode('view')
     setText('')
     toast(diffText(result.previous.items, result.meal.items), [
-      { label: 'Anular', run: () => undo({ items: result.previous.items }) },
+      { label: 'Anular', run: () => undo({ items: result.previous.items, undo: true }) },
     ])
     recomputeFrom(current.date, today)
     return true

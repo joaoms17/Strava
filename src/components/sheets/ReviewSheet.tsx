@@ -84,7 +84,7 @@ export default function ReviewSheet() {
         {
           label: 'Anular',
           run: async () => {
-            await postApi('/api/meal/update', { meal_id: corrected, items: result.previous.items })
+            await postApi('/api/meal/update', { meal_id: corrected, items: result.previous.items, undo: true })
             emitDataChanged()
           },
         },

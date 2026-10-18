@@ -212,7 +212,7 @@ export default function BarcodeSheet() {
         {
           label: 'Anular',
           run: async () => {
-            await postApi('/api/meal/update', { meal_id: meal.id, items: previous.items })
+            await postApi('/api/meal/update', { meal_id: meal.id, items: previous.items, undo: true })
             emitDataChanged()
           },
         },
