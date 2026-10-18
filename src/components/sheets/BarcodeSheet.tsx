@@ -352,6 +352,9 @@ export default function BarcodeSheet() {
                   ))}
                 </ul>
               ))}
+            <button onClick={() => setScanning(true)} className="min-h-10 text-[15px] text-eat">
+              Ler o código
+            </button>
             <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>
           </div>
         )}
