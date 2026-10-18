@@ -424,7 +424,11 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             {Object.entries(TAG_LABEL).map(([tag, tagLabel]) => (
               <button
                 key={tag}
-                onClick={() => setTags(toggle(tags, tag))}
+                onClick={() => {
+                  setTags(toggle(tags, tag))
+                  // «Comi metade» e uma divisão ao partilhar cortavam o prato duas vezes.
+                  if (tag === 'comi_metade' && !tags.includes(tag)) setSplit(null)
+                }}
                 className={`${chip(tags.includes(tag))} shrink-0 whitespace-nowrap`}
               >
                 {tagLabel}
@@ -450,7 +454,15 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             </div>
             {/* Com uma pessoa: como comeram (a divisão aplica-se no fim da análise). */}
             {sharingWith.length === 1 && (
-              <SplitChips me={me} other={sharingWith[0]!.name} value={split} onChange={setSplit} />
+              <SplitChips
+                me={me}
+                other={sharingWith[0]!.name}
+                value={split}
+                onChange={(value) => {
+                  setSplit(value)
+                  if (value != null) setTags((marks) => marks.filter((mark) => mark !== 'comi_metade'))
+                }}
+              />
             )}
           </div>
         )}
