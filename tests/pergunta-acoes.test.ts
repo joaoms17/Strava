@@ -12,7 +12,9 @@ import {
   inActionWindow,
   keepTurns,
   parseTurns,
+  replyWithActions,
   shortRefs,
+  sortActions,
   turnsForServer,
   type AskRefs,
   type AskTurn,
@@ -97,6 +99,23 @@ describe('ações da «Pergunta à app»', () => {
         refs,
       ),
     ).toEqual([])
+  })
+
+  it('uma ação que não passou fica dita na resposta (o cartão não aparece)', () => {
+    const none = sortActions([ai({ type: 'log_favorite', favorite_id: 'f9' })], refs)
+    expect(none).toEqual({ actions: [], dropped: 1 })
+    expect(replyWithActions('Registo o frango? Toca em «Fazer».', none.actions, none.dropped)).toMatch(
+      /^Registo o frango\? Toca em «Fazer»\.\n\nNão consegui preparar isto/,
+    )
+    const some = sortActions([ai({ type: 'add_water', glasses: 2 }), ai({ type: 'mark_day', flag: 'dia_fechado' })], refs)
+    expect(some.dropped).toBe(1)
+    expect(replyWithActions('Junto 2 copos e marco o dia.', some.actions, some.dropped)).toMatch(/Uma das coisas não ficou pronta/)
+    // Tudo certo (e as repetidas não contam como falhadas): a resposta fica igual.
+    const ok = sortActions([ai({ type: 'add_water', glasses: 2 }), ai({ type: 'add_water', glasses: 2 })], refs)
+    expect(ok.dropped).toBe(0)
+    expect(replyWithActions('Junto 2 copos.', ok.actions, ok.dropped)).toBe('Junto 2 copos.')
+    expect(replyWithActions('', ok.actions, 0)).toBe('Posso fazer isto:')
+    expect(replyWithActions('', [], 0)).toBe('')
   })
 
   it('só tipos da lista; nada de SQL nem campos a mais', () => {
@@ -226,19 +245,22 @@ describe('ações da «Pergunta à app»', () => {
   })
 
   it('o texto do cartão sai dos dados validados', () => {
+    // O número e a unidade não se separam no fim da linha.
+    expect(actionLabel({ type: 'add_water', date: TODAY, glasses: 2 }, TODAY)).toContain('500\u00a0ml')
+    const label = (...args: Parameters<typeof actionLabel>) => actionLabel(...args).replace(/\u00a0/g, ' ')
     expect(
-      actionLabel({ type: 'log_favorite', favorite_id: FAV, name: 'Frango com arroz', kcal: 310, date: TODAY, slot: 'jantar', portion: 0.5 }, TODAY),
+      label({ type: 'log_favorite', favorite_id: FAV, name: 'Frango com arroz', kcal: 310, date: TODAY, slot: 'jantar', portion: 0.5 }, TODAY),
     ).toBe('Registar «Frango com arroz» · hoje · jantar · ½ dose · 310 kcal')
     expect(
-      actionLabel({ type: 'repeat_meal', meal_id: MEAL, name: 'Ovos mexidos', kcal: 1420, date: TODAY, slot: 'pequeno_almoco' }, TODAY),
+      label({ type: 'repeat_meal', meal_id: MEAL, name: 'Ovos mexidos', kcal: 1420, date: TODAY, slot: 'pequeno_almoco' }, TODAY),
     ).toBe('Repetir «Ovos mexidos» · hoje · pequeno-almoço · 1 420 kcal')
-    expect(actionLabel({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }, TODAY)).toBe('Marcar ontem como «Sim, foi tudo»')
-    expect(actionLabel({ type: 'mark_day', date: '2026-10-14', flag: 'faltou_algo' }, TODAY)).toBe(
+    expect(label({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }, TODAY)).toBe('Marcar ontem como «Sim, foi tudo»')
+    expect(label({ type: 'mark_day', date: '2026-10-14', flag: 'faltou_algo' }, TODAY)).toBe(
       'Marcar qua 14 out como «Não, faltou algo»',
     )
-    expect(actionLabel({ type: 'add_water', date: TODAY, glasses: 2 }, TODAY)).toBe('Juntar 2 copos de água · hoje (500 ml)')
+    expect(label({ type: 'add_water', date: TODAY, glasses: 2 }, TODAY)).toBe('Juntar 2 copos de água · hoje (500 ml)')
     expect(
-      actionLabel(
+      label(
         {
           type: 'add_shopping_items',
           items: [
@@ -251,7 +273,7 @@ describe('ações da «Pergunta à app»', () => {
         TODAY,
       ),
     ).toBe('Juntar à lista de compras: Arroz 1,2 kg, Frango 600 g, Limões e mais 1')
-    expect(actionLabel({ type: 'share_meal', meal_id: MEAL, name: 'Bacalhau', person_id: JOANA, person_name: 'Joana' }, TODAY)).toBe(
+    expect(label({ type: 'share_meal', meal_id: MEAL, name: 'Bacalhau', person_id: JOANA, person_name: 'Joana' }, TODAY)).toBe(
       'Partilhar «Bacalhau» com Joana',
     )
     expect(dayWord('2026-10-16', TODAY)).toBe('anteontem')

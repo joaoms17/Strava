@@ -28,8 +28,9 @@ import {
   AskAiSchema,
   MAX_QUESTION_CHARS,
   MAX_TURN_CHARS,
-  cleanActions,
   cleanReply,
+  replyWithActions,
+  sortActions,
 } from '../_lib/rules/pergunta-acoes.js'
 import type { MealDayStats } from '../_lib/rules/evolucao.js'
 
@@ -165,8 +166,8 @@ export default async function ask(req: VercelRequest, res: VercelResponse) {
       },
       AskAiSchema,
     )
-    const actions = cleanActions(output.actions, refs)
-    const reply = cleanReply(output.reply) || (actions.length ? 'Posso fazer isto:' : '')
+    const { actions, dropped } = sortActions(output.actions, refs)
+    const reply = replyWithActions(cleanReply(output.reply), actions, dropped)
     if (!reply) throw new HttpError(502, 'A IA não respondeu. Tenta outra vez.')
     res.status(200).json({ reply, actions, today })
   } catch (err) {

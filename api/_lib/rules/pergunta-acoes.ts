@@ -214,18 +214,39 @@ function candidate(raw: Record<string, unknown>, refs: AskRefs): unknown {
 // O que a IA propôs, validado: só tipos da lista, só referências que foram
 // no contexto, cada ação uma vez e no máximo 3. O que não passa sai.
 export function cleanActions(raw: unknown, refs: AskRefs): AskAction[] {
+  return sortActions(raw, refs).actions
+}
+
+// O mesmo, a contar as que não passaram (referência ou dia que não existe).
+export function sortActions(raw: unknown, refs: AskRefs): { actions: AskAction[]; dropped: number } {
   const out: AskAction[] = []
   const seen = new Set<string>()
+  let dropped = 0
   for (const entry of Array.isArray(raw) ? raw : []) {
     const parsed = AskActionSchema.safeParse(candidate(record(entry), refs))
-    if (!parsed.success) continue
+    if (!parsed.success) {
+      dropped++
+      continue
+    }
     const key = JSON.stringify(parsed.data)
     if (seen.has(key)) continue
     seen.add(key)
-    out.push(parsed.data)
-    if (out.length >= ASK_MAX_ACTIONS) break
+    if (out.length < ASK_MAX_ACTIONS) out.push(parsed.data)
   }
-  return out
+  return { actions: out, dropped }
+}
+
+// A resposta promete muitas vezes o cartão («toca em Fazer»): se a ação que
+// a IA propôs não passou, diz-se em vez de deixar a pessoa à procura dele.
+export function replyWithActions(reply: string, actions: AskAction[], dropped: number): string {
+  const note =
+    dropped === 0
+      ? ''
+      : actions.length === 0
+        ? 'Não consegui preparar isto para fazer aqui. Diz-me qual é a refeição, a favorita ou o dia.'
+        : 'Uma das coisas não ficou pronta para fazer aqui. Diz-me qual é a refeição, a favorita ou o dia.'
+  const text = reply || (actions.length ? 'Posso fazer isto:' : '')
+  return [text, note].filter(Boolean).join('\n\n')
 }
 
 // No telemóvel, outra vez: a forma certa e um dia dentro da janela de hoje.
@@ -259,8 +280,10 @@ export function dayWord(date: string, today: string): string {
 }
 
 const PORTION_LABEL: Record<number, string> = { 0.5: '½ dose', 1.5: '1½ doses', 2: '2 doses' }
-const kcalText = (n: number) => `${String(round10(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} kcal`
-const gramsText = (g: number) => (g >= 1000 ? `${(g / 1000).toFixed(1).replace('.', ',')} kg` : `${g} g`)
+// Espaço que não parte (no cartão, «490» e «kcal» ficam na mesma linha).
+const NBSP = '\u00a0'
+const kcalText = (n: number) => `${String(round10(n)).replace(/\B(?=(\d{3})+(?!\d))/g, NBSP)}${NBSP}kcal`
+const gramsText = (g: number) => (g >= 1000 ? `${(g / 1000).toFixed(1).replace('.', ',')}${NBSP}kg` : `${g}${NBSP}g`)
 
 // O texto do cartão, sempre a partir dos dados validados (nunca da IA).
 export function actionLabel(action: AskAction, today: string): string {
@@ -288,7 +311,7 @@ export function actionLabel(action: AskAction, today: string): string {
       return `Marcar ${day} como ${action.flag === 'dia_fechado' ? '«Sim, foi tudo»' : '«Não, faltou algo»'}`
     }
     case 'add_water':
-      return `Juntar ${action.glasses} ${action.glasses === 1 ? 'copo' : 'copos'} de água · ${dayWord(action.date, today)} (${action.glasses * GLASS_ML} ml)`
+      return `Juntar ${action.glasses} ${action.glasses === 1 ? 'copo' : 'copos'} de água · ${dayWord(action.date, today)} (${action.glasses * GLASS_ML}${NBSP}ml)`
     case 'share_meal':
       return `Partilhar «${action.name}» com ${action.person_name}`
   }
@@ -347,7 +370,7 @@ export function parseTurns(raw: string | null, today: string): AskTurn[] {
 
 export function turnsForServer(turns: AskTurn[], today: string): { from: 'me' | 'app'; text: string }[] {
   return turns.slice(-ASK_TURNS_SENT).map((turn) => {
-    const done = (turn.actions ?? []).map((a) => `${actionLabel(a.action, today)} (${STATE_TEXT[a.state]})`)
+    const done = (turn.actions ?? []).map((a) => `${actionLabel(a.action, today).replace(/\u00a0/g, ' ')} (${STATE_TEXT[a.state]})`)
     const text = done.length ? `${turn.text}\n[Propus: ${done.join('; ')}]` : turn.text
     return { from: turn.from, text: text.slice(0, MAX_TURN_CHARS) }
   })
