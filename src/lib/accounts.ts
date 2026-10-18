@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { postApi } from './api'
-import { personName, sessionEnded } from '../../api/_lib/rules/pessoas'
+import { parseAccounts, personName, switchOutcome, upsertAccount } from '../../api/_lib/rules/pessoas'
 
 // Várias pessoas no mesmo telemóvel, cada uma com a sua conta: guarda-se a
 // sessão de cada uma (só neste telemóvel) e troca-se num toque. Os dados de
@@ -21,9 +21,7 @@ const EVENT = 'regresso:contas'
 
 function read(): StoredAccount[] {
   try {
-    const raw = localStorage.getItem(KEY)
-    const list = raw ? (JSON.parse(raw) as StoredAccount[]) : []
-    return Array.isArray(list) ? list.filter((a) => a && a.user_id && a.refresh_token) : []
+    return parseAccounts<StoredAccount>(localStorage.getItem(KEY))
   } catch {
     return []
   }
@@ -45,18 +43,15 @@ export function listAccounts(): StoredAccount[] {
 // A sessão atual fica sempre guardada (o supabase-js renova os tokens: a
 // cópia tem de acompanhar, senão a troca falharia com um token já usado).
 export function rememberSession(session: Session): void {
-  const list = read()
-  const entry: StoredAccount = {
-    user_id: session.user.id,
-    email: session.user.email ?? null,
-    name: personName(session.user.user_metadata?.name, session.user.email),
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-  }
-  const i = list.findIndex((a) => a.user_id === entry.user_id)
-  if (i >= 0) list[i] = entry
-  else list.push(entry)
-  write(list)
+  write(
+    upsertAccount(read(), {
+      user_id: session.user.id,
+      email: session.user.email ?? null,
+      name: personName(session.user.user_metadata?.name, session.user.email),
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    }),
+  )
 }
 
 // Sem rede e com o token por renovar (mais de 1 h sem abrir), o supabase-js
@@ -95,10 +90,12 @@ export async function switchTo(userId: string): Promise<void> {
     access_token: target.access_token,
     refresh_token: target.refresh_token,
   })
-  if (error && !sessionEnded({ name: error.name, message: error.message, status: error.status ?? null })) {
-    throw new Error('Sem rede. Tenta outra vez quando tiveres rede.')
-  }
-  if (error || !data.session) {
+  const outcome = switchOutcome(
+    error ? { name: error.name, message: error.message, status: error.status ?? null } : null,
+    data.session != null,
+  )
+  if (outcome === 'sem-rede') throw new Error('Sem rede. Tenta outra vez quando tiveres rede.')
+  if (outcome === 'esquecer' || !data.session) {
     forgetAccount(userId)
     throw new Error(`A sessão de ${target.name} acabou. Junta-a outra vez com o email e a palavra-passe.`)
   }
