@@ -60,6 +60,13 @@ export default function JaFizSheet() {
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
+  // Uma duração fora dos botões (ex.: 52 min do relógio) vai para «outro»,
+  // para se ver qual fica escolhida.
+  const showMinutes = (m: number) => {
+    setMinutes(DURATIONS.includes(m) ? m : null)
+    setOtherMinutes(DURATIONS.includes(m) ? '' : String(m))
+  }
+
   // Começa com a última sessão (ou o favorito que se quis mudar).
   useEffect(() => {
     void (async () => {
@@ -68,7 +75,7 @@ export default function JaFizSheet() {
         const fav = data as Favorite | null
         if (fav?.workout) {
           setKind(kindOf({ type: fav.workout.type, sport: fav.workout.sport }))
-          setMinutes(fav.workout.minutes)
+          showMinutes(fav.workout.minutes)
           setWatts(fav.workout.watts ?? null)
           return
         }
@@ -88,7 +95,7 @@ export default function JaFizSheet() {
         if (last?.type === 'bike' && last.watts) setWatts(last.watts)
       } else if (last) {
         setKind(kindOf(last))
-        if (last.minutes) setMinutes(last.minutes)
+        if (last.minutes) showMinutes(last.minutes)
         if (last.watts) setWatts(last.watts)
       }
       const { data: weights } = await supabase.from('weights').select('kg').order('date', { ascending: false }).limit(7)
