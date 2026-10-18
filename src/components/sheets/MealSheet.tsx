@@ -131,19 +131,27 @@ export default function MealSheet() {
 
   // Enquanto analisa, os números chegam sozinhos.
   const analysing = meal?.status === 'a_analisar'
+  // Analisada, com a divisão do «Também para …» ainda por aplicar (vem logo a
+  // seguir): continua a perguntar, para a porção e as kcal ficarem certas.
+  const splitPending =
+    !!meal &&
+    (meal.status === 'ok' || meal.status === 'por_rever') &&
+    (meal.share_with?.length ?? 0) > 0 &&
+    meal.share_split != null &&
+    Date.now() - Date.parse(meal.analysis_started_at ?? meal.created_at) < 5 * 60_000
   // As outras pessoas da app, para «Partilhar com …» (comeram o mesmo), e com
   // quem já está partilhada; outra vez quando a análise acaba (o «Também para
   // …» do ＋ partilha nessa altura).
   const slotIds = slotMeals.length > 1 ? slotMeals.map((m) => m.id) : []
-  const people = usePeople(id, `${analysing}:${peopleTick}`, slotIds)
+  const people = usePeople(id, `${analysing}:${splitPending}:${peopleTick}`, slotIds)
   useEffect(() => {
-    if (!analysing) return
+    if (!analysing && !splitPending) return
     const timer = setInterval(() => {
       if (!document.hidden) void load()
     }, 3000)
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [analysing, id])
+  }, [analysing, splitPending, id])
 
   if (meal === undefined) {
     return (
@@ -594,7 +602,7 @@ export default function MealSheet() {
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
-            {mode === 'view' && !dirty && !reanalysing && canChangePortion(current) && (
+            {mode === 'view' && !dirty && !reanalysing && !splitPending && canChangePortion(current) && (
               <div className="space-y-2">
                 {(scopeToggle || copyPeople.length > 0) && (
                   <div className="flex flex-wrap gap-2">

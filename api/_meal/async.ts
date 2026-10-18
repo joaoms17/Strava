@@ -138,8 +138,12 @@ function analyseInBackground(admin: SupabaseClient, mealId: string) {
   inBackground(
     claimAndAnalyse(admin, mealId).then(async (meal) => {
       // Uma partilha que falhe não tira o aviso.
-      await shareAfterAnalysis(admin, meal).catch((err) => console.error('Partilhar falhou:', err))
-      await notifyMealAnalysed(admin, meal)
+      // Numa divisão («A meias»), o aviso diz as kcal da parte de quem registou.
+      const shared = await shareAfterAnalysis(admin, meal).catch((err) => {
+        console.error('Partilhar falhou:', err)
+        return meal
+      })
+      await notifyMealAnalysed(admin, shared ?? meal)
     }),
   )
 }

@@ -268,13 +268,24 @@ export default function Hoje() {
   // Fotos a analisar: pergunta só pelo estado delas de 3 em 3 s (de 15 em 15 s
   // depois de 2 min) e recarrega o dia quando alguma muda; as que pararam de
   // vez (com «Tentar») já não se perguntam. Pede outra tentativa quando uma
-  // análise parou a meio.
+  // análise parou a meio. Uma divisão do «Também para …» («A meias») aplica-se
+  // logo a seguir à análise: até a partilha acabar (`share_with` fica vazio),
+  // pergunta também por essas, para as kcal da tua parte aparecerem sem reabrir.
   useEffect(() => {
-    const analysing = (data?.meals ?? []).filter((m) => m.status === 'a_analisar')
-    if (analysing.length === 0) return
     const now = Date.now()
-    const watched = analysing.filter((m) => !analysisStuck(m, now))
+    const analysing = (data?.meals ?? []).filter((m) => m.status === 'a_analisar')
+    const splitting = (data?.meals ?? []).filter(
+      (m) =>
+        (m.status === 'ok' || m.status === 'por_rever') &&
+        (m.share_with?.length ?? 0) > 0 &&
+        m.share_split != null &&
+        now - Date.parse(m.analysis_started_at ?? m.created_at) < 5 * 60_000,
+    )
+    if (analysing.length === 0 && splitting.length === 0) return
+    const watched = [...analysing.filter((m) => !analysisStuck(m, now)), ...splitting]
     const oldest = Math.min(...watched.map((m) => Date.parse(m.created_at)))
+    // `share_with` só se pede quando a refeição o trouxe (sem a migração não há).
+    const columns: string = `id,status,analysis_started_at,analysis_attempts${splitting.length ? ',share_with' : ''}`
     let alive = true
     const timer =
       watched.length > 0
@@ -282,18 +293,22 @@ export default function Hoje() {
             if (document.hidden) return
             const { data: rows, error } = await supabase
               .from('meals')
-              .select('id,status,analysis_started_at,analysis_attempts')
+              .select(columns)
               .in('id', watched.map((m) => m.id))
             if (!alive) return
             // Sem resposta (rede): pergunta outra vez na próxima volta.
             if (error) return setPollTick((t) => t + 1)
+            const list = (rows ?? []) as unknown as (Pick<Meal, 'id' | 'status' | 'analysis_started_at' | 'analysis_attempts'> & {
+              share_with?: string[] | null
+            })[]
             const changed = watched.some((m) => {
-              const row = rows?.find((r) => r.id === m.id)
+              const row = list.find((r) => r.id === m.id)
               return (
                 !row ||
                 row.status !== m.status ||
                 row.analysis_started_at !== m.analysis_started_at ||
-                row.analysis_attempts !== m.analysis_attempts
+                row.analysis_attempts !== m.analysis_attempts ||
+                (splitting.includes(m) && (row.share_with?.length ?? 0) === 0)
               )
             })
             if (changed) void load()

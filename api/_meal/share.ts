@@ -304,10 +304,16 @@ export async function shareUndo(req: VercelRequest, res: VercelResponse) {
 // análise; sem a migração não há `share_with` e não faz nada. Com
 // `share_split` (migração 20261018210000; só com uma pessoa a receber), a
 // refeição fica com a parte de quem a registou e a cópia com o resto.
-export async function shareAfterAnalysis(admin: SupabaseClient, meal: Record<string, unknown> | null): Promise<void> {
+// Devolve a refeição como ficou (com a parte de quem a registou, numa
+// divisão), para o aviso «Jantar analisado · 320 kcal» dizer as kcal certas.
+export async function shareAfterAnalysis(
+  admin: SupabaseClient,
+  meal: Record<string, unknown> | null,
+): Promise<Record<string, unknown> | null> {
   const pending = (meal?.share_with as string[] | null | undefined) ?? []
-  if (!meal || pending.length === 0) return
-  if (meal.status !== 'ok' && meal.status !== 'por_rever') return
+  if (!meal || pending.length === 0) return meal
+  if (meal.status !== 'ok' && meal.status !== 'por_rever') return meal
+  let result: Record<string, unknown> = meal
   try {
     const { data: source } = await admin
       .from('meals')
@@ -328,7 +334,10 @@ export async function shareAfterAnalysis(admin: SupabaseClient, meal: Record<str
         if (target && !(await copyMealTo(admin, source, to, fromName, factors.copy)).already) copied = true
       }
       // A parte de quem registou, só quando a cópia acabou de ser feita.
-      if (copied && split != null) await rescaleRow(admin, source, factors.own, { once: true })
+      if (copied && split != null) {
+        const updated = await rescaleRow(admin, source, factors.own, { once: true })
+        if (updated) result = updated
+      }
     }
   } catch (err) {
     console.error('Partilhar depois da análise falhou:', err)
@@ -337,6 +346,7 @@ export async function shareAfterAnalysis(admin: SupabaseClient, meal: Record<str
     const done = 'share_split' in meal ? { share_with: [], share_split: null } : { share_with: [] }
     await admin.from('meals').update(done).eq('id', meal.id as string)
   }
+  return result
 }
 
 // Uma favorita nova (por exemplo uma receita importada) também nas
