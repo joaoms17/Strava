@@ -18,3 +18,4 @@ Uma alteração ao prompt é sempre um ficheiro novo (`v2`, `v3`, …), nunca um
 - `meal-photo-add.v1.md` — «Juntar foto» numa refeição que já tem itens: recebe os itens atuais com as fotos e devolve só o que é novo (ou os valores do rótulo de um item que era estimado).
 - `label-read.v1.md` — código de barras que o Open Food Facts não tem: lê a tabela nutricional da embalagem, por 100 g, sem estimar o que não se vê.
 - `recipe.v1.md` — Favoritas › «Importar receita»: a lista de ingredientes (ou o texto da página) passa a itens com gramas para a receita toda, com as doses quando a receita as diz.
+- `meal-leftovers.v1.md` — «Sobrou comida?» (foto do antes e do depois): recebe as fotos do prato cheio, a do que sobrou (em último) e os itens contados, e devolve por item a parte comida (0 a 1) com a confiança; nunca junta itens, e diz quando a foto do depois não é o mesmo prato.
