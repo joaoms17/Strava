@@ -65,21 +65,18 @@ function publicKey(): Promise<string> {
   return serverKey
 }
 
-// A subscrição deste telemóvel; feita com outra chave (já não recebe) ou
-// morta, faz-se outra.
-async function subscription(registration: ServiceWorkerRegistration): Promise<{ sub: PushSubscription; fresh: boolean }> {
-  const key = await publicKey()
-  let sub = await registration.pushManager.getSubscription()
-  if (sub && !sameServerKey(sub.options?.applicationServerKey, key)) {
-    await sub.unsubscribe().catch(() => false)
-    sub = null
-  }
-  if (sub) return { sub, fresh: false }
-  const created = await registration.pushManager.subscribe({
+function subscribe(registration: ServiceWorkerRegistration, key: string): Promise<PushSubscription> {
+  return registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: base64UrlToBytes(key) as Uint8Array<ArrayBuffer>,
   })
-  return { sub: created, fresh: true }
+}
+
+// A subscrição deste telemóvel, se foi feita com a chave atual (com outra já
+// não recebe).
+async function current(registration: ServiceWorkerRegistration, key: string): Promise<PushSubscription | null> {
+  const sub = await registration.pushManager.getSubscription()
+  return sub && sameServerKey(sub.options?.applicationServerKey, key) ? sub : null
 }
 
 interface SubscribeResult {
@@ -107,7 +104,14 @@ export async function applyPush(next: PushPrefs): Promise<PushState & { moved: b
   }
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error(permission === 'denied' ? DENIED_TEXT : 'Sem autorização, não há notificações.')
-  const { sub } = await subscription(await worker())
+  const registration = await worker()
+  const key = await publicKey()
+  const existing = await registration.pushManager.getSubscription()
+  let sub = await current(registration, key)
+  if (!sub) {
+    await existing?.unsubscribe().catch(() => false)
+    sub = await subscribe(registration, key)
+  }
   const result = await register(sub, { prefs: next })
   const prefs = cleanPrefs(result.prefs)
   remember(prefs)
@@ -124,18 +128,35 @@ async function disablePush(): Promise<void> {
 }
 
 // Ao abrir a app (e em Definições): a subscrição continua viva e no servidor?
-// Corre por trás, sem bloquear; nunca tira o telemóvel a outra pessoa.
+// Se morreu (o serviço disse ao servidor que acabou), mudou de chave ou
+// desapareceu, faz-se outra com as escolhas guardadas aqui. Corre por trás,
+// sem bloquear; nunca tira o telemóvel a outra pessoa.
 export async function checkPush(): Promise<PushState> {
   const saved = savedPushPrefs()
   if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return { prefs: saved, other: false }
   const registration = await worker()
-  if (!saved && !(await registration.pushManager.getSubscription())) return { prefs: null, other: false }
-  const { sub, fresh } = await subscription(registration)
-  // Uma subscrição nova (a antiga morreu) leva as escolhas guardadas aqui.
-  const result = await register(sub, { check: true, ...(fresh && saved ? { prefs: saved } : {}) })
-  const prefs = result.prefs ? cleanPrefs(result.prefs) : null
+  const existing = await registration.pushManager.getSubscription()
+  if (!saved && !existing) return { prefs: null, other: false }
+  const key = await publicKey()
+  const usable = await current(registration, key)
+  if (usable) {
+    const result = await register(usable, { check: true })
+    if (result.other) {
+      remember(null)
+      return { prefs: null, other: true }
+    }
+    const prefs = result.prefs ? cleanPrefs(result.prefs) : null
+    if (prefs && anyPush(prefs)) {
+      remember(prefs)
+      return { prefs, other: false }
+    }
+  }
+  if (!saved) return { prefs: null, other: false }
+  await existing?.unsubscribe().catch(() => false)
+  const result = await register(await subscribe(registration, key), { prefs: saved })
+  const prefs = cleanPrefs(result.prefs)
   remember(prefs)
-  return { prefs: prefs && anyPush(prefs) ? prefs : null, other: result.other === true }
+  return { prefs: anyPush(prefs) ? prefs : null, other: false }
 }
 
 export async function testPush(): Promise<void> {

@@ -25,9 +25,8 @@ const SubscribeSchema = z.object({
     keys: z.object({ p256dh: z.string().min(20).max(200), auth: z.string().min(8).max(100) }),
   }),
   prefs: PrefsSchema.optional(),
-  // A verificação ao abrir a app: não tira o telemóvel a outra pessoa e
-  // ficam as escolhas guardadas (as do pedido só servem para uma subscrição
-  // nova, quando a antiga morreu).
+  // A verificação ao abrir a app: só renova uma subscrição que o servidor já
+  // tem desta pessoa (com as escolhas guardadas); não cria nem a tira a outra.
   check: z.boolean().optional(),
 })
 const EndpointSchema = z.object({ endpoint: Endpoint })
@@ -74,13 +73,12 @@ export const pushSubscribe: Handler = async (req, res) => {
       .maybeSingle()
     failIfMissing(error)
     const same = existing?.user_id === user.id
-    if (input.check && existing && !same) {
-      res.status(200).json({ prefs: null, other: true })
+    if (input.check && !same) {
+      res.status(200).json({ prefs: null, other: existing != null })
       return
     }
     const saved = same ? cleanPrefs(existing?.prefs) : NO_PUSH
-    const prefs = input.check && same ? saved : cleanPrefs({ ...saved, ...(input.prefs ?? {}) })
-    // Nada escolhido (a verificação de quem não as ligou): não guarda nada.
+    const prefs = input.check ? saved : cleanPrefs({ ...saved, ...(input.prefs ?? {}) })
     if (!anyPush(prefs) && !existing) {
       res.status(200).json({ prefs: null })
       return

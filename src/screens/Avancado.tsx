@@ -41,6 +41,7 @@ export default function Avancado() {
   const toast = useToast()
   const [costs, setCosts] = useState<{ eur: number; usd: number; byKind: Record<string, number> } | null>(null)
   const [usage, setUsage] = useState<AiUsage | null>(null)
+  const [usageFailed, setUsageFailed] = useState(false)
   const [cap, setCap] = useState(String(profile.ai_monthly_cap_eur ?? 10))
   const [visionCap, setVisionCap] = useState(String(profile.ai_daily_vision_cap ?? 40))
   const [catalog, setCatalog] = useState<CatalogExercise[]>([])
@@ -69,10 +70,10 @@ export default function Avancado() {
     void load()
     void getApi<AiUsage>('/api/day/ai-usage')
       .then(setUsage)
-      .catch(() => undefined)
+      .catch(() => setUsageFailed(true))
   }, [])
   // Com o Gemini (plano gratuito) não há euros: só o número de pedidos.
-  const euros = usage?.monthlyEur !== false
+  const euros = usage ? usage.monthlyEur : usageFailed
 
   function change(id: string, patch: Partial<CatalogExercise>) {
     setCatalog((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
