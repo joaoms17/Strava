@@ -111,7 +111,8 @@ export async function attachPhotos(
   for (let i = 0; i < chosen.length; i++) {
     const original = chosen[i]!
     const hash = await sha256Hex(original)
-    const { full, thumb } = await prepareImage(original)
+    // Juntar a uma refeição com fotos (muitas vezes o rótulo): no tamanho maior.
+    const { full, thumb } = await prepareImage(original, (meal.photo_paths?.length ?? 0) + chosen.length > 1)
     const base = `${user.id}/${meal.client_id ?? meal.id}/j${stamp}-${i}`
     for (const [path, blob] of [
       [`${base}.jpg`, full],

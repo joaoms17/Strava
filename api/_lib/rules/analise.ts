@@ -28,20 +28,43 @@ export function foodRefs(foodIds: string[]): { refs: Record<string, string>; byI
 
 const nonNegative = (n: number) => (Number.isFinite(n) && n > 0 ? round1(n) : 0)
 
+// Números que não podem estar certos (um rótulo lido por embalagem, um zero a
+// mais ou a menos): mais de 1,5 kg num item, mais de 9 kcal por grama (o
+// azeite tem 8,8) ou macros que dão bem mais calorias do que as escritas. O
+// contrário (kcal acima dos macros) é normal no álcool, por isso não conta.
+export const MAX_ITEM_GRAMS = 1500
+export const MAX_KCAL_PER_GRAM = 9
+
+export function implausibleItem(item: Pick<MealItem, 'grams' | 'kcal' | 'protein' | 'carbs' | 'fat'>): boolean {
+  if (item.grams > MAX_ITEM_GRAMS) return true
+  if (item.grams > 0 && item.kcal > item.grams * MAX_KCAL_PER_GRAM) return true
+  const fromMacros = 4 * item.protein + 4 * item.carbs + 9 * item.fat
+  return fromMacros > item.kcal * 1.25 + 20
+}
+
+// Um item com números impossíveis fica com confiança baixa (e a refeição por
+// rever): os números não mudam, mas aparece «confirma» em vez de entrar
+// como certo.
 export function toMealItems(items: AnalysedItem[], refs: Record<string, string>): MealItem[] {
   return items
     .filter((item) => item.name.trim())
-    .map((item) => ({
-      name: item.name.trim(),
-      grams: nonNegative(item.grams),
-      kcal: nonNegative(item.kcal),
-      protein: nonNegative(item.protein),
-      carbs: nonNegative(item.carbs),
-      fat: nonNegative(item.fat),
-      food_id: item.food_ref ? (refs[item.food_ref] ?? null) : null,
-      estimated: item.confidence !== 'alta',
-      confidence: item.confidence,
-    }))
+    .map((item) => {
+      const numbers = {
+        grams: nonNegative(item.grams),
+        kcal: nonNegative(item.kcal),
+        protein: nonNegative(item.protein),
+        carbs: nonNegative(item.carbs),
+        fat: nonNegative(item.fat),
+      }
+      const confidence: Confidence = implausibleItem(numbers) ? 'baixa' : item.confidence
+      return {
+        name: item.name.trim(),
+        ...numbers,
+        food_id: item.food_ref ? (refs[item.food_ref] ?? null) : null,
+        estimated: confidence !== 'alta',
+        confidence,
+      }
+    })
 }
 
 // Por rever quando algum item tem confiança baixa ou a refeição não é «alta».
