@@ -139,9 +139,10 @@ export default function Corpo() {
   const recent = lastTrend != null && lastTrend.date >= shiftDate(today, -7)
   const goal = recent && !waterPhase ? goalDate(lastTrend.date, lastTrend.value, target, rate) : null
   if (goal) {
+    // «dezembro–janeiro» em outubro dispensa o ano; «março–abril de 2027» não.
     const month = Number(goal.slice(5, 7)) - 1
-    const endYear = Number(goal.slice(0, 4)) + (month === 11 ? 1 : 0)
-    const year = endYear !== Number(today.slice(0, 4)) ? ` de ${endYear}` : ''
+    const goalYear = Number(goal.slice(0, 4))
+    const year = goalYear !== Number(today.slice(0, 4)) ? ` de ${goalYear}` : ''
     goalText = `Meta: cerca de ${monthLong(month)}–${monthLong((month + 1) % 12)}${year}`
   }
 
