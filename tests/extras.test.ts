@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { intakeLinks, proteinBySlot, shoppingList, shoppingText, waterGoalMl } from '../api/_lib/rules/extras'
+import { intakeLinks, litersText, proteinBySlot, shoppingList, shoppingText, waterGoalMl } from '../api/_lib/rules/extras'
 
 const item = (name: string, grams: number) => ({
   name,
@@ -71,5 +71,17 @@ describe('comer depois de noites más e com poucos passos', () => {
     const health = dates.map((date, i) => ({ date, sleep_minutes: i < 3 ? 330 : 450 }))
     expect(intakeLinks(days, health).sleep).toBeNull()
     expect(intakeLinks(days, []).steps).toBeNull()
+  })
+})
+
+describe('litros da água', () => {
+  it('sem zeros a mais, e o 0 aparece', () => {
+    expect(litersText(0)).toBe('0')
+    expect(litersText(250)).toBe('0,25')
+    expect(litersText(1250)).toBe('1,25')
+    expect(litersText(1500)).toBe('1,5')
+    expect(litersText(2000)).toBe('2')
+    expect(litersText(3000)).toBe('3')
+    expect(litersText(10000)).toBe('10')
   })
 })

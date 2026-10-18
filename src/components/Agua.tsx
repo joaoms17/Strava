@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
 import { useDataVersion } from '../lib/events'
-import { GLASS_ML, waterGoalMl } from '../../api/_lib/rules/extras'
-
-const liters = (ml: number) => (ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 2).replace(/0$/, '').replace('.', ',')
+import { GLASS_ML, litersText, waterGoalMl } from '../../api/_lib/rules/extras'
 
 // Hoje › Água: um toque por copo (250 ml), meta de 35 ml por kg. Guarda em
-// days.water_ml (migração 12); o fecho do dia não lhe mexe.
+// days.water_ml (migração 12); o fecho do dia não lhe mexe. Numa linha só,
+// logo a seguir ao cartão principal (e ao próximo passo): é o toque que mais
+// se repete no dia.
 export default function Agua({ date }: { date: string }) {
   const toast = useToast()
   const [ml, setMl] = useState<number | null>(null)
@@ -79,14 +79,14 @@ export default function Agua({ date }: { date: string }) {
   if (ml == null) return null
   const pct = Math.min(100, (ml / goal) * 100)
   return (
-    <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4" aria-label="Água">
+    <section className="rounded-[18px] border border-line bg-surface px-4 pt-1.5 pb-2" aria-label="Água">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="label">Água</p>
-          <p className="text-[17px] tabular-nums">
-            {liters(ml)} <span className="text-dim">de {liters(goal)} L</span>
-          </p>
-        </div>
+        <p className="flex min-w-0 items-baseline gap-2.5">
+          <span className="label">Água</span>
+          <span className="truncate text-[17px] tabular-nums">
+            {litersText(ml)} <span className="text-dim">de {litersText(goal)}&nbsp;L</span>
+          </span>
+        </p>
         <div className="flex shrink-0 items-center gap-2">
           <button
             disabled={ml === 0}
@@ -101,7 +101,7 @@ export default function Agua({ date }: { date: string }) {
           </button>
         </div>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-surface2">
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-surface2">
         <div className="h-full rounded-full bg-protein" style={{ width: `${pct}%` }} />
       </div>
     </section>

@@ -10,7 +10,7 @@ import {
   whenParams,
   withDate,
 } from '../src/lib/when'
-import { frequentMeals, groupByDay, mealName, repeatable, searchMeals, type RepeatSource } from '../src/lib/repetir'
+import { frequentMeals, fromFavorite, groupByDay, mealName, repeatable, searchMeals, type RepeatSource } from '../src/lib/repetir'
 
 const TODAY = '2026-10-04'
 
@@ -72,10 +72,11 @@ describe('Quando (dia e refeição)', () => {
     expect(dayLabel(TODAY, TODAY)).toBe('Hoje')
     expect(dayLabel('2026-10-03', TODAY)).toBe('Ontem')
     expect(dayLabel('2026-10-02', TODAY)).toBe('Anteontem')
-    expect(dayLabel('2026-09-28', TODAY)).toBe('seg 28 set')
+    // O dia e o mês não se separam na quebra de linha (espaço que não parte).
+    expect(dayLabel('2026-09-28', TODAY)).toBe('seg 28\u00a0set')
     expect(whenLabel({ date: '2026-10-03', slot: 'jantar' }, TODAY)).toBe('Ontem · jantar')
     expect(whenLabel({ date: TODAY, slot: 'agora' }, TODAY)).toBe('Hoje · agora')
-    expect(whenLabel({ date: '2026-09-28', slot: null }, TODAY)).toBe('seg 28 set')
+    expect(whenLabel({ date: '2026-09-28', slot: null }, TODAY)).toBe('seg 28\u00a0set')
   })
 })
 
@@ -136,5 +137,26 @@ describe('Repetir uma refeição', () => {
     expect(top).toHaveLength(1)
     expect(top[0]!.meal.id).toBe('b')
     expect(top[0]!.count).toBe(2)
+  })
+
+  it('as que mais repetes deixam de fora as favoritas (já estão a 1 toque no ＋)', () => {
+    const fav = { input_type: 'favorite' as const, raw_text: 'Batido de proteína', kcal: 390 }
+    const list = [
+      meal({ id: 'f1', ...fav, logged_at: '2026-10-01T10:00:00Z' }),
+      meal({ id: 'f2', ...fav, logged_at: '2026-10-02T10:00:00Z' }),
+      meal({ id: 'f3', ...fav, logged_at: '2026-10-03T10:00:00Z' }),
+      // «Repetir hoje» de uma favorita: leva o favorite_id.
+      meal({ id: 'r1', input_type: 'repeat', favorite_id: 'fav-1', logged_at: '2026-10-01T13:00:00Z' }),
+      meal({ id: 'r2', input_type: 'repeat', favorite_id: 'fav-1', logged_at: '2026-10-02T13:00:00Z' }),
+      meal({ id: 'a', logged_at: '2026-10-01T20:00:00Z', kcal: 610 }),
+      meal({ id: 'b', logged_at: '2026-10-03T20:00:00Z', kcal: 600 }),
+    ]
+    const top = frequentMeals(list)
+    expect(top.map((t) => t.meal.id)).toEqual(['b'])
+    expect(fromFavorite(list[0]!)).toBe(true)
+    expect(fromFavorite(list[3]!)).toBe(true)
+    expect(fromFavorite(list[5]!)).toBe(false)
+    // No dia a dia e na pesquisa continuam todas.
+    expect(searchMeals(list, 'batido')).toHaveLength(3)
   })
 })

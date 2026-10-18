@@ -60,6 +60,13 @@ export default function JaFizSheet() {
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
+  // Uma duração fora dos botões (ex.: 52 min do relógio) vai para «outro»,
+  // para se ver qual fica escolhida.
+  const showMinutes = (m: number) => {
+    setMinutes(DURATIONS.includes(m) ? m : null)
+    setOtherMinutes(DURATIONS.includes(m) ? '' : String(m))
+  }
+
   // Começa com a última sessão (ou o favorito que se quis mudar).
   useEffect(() => {
     void (async () => {
@@ -68,7 +75,7 @@ export default function JaFizSheet() {
         const fav = data as Favorite | null
         if (fav?.workout) {
           setKind(kindOf({ type: fav.workout.type, sport: fav.workout.sport }))
-          setMinutes(fav.workout.minutes)
+          showMinutes(fav.workout.minutes)
           setWatts(fav.workout.watts ?? null)
           return
         }
@@ -88,7 +95,7 @@ export default function JaFizSheet() {
         if (last?.type === 'bike' && last.watts) setWatts(last.watts)
       } else if (last) {
         setKind(kindOf(last))
-        if (last.minutes) setMinutes(last.minutes)
+        if (last.minutes) showMinutes(last.minutes)
         if (last.watts) setWatts(last.watts)
       }
       const { data: weights } = await supabase.from('weights').select('kg').order('date', { ascending: false }).limit(7)
@@ -174,7 +181,7 @@ export default function JaFizSheet() {
       <div className="space-y-5 pb-2">
         <div className="flex flex-wrap gap-2">
           {KINDS.map(([id, label]) => (
-            <button key={id} onClick={() => setKind(id)} className={chip(kind === id)}>
+            <button key={id} onClick={() => setKind(id)} className={chip(kind === id, 'cta')}>
               {label}
             </button>
           ))}
@@ -182,7 +189,7 @@ export default function JaFizSheet() {
 
         <div className="space-y-2">
           <p className="label">Quando</p>
-          <DayChips today={today} value={day} onChange={setDay} />
+          <DayChips today={today} value={day} onChange={setDay} tone="cta" />
           <label className="flex items-center gap-3 text-[15px] text-dim">
             Começou às
             <input
@@ -206,22 +213,28 @@ export default function JaFizSheet() {
                   setMinutes(d)
                   setOtherMinutes('')
                 }}
-                className={chip(minutes === d)}
+                className={chip(minutes === d, 'cta')}
               >
                 {d} min
               </button>
             ))}
-            <input
-              inputMode="numeric"
-              placeholder="outro"
-              value={otherMinutes}
-              onChange={(e) => {
-                setOtherMinutes(e.target.value.replace(/\D/g, ''))
-                setMinutes(null)
-              }}
-              className="h-9 w-20 rounded-full border border-line bg-transparent px-3 text-[15px] tabular-nums placeholder:text-dim"
-              aria-label="Outra duração em minutos"
-            />
+            {/* Outra duração: com o aspeto de escolhida quando está escrita (como nos teus treinos). */}
+            <label className="flex items-center gap-1.5 text-[15px] text-dim">
+              <input
+                inputMode="numeric"
+                placeholder="outro"
+                value={otherMinutes}
+                onChange={(e) => {
+                  setOtherMinutes(e.target.value.replace(/\D/g, ''))
+                  setMinutes(null)
+                }}
+                className={`h-9 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                  otherMinutes ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
+                }`}
+                aria-label="Outra duração em minutos"
+              />
+              min
+            </label>
           </div>
         </div>
 
@@ -233,7 +246,7 @@ export default function JaFizSheet() {
                 {[...new Set([...wattsOptions, ...(watts ? [watts] : [])])]
                   .sort((a, b) => a - b)
                   .map((w) => (
-                    <button key={w} onClick={() => setWatts(w)} className={chip(watts === w)}>
+                    <button key={w} onClick={() => setWatts(w)} className={chip(watts === w, 'cta')}>
                       {w} W
                     </button>
                   ))}

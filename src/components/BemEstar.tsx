@@ -2,9 +2,11 @@ import { useState, type ReactElement } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useThemeColors } from '../lib/colors'
 import { shiftDate } from '../lib/day'
-import { fmtDayShort, fmtInt } from '../lib/format'
+import { fmtDayMonth, fmtDayShort, fmtInt } from '../lib/format'
 import { fmtSleep, sleepLabel } from '../../api/_lib/rules/sono'
 import { wellnessTrend, type WellnessRow } from '../../api/_lib/rules/plano'
+import { segment } from './ui/Chips'
+import { STEPS_AVG_DAYS, stepsAverage } from '../../api/_lib/rules/passos'
 
 type Range = 30 | 90
 type Day = {
@@ -18,8 +20,12 @@ type Day = {
   hrv: number | null
 }
 
-const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 const thousands = (v: number) => (v === 0 ? '0' : `${(v / 1000).toFixed(v % 1000 ? 1 : 0).replace('.', ',')} mil`)
+// Eixos da FC e da HRV em números redondos (de 5 em 5), com 4 marcas.
+const round5Domain: [(min: number) => number, (max: number) => number] = [
+  (min) => Math.floor((min - 2) / 5) * 5,
+  (max) => Math.ceil((max + 2) / 5) * 5,
+]
 
 // Corpo › Evolução › Do relógio: os gráficos dia a dia (passos, sono, FC em
 // repouso e HRV). Só aparece o que o relógio mandou.
@@ -45,8 +51,9 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
     }
   })
   const count = (key: keyof Day) => days.filter((d) => d[key] != null).length
-  const fullDays = days.filter((d) => d.date < today && d.steps != null)
-  const stepsAvg = fullDays.length ? fullDays.reduce((a, d) => a + d.steps!, 0) / fullDays.length : null
+  // A média dos 30 dias antes de hoje, a mesma conta do Hoje (sem dias a 0);
+  // o botão 30/90 muda só o gráfico.
+  const stepsAvg = stepsAverage(rows, today)
   const sleepDays = days.filter((d) => d.sleep_minutes != null)
   const sleepAvg = sleepDays.length ? sleepDays.reduce((a, d) => a + d.sleep_minutes!, 0) / sleepDays.length : null
   const charts = count('steps') >= 2 || count('sleepH') >= 2 || count('rhr') >= 2 || count('hrv') >= 2
@@ -55,7 +62,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
 
   const dense = range === 90
   const axis = { tick: { fill: colors.dim, fontSize: 11 }, axisLine: false, tickLine: false } as const
-  const xAxis = <XAxis dataKey="date" tickFormatter={dm} {...axis} minTickGap={28} />
+  const xAxis = <XAxis dataKey="date" tickFormatter={fmtDayMonth} {...axis} minTickGap={32} />
   const color = colors['chart-health']
   const bar = { fill: color, maxBarSize: 24, radius: [4, 4, 0, 0] as [number, number, number, number], isAnimationActive: false }
   const gap = dense ? {} : { stroke: colors.surface, strokeWidth: 2 }
@@ -114,7 +121,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
                 key={r}
                 onClick={() => setRange(r)}
                 aria-pressed={range === r}
-                className={`min-h-8 rounded-md px-3 ${range === r ? 'bg-surface font-semibold' : 'text-dim'}`}
+                className={`min-h-10 rounded-md px-3 ${segment(range === r)}`}
               >
                 {r} dias
               </button>
@@ -128,7 +135,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
           'Passos por dia',
           [
             stepsToday != null ? `Hoje: ${fmtInt(stepsToday)} até agora` : null,
-            stepsAvg != null ? `média ${fmtInt(stepsAvg)} por dia (sem hoje)` : null,
+            stepsAvg != null ? `média de ${STEPS_AVG_DAYS} dias: ${fmtInt(stepsAvg)}` : null,
           ]
             .filter(Boolean)
             .join(' · ') || null,
@@ -169,7 +176,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
           <LineChart data={days} margin={margin}>
             <CartesianGrid stroke={colors.line} vertical={false} />
             {xAxis}
-            <YAxis {...axis} allowDecimals={false} domain={['dataMin - 2', 'dataMax + 2']} width={56} />
+            <YAxis {...axis} allowDecimals={false} domain={round5Domain} tickCount={4} width={56} />
             {tip((d) => [d.rhr != null ? `${d.rhr} bpm` : 'sem registo'])}
             <Line dataKey="rhr" {...line} />
           </LineChart>,
@@ -182,7 +189,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
           <LineChart data={days} margin={margin}>
             <CartesianGrid stroke={colors.line} vertical={false} />
             {xAxis}
-            <YAxis {...axis} allowDecimals={false} domain={['dataMin - 5', 'dataMax + 5']} width={56} />
+            <YAxis {...axis} allowDecimals={false} domain={round5Domain} tickCount={4} width={56} />
             {tip((d) => [d.hrv != null ? `${d.hrv} ms` : 'sem registo'])}
             <Line dataKey="hrv" {...line} />
           </LineChart>,
@@ -207,7 +214,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
                 .reverse()
                 .map((d) => (
                   <tr key={d.date}>
-                    <td>{d.date === today ? 'hoje' : dm(d.date)}</td>
+                    <td>{d.date === today ? 'hoje' : fmtDayMonth(d.date)}</td>
                     <td className="text-right">{d.steps != null ? fmtInt(d.steps) : '—'}</td>
                     <td className="text-right">{d.sleep_minutes != null ? fmtSleep(d.sleep_minutes) : '—'}</td>
                     <td className="text-right">{d.rhr ?? '—'}</td>

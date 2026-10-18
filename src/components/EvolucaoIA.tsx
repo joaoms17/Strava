@@ -152,8 +152,8 @@ export default function EvolucaoIA({ today }: { today: string }) {
       ) : !analysis || (!analysis.resumo && analysis.areas.length === 0) ? (
         <>
           <p className="text-[15px] text-dim">
-            A IA olha para tudo — peso, medidas, comida, treino, sono, FC em repouso e passos — e diz como estás a
-            evoluir e no que te deves focar.
+            A IA olha para tudo — peso, medidas, comida, treino e o que o relógio mandar — e diz como estás a evoluir e
+            no que te deves focar.
           </p>
           <button disabled={busy} onClick={() => void analyse()} className={primary}>
             {busy ? 'A analisar…' : 'Analisar a minha evolução'}

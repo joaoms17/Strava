@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  PORTION_FACTORS,
   favoriteName,
+  favoritesGrid,
   itemNameSet,
   jaccard,
   mealName,
+  portionLabel,
   proteinPicks,
   patternKey,
   rankFavorites,
@@ -37,6 +40,9 @@ describe('porções dos favoritos', () => {
     const oneAndHalf = scaleItems(base, 1.5)
     expect(rescaleItems(oneAndHalf, 1.5, 2)[0]).toMatchObject({ grams: 200, kcal: 260 })
   })
+  it('o que os botões dizem: ½ · 1 · 1½ · 2', () => {
+    expect(PORTION_FACTORS.map(portionLabel)).toEqual(['½', '1', '1½', '2'])
+  })
 })
 
 describe('ordem dos favoritos', () => {
@@ -61,6 +67,29 @@ describe('ordem dos favoritos', () => {
       'almoco',
     )
     expect(ranked.map((f) => f.id)).toEqual(['b', 'a'])
+  })
+  it('a grelha do ＋ não repete as da dieta (já estão em cima) e preenche com as seguintes', () => {
+    const favs = [
+      fav('frango', 'almoco', 30),
+      fav('atum', 'almoco', 20),
+      fav('sopa', 'almoco', 10),
+      fav('batido', null, 33),
+      fav('iogurte', null, 12),
+      fav('ovos', 'pequeno_almoco', 8),
+      fav('tosta', null, 5),
+      fav('fruta', null, 1),
+    ]
+    expect(favoritesGrid(favs, 'almoco').map((f) => f.id)).toEqual(['frango', 'atum', 'sopa', 'batido', 'iogurte', 'ovos'])
+    expect(favoritesGrid(favs, 'almoco', ['frango', 'atum']).map((f) => f.id)).toEqual([
+      'sopa',
+      'batido',
+      'iogurte',
+      'ovos',
+      'tosta',
+      'fruta',
+    ])
+    // Todas na dieta: a grelha fica vazia (não diz «guarda as que repetes»).
+    expect(favoritesGrid(favs.slice(0, 2), 'almoco', ['frango', 'atum'])).toEqual([])
   })
 })
 

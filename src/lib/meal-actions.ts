@@ -3,14 +3,12 @@ import { emitDataChanged } from './events'
 import { fmtKcal } from './format'
 import type { ToastAction } from './toast'
 import type { Favorite, Meal, Slot } from './types'
+import { PORTION_FACTORS, portionLabel } from '../../api/_lib/rules/favoritos'
 
 type ShowToast = (text: string, actions?: ToastAction[]) => void
 
-const PORTIONS: [string, number][] = [
-  ['½', 0.5],
-  ['1½', 1.5],
-  ['2', 2],
-]
+// As porções do aviso «Registado» (a 1 é a que fica).
+const PORTIONS: [string, number][] = PORTION_FACTORS.filter((f) => f !== 1).map((f) => [portionLabel(f), f])
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Não consegui gravar. Tenta outra vez.'
@@ -26,7 +24,7 @@ async function undoInsert(meal: Meal, toast: ShowToast) {
   }
 }
 
-// Favorito com 1 toque: regista e mostra «Registado · ½ · 1½ · 2 · Anular».
+// Favorita com 1 toque: regista e mostra «Registado · ×½ · ×1½ · ×2 · Anular».
 // Com uma refeição escolhida (slot), fica nela e à hora habitual dela; com
 // uma porção (a «Pergunta à app»), já nessa porção. Devolve se gravou.
 export async function logFavorite(
@@ -62,8 +60,9 @@ function portionChoices(current: number): [string, number][] {
 
 function showRegistered(meal: Meal, text: string, toast: ShowToast) {
   toast(text, [
+    // «×½ · ×1½ · ×2»: o × diz que é a porção (as ações vão para uma 2.ª linha).
     ...portionChoices(Number(meal.portion_factor ?? 1)).map(([label, factor]) => ({
-      label,
+      label: `×${label}`,
       busy: 'A mudar a porção…',
       run: async () => {
         try {

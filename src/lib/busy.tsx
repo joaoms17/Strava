@@ -1,11 +1,12 @@
-import { useId, useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useId, useSyncExternalStore, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { failureText } from '../../api/_lib/rules/falhas'
 
 // À espera do servidor ou da IA (guardar, apagar, analisar, corrigir): só
 // uma coisa de cada vez. Enquanto corre, o botão diz «A guardar…», os toques
 // repetidos não contam e uma camada tapa o ecrã e a folha (aparece aos
 // 200 ms, para não piscar), por isso não se fecha a folha, não se muda de dia
-// nem se mexe noutra coisa a meio. Liberta-se sempre no fim; ao fim de 65 s
+// nem se mexe noutra coisa a meio (o botão tocado já diz «A guardar…»; só
+// sem botão o rótulo aparece na camada). Liberta-se sempre no fim; ao fim de 65 s
 // (o servidor desiste aos 60) liberta-se sozinha, com um aviso. O que corre
 // por trás (a fila das fotos, a sincronização, a análise das fotos, a
 // Evolução) não passa por aqui: tem o seu próprio «a analisar».
@@ -86,6 +87,30 @@ export function useBusy(): Busy | null {
   return useSyncExternalStore(subscribe, () => current)
 }
 
+// Os botões no ecrã que mostram o seu próprio «A guardar…» (BusyButton e
+// useBusyKey). Com o trabalho de um deles a correr, a camada não repete o
+// rótulo: só engole os toques.
+const ownLabels = new Set<string>()
+
+export function showsOwnLabel(busy: Busy | null): boolean {
+  return busy?.key != null && ownLabels.has(busy.key)
+}
+
+function useOwnLabel(key: string, on: boolean) {
+  useEffect(() => {
+    if (!on) return
+    ownLabels.add(key)
+    return () => {
+      ownLabels.delete(key)
+      // O botão saiu do ecrã a meio (a folha mudou): o rótulo passa para a camada.
+      if (current?.key === key) {
+        current = { ...current }
+        emit()
+      }
+    }
+  }, [key, on])
+}
+
 export function Spinner({ size = 18, className = '' }: { size?: number; className?: string }) {
   return (
     <svg
@@ -112,17 +137,20 @@ export function BusyLabel({ text }: { text: string }) {
 }
 
 // Botão cujo toque espera pelo servidor: corre por `runBusy`, mostra o
-// rótulo `busy` com o círculo a rodar e não aceita outro toque.
+// rótulo `busy` com o círculo a rodar e não aceita outro toque. `compact`
+// (botões pequenos, como as porções): só o círculo; o rótulo aparece na
+// camada por cima de tudo.
 export function BusyButton({
   busy: busyText,
   onClick,
   disabled,
+  compact = false,
   className = '',
   children,
   ...rest
-}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & { busy: string; onClick: () => unknown }) {
-  const key = useId()
-  const mine = useBusy()?.key === key
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & { busy: string; onClick: () => unknown; compact?: boolean }) {
+  // Com `compact` o botão só mostra o círculo: o rótulo fica na camada.
+  const [key, mine] = useBusyKey(!compact)
   return (
     <button
       {...rest}
@@ -131,14 +159,16 @@ export function BusyButton({
       onClick={() => void runBusy(busyText, onClick, key)}
       className={`${className} ${mine ? 'opacity-100!' : ''}`}
     >
-      {mine ? <BusyLabel text={busyText} /> : children}
+      {mine ? compact ? <Spinner className="mx-auto" /> : <BusyLabel text={busyText} /> : children}
     </button>
   )
 }
 
 // Para os botões com um rótulo próprio: true enquanto corre o trabalho de `key`.
-export function useBusyKey(): [key: string, mine: boolean] {
+// `ownLabel = false` para quem só mostra o círculo (o rótulo fica na camada).
+export function useBusyKey(ownLabel = true): [key: string, mine: boolean] {
   const key = useId()
+  useOwnLabel(key, ownLabel)
   return [key, useBusy()?.key === key]
 }
 

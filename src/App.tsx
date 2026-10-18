@@ -16,7 +16,7 @@ import Welcome from './components/Welcome'
 import PeopleSwitcher from './components/PeopleSwitcher'
 import { startAccountTracking, storedSession, useAccounts } from './lib/accounts'
 import { setActiveUser } from './lib/scoped'
-import { initialOf, sessionEnded } from '../api/_lib/rules/pessoas'
+import { sessionEnded } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
 import { bootUrl } from './lib/boot-url'
 import TabBar from './components/TabBar'
@@ -31,7 +31,6 @@ import NewFavoriteSheet from './components/sheets/NewFavoriteSheet'
 import DietSheet from './components/sheets/DietSheet'
 import PersonSheet from './components/sheets/PersonSheet'
 import NoteSheet from './components/sheets/NoteSheet'
-import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
 import MenuSheet from './components/sheets/MenuSheet'
 import ReviewSheet from './components/sheets/ReviewSheet'
@@ -116,8 +115,6 @@ const TITLES: [RegExp, string][] = [
 
 function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
   const [location, navigate] = useLocation()
-  const { accounts, currentId } = useAccounts()
-  const me = accounts.find((a) => a.user_id === currentId)
   const { profile } = useProfile()
   const queued = useQueueCount()
   const parent = PARENT.find(([re]) => re.test(location))?.[1]
@@ -135,7 +132,7 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
     >
       <div className="flex min-w-0 items-center gap-1">
         {parent && (
-          <button onClick={() => navigate(parent)} className="-ml-2 px-2 py-1 text-[17px] font-medium text-ink">
+          <button onClick={() => navigate(parent)} className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink">
             ‹ Voltar
           </button>
         )}
@@ -157,14 +154,24 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
                 : `A enviar ${queued.count}`}
           </span>
         )}
+        {/* Num dia passado, a volta a hoje fica aqui (a data já está no título e na faixa da semana). */}
+        {location.startsWith('/hoje') && hojeDate !== today && (
+          <button
+            onClick={() => navigate('/hoje')}
+            className="flex h-11 items-center rounded-xl border border-line bg-surface px-3 text-[15px] whitespace-nowrap text-eat"
+          >
+            Voltar a hoje ›
+          </button>
+        )}
         {(location.startsWith('/hoje') || location.startsWith('/balanco')) && <AskButton />}
+        {/* De quem é a app vê-se no separador do topo; aqui só as definições. */}
         {!location.startsWith('/definicoes') && (
           <Link
             href="/definicoes"
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface font-display text-[20px] font-bold"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface text-ink"
             aria-label="Definições"
           >
-            {initialOf(me?.name ?? 'J')}
+            <Icon name="settings" size={22} />
           </Link>
         )}
       </div>
@@ -200,7 +207,6 @@ function Sheets() {
   if (sheet.name === 'dieta') return <DietSheet key={sheet.params.get('id') ?? 'nova'} />
   if (sheet.name === 'pessoa') return <PersonSheet />
   if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
-  if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />
   if (sheet.name === 'menu') return <MenuSheet />
   if (sheet.name === 'rever') return <ReviewSheet />
@@ -292,12 +298,12 @@ function Shell() {
         <ul className="space-y-1">
           {missingMigrations.map((file) => (
             <li key={file}>
-              <code className="text-ink">supabase/migrations/{file}</code>
+              <code className="text-[13px] break-all text-ink">supabase/migrations/{file}</code>
             </li>
           ))}
         </ul>
         <p>Cola cada um, carrega em Run. Demora segundos e não apaga nada.</p>
-        <button onClick={() => void reload()} className="mt-2 rounded-xl bg-eat px-4 py-3 font-semibold text-bg">
+        <button onClick={() => void reload()} className="mt-2 rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
           Já corri, tentar outra vez
         </button>
       </Centered>
@@ -307,7 +313,7 @@ function Shell() {
     return (
       <Centered>
         <p>Não consegui ligar ao Supabase.</p>
-        <button onClick={() => void reload()} className="rounded-xl bg-eat px-4 py-3 font-semibold text-bg">
+        <button onClick={() => void reload()} className="rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
           Tentar outra vez
         </button>
       </Centered>

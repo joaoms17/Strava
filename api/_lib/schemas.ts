@@ -38,6 +38,23 @@ export const MealAnalysisSchema = z.object({
 
 export type MealAnalysis = z.infer<typeof MealAnalysisSchema>
 
+// «Sobrou comida?»: a parte comida de cada item (0 a 1, por índice), se a
+// foto do depois é o mesmo prato e se ficou vazio. Sem limites no schema (os
+// structured outputs não os aceitam): a fração arruma-se em rules/sobras.ts.
+export const LeftoversAnswerSchema = z.object({
+  same_plate: z.boolean(),
+  reason: z.string().nullable(),
+  empty_plate: z.boolean(),
+  items: z.array(
+    z.object({
+      index: z.number().int(),
+      name: z.string(),
+      eaten: z.number(),
+      confidence: Confidence,
+    }),
+  ),
+})
+
 // Item de refeição vindo do telemóvel (edições, correções, anular).
 export const MealItemInputSchema = ParsedItemSchema.extend({
   confidence: Confidence.optional(),

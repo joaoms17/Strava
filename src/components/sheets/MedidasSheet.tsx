@@ -88,7 +88,9 @@ export default function MedidasSheet() {
             const raw = editing.readings?.[zone]
             const list = Array.isArray(raw) ? raw : null
             const value = editing[ZONE_COLUMN[zone]] as number | null
-            r[zone] = list?.length ? [...list.map(String), '', ''].slice(0, 3) : [value != null ? String(value) : '', '', '']
+            // Com vírgula, como no resto da app («40,7»; o parseDecimal aceita as duas).
+            const shown = (v: unknown) => String(v).replace('.', ',')
+            r[zone] = list?.length ? [...list.map(shown), '', ''].slice(0, 3) : [value != null ? shown(value) : '', '', '']
             if ((list?.length ?? 0) > 1) setTwice(true)
             if (OPTIONAL.includes(zone) && value != null) setShowOptional(true)
           }
@@ -422,7 +424,7 @@ export default function MedidasSheet() {
         </div>
         <label className="flex items-center justify-between gap-3 text-[15px]">
           Medir 2 vezes (mais rigor)
-          <input type="checkbox" checked={twice} onChange={(e) => setTwice(e.target.checked)} className="h-5 w-5 accent-current" />
+          <input type="checkbox" checked={twice} onChange={(e) => setTwice(e.target.checked)} className="h-5 w-5 accent-cta" />
         </label>
 
         {ESSENTIAL.map((z) => zoneInput(z, true))}
@@ -446,8 +448,8 @@ export default function MedidasSheet() {
 
         {liveComposition && (
           <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
-            Gordura {fmt1(liveComposition.shown.fatKg)} kg (cerca de {liveComposition.shown.pct} %) · Massa magra{' '}
-            {fmt1(liveComposition.shown.leanKg)} kg
+            Gordura {fmt1(liveComposition.shown.fatKg)}&nbsp;kg (cerca de {liveComposition.shown.pct}&nbsp;%) · Massa magra{' '}
+            {fmt1(liveComposition.shown.leanKg)}&nbsp;kg
           </p>
         )}
 

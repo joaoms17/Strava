@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
 import MealHistoryList, { type HistoryMeal } from '../MealHistoryList'
+import ItemList from '../ItemList'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton, runBusy } from '../../lib/busy'
@@ -10,7 +11,6 @@ import { emitDataChanged } from '../../lib/events'
 import { getApi, postApi } from '../../lib/api'
 import { nutritionalDay } from '../../lib/day'
 import { fmtInt, fmtKcal } from '../../lib/format'
-import { stepItem } from '../../lib/meal-diff'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { deleteFavorite, favoriteFromMeal, insertFavorite, uploadFavoritePhoto } from '../../lib/favorites'
 import { favoriteName, scaleItems } from '../../../api/_lib/rules/favoritos'
@@ -19,7 +19,7 @@ import { addOption } from '../../../api/_lib/rules/dieta'
 import { peekDietDraft, saveDietDraft } from '../../lib/diets'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL } from '../../../api/_lib/rules/momentos'
-import { chip } from '../ui/Chips'
+import { SEGMENT_TRACK, chip, segment as segmentStyle } from '../ui/Chips'
 import type { MealItem, Slot } from '../../lib/types'
 
 type Mode = 'escrever' | 'receita' | 'refeicao'
@@ -237,7 +237,7 @@ export default function NewFavoriteSheet() {
     <button
       onClick={() => setMode(m)}
       aria-pressed={mode === m}
-      className={`min-h-10 rounded-lg ${mode === m ? 'bg-surface font-semibold' : 'text-dim'}`}
+      className={`min-h-10 rounded-lg ${segmentStyle(mode === m)}`}
     >
       {label}
     </button>
@@ -270,7 +270,7 @@ export default function NewFavoriteSheet() {
   return (
     <BottomSheet title="Nova favorita" onClose={sheet.close} footer={footer ?? undefined}>
       <div className="space-y-4 pb-2">
-        <div className="grid grid-cols-3 rounded-xl bg-surface2 p-1 text-[15px]">
+        <div className={`grid grid-cols-3 ${SEGMENT_TRACK} text-[15px]`}>
           {segment('escrever', 'Escrever')}
           {segment('receita', 'Receita')}
           {segment('refeicao', 'De uma refeição')}
@@ -349,7 +349,7 @@ export default function NewFavoriteSheet() {
 
                 {items && totals && (
                   <div className="space-y-2">
-                    <ItemList items={items} onChange={setItems} />
+                    <ItemList items={items} onChange={setItems} onRemoveLast={() => setItems(null)} />
                     <p className="text-[14px] tabular-nums">
                       <span className="font-semibold">{fmtKcal(totals.kcal)} kcal</span>
                       <span className="text-dim">
@@ -384,7 +384,8 @@ export default function NewFavoriteSheet() {
                     <p className="label">A receita toda</p>
                     <ItemList
                       items={recipe.items}
-                      onChange={(next) => setRecipe(next ? { ...recipe, items: next } : null)}
+                      onChange={(next) => setRecipe({ ...recipe, items: next })}
+                      onRemoveLast={() => setRecipe(null)}
                     />
                     <div className="flex items-center gap-3 rounded-2xl border border-line p-3">
                       <span className="min-w-0 flex-1">
@@ -464,50 +465,5 @@ export default function NewFavoriteSheet() {
         )}
       </div>
     </BottomSheet>
-  )
-}
-
-// Os itens calculados, com −/+ (10 g) e × para tirar.
-function ItemList({ items, onChange }: { items: MealItem[]; onChange: (next: MealItem[] | null) => void }) {
-  return (
-    <ul className="divide-y divide-line rounded-2xl bg-surface2 text-[15px]">
-      {items.map((item, i) => (
-        <li key={`${item.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
-          <span className="min-w-0 flex-1 truncate">
-            {item.name} <span className="text-dim tabular-nums">· {fmtInt(item.grams)} g</span>
-            {item.confidence === 'baixa' && <span className="ml-1 text-[13px] text-attn">confirma</span>}
-          </span>
-          <span className="shrink-0 text-dim tabular-nums">{fmtInt(item.kcal)}</span>
-          {item.grams > 0 && (
-            <>
-              <button
-                aria-label={`menos 10 g de ${item.name}`}
-                onClick={() => onChange(items.map((x, j) => (j === i ? stepItem(x, -10) : x)))}
-                className="h-9 w-9 rounded-lg text-dim"
-              >
-                −
-              </button>
-              <button
-                aria-label={`mais 10 g de ${item.name}`}
-                onClick={() => onChange(items.map((x, j) => (j === i ? stepItem(x, 10) : x)))}
-                className="h-9 w-9 rounded-lg text-dim"
-              >
-                +
-              </button>
-            </>
-          )}
-          <button
-            aria-label={`Tirar ${item.name}`}
-            onClick={() => {
-              const next = items.filter((_, j) => j !== i)
-              onChange(next.length ? next : null)
-            }}
-            className="h-9 w-9 rounded-lg text-dim"
-          >
-            <Icon name="close" size={16} />
-          </button>
-        </li>
-      ))}
-    </ul>
   )
 }

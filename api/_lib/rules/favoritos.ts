@@ -6,6 +6,14 @@ import type { Slot } from './momentos.js'
 
 export const PORTION_FACTORS = [0.5, 1, 1.5, 2] as const
 
+// «½», «1», «1½», «2» (o que se mostra nos botões e nos avisos).
+export function portionLabel(factor: number): string {
+  const whole = Math.floor(factor)
+  const half = factor - whole === 0.5
+  if (!half) return String(factor).replace('.', ',')
+  return whole === 0 ? '½' : `${whole}½`
+}
+
 export function scaleItems(items: MealItem[], factor: number): MealItem[] {
   return items.map((item) => ({
     ...item,
@@ -40,6 +48,18 @@ export function rankFavorites<T extends RankableFavorite>(favorites: T[], slot: 
     if (a.use_count !== b.use_count) return b.use_count - a.use_count
     return (b.last_used_at ?? '').localeCompare(a.last_used_at ?? '')
   })
+}
+
+// A grelha das favoritas do ＋: as mais prováveis para a hora, sem as que já
+// aparecem em cima («Da tua dieta»), para os lugares não se repetirem.
+export function favoritesGrid<T extends RankableFavorite>(
+  favorites: T[],
+  slot: Slot,
+  shownAbove: readonly string[] = [],
+  max = 6,
+): T[] {
+  const above = new Set(shownAbove)
+  return rankFavorites(favorites.filter((f) => !above.has(f.id)), slot).slice(0, max)
 }
 
 // O cartão da proteína no Hoje: as favoritas com proteína (15 g ou mais) que

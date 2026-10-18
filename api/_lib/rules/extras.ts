@@ -32,6 +32,12 @@ export function waterGoalMl(weightKg: number | null): number {
   return Math.min(4000, Math.max(1500, Math.round((35 * weightKg) / GLASS_ML) * GLASS_ML))
 }
 
+// Litros no cartão, sem zeros a mais: 0 → «0», 1250 → «1,25», 1500 → «1,5»,
+// 2000 → «2», 10000 → «10» (antes o 0 ficava em branco: « de 3 L»).
+export function litersText(ml: number): string {
+  return (Math.max(0, ml) / 1000).toFixed(2).replace(/\.?0+$/, '').replace('.', ',')
+}
+
 // --- Lista de compras -----------------------------------------------------
 export interface ShoppingLine {
   name: string

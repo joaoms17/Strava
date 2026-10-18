@@ -1,21 +1,31 @@
 import { useEffect, useState } from 'react'
-import { BUSY_SHOW_MS, Spinner, onBusyNotice, useBusy } from '../../lib/busy'
-import { useToast } from '../../lib/toast'
+import { BUSY_SHOW_MS, Spinner, onBusyNotice, showsOwnLabel, useBusy } from '../../lib/busy'
+import { useToast, useToastPlace } from '../../lib/toast'
 
 // A camada que tapa tudo (acima das folhas e dos avisos) enquanto corre.
+// Quando o botão tocado já diz «A guardar…» com o círculo, a camada só
+// engole os toques e esbate pouco (o rótulo não aparece duas vezes nem tapa
+// o formulário). Sem botão (Anular, as porções, um toque num cartão), o
+// rótulo aparece onde aparecem os avisos, como se o aviso continuasse.
 export default function BusyLayer() {
   const busy = useBusy()
   const toast = useToast()
+  const place = useToastPlace()
   const [shown, setShown] = useState(false)
 
   useEffect(() => onBusyNotice((text) => toast(text)), [toast])
 
+  // Pela espera e não pelo objeto: quando o botão sai do ecrã a meio, a mesma
+  // espera continua (já à vista) e só passa a mostrar o rótulo.
+  const busyId = busy?.id ?? null
   useEffect(() => {
     setShown(false)
-    if (!busy) return
+    if (busyId == null) return
     const timer = setTimeout(() => setShown(true), BUSY_SHOW_MS)
     return () => clearTimeout(timer)
-  }, [busy])
+  }, [busyId])
+
+  const ownLabel = showsOwnLabel(busy)
 
   return (
     <>
@@ -26,11 +36,15 @@ export default function BusyLayer() {
         // Engole os toques desde o primeiro instante; só se vê aos 200 ms.
         <div className="fixed inset-0 z-[60] touch-none" onClick={(e) => e.stopPropagation()}>
           {shown && (
-            <div className="fade-in flex h-full items-center justify-center bg-bg/45 px-6">
-              <p className="flex items-center gap-3 rounded-2xl border border-line bg-surface px-5 py-4 text-[17px] font-semibold text-ink shadow-lg">
-                <Spinner size={22} />
-                {busy.label}
-              </p>
+            <div className={`fade-in h-full ${ownLabel ? 'bg-bg/20' : 'bg-bg/45'}`}>
+              {!ownLabel && (
+                <div className={`fixed inset-x-0 flex justify-center px-4 ${place}`}>
+                  <p className="flex w-full max-w-md items-center gap-3 rounded-2xl bg-toast px-4 py-3 text-[15px] font-semibold text-on-toast shadow-lg ring-1 ring-white/10">
+                    <Spinner size={20} />
+                    {busy.label}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -38,4 +52,3 @@ export default function BusyLayer() {
     </>
   )
 }
-

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dismissNudge, isNudgeHidden, lowDayKcal, nextStep, type NextStepInput } from '../api/_lib/rules/proximo-passo'
+import { askPastDay, dismissNudge, isNudgeHidden, lowDayKcal, nextStep, type NextStepInput } from '../api/_lib/rules/proximo-passo'
 
 const base: NextStepInput = {
   today: '2026-09-28',
@@ -116,5 +116,27 @@ describe('próximo passo com fotos', () => {
   it('depois das 20:00 com refeições por confirmar: rever', () => {
     expect(nextStep({ ...base, minutesOfDay: 20 * 60 + 5, kcalToday: 1500, mealsToReview: 2 })).toBe('rever')
     expect(nextStep({ ...base, minutesOfDay: 19 * 60, kcalToday: 1500, proteinToday: 120, mealsToReview: 2 })).toBeNull()
+  })
+})
+
+describe('«Foi tudo neste dia?» num dia passado', () => {
+  const past = { date: '2026-10-14', today: '2026-10-18', meals: 1, kcalIn: 430, uncounted: 0, flags: [] as string[] }
+
+  it('um dia acabado, incompleto e sem resposta pergunta (ex.: jejum de há dias)', () => {
+    expect(askPastDay(past)).toBe(true)
+    expect(askPastDay({ ...past, date: '2026-10-17' })).toBe(true)
+    expect(askPastDay({ ...past, meals: 2, kcalIn: 700 })).toBe(true)
+  })
+
+  it('não pergunta hoje, sem refeições, com o dia completo ou já respondido', () => {
+    expect(askPastDay({ ...past, date: past.today })).toBe(false)
+    expect(askPastDay({ ...past, meals: 0, kcalIn: 0 })).toBe(false)
+    expect(askPastDay({ ...past, meals: 3, kcalIn: 1900 })).toBe(false)
+    expect(askPastDay({ ...past, flags: ['dia_fechado'] })).toBe(false)
+    expect(askPastDay({ ...past, flags: ['faltou_algo'] })).toBe(false)
+  })
+
+  it('com uma foto ainda sem números, primeiro resolve-se a foto', () => {
+    expect(askPastDay({ ...past, uncounted: 1 })).toBe(false)
   })
 })

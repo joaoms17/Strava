@@ -11,6 +11,7 @@ import { loadActiveDiet } from '../lib/diets'
 import DietToday from '../components/DietToday'
 import Sequencia from '../components/Sequencia'
 import Agua from '../components/Agua'
+import AvisarAnalise from '../components/AvisarAnalise'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
@@ -33,6 +34,7 @@ import { fmtSleep, hasSleep, poorNight, sleepDetail, type NightSleep } from '../
 import { splitStoredError } from '../../api/_lib/rules/resposta-ia'
 import { isTransientFailure } from '../../api/_lib/rules/falhas'
 import {
+  askPastDay,
   dismissNudge,
   nextStep,
   type NextStepId,
@@ -49,6 +51,7 @@ import WeekStrip from '../components/ui/WeekStrip'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
 import { proteinPicks } from '../../api/_lib/rules/favoritos'
+import { sharedFrom } from '../../api/_lib/rules/partilha'
 
 interface DayData {
   date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
@@ -59,8 +62,10 @@ interface DayData {
   weights: WeightRow[]
   // Ontem: refeições contadas e as kcal, e as fotos ainda sem números.
   yesterday: { meals: number; kcal: number; uncounted: Meal[]; flags: string[] }
-  // O plano base guardado no fecho deste dia (null: o de hoje) e os dias da semana até este.
+  // O plano base guardado no fecho deste dia (null: o de hoje), as respostas
+  // «Foi tudo?» deste dia e os dias da semana até este.
   dayBase: number | null
+  flags: string[]
   week: WeekSoFarDay[]
   latestTdee: number | null
   favorites: Favorite[]
@@ -80,6 +85,14 @@ interface DayData {
 }
 
 const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as const
+// Os botões dos cartões (próximo passo e pessoa nova), sempre do mesmo
+// tamanho e letra: o principal é laranja nos passos da comida (bg-eat) e
+// preto nos outros (bg-cta), como na decisão 93; «Agora não»/«Saltar» é texto.
+const STEP_PRIMARY = 'flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-[16px] font-semibold'
+const STEP_EAT = `${STEP_PRIMARY} bg-eat text-bg`
+const STEP_CTA = `${STEP_PRIMARY} bg-cta text-on-cta`
+const STEP_SECONDARY = 'flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface2 px-3 text-[15px]'
+const STEP_LATER = 'min-h-11 px-3 text-[15px] text-dim'
 const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
 
 // A foto da refeição; registada de uma favorita sem foto (a foto foi junta
@@ -212,7 +225,9 @@ export default function Hoje() {
     if (request !== loads.current) return
     const yesterdayRows = (yMeals ?? []) as Meal[]
     const yesterdayCounted = yesterdayRows.filter((m) => m.status === 'ok' || m.status === 'por_rever')
-    const dayRow = ((weekRows ?? []) as { date: string; base_kcal?: number | null }[]).find((d) => d.date === date)
+    const dayRow = ((weekRows ?? []) as { date: string; base_kcal?: number | null; flags?: unknown }[]).find(
+      (d) => d.date === date,
+    )
     setData({
       date,
       meals: mealRows,
@@ -227,6 +242,7 @@ export default function Hoje() {
         flags: Array.isArray(yDay?.flags) ? (yDay.flags as string[]) : [],
       },
       dayBase: dayRow?.base_kcal != null ? Number(dayRow.base_kcal) : null,
+      flags: Array.isArray(dayRow?.flags) ? (dayRow.flags as string[]) : [],
       week: (weekRows ?? []) as WeekSoFarDay[],
       latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
       favorites: favoriteRows,
@@ -365,8 +381,8 @@ export default function Hoje() {
     week == null
       ? null
       : Math.abs(week.diff) < 50
-        ? 'no plano'
-        : `${fmtInt(Math.abs(week.diff))} ${week.diff > 0 ? 'abaixo' : 'acima'} do plano`
+        ? 'certa com o plano'
+        : `${fmtKcal(Math.abs(week.diff))} kcal ${week.diff > 0 ? 'abaixo' : 'acima'} do plano`
   const yesterdayComplete = isDayComplete({
     mealCount: data.yesterday.meals,
     kcalIn: data.yesterday.kcal,
@@ -374,11 +390,27 @@ export default function Hoje() {
     missingSomething: data.yesterday.flags.includes('faltou_algo'),
     uncountedMeals: data.yesterday.uncounted.length,
   })
+  // Um dia passado: as fotos ainda sem números, se ficou completo (regra 5)
+  // e, incompleto e sem resposta, a pergunta «Foi tudo neste dia?».
+  const uncountedMeals = data.meals.length - counted.length + localCaptures.length
+  const dayComplete = isDayComplete({
+    mealCount: counted.length,
+    kcalIn,
+    manuallyClosed: data.flags.includes('dia_fechado'),
+    missingSomething: data.flags.includes('faltou_algo'),
+    uncountedMeals,
+  })
+  const askDay =
+    !data.offline &&
+    askPastDay({ date, today, meals: counted.length, kcalIn, uncounted: uncountedMeals, flags: data.flags })
+  // Sem rede não se sabe o que já se comeu: «—» em vez de zeros.
+  const unknown = data.offline
 
   const clock = lisbonClock(now)
   const minutesOfDay = clock.hour * 60 + clock.minute
   const nudges = (profile.nudge_state ?? {}) as NudgeState
-  const step: NextStepId | null = isToday
+  // Sem rede os cartões não têm dados (e pesar ou medir precisa de rede).
+  const step: NextStepId | null = isToday && !data.offline
     ? nextStep({
         today,
         minutesOfDay,
@@ -407,7 +439,7 @@ export default function Hoje() {
   const proteinFavorites = proteinPicks(data.favorites, left)
 
   const hints = profile.dismissed_hints ?? []
-  const firstCards = isToday
+  const firstCards = isToday && !data.offline
     ? [
         !data.hasAnyWeight && !hints.includes('primeira_pesagem') ? 'primeira_pesagem' : null,
         !data.hasAnyMeal && !hints.includes('primeira_foto') ? 'primeira_foto' : null,
@@ -458,6 +490,14 @@ export default function Hoje() {
       return
     }
     toast(flag === 'dia_fechado' ? 'Ontem fica completo.' : 'Ontem fica fora das contas do gasto.')
+  }
+
+  async function answerPastDay(flag: DayAnswer) {
+    if (!(await answerDay(date, flag, today))) {
+      toast('Não consegui gravar. Tenta outra vez.')
+      return
+    }
+    toast(flag === 'dia_fechado' ? 'Este dia fica completo.' : 'Este dia fica fora das contas do gasto.')
   }
 
   type Entry = { at: string; key: string; node: React.ReactNode }
@@ -564,6 +604,10 @@ export default function Hoje() {
       ),
     })
   }
+  // A primeira foto a analisar oferece o aviso de quando acabar.
+  const firstPending = data.meals.find(
+    (m) => !retrying.has(m.id) && m.status === 'a_analisar' && !analysisStuck(m, Date.now()),
+  )?.id
   for (const meal of data.meals) {
     const slot = meal.slot ?? slotOf(new Date(meal.logged_at))
     const fresh = Date.now() - Date.parse(meal.created_at) < 60_000
@@ -576,6 +620,9 @@ export default function Hoje() {
     const stuck = !isRetrying && analysisStuck(meal, Date.now())
     const failed = !isRetrying && (meal.status === 'erro' || stuck)
     const pending = isRetrying || (meal.status === 'a_analisar' && !stuck)
+    // Partilhada por outra pessoa da casa: diz de quem é e, por rever, leva
+    // a confirmar a porção (a qualquer hora, não só no Rever da noite).
+    const from = analysed ? sharedFrom(meal.note) : null
     const subtitle = isRetrying
       ? 'A analisar outra vez…'
       : meal.status === 'erro'
@@ -588,7 +635,7 @@ export default function Hoje() {
               ? 'Sem análise (limite da IA)'
               : fromFavorite
                 ? SLOT_LABEL[slot]
-                : meal.items.map((i) => i.name).join(', ')
+                : `${from ? `de ${from} · ` : ''}${meal.items.map((i) => i.name).join(', ')}`
     entries.push({
       at: meal.logged_at,
       key: `m-${meal.id}`,
@@ -655,6 +702,14 @@ export default function Hoje() {
               </button>
             )}
           </div>
+          {from && meal.status === 'por_rever' && (
+            <button
+              onClick={() => sheet.open('rever', { id: meal.id })}
+              className="-my-1.5 ml-[72px] flex min-h-11 items-center text-[14px] text-eat"
+            >
+              Confirma a tua porção ›
+            </button>
+          )}
           {fresh && analysed && (
             <p className="pl-[72px] text-[13px] text-dim">
               acabado de registar ·{' '}
@@ -663,6 +718,7 @@ export default function Hoje() {
               </button>
             </p>
           )}
+          {meal.id === firstPending && <AvisarAnalise className="-mt-1 pl-[72px]" />}
         </div>
       ),
     })
@@ -756,36 +812,42 @@ export default function Hoje() {
         </p>
       )}
 
-      {!isToday && (
-        <p className="flex items-center justify-between rounded-xl bg-surface2 px-3 py-2 text-[15px]">
-          <span>A ver {fmtDayShort(date)}</span>
-          <button className="text-eat" onClick={() => navigate('/hoje')}>
-            Voltar a hoje
-          </button>
-        </p>
-      )}
-
       <button
         onClick={() => setPlanOpen(true)}
         className="block w-full rounded-[18px] border border-line bg-surface px-[18px] pt-4 pb-4 text-left"
       >
         <div className="flex items-center justify-between">
+          {/* Num dia passado completo, o número grande é o que ficou do plano (o comido está por baixo);
+              incompleto, continua a ser o que se comeu (não é «ficaste abaixo» quando faltou registar). */}
           <p className="label">
             {!isToday
-              ? 'Comeste'
-              : over
+              ? !dayComplete || unknown
+                ? 'Comeste'
+                : over
+                  ? 'Passaste o plano'
+                  : 'Ficaste abaixo do plano'
+              : over && !unknown
                 ? 'Passaste o plano'
-                : `${counted.length === 0 ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 ? ' cerca de' : ''}`}
+                : `${counted.length === 0 || unknown ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 && !unknown ? ' cerca de' : ''}`}
           </p>
           <p className="label">Ver o plano ›</p>
         </div>
         <p className="mt-0.5 flex items-baseline gap-2">
           <span
-            className={`num text-[96px] leading-[0.92] font-extrabold ${
-              !isToday ? 'text-ink' : over ? 'text-attn' : 'text-eat'
-            } ${isToday && stillCounting ? 'opacity-50' : ''}`}
+            className={`num leading-[0.92] ${
+              // Sem rede, um traço (mais pequeno: a 96 px parecia uma barra).
+              unknown
+                ? 'text-[64px] font-semibold text-dim'
+                : `text-[96px] font-extrabold ${over && (isToday || dayComplete) ? 'text-attn' : !isToday ? 'text-ink' : 'text-eat'}`
+            } ${isToday && stillCounting && !unknown ? 'opacity-80' : ''}`}
           >
-            {!isToday ? fmtKcal(kcalIn) : over ? `+${fmtKcal(-left)}` : fmtKcal(left)}
+            {unknown
+              ? '—'
+              : !isToday && !dayComplete
+                ? fmtKcal(kcalIn)
+                : over
+                  ? `+${fmtKcal(-left)}`
+                  : fmtKcal(left)}
           </span>
           <span className="num text-[22px] text-dim">KCAL</span>
         </p>
@@ -801,18 +863,32 @@ export default function Hoje() {
             ainda a contar {stillCounting} {stillCounting === 1 ? 'foto' : 'fotos'}
           </p>
         )}
-        <div className="mt-3">
-          <Segments value={kcalIn} max={plan} tone="eat" label="Comer" />
-        </div>
-        <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-line pt-3">
-          <div>
-            <p className="label text-[12px]">Comido</p>
-            <p className="num text-[26px] leading-tight">{fmtKcal(kcalIn)}</p>
+        {!unknown && (
+          <div className="mt-3">
+            <Segments value={kcalIn} max={plan} tone="eat" label="Comer" />
           </div>
+        )}
+        <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-line pt-3">
+          {!isToday && !dayComplete && !unknown ? (
+            // O comido já é o número grande: aqui fica que o dia não conta (ainda).
+            <div>
+              <p className="label text-[12px]">Dia</p>
+              <p className="pt-1 text-[17px] leading-tight text-dim">
+                {data.flags.includes('faltou_algo') ? 'faltou algo' : 'incompleto'}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="label text-[12px]">Comido</p>
+              <p className={`num text-[26px] leading-tight ${unknown ? 'text-dim' : ''}`}>{unknown ? '—' : fmtKcal(kcalIn)}</p>
+            </div>
+          )}
           <div>
             <p className="label text-[12px]">Treino</p>
-            <p className={`num text-[26px] leading-tight ${kcalExercise > 0 && !maintenance ? 'text-burn' : 'text-dim'}`}>
-              {kcalExercise > 0 && !maintenance ? `+${fmtKcal(kcalExercise)}` : '—'}
+            <p
+              className={`num text-[26px] leading-tight ${kcalExercise > 0 && !maintenance && !unknown ? 'text-burn' : 'text-dim'}`}
+            >
+              {kcalExercise > 0 && !maintenance && !unknown ? `+${fmtKcal(kcalExercise)}` : '—'}
             </p>
           </div>
           <div>
@@ -823,18 +899,37 @@ export default function Hoje() {
         <div className="mt-3.5 flex items-baseline justify-between">
           <p className="label text-[12px]">Proteína</p>
           <p className="num text-[18px]">
-            {fmtInt(proteinIn)} <span className="text-dim">/ {fmtInt(profile.protein_g)} g</span>
+            {unknown ? '—' : fmtInt(proteinIn)} <span className="text-dim">/ {fmtInt(profile.protein_g)} g</span>
           </p>
         </div>
-        <div className="mt-1.5">
-          <Segments value={proteinIn} max={profile.protein_g} count={14} height={6} tone="protein" label="Proteína" />
-        </div>
+        {!unknown && (
+          <div className="mt-1.5">
+            <Segments value={proteinIn} max={profile.protein_g} count={14} height={6} tone="protein" label="Proteína" />
+          </div>
+        )}
         {maintenance && (
           <span className="mt-3 inline-block rounded-lg border border-line px-3 py-1 font-display text-[13px] font-semibold tracking-[0.1em] text-burn uppercase">
             Semana de pausa da dieta
           </span>
         )}
       </button>
+
+      {askDay && (
+        <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
+          <p className="text-[17px]">
+            Registaste {counted.length} {counted.length === 1 ? 'refeição' : 'refeições'} ({fmtKcal(kcalIn)}&nbsp;kcal). Foi
+            tudo neste dia?
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <BusyButton busy="A guardar…" onClick={() => answerPastDay('dia_fechado')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+              Sim, foi tudo
+            </BusyButton>
+            <BusyButton busy="A guardar…" onClick={() => answerPastDay('faltou_algo')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+              Não, faltou algo
+            </BusyButton>
+          </div>
+        </div>
+      )}
 
       {firstCards.map((card) => (
         <div key={card} className="space-y-3 rounded-2xl border border-line p-4">
@@ -845,10 +940,11 @@ export default function Hoje() {
                 De manhã, antes de comer.
               </p>
               <div className="flex gap-2">
-                <button onClick={() => sheet.open('peso')} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+                <button onClick={() => sheet.open('peso')} className={`${STEP_CTA} flex-1`}>
                   Pesar
                 </button>
-                <button onClick={() => void dismissHint(card)} className="min-h-12 px-4 text-[15px] text-dim">
+                {/* «Saltar» esconde de vez; «Agora não» (próximo passo) só até amanhã. */}
+                <button onClick={() => void dismissHint(card)} className={STEP_LATER}>
                   Saltar
                 </button>
               </div>
@@ -857,9 +953,11 @@ export default function Hoje() {
             <>
               <p className="text-[17px] font-semibold">Fotografa a próxima refeição</p>
               <p className="text-[15px] text-dim">Toca em + e tira uma foto ao prato. Eu faço as contas.</p>
-              <button onClick={() => void dismissHint(card)} className="text-[15px] text-dim">
-                Saltar
-              </button>
+              <div className="-mt-1 flex justify-end">
+                <button onClick={() => void dismissHint(card)} className={STEP_LATER}>
+                  Saltar
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -900,13 +998,21 @@ export default function Hoje() {
             })
             emitDataChanged()
           }}
-          onReview={() => sheet.open('rever')}
+          onReview={() => {
+            // Uma só: a folha da refeição (a partilhada, no Rever, que tem a porção).
+            const only = reviewMeals.length === 1 ? reviewMeals[0]! : null
+            if (only && !sharedFrom(only.note)) sheet.open('refeicao', { id: only.id })
+            else sheet.open('rever')
+          }}
           onRaiseLimit={() => navigate('/definicoes/avancado')}
           onConfirmWorkout={() => sheet.open('confirmar-treino', { import: data.importsToConfirm[0]! })}
           measureDaysSince={daysSinceMeasure(data.lastMeasureDate, today)}
           onMeasure={() => sheet.open('medidas')}
         />
       )}
+
+      {/* A água logo a seguir ao próximo passo: «+ copo» é o toque que mais se repete. */}
+      {date <= today && <Agua key={date} date={date} />}
 
       {empty && watchOnly.length > 0 && (
         <div className="-mx-2 divide-y divide-line/60">
@@ -915,12 +1021,14 @@ export default function Hoje() {
           ))}
         </div>
       )}
-      {empty ? (
+      {empty && data.offline && !isToday ? null : empty ? (
         <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
           <p className="text-[15px] text-dim">
-            {isToday
-              ? 'O teu dia começa aqui. Toca em + e tira uma foto ao que comes. Eu faço as contas.'
-              : `Nada registado em ${weekdayShort(date)}. Toca em + para registar nesse dia.`}
+            {data.offline
+              ? 'Sem rede: tira a foto na mesma, fica guardada e segue quando houver rede.'
+              : isToday
+                ? 'O teu dia começa aqui. Toca em + e tira uma foto ao que comes. Eu faço as contas.'
+                : `Nada registado em ${weekdayShort(date)}. Toca em + para registar nesse dia.`}
           </p>
           {isToday && (
             <>
@@ -930,7 +1038,8 @@ export default function Hoje() {
               >
                 Fotografar
               </PhotoButton>
-              {!data.weighedToday && (
+              {/* Pesar precisa de rede (grava logo no servidor). */}
+              {!data.weighedToday && !data.offline && (
                 <button onClick={() => sheet.open('peso')} className="text-[15px] text-eat">
                   Ou pesa-te primeiro
                 </button>
@@ -947,8 +1056,6 @@ export default function Hoje() {
           <div className="-mx-2 divide-y divide-line/60">{entries.map((e) => <div key={e.key}>{e.node}</div>)}</div>
         </div>
       )}
-
-      {date <= today && <Agua key={date} date={date} />}
 
       {data.diet && date <= today && (
         <DietToday diet={data.diet} favorites={data.favorites} meals={data.meals} date={date} today={today} />
@@ -1009,37 +1116,44 @@ export default function Hoje() {
             {outToday != null && (
               <div className="space-y-1">
                 <p className="text-[17px]">
-                  Gastas cerca de {fmtKcal(round10(outToday))} {isToday ? 'hoje' : 'nesse dia'}
+                  Gastas cerca de {fmtKcal(round10(outToday))}&nbsp;kcal {isToday ? 'hoje' : 'nesse dia'}
                   {data.expenditure?.learning ? ' (a aprender)' : ''}.
                 </p>
                 {!maintenance && paceFromDiff(plan - outToday) < 0 && (
                   <p>
-                    O plano deixa-te comer {fmtKcal(plan)} para perderes cerca de{' '}
-                    {fmt1(Math.abs(paceFromDiff(plan - outToday)))} kg por semana.
+                    O plano deixa-te comer {fmtKcal(plan)}&nbsp;kcal para perderes cerca de{' '}
+                    {fmt1(Math.abs(paceFromDiff(plan - outToday)))}&nbsp;kg por semana.
                   </p>
                 )}
               </div>
             )}
             {maintenance ? (
               <p>
-                Esta semana o plano é comer o que gastas ({fmtInt(plan)}) para o corpo descansar da dieta.
+                Esta semana o plano é comer o que gastas ({fmtKcal(plan)}&nbsp;kcal) para o corpo descansar da dieta.
               </p>
             ) : (
+              // Os mesmos números do cartão (a 10), com a unidade.
               <p className="tabular-nums">
-                Plano: {fmtInt(dayBase)}
+                Plano: {fmtKcal(dayBase)}
                 {kcalExercise > 0 && (
                   <>
                     {' '}
-                    + <span className="text-burn">{fmtInt(kcalExercise)} do treino</span> = {fmtInt(plan)}
+                    + <span className="text-burn">{fmtKcal(kcalExercise)} do treino</span> = {fmtKcal(plan)}
                   </>
                 )}
+                &nbsp;kcal
               </p>
             )}
-            <p className="tabular-nums">
-              Comeste {fmtInt(kcalIn)}
-              {isToday && !over && <> · Podes comer mais {fmtInt(left)}</>}
-              {over && <> · Passaste {fmtInt(-left)} do plano</>}
-            </p>
+            {unknown ? (
+              // Sem rede não se sabe o que já se comeu: nada de «Comeste 0».
+              <p className="text-dim">Sem rede: o que comeste aparece quando houver rede.</p>
+            ) : (
+              <p className="tabular-nums">
+                Comeste {fmtKcal(kcalIn)}&nbsp;kcal
+                {isToday && !over && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
+                {over && <> · Passaste {fmtKcal(-left)}&nbsp;kcal do plano</>}
+              </p>
+            )}
             {week && weekText && (
               <p className="tabular-nums">
                 Esta semana, com hoje: {weekText}{' '}
@@ -1048,15 +1162,17 @@ export default function Hoje() {
                 </span>
               </p>
             )}
-            <p className="text-dim tabular-nums">
-              <span className="text-protein">Proteína {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g</span> ·
-              Hidratos {fmtInt(carbsIn)} g · Gordura {fmtInt(fatIn)} g
-            </p>
+            {!unknown && (
+              <p className="text-dim tabular-nums">
+                <span className="text-protein">Proteína {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g</span> ·
+                Hidratos {fmtInt(carbsIn)} g · Gordura {fmtInt(fatIn)} g
+              </p>
+            )}
             {workoutKcals.length > 0 && (
               <ul className="space-y-1 text-dim">
                 {workoutKcals.map(({ workout, kcal }) => (
                   <li key={workout.id} className="tabular-nums">
-                    {workoutTitle(workout)} · +{fmtInt(kcal)}{' '}
+                    {workoutTitle(workout)} · +{fmtKcal(kcal)}&nbsp;kcal{' '}
                     {workout.type === 'bike' && workout.watts != null
                       ? `pela potência (${workout.watts} W × ${workout.minutes} min)`
                       : workout.type === 'strength'
@@ -1072,7 +1188,7 @@ export default function Hoje() {
                 ))}
               </ul>
             )}
-            {kcalExercise === 0 && !maintenance && (
+            {kcalExercise === 0 && !maintenance && !unknown && (
               <p className="text-dim">Um treino aumenta o que podes comer.</p>
             )}
             <details className="text-dim">
@@ -1141,7 +1257,7 @@ function NextStepCard({
   const errorMeal = errorMeals[0] ?? null
   const female = useReadyProfile().sex === 'f'
   const later = (
-    <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
+    <button onClick={onDismiss} className={STEP_LATER}>
       Agora não
     </button>
   )
@@ -1149,7 +1265,7 @@ function NextStepCard({
     <div className="flex flex-wrap gap-2">
       {favorites.map((fav) => (
         <button key={fav.id} onClick={() => onFavorite(fav)} className="rounded-full bg-surface2 px-3 py-2 text-[15px]">
-          {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g</span>
+          {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g prot.</span>
         </button>
       ))}
     </div>
@@ -1174,29 +1290,20 @@ function NextStepCard({
                 : 'A análise parou a meio.'}
             </p>
           </div>
-          <button
-            onClick={() => errorMeals.forEach((m) => onRetry(m.id))}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-eat font-display text-[17px] font-bold tracking-[0.04em] text-bg uppercase"
-          >
+          <button onClick={() => errorMeals.forEach((m) => onRetry(m.id))} className={`${STEP_EAT} w-full`}>
             <Icon name="retry" size={20} />
             {errorMeals.length > 1 ? `Tentar as ${errorMeals.length} outra vez` : 'Tentar outra vez'}
           </button>
           <div className="grid grid-cols-2 gap-2">
             {(errorMeal.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS ? (
-              <AttachPhotoButton
-                meal={errorMeal}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line font-display text-[15px] font-semibold tracking-[0.04em] uppercase"
-              >
+              <AttachPhotoButton meal={errorMeal} className={STEP_SECONDARY}>
                 <Icon name="camera" size={18} />
                 Juntar foto
               </AttachPhotoButton>
             ) : (
               <span />
             )}
-            <button
-              onClick={() => onOpenMeal(errorMeal.id)}
-              className="min-h-12 rounded-xl border border-line px-3 font-display text-[15px] font-semibold tracking-[0.04em] uppercase"
-            >
+            <button onClick={() => onOpenMeal(errorMeal.id)} className={STEP_SECONDARY}>
               Escrever
             </button>
           </div>
@@ -1205,10 +1312,7 @@ function NextStepCard({
       {id === 'treino' && (
         <>
           <p className="text-[17px]">Li o print do relógio. Falta confirmar o treino.</p>
-          <button
-            onClick={onConfirmWorkout}
-            className="min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase"
-          >
+          <button onClick={onConfirmWorkout} className={`${STEP_CTA} w-full`}>
             Confirmar treino
           </button>
         </>
@@ -1218,19 +1322,19 @@ function NextStepCard({
           <p className="text-[17px]">
             Chegaste ao limite da IA que definiste. A foto das {timeOf(limitMeal.logged_at)} está guardada.
           </p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              disabled={limitAnalysing}
-              onClick={() => void onAnalyse(limitMeal.id, { force: true })}
-              className="min-h-12 rounded-xl bg-eat px-1 text-[13px] font-semibold text-bg disabled:opacity-50"
-            >
-              {limitAnalysing ? 'A analisar…' : 'Analisar esta mesmo assim'}
-            </button>
-            <button onClick={onRaiseLimit} className="min-h-12 rounded-xl bg-surface2 px-1 text-[13px]">
+          <button
+            disabled={limitAnalysing}
+            onClick={() => void onAnalyse(limitMeal.id, { force: true })}
+            className={`${STEP_EAT} w-full disabled:opacity-50`}
+          >
+            {limitAnalysing ? 'A analisar…' : 'Analisar esta mesmo assim'}
+          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={onRaiseLimit} className={STEP_SECONDARY}>
               Subir limite
             </button>
-            <button onClick={() => onOpenMeal(limitMeal.id)} className="min-h-12 rounded-xl bg-surface2 px-1 text-[13px]">
-              Escrever em vez disso
+            <button onClick={() => onOpenMeal(limitMeal.id)} className={STEP_SECONDARY}>
+              Escrever
             </button>
           </div>
         </>
@@ -1242,7 +1346,7 @@ function NextStepCard({
             opcional.
           </p>
           <div className="flex items-center gap-2">
-            <button onClick={onReview} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+            <button onClick={onReview} className={`${STEP_EAT} flex-1`}>
               Rever
             </button>
             {later}
@@ -1257,7 +1361,7 @@ function NextStepCard({
               : `Medições: há ${measureDaysSince} dias · 2 minutos.`}
           </p>
           <div className="flex items-center gap-2">
-            <button onClick={onMeasure} className="min-h-12 flex-1 rounded-xl bg-cta font-semibold text-on-cta">
+            <button onClick={onMeasure} className={`${STEP_CTA} flex-1`}>
               Medir
             </button>
             {later}
@@ -1268,7 +1372,7 @@ function NextStepCard({
         <>
           <p className="text-[17px]">Bom dia. Pesa-te?</p>
           <div className="flex items-center gap-2">
-            <button onClick={onWeigh} className="min-h-12 flex-1 rounded-xl bg-eat font-semibold text-bg">
+            <button onClick={onWeigh} className={`${STEP_CTA} flex-1`}>
               Pesar
             </button>
             {later}
@@ -1319,8 +1423,8 @@ function NextStepCard({
       {id === 'ontem' && yesterdayUncounted.length === 0 && (
         <>
           <p className="text-[17px]">
-            Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'} ({fmtInt(yesterdayKcal)}{' '}
-            kcal). Foi tudo?
+            Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'} ({fmtKcal(yesterdayKcal)}
+            &nbsp;kcal). Foi tudo?
           </p>
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => onYesterday('dia_fechado')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">

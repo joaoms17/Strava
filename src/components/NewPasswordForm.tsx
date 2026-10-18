@@ -70,7 +70,7 @@ export default function NewPasswordForm({
         className={field}
       />
       <label className="flex items-center gap-2 text-[14px] text-dim">
-        <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} className="h-4 w-4 accent-eat" />
+        <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} className="h-4 w-4 accent-cta" />
         Mostrar
       </label>
       {error && <p className="text-[14px] text-eat">{error}</p>}

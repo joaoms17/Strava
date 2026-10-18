@@ -9,14 +9,10 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useThemeColors } from '../lib/colors'
+import { fmtDayMonth } from '../lib/format'
 import { exerciseKey } from '../../api/_lib/rules/exercicios'
+import { chip } from './ui/Chips'
 import type { ExerciseLogRow } from '../lib/types'
-
-
-function fmtDate(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${day}/${month}`
-}
 
 // Carga por exercício (12 semanas): melhor série de cada sessão. O mesmo
 // exercício escrito de outra maneira (maiúsculas, acentos) é uma só linha,
@@ -75,14 +71,13 @@ export default function LoadChart({
   return (
     <div className="rounded-2xl border border-edge bg-card p-4">
       <h2 className="text-sm font-semibold text-dim">Carga por exercício — 12 semanas</h2>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap gap-2">
         {exercises.map(({ key, name }) => (
           <button
             key={key}
             onClick={() => setSelected(key)}
-            className={`rounded-lg border px-2.5 py-1 text-xs ${
-              key === exercise ? 'border-accent text-accent' : 'border-edge text-dim'
-            }`}
+            aria-pressed={key === exercise}
+            className={chip(key === exercise, 'cta')}
           >
             {name}
           </button>
@@ -94,7 +89,7 @@ export default function LoadChart({
             <CartesianGrid stroke={colors.line} vertical={false} />
             <XAxis
               dataKey="date"
-              tickFormatter={fmtDate}
+              tickFormatter={fmtDayMonth}
               tick={{ fill: colors.dim, fontSize: 11 }}
               axisLine={{ stroke: colors.line }}
               tickLine={false}
@@ -116,7 +111,7 @@ export default function LoadChart({
                 color: colors.ink,
                 fontSize: 12,
               }}
-              labelFormatter={(label) => fmtDate(String(label))}
+              labelFormatter={(label) => fmtDayMonth(String(label))}
               formatter={(value) => [`${value} kg`, 'melhor série']}
             />
             <Line isAnimationActive={false}
