@@ -12,8 +12,10 @@ import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
 import { notifyMealAnalysed } from '../_lib/push.js'
+import { shareAfterAnalysis } from './share.js'
 import { learnFoods } from '../_lib/foods.js'
 import { itemsToLearn } from '../_lib/rules/aprender.js'
+import { MAX_SHARE_WITH, shareTargets } from '../_lib/rules/partilha.js'
 
 // Comida sem espera (Fase 2): a captura responde 202 logo e a análise corre
 // em segundo plano; o telemóvel pergunta pelo estado e, se preciso, pede
@@ -35,6 +37,7 @@ const CaptureSchema = z.object({
   taken_at: z.string().nullable().optional(), // instante conhecido (câmara, EXIF)
   date: DATE.optional(), // dia nutricional, quando a hora é desconhecida ou é um dia passado
   slot: SLOT.optional(),
+  share_with: z.array(z.string().uuid()).max(MAX_SHARE_WITH).default([]), // «Também para …»: segue no fim da análise
 })
 
 const MealIdSchema = z.object({ meal_id: z.string().uuid() })
@@ -126,10 +129,16 @@ function inBackground(task: Promise<unknown>) {
   waitUntil(safe)
 }
 
-// No fim da análise, avisa o telemóvel («Almoço analisado · 640 kcal») se a
-// pessoa o quiser.
+// No fim da análise, a refeição segue para quem se escolheu em «Também para
+// …» e o telemóvel avisa («Almoço analisado · 640 kcal») se a pessoa o quiser.
 function analyseInBackground(admin: SupabaseClient, mealId: string) {
-  inBackground(claimAndAnalyse(admin, mealId).then((meal) => notifyMealAnalysed(admin, meal)))
+  inBackground(
+    claimAndAnalyse(admin, mealId).then(async (meal) => {
+      // Uma partilha que falhe não tira o aviso.
+      await shareAfterAnalysis(admin, meal).catch((err) => console.error('Partilhar falhou:', err))
+      await notifyMealAnalysed(admin, meal)
+    }),
+  )
 }
 
 async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
@@ -183,28 +192,35 @@ export const capture = post(async ({ db, userId, body, res }) => {
   const withPhotos = input.photo_paths.length > 0
   const admin = adminClient()
   const overLimit = await aiLimitReached(admin, userId, withPhotos)
-  const { data: meal, error } = await db
+  const shareWith = shareTargets(input.share_with, userId)
+  const row: Record<string, unknown> = {
+    user_id: userId,
+    client_id: input.client_id,
+    date: nutritionalDay(loggedAt, cutoff),
+    logged_at: loggedAt.toISOString(),
+    slot: input.slot ?? slotOf(loggedAt),
+    input_type: withPhotos ? 'photo' : 'text',
+    raw_text: text,
+    note: input.note?.trim() || null,
+    tags: input.tags,
+    photo_paths: input.photo_paths,
+    photo_path: input.photo_paths[0] ?? null,
+    thumb_paths: input.thumb_paths,
+    image_hashes: input.image_hashes,
+    items: [],
+    status: overLimit ? 'sem_analise' : 'a_analisar',
+    is_estimate: withPhotos,
+  }
+  let { data: meal, error } = await db
     .from('meals')
-    .insert({
-      user_id: userId,
-      client_id: input.client_id,
-      date: nutritionalDay(loggedAt, cutoff),
-      logged_at: loggedAt.toISOString(),
-      slot: input.slot ?? slotOf(loggedAt),
-      input_type: withPhotos ? 'photo' : 'text',
-      raw_text: text,
-      note: input.note?.trim() || null,
-      tags: input.tags,
-      photo_paths: input.photo_paths,
-      photo_path: input.photo_paths[0] ?? null,
-      thumb_paths: input.thumb_paths,
-      image_hashes: input.image_hashes,
-      items: [],
-      status: overLimit ? 'sem_analise' : 'a_analisar',
-      is_estimate: withPhotos,
-    })
+    .insert(shareWith.length ? { ...row, share_with: shareWith } : row)
     .select()
     .single()
+  // Sem a migração 20261018160000 não há `share_with`: regista na mesma
+  // (fica por partilhar à mão, na folha da refeição).
+  if (error && shareWith.length && /share_with/.test(error.message)) {
+    ;({ data: meal, error } = await db.from('meals').insert(row).select().single())
+  }
   if (error) {
     // Dois envios em simultâneo com o mesmo client_id: o outro ganhou.
     if (error.code === '23505') {
@@ -239,6 +255,8 @@ export const analyse = post(async ({ db, userId, body, res }) => {
     return
   }
   const result = await claimAndAnalyse(admin, meal.id, reset)
+  // «Também para …» que ficou à espera (limite da IA, erro): segue agora.
+  if (result) inBackground(shareAfterAnalysis(admin, result))
   res.status(200).json({ meal: result ?? (await ownMeal(db, input.meal_id)) })
 })
 

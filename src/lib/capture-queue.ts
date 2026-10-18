@@ -27,6 +27,7 @@ export interface CaptureEntry {
   taken_at: string | null // hora conhecida (câmara ou EXIF)
   date: string | null // dia escolhido quando a hora é desconhecida ou é um dia passado
   slot: Slot | null
+  share_with?: string[] // «Também para …»: segue para essas pessoas no fim da análise
   state: 'pendente' | 'erro'
   error: string | null
   user_id?: string | null // de quem é (várias pessoas no mesmo telemóvel)
@@ -138,6 +139,7 @@ async function send(entry: CaptureEntry, userId: string) {
       taken_at: entry.taken_at,
       date: entry.date ?? undefined,
       slot: entry.slot ?? undefined,
+      ...(entry.share_with?.length ? { share_with: entry.share_with } : {}),
     })
     if (result.duplicate) {
       window.dispatchEvent(new CustomEvent(DUPLICATE_EVENT, { detail: result.meal }))
