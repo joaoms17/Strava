@@ -9,6 +9,7 @@ import {
   daysSinceMeasure,
   earlyDietWeeks,
   isPlausible,
+  lossSentence,
   measureFlags,
   navyBodyFat,
   navyBodyFatInches,
@@ -292,5 +293,34 @@ describe('zonas', () => {
       2,
     )
     expect(measurementComposition(183, { date: '2026-10-01', neck_cm: null, waist_cm: 94, weight_used_kg: 85 }, 'm')).toBeNull()
+  })
+})
+
+describe('o peso perdido e a gordura numa frase só', () => {
+  const sp = (text: string | null) => text?.replace(/\u00a0/g, ' ')
+
+  it('a gordura e a massa magra somam o peso perdido', () => {
+    expect(sp(lossSentence({ weightKg: -4.5, fatKg: -3.6, fatShare: 80 }))).toBe(
+      '−4,5 kg, dos quais cerca de 3,6 kg de gordura (80 %); massa magra −0,9 kg',
+    )
+    expect(sp(lossSentence({ weightKg: -3.5, fatKg: -2.8, fatShare: 80 }))).toBe(
+      '−3,5 kg, dos quais cerca de 2,8 kg de gordura (80 %); massa magra −0,7 kg',
+    )
+  })
+
+  it('quase tudo gordura: massa magra estável', () => {
+    expect(sp(lossSentence({ weightKg: -4, fatKg: -3.8, fatShare: 95 }))).toBe(
+      '−4 kg, dos quais cerca de 3,8 kg de gordura (95 %); massa magra estável',
+    )
+  })
+
+  it('número e unidade nunca se separam na quebra de linha', () => {
+    expect(lossSentence({ weightKg: -4.5, fatKg: -3.6, fatShare: 80 })).toContain('80\u00a0%')
+  })
+
+  it('sem frase a subir de peso ou fora de 0–100 %', () => {
+    expect(lossSentence({ weightKg: 3.2, fatKg: 1, fatShare: 31 })).toBeNull()
+    expect(lossSentence({ weightKg: -3.5, fatKg: 0.4, fatShare: -11 })).toBeNull()
+    expect(lossSentence({ weightKg: -3.5, fatKg: -4.2, fatShare: 120 })).toBeNull()
   })
 })

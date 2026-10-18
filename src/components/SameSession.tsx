@@ -22,7 +22,7 @@ export default function SameSession({
     <div className="space-y-2">
       <p className="text-[16px]">
         Já tens registado neste dia: {workoutTitle(workout)}
-        {when} ({workout.minutes ?? '?'} min{origin}). É este treino?
+        {when} ({workout.minutes ?? '?'}&nbsp;min{origin}). É este treino?
       </p>
       <div className="grid grid-cols-2 gap-2">
         <BusyButton

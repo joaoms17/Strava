@@ -1,10 +1,9 @@
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useThemeColors } from '../lib/colors'
-import { fmtDayShort } from '../lib/format'
+import { NBSP, fmtDayMonth, fmtDayShort } from '../lib/format'
 import { MIN_EFFICIENCY_MINUTES, bikeEfficiency, type EfficiencyPoint } from '../../api/_lib/rules/plano'
 import type { Workout } from '../lib/types'
 
-const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 const comma = (n: number, digits = 2) => n.toFixed(digits).replace('.', ',')
 
 // Treino › Progressão na bicicleta: só o que se pode comparar entre sessões —
@@ -44,7 +43,7 @@ export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
       <p className="text-[13px] text-dim">
         Se sobe, fazes o mesmo esforço com menos batimentos.{' '}
         {points.length >= 2 &&
-          `Desde ${dm(first.date)}: ${change > 0 ? '+' : ''}${change} %.`}
+          `Desde ${fmtDayMonth(first.date)}: ${change > 0 ? '+' : ''}${change}${NBSP}%.`}
       </p>
       <div className="mt-2 h-44">
         <ResponsiveContainer width="100%" height="100%">
@@ -52,7 +51,7 @@ export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
             <CartesianGrid stroke={colors.line} vertical={false} />
             <XAxis
               dataKey="date"
-              tickFormatter={dm}
+              tickFormatter={fmtDayMonth}
               tick={{ fill: colors.dim, fontSize: 11 }}
               axisLine={false}
               tickLine={false}

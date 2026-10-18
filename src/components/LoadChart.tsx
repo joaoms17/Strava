@@ -9,14 +9,9 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { useThemeColors } from '../lib/colors'
+import { fmtDayMonth } from '../lib/format'
 import { exerciseKey } from '../../api/_lib/rules/exercicios'
 import type { ExerciseLogRow } from '../lib/types'
-
-
-function fmtDate(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${day}/${month}`
-}
 
 // Carga por exercício (12 semanas): melhor série de cada sessão. O mesmo
 // exercício escrito de outra maneira (maiúsculas, acentos) é uma só linha,
@@ -94,7 +89,7 @@ export default function LoadChart({
             <CartesianGrid stroke={colors.line} vertical={false} />
             <XAxis
               dataKey="date"
-              tickFormatter={fmtDate}
+              tickFormatter={fmtDayMonth}
               tick={{ fill: colors.dim, fontSize: 11 }}
               axisLine={{ stroke: colors.line }}
               tickLine={false}
@@ -116,7 +111,7 @@ export default function LoadChart({
                 color: colors.ink,
                 fontSize: 12,
               }}
-              labelFormatter={(label) => fmtDate(String(label))}
+              labelFormatter={(label) => fmtDayMonth(String(label))}
               formatter={(value) => [`${value} kg`, 'melhor série']}
             />
             <Line isAnimationActive={false}

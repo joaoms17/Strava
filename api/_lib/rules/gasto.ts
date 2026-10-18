@@ -156,15 +156,20 @@ export function baseSuggestion(
 }
 
 // «Qualidade da perda» (Corpo): que parte do peso perdido foi gordura; só
-// com 3 medições ou mais e 3 kg ou mais de diferença de peso.
+// com 3 medições ou mais e 3 kg ou mais de diferença de peso. A gordura
+// (`fatKg`) vem da mesma conta da percentagem.
 export function lossQuality(
   measurements: { weight_used_kg: number; fatKg: number }[],
-): { fatShare: number; weightKg: number } | null {
+): { fatShare: number; weightKg: number; fatKg: number } | null {
   if (measurements.length < 3) return null
   const first = measurements[0]!
   const last = measurements[measurements.length - 1]!
   const dWeight = last.weight_used_kg - first.weight_used_kg
   if (Math.abs(dWeight) < 3) return null
   const dFat = last.fatKg - first.fatKg
-  return { fatShare: Math.round((dFat / dWeight) * 100), weightKg: Math.round(dWeight * 10) / 10 }
+  return {
+    fatShare: Math.round((dFat / dWeight) * 100),
+    weightKg: Math.round(dWeight * 10) / 10,
+    fatKg: Math.round(dFat * 10) / 10,
+  }
 }

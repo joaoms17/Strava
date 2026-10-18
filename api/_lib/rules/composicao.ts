@@ -257,6 +257,23 @@ export function confirmationSentence(change: CompositionChange): string {
   return change.pctExact < 0 ? 'a fita já confirma esta descida' : 'a fita já confirma esta subida'
 }
 
+// «Desde 18 ago: −4,5 kg, dos quais cerca de 3,6 kg de gordura (80 %);
+// massa magra −0,9 kg»: o peso perdido e a parte que foi gordura numa frase
+// só, em vez de duas seguidas com a mesma descida (com 3 medições e 3 kg ou
+// mais, `lossQuality`). A gordura e a massa magra saem da mesma conta da
+// percentagem e somam o peso. Fora de 0–100 % (a gordura subiu, ou desceu
+// mais do que o peso) não há frase: ficam as duas de antes.
+const NBSP = '\u00a0'
+
+export function lossSentence(loss: { weightKg: number; fatKg: number; fatShare: number }): string | null {
+  if (loss.weightKg >= 0 || loss.fatShare < 0 || loss.fatShare > 100) return null
+  const weight = round1(loss.weightKg)
+  const fat = round1(Math.min(0, Math.max(weight, loss.fatKg)))
+  const lean = round1(weight - fat)
+  const leanText = Math.abs(lean) <= LEAN_STABLE_KG ? 'massa magra estável' : `massa magra −${fmtKg(lean)}${NBSP}kg`
+  return `−${fmtKg(weight)}${NBSP}kg, dos quais cerca de ${fmtKg(fat)}${NBSP}kg de gordura (${loss.fatShare}${NBSP}%); ${leanText}`
+}
+
 // Cintura para uma %G alvo, com o mesmo pescoço, altura (e anca, nas mulheres).
 export function targetWaist(
   heightCm: number,
