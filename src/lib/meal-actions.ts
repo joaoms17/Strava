@@ -53,9 +53,16 @@ export async function logFavorite(
   }
 }
 
+// Fora da dose normal (a porção pedida à «Pergunta à app» ou já mudada),
+// também se pode voltar a 1.
+function portionChoices(current: number): [string, number][] {
+  const choices: [string, number][] = current === 1 ? PORTIONS : [['1', 1], ...PORTIONS]
+  return choices.filter(([, f]) => f !== current)
+}
+
 function showRegistered(meal: Meal, text: string, toast: ShowToast) {
   toast(text, [
-    ...PORTIONS.filter(([, f]) => f !== Number(meal.portion_factor)).map(([label, factor]) => ({
+    ...portionChoices(Number(meal.portion_factor ?? 1)).map(([label, factor]) => ({
       label,
       busy: 'A mudar a porção…',
       run: async () => {
