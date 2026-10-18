@@ -159,12 +159,19 @@ async function computeAdaptive(admin: SupabaseClient, userId: string, date: stri
       ? Number(formula) + rows.reduce((a, d) => a + Number(d.kcal_exercise ?? 0), 0) / Math.max(1, rows.length)
       : null
   const previous = prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null
-  // Um dia incompleto fica com a estimativa anterior; sem dados para medir
-  // (ex.: um dia antigo que passou a «faltou algo»), o dia fica sem estimativa.
+  // Um dia incompleto fica com a estimativa anterior; um completo sem dados
+  // para medir (menos de 10 dias completos ou sem pesagens) fica sem ela.
   const tdee = dayTdee({ complete, previous, raw, reference })
-  const { error } = await admin.from('days').update({ tdee_est: tdee, tdee_raw: raw }).eq('user_id', userId).eq('date', date)
-  // Antes da migração 20261018140000 não há tdee_raw: guarda só a estimativa.
-  if (error && /tdee_raw/.test(error.message)) {
+  // Uma pesagem mal escrita pode dar um valor só pelo peso absurdo (fora de
+  // numeric(6,1)): fica sem ele.
+  const rawStored = raw != null && Math.abs(raw) < 100_000 ? raw : null
+  const { error } = await admin
+    .from('days')
+    .update({ tdee_est: tdee, tdee_raw: rawStored })
+    .eq('user_id', userId)
+    .eq('date', date)
+  // Antes da migração 20261018140000 não há tdee_raw: a estimativa guarda-se na mesma.
+  if (error) {
     await admin.from('days').update({ tdee_est: tdee }).eq('user_id', userId).eq('date', date)
   }
 }

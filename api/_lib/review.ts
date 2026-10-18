@@ -48,7 +48,9 @@ export async function generateWeeklyReview(
         .eq('user_id', userId)
         .gte('date', weekStart)
         .lte('date', weekEnd)
-        .order('date'),
+        // Por ordem fixa (dois treinos no mesmo dia): a impressão digital só muda com os dados.
+        .order('date')
+        .order('id'),
       admin.from('health_daily').select('*').eq('user_id', userId).gte('date', weekStart).lte('date', weekEnd),
       admin.from('profile').select('protein_g,base_kcal,kcal_floor_week,sex,goals').eq('user_id', userId).single(),
     ])

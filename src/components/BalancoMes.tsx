@@ -111,7 +111,7 @@ export default function BalancoMes({ today }: { today: string }) {
   const withSteps = weeks.filter((w) => w.steps != null || w.sleep != null)
   const compared = (link: IntakeLink) =>
     Math.abs(link.diff) < 100
-      ? 'comeste cerca do mesmo que nos outros dias'
+      ? 'comeste mais ou menos o mesmo que nos outros dias'
       : `comeste em média ${fmtInt(Math.abs(link.diff))} kcal ${link.diff > 0 ? 'a mais' : 'a menos'} do que nos outros dias`
   const linkLines = [
     links?.sleep ? `Depois de noites más (menos de 6 h ou sono fraco), ${compared(links.sleep)}.` : null,
