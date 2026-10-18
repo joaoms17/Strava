@@ -39,8 +39,9 @@ export function failureText(failure: Failure, fallback = 'Não consegui. Tenta o
   const network =
     NETWORK_MESSAGE.test(message) || (status == null && !!failure.name && failure.name !== 'TypeError' && NETWORK_NAMES.has(failure.name))
   const own = message !== '' && !GENERIC_MESSAGE.test(message) && !network
-  if (status === 429) return 'Muitos pedidos seguidos. Espera um minuto e tenta outra vez.'
+  // A da app primeiro: o 429 do limite da IA diz o que fazer (Definições › Avançado).
   if (own && (status == null || status < 500 || PORTUGUESE.test(message))) return message
+  if (status === 429) return 'Muitos pedidos seguidos. Espera um minuto e tenta outra vez.'
   if (status === 408 || status === 504) return 'O servidor demorou demasiado. Tenta outra vez.'
   if (status != null && status >= 500) return 'O servidor falhou. Tenta outra vez daqui a pouco.'
   if (network) return 'Sem rede ou rede fraca. Tenta outra vez.'

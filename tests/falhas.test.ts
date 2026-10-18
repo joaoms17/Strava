@@ -35,6 +35,10 @@ describe('falhas passageiras', () => {
       'A IA não respondeu. Tenta outra vez.',
     )
     expect(failureText({ status: 429 })).toMatch(/Espera um minuto/)
+    // O limite da IA (429 da app) mantém a frase do servidor.
+    expect(failureText({ status: 429, message: 'Chegaste ao limite mensal da IA (Definições › Avançado).' })).toBe(
+      'Chegaste ao limite mensal da IA (Definições › Avançado).',
+    )
     expect(failureText({ status: 400, message: 'Falta a foto ou o texto.' })).toBe('Falta a foto ou o texto.')
     expect(failureText({ message: 'Erro 418' }, 'Não consegui guardar.')).toBe('Não consegui guardar.')
     expect(failureText({})).toBe('Não consegui. Tenta outra vez.')
