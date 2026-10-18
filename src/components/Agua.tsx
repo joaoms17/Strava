@@ -14,6 +14,10 @@ export default function Agua({ date }: { date: string }) {
   // Os copos mudam logo no ecrã (vários toques seguidos contam todos) e a
   // gravação segue por ordem: a última a chegar é sempre a do último toque.
   const saving = useRef<Promise<void>>(Promise.resolve())
+  // O que está gravado e quantos toques faltam gravar: uma falha só volta
+  // atrás (para o gravado) quando já não há outro toque a caminho.
+  const saved = useRef(0)
+  const pending = useRef(0)
 
   useEffect(() => {
     let alive = true
@@ -24,7 +28,8 @@ export default function Agua({ date }: { date: string }) {
       if (!alive) return
       // Sem a migração 12 a coluna não existe: o cartão não aparece.
       if (day.error) return setMl(null)
-      setMl(Number(day.data?.water_ml ?? 0))
+      saved.current = Number(day.data?.water_ml ?? 0)
+      setMl(saved.current)
       setGoal(waterGoalMl(weight.data?.[0]?.kg != null ? Number(weight.data[0].kg) : null))
     })
     return () => {
@@ -36,10 +41,8 @@ export default function Agua({ date }: { date: string }) {
     if (ml == null) return
     const next = Math.max(0, ml + delta)
     setMl(next)
-    const failed = () => {
-      setMl(ml)
-      toast('Não consegui guardar a água.')
-    }
+    pending.current += 1
+    let ok = false
     saving.current = saving.current
       .then(async () => {
         const {
@@ -49,9 +52,18 @@ export default function Agua({ date }: { date: string }) {
         const { error } = await supabase
           .from('days')
           .upsert({ user_id: user.id, date, water_ml: next }, { onConflict: 'user_id,date' })
-        if (error) failed()
+        if (!error) {
+          ok = true
+          saved.current = next
+        }
       })
-      .catch(failed)
+      .catch(() => undefined)
+      .then(() => {
+        pending.current -= 1
+        if (ok || pending.current > 0) return
+        setMl(saved.current)
+        toast('Não consegui guardar a água.')
+      })
     await saving.current
   }
 
