@@ -567,7 +567,7 @@ export const update = post(async ({ db, body, res }) => {
   const sport = (type === 'other' ? (input.sport ?? (workout.raw as { sport?: OtherSport } | null)?.sport ?? 'outro') : null) as
     | OtherSport
     | null
-  if (input.sport !== undefined && type === 'other') raw = { ...(raw ?? {}), sport }
+  if (type === 'other' && (input.sport !== undefined || patch.type !== undefined)) raw = { ...(raw ?? {}), sport }
   if (raw !== workout.raw) patch.raw = raw
   // Mudar o tipo (ex.: a elíptica que entrou como bicicleta): o desporto
   // mostrado acompanha.
