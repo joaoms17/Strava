@@ -609,8 +609,11 @@ export default function MealSheet() {
                       )}
                       {people.map((p) =>
                         shared.includes(p.user_id) ? (
-                          <span key={p.user_id} className="text-dim">
-                            Partilhada com {p.name} ✓
+                          // Um estado, não um botão: sem contorno.
+                          <span key={p.user_id} className="!border-transparent bg-surface2 text-dim">
+                            <span>
+                              Partilhada com <span className="whitespace-nowrap">{p.name} ✓</span>
+                            </span>
                           </span>
                         ) : (
                           <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareWith(p)} className="text-eat">
