@@ -1005,6 +1005,7 @@ function NextStepCard({
   onMeasure: () => void
 }) {
   const errorMeal = errorMeals[0] ?? null
+  const female = useReadyProfile().sex === 'f'
   const later = (
     <button onClick={onDismiss} className="min-h-11 px-3 text-[15px] text-dim">
       Agora não
@@ -1117,7 +1118,7 @@ function NextStepCard({
         <>
           <p className="text-[17px]">
             {measureDaysSince == null
-              ? 'Mede a cintura e o pescoço: 2 minutos com uma fita métrica chegam para estimar a gordura e a massa magra.'
+              ? `Mede ${female ? 'a cintura, a anca e o pescoço' : 'a cintura e o pescoço'}: 2 minutos com uma fita métrica chegam para estimar a gordura e a massa magra.`
               : `Medições: há ${measureDaysSince} dias · 2 minutos.`}
           </p>
           <div className="flex items-center gap-2">
