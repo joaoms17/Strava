@@ -15,6 +15,7 @@ import AttachPhotoButton from '../ui/AttachPhotoButton'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
 import AiCheck from '../AiCheck'
+import AvisarAnalise from '../AvisarAnalise'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
 import { recomputeFrom } from '../../lib/recompute'
@@ -409,6 +410,7 @@ export default function MealSheet() {
           <div className="space-y-3">
             <p className="animate-pulse text-[17px]">A analisar…</p>
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
+            <AvisarAnalise className="-mt-2" />
             <button onClick={() => sheet.open('nota', { id: current.id })} className={`${secondary} w-full`}>
               ＋ Nota
             </button>

@@ -91,3 +91,13 @@ export function switchOutcome(error: Failure | null, hasSession: boolean): 'entr
   if (error || !hasSession) return 'esquecer'
   return 'entrar'
 }
+
+// Trocar de pessoa no separador recarrega no mesmo separador da app (no
+// Balanço, fica no Balanço), mas só com o primeiro segmento: ids, datas e
+// ?folha= são da pessoa anterior (/treino/ginasio?id=… → /treino).
+const SWITCH_TABS = ['hoje', 'balanco', 'treino', 'corpo', 'favoritos', 'definicoes']
+
+export function switchPath(pathname: string | null | undefined): string {
+  const first = (pathname ?? '').split(/[?#]/)[0]!.split('/').filter(Boolean)[0] ?? ''
+  return SWITCH_TABS.includes(first) ? `/${first}` : '/hoje'
+}

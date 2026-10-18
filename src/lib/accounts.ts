@@ -80,10 +80,12 @@ export function startAccountTracking(): () => void {
 }
 
 // Trocar de pessoa: entra com a sessão guardada e recarrega a app (nada da
-// pessoa anterior fica em memória). Só se esquece a pessoa quando o servidor
-// diz que a sessão dela acabou: sem rede (ou com o servidor em baixo) a
-// sessão continua válida e a troca fica para quando houver rede.
-export async function switchTo(userId: string): Promise<void> {
+// pessoa anterior fica em memória) no ecrã `path`: o separador do topo fica
+// no mesmo ecrã (`switchPath`); entrar e sair vão para o Hoje. Só se esquece
+// a pessoa quando o servidor diz que a sessão dela acabou: sem rede (ou com
+// o servidor em baixo) a sessão continua válida e a troca fica para quando
+// houver rede.
+export async function switchTo(userId: string, path = '/hoje'): Promise<void> {
   const target = read().find((a) => a.user_id === userId)
   if (!target) throw new Error('Essa pessoa já não está neste telemóvel.')
   const { data, error } = await supabase.auth.setSession({
@@ -100,7 +102,7 @@ export async function switchTo(userId: string): Promise<void> {
     throw new Error(`A sessão de ${target.name} acabou. Junta-a outra vez com o email e a palavra-passe.`)
   }
   rememberSession(data.session)
-  window.location.assign('/hoje')
+  window.location.assign(path)
 }
 
 // Juntar uma pessoa que já tem conta: entra com ela (a atual fica guardada).

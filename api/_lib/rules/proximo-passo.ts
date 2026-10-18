@@ -5,6 +5,7 @@
 // rever à noite (6), pouco (7), proteína (8) e medir (9, de manhã). Os cartões 1 e 2 resolvem-se
 // com a ação; os outros têm «Agora não», que esconde até ao dia seguinte e,
 // ignorado 2 vezes, pausa 3 dias.
+import { isDayComplete } from './day-close.js'
 
 export type NextStepId = 'erro' | 'limite' | 'treino' | 'pesar' | 'ontem' | 'rever' | 'pouco' | 'proteina' | 'medir'
 
@@ -109,4 +110,22 @@ export function nextStep(input: NextStepInput): NextStepId | null {
     if (applies && !(dismissible && hidden(id))) return id
   }
   return null
+}
+
+// Hoje a ver um dia passado (ontem incluído, porque o cartão «Ontem» só
+// aparece no dia de hoje): «Foi tudo neste dia?» quando o dia tem pelo menos
+// uma refeição com números, nenhuma foto por contar (essas resolvem-se
+// primeiro, com «Tentar»), nenhuma resposta e ainda não está completo pela
+// regra 5 (ex.: um dia de jejum de há três dias).
+export function askPastDay(input: {
+  date: string
+  today: string
+  meals: number // refeições contadas (ok e por rever)
+  kcalIn: number
+  uncounted: number // fotos sem números (a analisar, com erro, acima do limite)
+  flags: string[]
+}): boolean {
+  if (input.date >= input.today || input.meals < 1 || input.uncounted > 0) return false
+  if (input.flags.includes('dia_fechado') || input.flags.includes('faltou_algo')) return false
+  return !isDayComplete({ mealCount: input.meals, kcalIn: input.kcalIn, manuallyClosed: false })
 }
