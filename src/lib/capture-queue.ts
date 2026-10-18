@@ -154,7 +154,7 @@ async function send(entry: CaptureEntry, userId: string) {
 }
 
 // O que a captura diz enquanto espera por outra tentativa.
-export const RETRY_TEXT = 'Rede fraca: vou tentar outra vez sozinha.'
+export const RETRY_TEXT = 'Ainda não consegui enviar: vou tentar outra vez sozinha.'
 
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -200,7 +200,7 @@ export function processCaptures(): Promise<void> {
             await discardCapture(entry.client_id)
             emitDataChanged()
           } catch (err) {
-            if (err instanceof TransientFailure) {
+            if (err instanceof TransientFailure || isNetworkError(err)) {
               // Sem rede ou rede fraca: fica por enviar e tenta mais tarde (o
               // servidor reconhece o client_id, por isso repetir não duplica).
               const attempts = (entry.attempts ?? 0) + 1

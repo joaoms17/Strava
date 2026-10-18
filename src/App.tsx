@@ -13,9 +13,8 @@ import Login from './components/Login'
 import Welcome from './components/Welcome'
 import PeopleSwitcher from './components/PeopleSwitcher'
 import { startAccountTracking, storedSession, useAccounts } from './lib/accounts'
-import { sessionEnded } from '../api/_lib/rules/pessoas'
 import { setActiveUser } from './lib/scoped'
-import { initialOf } from '../api/_lib/rules/pessoas'
+import { initialOf, sessionEnded } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
 import { bootUrl } from './lib/boot-url'
 import TabBar from './components/TabBar'
@@ -302,7 +301,7 @@ export default function App() {
     // Guarda a sessão de cada pessoa deste telemóvel (para o separador).
     const stopTracking = startAccountTracking()
     supabase.auth.getSession().then(({ data, error }) => {
-      // Sem rede, a sessão guardada (a pessoa não foi à vida: só falta renovar o token).
+      // Sem rede, a sessão guardada: não acabou, só falta renovar o token.
       const session = data.session ?? (error && !sessionEnded(error) ? storedSession() : null)
       setActiveUser(session?.user.id ?? null)
       setSession(session)

@@ -36,19 +36,22 @@ export default function Agua({ date }: { date: string }) {
     if (ml == null) return
     const next = Math.max(0, ml + delta)
     setMl(next)
-    saving.current = saving.current.then(async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-      const { error } = await supabase
-        .from('days')
-        .upsert({ user_id: user.id, date, water_ml: next }, { onConflict: 'user_id,date' })
-      if (error) {
-        setMl(ml)
-        toast('Não consegui guardar a água.')
-      }
-    })
+    const failed = () => {
+      setMl(ml)
+      toast('Não consegui guardar a água.')
+    }
+    saving.current = saving.current
+      .then(async () => {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (!user) return
+        const { error } = await supabase
+          .from('days')
+          .upsert({ user_id: user.id, date, water_ml: next }, { onConflict: 'user_id,date' })
+        if (error) failed()
+      })
+      .catch(failed)
     await saving.current
   }
 

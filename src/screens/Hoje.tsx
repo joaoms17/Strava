@@ -15,7 +15,7 @@ import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
 import { workoutTitle } from '../lib/workout-actions'
-import { discardCapture, restoreCapture, retryCapture, useCaptures, type CaptureEntry } from '../lib/capture-queue'
+import { RETRY_TEXT, discardCapture, restoreCapture, retryCapture, useCaptures, type CaptureEntry } from '../lib/capture-queue'
 import { BusyButton, runBusy } from '../lib/busy'
 import { recomputeFrom } from '../lib/recompute'
 import { answerDay, type DayAnswer } from '../lib/day-flag'
@@ -240,11 +240,13 @@ export default function Hoje() {
       watched.length > 0
         ? setTimeout(async () => {
             if (document.hidden) return
-            const { data: rows } = await supabase
+            const { data: rows, error } = await supabase
               .from('meals')
               .select('id,status,analysis_started_at,analysis_attempts')
               .in('id', watched.map((m) => m.id))
             if (!alive) return
+            // Sem resposta (rede): pergunta outra vez na próxima volta.
+            if (error) return setPollTick((t) => t + 1)
             const changed = watched.some((m) => {
               const row = rows?.find((r) => r.id === m.id)
               return (
@@ -638,7 +640,7 @@ export default function Hoje() {
                 : !navigator.onLine
                   ? 'À espera de rede · fica guardada'
                   : (capture.attempts ?? 0) > 0
-                    ? (capture.error ?? 'Rede fraca: vou tentar outra vez sozinha.')
+                    ? (capture.error ?? RETRY_TEXT)
                     : 'A enviar…'}
             </span>
           </span>

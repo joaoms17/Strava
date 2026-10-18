@@ -96,7 +96,7 @@ export async function switchTo(userId: string): Promise<void> {
     refresh_token: target.refresh_token,
   })
   if (error && !sessionEnded({ name: error.name, message: error.message, status: error.status ?? null })) {
-    throw new Error('Sem rede. Troca de pessoa quando tiveres rede.')
+    throw new Error('Sem rede. Tenta outra vez quando tiveres rede.')
   }
   if (error || !data.session) {
     forgetAccount(userId)
