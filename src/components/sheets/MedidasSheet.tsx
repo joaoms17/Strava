@@ -316,7 +316,9 @@ export default function MedidasSheet() {
                 </p>
               ) : previous && !sameSiteBefore ? (
                 <p className="text-[15px] text-dim">
-                  A cintura foi medida noutro sítio: mostro o que mudou a partir da próxima medição.
+                  A anterior tinha a cintura{' '}
+                  {measuredWaistSite(previous.readings) === 'umbigo' ? 'no umbigo' : 'na parte mais estreita'}: mostro o que
+                  mudou a partir da próxima medição.
                 </p>
               ) : (
                 <p className="text-[15px] text-dim">Na próxima medição mostro o que mudou.</p>
