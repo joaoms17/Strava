@@ -662,7 +662,7 @@ export default function Hoje() {
           {from && meal.status === 'por_rever' && (
             <button
               onClick={() => sheet.open('rever', { id: meal.id })}
-              className="-mt-1 ml-[72px] flex min-h-9 items-center text-[14px] text-eat"
+              className="-my-1.5 ml-[72px] flex min-h-11 items-center text-[14px] text-eat"
             >
               Confirma a tua porção ›
             </button>

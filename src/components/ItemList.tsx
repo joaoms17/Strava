@@ -38,6 +38,15 @@ export default function ItemList({
     setEditing(null)
   }
 
+  // No iPhone, tocar num botão nem sempre tira o foco do campo: × − + fecham
+  // a edição antes (o número escrito já está nos alimentos), para o campo não
+  // ficar a apontar para outro alimento.
+  function act(next: MealItem[]) {
+    cancelled.current = false
+    setEditing(null)
+    onChange(next)
+  }
+
   return (
     <ul className="divide-y divide-line rounded-2xl bg-surface2">
       {items.map((item, i) => {
@@ -96,7 +105,13 @@ export default function ItemList({
             )}
             {!readOnly && (items.length > 1 || onRemoveLast) && (
               <button
-                onClick={() => (items.length > 1 ? onChange(items.filter((_, j) => j !== i)) : onRemoveLast?.())}
+                onClick={() => {
+                  if (items.length > 1) act(items.filter((_, j) => j !== i))
+                  else {
+                    setEditing(null)
+                    onRemoveLast?.()
+                  }
+                }}
                 className={`${button} text-pain`}
                 aria-label={`tirar ${item.name}`}
               >
@@ -105,10 +120,10 @@ export default function ItemList({
             )}
             {editable && (
               <>
-                <button onClick={() => replace(i, stepItem(item, -10))} className={button} aria-label={`menos 10 g de ${item.name}`}>
+                <button onClick={() => act(items.map((it, j) => (j === i ? stepItem(it, -10) : it)))} className={button} aria-label={`menos 10 g de ${item.name}`}>
                   −
                 </button>
-                <button onClick={() => replace(i, stepItem(item, 10))} className={button} aria-label={`mais 10 g de ${item.name}`}>
+                <button onClick={() => act(items.map((it, j) => (j === i ? stepItem(it, 10) : it)))} className={button} aria-label={`mais 10 g de ${item.name}`}>
                   +
                 </button>
               </>
