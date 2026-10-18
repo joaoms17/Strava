@@ -8,7 +8,7 @@
 | `/api/meal/analyse` | POST | Outra tentativa com lease (`claim_meal_analysis`); `reset` para «Tentar de novo» e «Reanalisar foto», `force` para analisar acima do limite. |
 | `/api/meal/correct` | POST | «Corrigir por texto»: Haiku sobre os itens atuais, sem foto; devolve os itens anteriores para Anular. |
 | `/api/meal/update` | POST | Itens (passos de 10 g), dia e momento, nota (corrige se a análise já acabou), marcas, confirmar e anular a confirmação. |
-| `/api/meal/quick` | POST | Só números, com item sintético «Registo rápido». |
+| `/api/meal/quick` | POST | Só números, com item sintético «Registo rápido». Sem uso na app desde que o «Só números» saiu do ＋ (os números escrevem-se no texto). |
 | `/api/meal/estimate` | POST | Analisar sem gravar («Nova favorita»): o texto, ou a foto (em `<user>/…`) com o nome, pelo mesmo caminho das refeições (biblioteca com referências curtas, confiança por item e as guardas dos números). Devolve `{items[], title, confidence}`. |
 | `/api/meal/save` | POST | Grava a refeição confirmada: valida com Zod, calcula dia nutricional (regra 1) e totais no servidor. |
 | `/api/meal/log-favorite` | POST | Favorito com 1 toque, sem IA: itens × porção, dia nutricional e totais no servidor; num dia passado usa a hora habitual do momento. |

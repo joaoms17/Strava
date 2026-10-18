@@ -103,7 +103,7 @@ export default function WhenPicker({
   )
 }
 
-// Nas folhas abertas a partir do ＋ (Repetir, Só números) o «Quando» já foi
+// Nas folhas abertas a partir do ＋ (Repetir) o «Quando» já foi
 // escolhido lá (decisão 134): só a linha «Vai ficar em Hoje · agora» com
 // «Mudar», que abre o seletor. Sem refeição (num dia passado é obrigatória)
 // o seletor já vem aberto.

@@ -9,12 +9,11 @@ import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
-import { localCalendarDate, nutritionalDay, shiftDate } from '../../lib/day'
+import { localCalendarDate, nutritionalDay } from '../../lib/day'
 import { fmtKcal } from '../../lib/format'
-import { logFavorite, repeatMeal } from '../../lib/meal-actions'
+import { logFavorite } from '../../lib/meal-actions'
 import { enqueueCapture } from '../../lib/capture-queue'
 import { exifDateTimeOf } from '../../lib/exif'
-import { mealName, mealSlot } from '../../lib/repetir'
 import {
   MAX_MEAL_PHOTOS,
   clearPendingCamera,
@@ -41,7 +40,7 @@ import {
 import { favoritesGrid } from '../../../api/_lib/rules/favoritos'
 import { photoInstant } from '../../../api/_lib/rules/captura'
 import { SLOT_LABEL, lisbonClock } from '../../../api/_lib/rules/momentos'
-import type { Diet, Favorite, Meal, Slot } from '../../lib/types'
+import type { Diet, Favorite, Slot } from '../../lib/types'
 
 // Registar: tudo numa folha. Em cima o «Quando» (dia e refeição, com «Agora»
 // por defeito), logo a seguir o campo para escrever o que comeste, depois as
@@ -81,7 +80,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   // Dia da foto (hora EXIF) quando se regista «Agora»: pode não ser hoje.
   const [photoDay, setPhotoDay] = useState<string | null>(null)
   const [favorites, setFavorites] = useState<Favorite[] | null>(null)
-  const [sameAsYesterday, setSameAsYesterday] = useState<Meal | null>(null)
   const [weighedToday, setWeighedToday] = useState(true)
   const [diet, setDiet] = useState<Diet | null>(null)
   const textBox = useRef<HTMLTextAreaElement>(null)
@@ -179,24 +177,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
       alive = false
     }
   }, [])
-
-  // «Igual a ontem»: a mesma refeição no dia antes do escolhido.
-  useEffect(() => {
-    let alive = true
-    void supabase
-      .from('meals_counted')
-      .select('*')
-      .eq('date', shiftDate(when.date, -1))
-      .order('logged_at')
-      .then(({ data }) => {
-        if (!alive) return
-        const meals = (data ?? []) as Meal[]
-        setSameAsYesterday(meals.find((m) => mealSlot(m) === refSlot && m.items.length > 0) ?? null)
-      })
-    return () => {
-      alive = false
-    }
-  }, [when.date, refSlot])
 
   // A dieta que segues: as favoritas desta refeição (a habitual primeiro).
   const dietOptions = useMemo(() => {
@@ -297,7 +277,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     )
   }
 
-  function open(name: 'barras' | 'numeros' | 'repetir') {
+  function open(name: 'barras' | 'repetir') {
     sheet.open(name, whenParams(when, today))
   }
 
@@ -502,20 +482,12 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
           </PhotoButton>
         </div>
         {/* As outras formas de registar ficam logo aqui, sem deslizar. */}
-        <div className="-mt-1 flex gap-2">
-          <button
-            onClick={() => open('barras')}
-            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
-          >
-            <Icon name="barcode" size={18} /> Código de barras
-          </button>
-          <button
-            onClick={() => open('numeros')}
-            className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line text-[15px]"
-          >
-            Só números
-          </button>
-        </div>
+        <button
+          onClick={() => open('barras')}
+          className="-mt-1 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+        >
+          <Icon name="barcode" size={18} /> Código de barras
+        </button>
 
         {dietOptions.length > 0 && (
           <div className="space-y-2" aria-label="Da tua dieta">
@@ -566,36 +538,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             </span>
             <Icon name="chevron" size={18} className="shrink-0 text-dim" />
           </button>
-          {sameAsYesterday && (
-            <button
-              onClick={() => {
-                if (!slotChosen()) return
-                forgetDraft()
-                sheet.close()
-                void runBusy('A registar…', () =>
-                  repeatMeal(
-                    sameAsYesterday.id,
-                    api.date ?? null,
-                    `Registado · ${isNow ? `igual a ontem (${SLOT_LABEL[refSlot].toLowerCase()})` : label}`,
-                    toast,
-                    api.slot ?? refSlot,
-                  ),
-                )
-              }}
-              className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block text-[15px]">
-                  Igual {when.date === today ? 'a ontem' : `a ${dayLabel(shiftDate(when.date, -1), today).toLowerCase()}`} ·{' '}
-                  {SLOT_LABEL[refSlot].toLowerCase()}
-                </span>
-                <span className="block truncate text-[13px] text-dim">{mealName(sameAsYesterday)}</span>
-              </span>
-              <span className="shrink-0 text-[13px] text-dim tabular-nums">
-                {fmtKcal(Number(sameAsYesterday.kcal))} kcal
-              </span>
-            </button>
-          )}
         </div>
 
         <div className="space-y-2">

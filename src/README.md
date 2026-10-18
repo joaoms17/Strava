@@ -13,7 +13,7 @@ Redesenho em curso (docs/redesenho-2026-09.md). Fases 1 e 2:
   Avancado.tsx        custos da IA, mínimo semanal, exercícios seguros, calendário
   Arquivo.tsx         capítulos, linha do tempo e resumos antigos (só leitura)
 /components
-  sheets/             folhas por URL: (+), Peso, Refeição, Galeria, Escrever, Nota, Só números, Código de barras, Rever
+  sheets/             folhas por URL: (+), Peso, Refeição, Galeria, Escrever, Nota, Código de barras, Rever
   ui/                 folha inferior, Quando (dia e refeição), barras, faixa da semana, botão de foto
 /lib                  supabase, perfil, tema, avisos com Anular, espera com bloqueio (busy), folhas, fila de capturas e rascunho do Registar (IndexedDB), EXIF, fotos, formatação PT-PT
 ```
