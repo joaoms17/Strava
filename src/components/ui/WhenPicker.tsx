@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { shiftDate } from '../../lib/day'
 import { fmtDayShort } from '../../lib/format'
-import { dayLabel, normalizeWhen, withDate, type When } from '../../lib/when'
+import { dayLabel, normalizeWhen, whenLabel, withDate, type When } from '../../lib/when'
 import { SLOTS, SLOT_LABEL, SLOT_TIME, clockTime, type Slot } from '../../../api/_lib/rules/momentos'
 import { chip } from './Chips'
 import Icon from './Icon'
@@ -98,6 +99,40 @@ export default function WhenPicker({
         ))}
       </div>
       {missing && <p className="text-[13px] text-eat">Que refeição foi? Escolhe acima.</p>}
+    </div>
+  )
+}
+
+// Nas folhas abertas a partir do ＋ (Repetir, Só números) o «Quando» já foi
+// escolhido lá (decisão 134): só a linha «Vai ficar em Hoje · agora» com
+// «Mudar», que abre o seletor. Sem refeição (num dia passado é obrigatória)
+// o seletor já vem aberto.
+export function WhenLine({
+  today,
+  value,
+  onChange,
+  highlight = false,
+}: {
+  today: string
+  value: When
+  onChange: (when: When) => void
+  highlight?: boolean
+}) {
+  const [open, setOpen] = useState(() => value.slot == null)
+  const shown = open || value.slot == null
+  return (
+    <div className="space-y-2">
+      <div className="flex min-h-11 items-center justify-between gap-3">
+        <p className="text-[13px] text-dim">
+          Vai ficar em <span className="font-semibold text-ink">{whenLabel(value, today)}</span>
+        </p>
+        {!shown && (
+          <button onClick={() => setOpen(true)} className="-mr-2 min-h-11 shrink-0 px-2 text-[15px] text-eat">
+            Mudar
+          </button>
+        )}
+      </div>
+      {shown && <WhenPicker today={today} value={value} onChange={onChange} highlight={highlight} />}
     </div>
   )
 }

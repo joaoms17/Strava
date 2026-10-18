@@ -25,6 +25,7 @@ import {
 import { BusyLabel, runBusy, useBusyKey } from '../../lib/busy'
 import { loadActiveDiet } from '../../lib/diets'
 import { useSignedUrls } from '../../lib/photos'
+import { usePeople } from '../../lib/people'
 import Thumb from '../ui/Thumb'
 import {
   dayLabel,
@@ -36,7 +37,7 @@ import {
   whenParams,
   type When,
 } from '../../lib/when'
-import { rankFavorites } from '../../../api/_lib/rules/favoritos'
+import { favoritesGrid } from '../../../api/_lib/rules/favoritos'
 import { photoInstant } from '../../../api/_lib/rules/captura'
 import { SLOT_LABEL, lisbonClock } from '../../../api/_lib/rules/momentos'
 import type { Diet, Favorite, Meal, Slot } from '../../lib/types'
@@ -63,6 +64,9 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     (peekPendingCamera() ?? []).map((file) => ({ file, url: URL.createObjectURL(file) })),
   )
   const [tags, setTags] = useState<string[]>([])
+  // «Também para …»: comeram o mesmo; segue para essa pessoa quando a análise acabar.
+  const people = usePeople()
+  const [shareWith, setShareWith] = useState<string[]>([])
   const [sendKey, busy] = useBusyKey()
   const [askSlot, setAskSlot] = useState(false)
   // O rascunho guardado (fotos e texto de antes): lê-se uma vez ao abrir;
@@ -193,12 +197,16 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     }
   }, [when.date, refSlot])
 
-  const ranked = useMemo(() => rankFavorites(favorites ?? [], refSlot).slice(0, 6), [favorites, refSlot])
   // A dieta que segues: as favoritas desta refeição (a habitual primeiro).
   const dietOptions = useMemo(() => {
     const byId = new Map((favorites ?? []).map((f) => [f.id, f]))
     return (diet?.meals[refSlot] ?? []).map((id) => byId.get(id)).filter((f): f is Favorite => !!f)
   }, [diet, favorites, refSlot])
+  // As da dieta já estão em cima: a grelha mostra as seguintes.
+  const ranked = useMemo(
+    () => favoritesGrid(favorites ?? [], refSlot, dietOptions.map((f) => f.id)),
+    [favorites, refSlot, dietOptions],
+  )
   const favUrls = useSignedUrls([...ranked, ...dietOptions].map((f) => f.photo_path))
   const weighDot = !weighedToday && lisbonClock(now).hour < 11
   const label = whenLabel(when, today)
@@ -240,6 +248,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
         taken_at: takenAt,
         date: api.date ?? null,
         slot: api.slot ?? null,
+        share_with: people.filter((p) => shareWith.includes(p.user_id)).map((p) => p.user_id),
       })
       sent.current = true
       await saveCaptureDraft(null)
@@ -425,6 +434,20 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
         ) : (
           <p className="-mt-2 text-[13px] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
         )}
+        {hasContent && people.length > 0 && (
+          <div className="-mt-1 flex flex-wrap gap-2">
+            {people.map((p) => (
+              <button
+                key={p.user_id}
+                aria-pressed={shareWith.includes(p.user_id)}
+                onClick={() => setShareWith(toggle(shareWith, p.user_id))}
+                className={chip(shareWith.includes(p.user_id))}
+              >
+                Também para {p.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {reviewing ? (
           <button
@@ -466,6 +489,21 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             <Icon name="gallery" size={28} />
             Galeria
           </PhotoButton>
+        </div>
+        {/* As outras formas de registar ficam logo aqui, sem deslizar. */}
+        <div className="-mt-1 flex gap-2">
+          <button
+            onClick={() => open('barras')}
+            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+          >
+            <Icon name="barcode" size={18} /> Código de barras
+          </button>
+          <button
+            onClick={() => open('numeros')}
+            className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line text-[15px]"
+          >
+            Só números
+          </button>
         </div>
 
         {dietOptions.length > 0 && (
@@ -561,7 +599,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
               </button>
             </span>
           </div>
-          {favorites != null && ranked.length === 0 ? (
+          {favorites != null && favorites.length === 0 ? (
             <p className="rounded-xl bg-surface2 px-3 py-3 text-[13px] text-dim">
               Guarda as refeições que repetes em «＋ Nova» (com foto) ou na ☆ de uma refeição. Depois registas com 1
               toque.
@@ -576,28 +614,13 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
                 >
                   <Thumb url={favorite.photo_path ? favUrls[favorite.photo_path] : null} size={42} />
                   <span className="min-w-0">
-                    <span className="block truncate text-[15px]">{favorite.name}</span>
+                    <span className="line-clamp-2 text-[15px] leading-tight">{favorite.name}</span>
                     <span className="block text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
                   </span>
                 </button>
               ))}
             </div>
           )}
-        </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={() => open('barras')}
-            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
-          >
-            <Icon name="barcode" size={18} /> Código de barras
-          </button>
-          <button
-            onClick={() => open('numeros')}
-            className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line text-[15px]"
-          >
-            Só números
-          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-2">

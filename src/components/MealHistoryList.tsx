@@ -44,7 +44,7 @@ export default function MealHistoryList({
     let alive = true
     void supabase
       .from('meals_counted')
-      .select('id,date,logged_at,slot,input_type,raw_text,items,kcal,protein,status,photo_path,photo_paths,thumb_paths')
+      .select('id,date,logged_at,slot,input_type,raw_text,items,kcal,protein,status,favorite_id,photo_path,photo_paths,thumb_paths')
       .gte('date', shiftDate(today, -DAYS))
       .lte('date', today)
       .order('logged_at', { ascending: false })

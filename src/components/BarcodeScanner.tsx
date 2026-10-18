@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 // BarcodeDetector nativo quando existe; senão ZXing (import dinâmico);
-// e há sempre o campo manual para escrever o EAN.
+// e há sempre o campo manual para escrever os números do código.
 interface DetectedBarcode {
   rawValue: string
 }
@@ -84,10 +84,11 @@ export default function BarcodeScanner({
   }, [onDetect])
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg/95 p-4">
+    // Opaco e abaixo da barra de estado: a app por trás não se vê através da câmara.
+    <div className="fixed inset-0 z-50 flex flex-col bg-bg px-4 pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between pb-2">
-        <h2 className="font-semibold">Ler código de barras</h2>
-        <button className="px-2 text-dim" onClick={onClose}>
+        <h2 className="font-display text-[22px] font-bold uppercase">Ler código de barras</h2>
+        <button className="-mr-2 min-h-11 px-3 text-[15px] text-dim" onClick={onClose}>
           Fechar
         </button>
       </div>
@@ -108,7 +109,8 @@ export default function BarcodeScanner({
       <div className="flex gap-2 pt-4">
         <input
           inputMode="numeric"
-          placeholder="ou escreve o EAN"
+          aria-label="Números do código de barras"
+          placeholder="ou escreve os números do código"
           value={manual}
           onChange={(e) => setManual(e.target.value.replace(/\D/g, ''))}
           className="min-w-0 flex-1 rounded-xl border border-edge bg-card px-3 py-3 text-ink placeholder:text-dim focus:border-accent focus:outline-none"

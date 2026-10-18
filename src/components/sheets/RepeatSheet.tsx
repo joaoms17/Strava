@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
-import WhenPicker from '../ui/WhenPicker'
+import { WhenLine } from '../ui/WhenPicker'
 import MealHistoryList from '../MealHistoryList'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
@@ -39,20 +39,15 @@ export default function RepeatSheet() {
   return (
     <BottomSheet title="Repetir refeição" onClose={sheet.close}>
       <div className="space-y-4 pb-2">
-        <div className="space-y-2">
-          <p className="text-[13px] text-dim">
-            Vai ficar em <span className="font-semibold text-ink">{label}</span>
-          </p>
-          <WhenPicker
-            today={today}
-            value={when}
-            onChange={(next) => {
-              setWhen(next)
-              setAskSlot(false)
-            }}
-            highlight={askSlot}
-          />
-        </div>
+        <WhenLine
+          today={today}
+          value={when}
+          onChange={(next) => {
+            setWhen(next)
+            setAskSlot(false)
+          }}
+          highlight={askSlot}
+        />
         <MealHistoryList today={today} onPick={(meal) => pick(meal.id)} />
       </div>
     </BottomSheet>

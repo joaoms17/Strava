@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
-import WhenPicker from '../ui/WhenPicker'
+import { WhenLine } from '../ui/WhenPicker'
 import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
@@ -96,7 +96,7 @@ export default function QuickSheet() {
           {field('fat', 'Gordura g')}
         </div>
         {field('name', 'Nome')}
-        <WhenPicker today={today} value={when} onChange={setWhen} />
+        <WhenLine today={today} value={when} onChange={setWhen} />
       </div>
     </BottomSheet>
   )

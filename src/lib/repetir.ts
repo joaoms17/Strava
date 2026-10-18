@@ -5,7 +5,8 @@ import type { Meal } from './types'
 export type RepeatSource = Pick<
   Meal,
   'id' | 'date' | 'logged_at' | 'slot' | 'input_type' | 'raw_text' | 'items' | 'kcal' | 'protein' | 'status'
->
+> &
+  Partial<Pick<Meal, 'favorite_id'>>
 
 export function repeatable(meal: RepeatSource): boolean {
   return (meal.status === 'ok' || meal.status === 'por_rever') && meal.items.length > 0 && Number(meal.kcal) > 0
@@ -52,11 +53,19 @@ export function groupByDay<T extends RepeatSource>(meals: T[]): { date: string; 
     .map(([date, list]) => ({ date, meals: list.sort((a, b) => a.logged_at.localeCompare(b.logged_at)) }))
 }
 
+// Registada de uma favorita (ou repetida de uma): já está a 1 toque nas
+// Favoritas do ＋.
+export function fromFavorite(meal: Pick<RepeatSource, 'input_type' | 'favorite_id'>): boolean {
+  return meal.input_type === 'favorite' || meal.favorite_id != null
+}
+
 // As que mais se repetem (mesmo nome e mais ou menos as mesmas kcal), a
-// mais recente de cada; só as que aparecem pelo menos 2 vezes.
+// mais recente de cada; só as que aparecem pelo menos 2 vezes. As das
+// favoritas ficam de fora (continuam no dia a dia e na pesquisa).
 export function frequentMeals<T extends RepeatSource>(meals: T[], limit = 6): { meal: T; count: number }[] {
   const groups = new Map<string, { meal: T; count: number }>()
   for (const meal of meals) {
+    if (fromFavorite(meal)) continue
     const key = `${fold(mealName(meal))}|${Math.round(Number(meal.kcal) / 50)}`
     const current = groups.get(key)
     if (!current) groups.set(key, { meal, count: 1 })
