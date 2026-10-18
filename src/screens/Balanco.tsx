@@ -470,8 +470,13 @@ export default function Balanco() {
                     dataKey="label"
                     axisLine={{ stroke: colors.line }}
                     tickLine={false}
-                    tick={(props: { x?: number | string; y?: number | string; index?: number; payload?: { value?: string } }) => {
-                      const d = chart[props.index ?? -1]
+                    tick={(props: {
+                      x?: number | string
+                      y?: number | string
+                      index?: number
+                      payload?: { value?: string; index?: number }
+                    }) => {
+                      const d = chart[props.payload?.index ?? props.index ?? -1]
                       const x = Number(props.x ?? 0)
                       const y = Number(props.y ?? 0)
                       const open = d && d.date <= today ? () => openDay(d.date) : undefined
