@@ -928,7 +928,7 @@ export default function Hoje() {
                 De manhã, antes de comer.
               </p>
               <div className="flex gap-2">
-                <button onClick={() => sheet.open('peso')} className={`${STEP_PRIMARY} flex-1 bg-cta text-on-cta`}>
+                <button onClick={() => sheet.open('peso')} className={`${STEP_CTA} flex-1`}>
                   Pesar
                 </button>
                 {/* «Saltar» esconde de vez; «Agora não» (próximo passo) só até amanhã. */}
