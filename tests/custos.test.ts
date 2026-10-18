@@ -3,6 +3,7 @@ import {
   VISION_KINDS,
   aiLimitsFor,
   dailyVisionCapReached,
+  kindLabel,
   monthlyCapReached,
   nearMonthlyCap,
 } from '../api/_lib/rules/custos'
@@ -30,5 +31,15 @@ describe('limites da IA', () => {
     expect(VISION_KINDS).toContain('menu_pick')
     expect(VISION_KINDS).toContain('meal_leftovers')
     expect(VISION_KINDS).not.toContain('meal_text')
+  })
+
+  it('os pedidos do mês no singular quando é 1 («1 menu», não «1 menus»)', () => {
+    expect(kindLabel('menus', 1)).toBe('menu')
+    expect(kindLabel('verificações', 1)).toBe('verificação')
+    expect(kindLabel('refeições por texto', 1)).toBe('refeição por texto')
+    expect(kindLabel('menus', 2)).toBe('menus')
+    expect(kindLabel('menus', 0)).toBe('menus')
+    // Um tipo novo sem singular fica no plural.
+    expect(kindLabel('fotos do que sobrou', 1)).toBe('fotos do que sobrou')
   })
 })

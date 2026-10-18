@@ -424,7 +424,7 @@ export default function MedidasSheet() {
         </div>
         <label className="flex items-center justify-between gap-3 text-[15px]">
           Medir 2 vezes (mais rigor)
-          <input type="checkbox" checked={twice} onChange={(e) => setTwice(e.target.checked)} className="h-5 w-5 accent-current" />
+          <input type="checkbox" checked={twice} onChange={(e) => setTwice(e.target.checked)} className="h-5 w-5 accent-cta" />
         </label>
 
         {ESSENTIAL.map((z) => zoneInput(z, true))}

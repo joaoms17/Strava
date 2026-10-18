@@ -317,7 +317,7 @@ export default function DizerTreinoSheet() {
 
               <div className="space-y-2">
                 <p className="label">Quando</p>
-                <DayChips today={today} value={day} onChange={setDay} />
+                <DayChips today={today} value={day} onChange={setDay} tone="cta" />
               </div>
               <label className="flex items-center gap-3 text-[16px]">
                 Duração
@@ -336,7 +336,7 @@ export default function DizerTreinoSheet() {
                   type="checkbox"
                   checked={keep}
                   onChange={(e) => setKeep(e.target.checked)}
-                  className="h-5 w-5 accent-[var(--color-eat)]"
+                  className="h-5 w-5 accent-cta"
                 />
                 Guardar nos meus treinos
               </label>

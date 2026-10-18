@@ -11,27 +11,38 @@ export const TAG_LABEL: Record<string, string> = {
 }
 
 // Por escolher, os chips têm contorno: ficam visíveis em cima de qualquer fundo.
-export const chip = (active: boolean) =>
+// Escolhido: o laranja de Comer nas folhas da comida (`eat`, por omissão) e o
+// do botão principal (`cta`) nos treinos, no corpo e nas pessoas (decisão 93).
+export type ChipTone = 'eat' | 'cta'
+export const chip = (active: boolean, tone: ChipTone = 'eat') =>
   `min-h-9 rounded-full border px-3 py-1.5 text-[15px] ${
-    active ? 'border-eat bg-eat text-bg' : 'border-line bg-transparent'
+    !active ? 'border-line bg-transparent' : tone === 'cta' ? 'border-cta bg-cta text-on-cta' : 'border-eat bg-eat text-bg'
   }`
+
+// Separadores (a pessoa, Semana/Mês, 1M/3M/Tudo, as Favoritas, Sexo,
+// Aparência…): um fundo rebaixado e o escolhido numa pílula levantada,
+// neutra e visível nos dois temas. Sem cor: não é comer nem o botão principal.
+export const SEGMENT_TRACK = 'rounded-xl bg-surface2 p-1'
+export const segment = (active: boolean) => (active ? 'bg-raised font-semibold text-ink shadow-sm' : 'text-dim')
 
 // Dia em chips: Hoje · Ontem · Anteontem.
 export function DayChips({
   today,
   value,
   onChange,
+  tone,
 }: {
   today: string
   value: string | null
   onChange: (date: string) => void
+  tone?: ChipTone
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {[0, -1, -2].map((back) => {
         const date = shiftDate(today, back)
         return (
-          <button key={back} onClick={() => onChange(date)} className={chip(date === value)}>
+          <button key={back} onClick={() => onChange(date)} aria-pressed={date === value} className={chip(date === value, tone)}>
             {back === 0 ? 'Hoje' : back === -1 ? 'Ontem' : 'Anteontem'}
           </button>
         )

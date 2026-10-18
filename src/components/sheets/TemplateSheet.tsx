@@ -135,7 +135,7 @@ export default function TemplateSheet() {
   const field =
     'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
   const small =
-    'h-10 w-14 rounded-lg border border-line bg-bg text-center text-[16px] tabular-nums focus:border-eat focus:outline-none'
+    'h-10 w-12 shrink-0 rounded-lg border border-line bg-bg text-center text-[16px] tabular-nums focus:border-eat focus:outline-none'
   const num = (text: string) => {
     const n = Number(text.replace(',', '.'))
     return Number.isFinite(n) ? n : null
@@ -175,7 +175,7 @@ export default function TemplateSheet() {
             <p className="label">Tipo</p>
             <div className="flex flex-wrap gap-2">
               {KINDS.map(([k, label]) => (
-                <button key={k} onClick={() => setKind(k)} className={chip(kind === k)}>
+                <button key={k} onClick={() => setKind(k)} className={chip(kind === k, 'cta')}>
                   {label}
                 </button>
               ))}
@@ -186,21 +186,27 @@ export default function TemplateSheet() {
             <p className="label">Duração habitual</p>
             <div className="flex flex-wrap items-center gap-2">
               {DURATIONS.map((m) => (
-                <button key={m} onClick={() => setMinutes(m)} className={chip(minutes === m)}>
+                <button key={m} onClick={() => setMinutes(m)} className={chip(minutes === m, 'cta')}>
                   {m} min
                 </button>
               ))}
-              <input
-                inputMode="numeric"
-                aria-label="Outra duração em minutos"
-                value={DURATIONS.includes(minutes) ? '' : String(minutes)}
-                placeholder="outra"
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value.replace(/\D/g, ''), 10)
-                  if (Number.isFinite(n) && n > 0) setMinutes(Math.min(n, 600))
-                }}
-                className="h-9 w-20 rounded-full border border-line bg-transparent px-3 text-[15px] tabular-nums placeholder:text-dim"
-              />
+              {/* Outra duração: com o aspeto de escolhida quando não é nenhuma das de cima. */}
+              <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                <input
+                  inputMode="numeric"
+                  aria-label="Outra duração em minutos"
+                  value={DURATIONS.includes(minutes) ? '' : String(minutes)}
+                  placeholder="outra"
+                  onChange={(e) => {
+                    const n = Number.parseInt(e.target.value.replace(/\D/g, ''), 10)
+                    if (Number.isFinite(n) && n > 0) setMinutes(Math.min(n, 600))
+                  }}
+                  className={`h-9 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                    DURATIONS.includes(minutes) ? 'border-line bg-transparent text-ink' : 'border-cta bg-cta text-on-cta'
+                  }`}
+                />
+                min
+              </label>
             </div>
           </div>
 
@@ -209,7 +215,7 @@ export default function TemplateSheet() {
               <p className="label">Potência</p>
               <div className="flex flex-wrap gap-2">
                 {wattsOptions.map((w) => (
-                  <button key={w} onClick={() => setWatts(w)} className={chip(watts === w)}>
+                  <button key={w} onClick={() => setWatts(w)} className={chip(watts === w, 'cta')}>
                     {w} W
                   </button>
                 ))}
@@ -227,10 +233,10 @@ export default function TemplateSheet() {
                 <div key={`${e.name}-${i}`} className="space-y-2 rounded-xl border border-line p-3">
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[16px] font-semibold">{e.name}</span>
-                    <button onClick={() => move(i, -1)} aria-label="Subir" className="h-9 w-9 rounded-lg text-dim">
+                    <button onClick={() => move(i, -1)} aria-label="Subir" className="h-11 w-11 shrink-0 rounded-lg text-dim">
                       ↑
                     </button>
-                    <button onClick={() => move(i, 1)} aria-label="Descer" className="h-9 w-9 rounded-lg text-dim">
+                    <button onClick={() => move(i, 1)} aria-label="Descer" className="h-11 w-11 shrink-0 rounded-lg text-dim">
                       ↓
                     </button>
                     <button
@@ -239,12 +245,13 @@ export default function TemplateSheet() {
                         dropDraft(e.name)
                       }}
                       aria-label={`Tirar ${e.name}`}
-                      className="h-9 w-9 rounded-lg text-dim"
+                      className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-dim"
                     >
                       <Icon name="close" size={18} />
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[14px] text-dim">
+                  {/* Duas linhas fixas: as séries e as repetições; a carga, com «kg» ao lado. */}
+                  <div className="flex items-center gap-1.5 text-[14px] text-dim">
                     <input
                       inputMode="numeric"
                       aria-label={`Séries de ${e.name}`}
@@ -271,12 +278,15 @@ export default function TemplateSheet() {
                       onChange={(ev) => updateExercise(i, { rep_max: Math.max(1, Math.min(100, num(ev.target.value) ?? 1)) })}
                       className={small}
                     />
-                    reps ·
+                    repetições
+                  </div>
+                  <label className="flex items-center gap-1.5 text-[14px] text-dim">
+                    Carga
                     <input
                       inputMode="decimal"
                       aria-label={`Carga de ${e.name} em kg`}
                       value={loadDrafts[e.name] ?? (e.load_kg != null ? String(e.load_kg).replace('.', ',') : '')}
-                      placeholder="kg"
+                      placeholder="—"
                       onChange={(ev) => {
                         const text = ev.target.value.replace(/[^\d,.]/g, '')
                         setLoadDrafts((prev) => ({ ...prev, [e.name]: text }))
@@ -285,7 +295,8 @@ export default function TemplateSheet() {
                       onBlur={() => dropDraft(e.name)}
                       className={small}
                     />
-                  </div>
+                    kg
+                  </label>
                 </div>
               ))}
               {picking ? (

@@ -5,6 +5,7 @@ import { shiftDate } from '../lib/day'
 import { fmtDayMonth, fmtDayShort, fmtInt } from '../lib/format'
 import { fmtSleep, sleepLabel } from '../../api/_lib/rules/sono'
 import { wellnessTrend, type WellnessRow } from '../../api/_lib/rules/plano'
+import { segment } from './ui/Chips'
 import { STEPS_AVG_DAYS, stepsAverage } from '../../api/_lib/rules/passos'
 
 type Range = 30 | 90
@@ -120,7 +121,7 @@ export default function BemEstar({ rows, today }: { rows: WellnessRow[]; today: 
                 key={r}
                 onClick={() => setRange(r)}
                 aria-pressed={range === r}
-                className={`min-h-8 rounded-md px-3 ${range === r ? 'bg-surface font-semibold' : 'text-dim'}`}
+                className={`min-h-10 rounded-md px-3 ${segment(range === r)}`}
               >
                 {r} dias
               </button>

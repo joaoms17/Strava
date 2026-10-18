@@ -1,6 +1,7 @@
 import { switchTo, useAccounts } from '../lib/accounts'
 import { useToast } from '../lib/toast'
 import { BusyButton } from '../lib/busy'
+import { SEGMENT_TRACK, segment } from './ui/Chips'
 import { switchPath } from '../../api/_lib/rules/pessoas'
 
 // O separador no topo: de quem é a app agora (só aparece com duas ou mais
@@ -25,7 +26,7 @@ export default function PeopleSwitcher() {
       aria-label="Pessoa"
       className="mx-auto flex max-w-md gap-1 px-4 pt-[calc(10px+env(safe-area-inset-top))]"
     >
-      <div className="flex w-full gap-1 rounded-xl bg-surface2 p-1">
+      <div className={`flex w-full gap-1 ${SEGMENT_TRACK}`}>
         {accounts.map((account) => {
           const active = account.user_id === currentId
           return (
@@ -34,9 +35,7 @@ export default function PeopleSwitcher() {
               busy="A mudar…"
               onClick={() => pick(account.user_id)}
               aria-pressed={active}
-              className={`min-h-9 flex-1 truncate rounded-lg px-2 text-[15px] ${
-                active ? 'bg-eat font-semibold text-bg' : 'text-dim'
-              }`}
+              className={`min-h-11 flex-1 truncate rounded-lg px-2 text-[15px] ${segment(active)}`}
             >
               {account.name}
             </BusyButton>

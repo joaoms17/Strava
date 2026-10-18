@@ -48,7 +48,8 @@ function KindToggle({
   disabled: boolean
   onChange: (value: boolean, key: string) => void
 }) {
-  const [key, mine] = useBusyKey()
+  // Só o círculo no lugar da caixa: o «A ligar…» aparece na camada.
+  const [key, mine] = useBusyKey(false)
   return (
     <label className="flex items-start justify-between gap-4">
       <span>
@@ -63,7 +64,7 @@ function KindToggle({
           checked={value}
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked, key)}
-          className="mt-1 h-6 w-6 shrink-0 accent-[var(--color-eat)] disabled:opacity-40"
+          className="mt-1 h-6 w-6 shrink-0 accent-cta disabled:opacity-40"
         />
       )}
     </label>

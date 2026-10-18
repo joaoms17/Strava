@@ -19,7 +19,7 @@ import { addOption } from '../../../api/_lib/rules/dieta'
 import { peekDietDraft, saveDietDraft } from '../../lib/diets'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL } from '../../../api/_lib/rules/momentos'
-import { chip } from '../ui/Chips'
+import { SEGMENT_TRACK, chip, segment as segmentStyle } from '../ui/Chips'
 import type { MealItem, Slot } from '../../lib/types'
 
 type Mode = 'escrever' | 'receita' | 'refeicao'
@@ -237,7 +237,7 @@ export default function NewFavoriteSheet() {
     <button
       onClick={() => setMode(m)}
       aria-pressed={mode === m}
-      className={`min-h-10 rounded-lg ${mode === m ? 'bg-surface font-semibold' : 'text-dim'}`}
+      className={`min-h-10 rounded-lg ${segmentStyle(mode === m)}`}
     >
       {label}
     </button>
@@ -270,7 +270,7 @@ export default function NewFavoriteSheet() {
   return (
     <BottomSheet title="Nova favorita" onClose={sheet.close} footer={footer ?? undefined}>
       <div className="space-y-4 pb-2">
-        <div className="grid grid-cols-3 rounded-xl bg-surface2 p-1 text-[15px]">
+        <div className={`grid grid-cols-3 ${SEGMENT_TRACK} text-[15px]`}>
           {segment('escrever', 'Escrever')}
           {segment('receita', 'Receita')}
           {segment('refeicao', 'De uma refeição')}

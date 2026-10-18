@@ -5,7 +5,7 @@ import { useToast } from '../lib/toast'
 import { BusyButton } from '../lib/busy'
 import { useReadyProfile, useProfile } from '../lib/profile'
 import { fmtInt } from '../lib/format'
-import { USD_TO_EUR, nearMonthlyCap } from '../../api/_lib/rules/custos'
+import { USD_TO_EUR, kindLabel, nearMonthlyCap } from '../../api/_lib/rules/custos'
 import type { CatalogExercise } from '../lib/types'
 import AiCheck from '../components/AiCheck'
 
@@ -129,13 +129,13 @@ export default function Avancado() {
           <>
             {euros && (
               <p className="text-[15px] tabular-nums">
-                Este mês cerca de {costs.eur.toFixed(2).replace('.', ',')} € (aprox.)
+                Este mês: cerca de {costs.eur.toFixed(2).replace('.', ',')} €
               </p>
             )}
             <p className="text-[13px] text-dim">
               {euros ? '' : 'Este mês: '}
               {Object.entries(costs.byKind)
-                .map(([label, n]) => `${fmtInt(n)} ${label}`)
+                .map(([label, n]) => `${fmtInt(n)} ${kindLabel(label, n)}`)
                 .join(' · ') || 'Nenhuma chamada este mês.'}
             </p>
             {euros && nearMonthlyCap(costs.usd, Number(profile.ai_monthly_cap_eur ?? 10)) && (
@@ -186,7 +186,7 @@ export default function Avancado() {
               (await update({ ai_monthly_cap_eur: eur, ai_daily_vision_cap: perDay })) ? 'Guardado.' : 'Não consegui guardar.',
             )
           }}
-          className="min-h-11 w-full rounded-xl bg-eat font-semibold text-bg"
+          className="min-h-11 w-full rounded-xl bg-cta font-semibold text-on-cta"
         >
           Guardar limites
         </BusyButton>
@@ -214,7 +214,7 @@ export default function Avancado() {
               }
               toast((await update({ kcal_floor_week: n })) ? 'Guardado.' : 'Não consegui guardar.')
             }}
-            className="min-h-11 rounded-xl bg-eat px-4 font-semibold text-bg"
+            className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta"
           >
             Guardar
           </BusyButton>
@@ -250,7 +250,7 @@ export default function Avancado() {
           busy="A guardar…"
           disabled={dirty.size === 0}
           onClick={saveCatalog}
-          className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-40"
+          className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-40"
         >
           Guardar exercícios
         </BusyButton>

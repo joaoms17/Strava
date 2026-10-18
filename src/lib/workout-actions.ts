@@ -56,7 +56,7 @@ export interface SaveWorkoutBody {
   name?: string | null
 }
 
-// Guarda o treino e mostra «Bicicleta registada · +380 no plano · Anular».
+// Guarda o treino e mostra «Bicicleta registada · +380 kcal do treino · Anular».
 export async function saveWorkout(body: SaveWorkoutBody, toast: ShowToast): Promise<Workout | null> {
   try {
     const result = await postApi<{ workout: Workout; merged?: boolean }>('/api/workout/save', {
@@ -73,7 +73,7 @@ export async function saveWorkout(body: SaveWorkoutBody, toast: ShowToast): Prom
       )
     } else {
       const kcal = w.kcal_est ?? 0
-      toast(`${workoutTitle(w)} registad${w.type === 'strength' || w.type === 'other' ? 'o' : 'a'}${kcal > 0 ? ` · +${fmtKcal(kcal)} no plano` : ''}`, [
+      toast(`${workoutTitle(w)} registad${w.type === 'strength' || w.type === 'other' ? 'o' : 'a'}${kcal > 0 ? ` · +${fmtKcal(kcal)} kcal do treino` : ''}`, [
         { label: 'Anular', run: () => undoWorkout(w.id, toast) },
       ])
     }

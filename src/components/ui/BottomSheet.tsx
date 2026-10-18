@@ -96,7 +96,7 @@ export default function BottomSheet({
         {title && (
           <div className="flex shrink-0 items-center justify-between px-4 pb-2">
             <h2 className="font-display text-[22px] font-bold uppercase">{title}</h2>
-            <button onClick={close} className="-mr-2 px-2 py-1 text-[15px] text-dim" aria-label="Fechar">
+            <button onClick={close} className="-mr-3 min-h-11 px-3 text-[15px] text-dim" aria-label="Fechar">
               Fechar
             </button>
           </div>

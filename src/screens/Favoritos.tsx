@@ -16,7 +16,7 @@ import type { Favorite, Food, Slot } from '../lib/types'
 import ListaCompras from '../components/ListaCompras'
 import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
-import { chip } from '../components/ui/Chips'
+import { SEGMENT_TRACK, chip, segment as tabStyle } from '../components/ui/Chips'
 import { useSheet } from '../lib/sheet'
 
 type Segment = 'refeicoes' | 'dieta' | 'treinos' | 'alimentos' | 'compras'
@@ -87,7 +87,7 @@ export default function Favoritos() {
 
   return (
     <div className="space-y-4 pt-1">
-      <div className="grid grid-cols-5 rounded-xl bg-surface2 p-1 text-[14px]">
+      <div className={`grid grid-cols-5 ${SEGMENT_TRACK} text-[14px]`}>
         {(
           [
             ['refeicoes', 'Refeições'],
@@ -100,7 +100,8 @@ export default function Favoritos() {
           <button
             key={id}
             onClick={() => setSegment(id)}
-            className={`min-h-10 rounded-lg ${segment === id ? 'bg-surface font-semibold' : 'text-dim'}`}
+            aria-pressed={segment === id}
+            className={`min-h-10 rounded-lg ${tabStyle(segment === id)}`}
           >
             {label}
           </button>
@@ -308,7 +309,7 @@ function EditFavorite({
 
   return (
     <BottomSheet
-      title="Editar favorito"
+      title="Editar favorita"
       onClose={onClose}
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
@@ -362,7 +363,7 @@ function EditFavorite({
               <button
                 key={s}
                 onClick={() => setSlot(s)}
-                className={`rounded-full px-3 py-1.5 text-[15px] ${s === slot ? 'bg-eat text-bg' : 'bg-surface2'}`}
+                className={chip(s === slot)}
               >
                 {SLOT_LABEL[s]}
               </button>

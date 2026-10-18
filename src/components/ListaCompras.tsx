@@ -119,7 +119,7 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
               return (
                 <li key={l.name}>
                   <label className="flex min-h-10 items-center gap-3 text-[15px]">
-                    <input type="checkbox" checked={done} onChange={() => toggle(l.name)} className="h-5 w-5 accent-current" />
+                    <input type="checkbox" checked={done} onChange={() => toggle(l.name)} className="h-5 w-5 accent-cta" />
                     <span className={`flex-1 ${done ? 'text-dim line-through' : ''}`}>{l.name}</span>
                     <span className="text-dim tabular-nums">
                       {l.grams > 0 ? (l.grams >= 1000 ? `${(l.grams / 1000).toFixed(1).replace('.', ',')} kg` : `${l.grams} g`) : `× ${l.times}`}

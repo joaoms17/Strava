@@ -11,6 +11,7 @@ import { localCalendarDate, shiftDate } from '../../lib/day'
 import { fmt1, parseDecimal } from '../../lib/format'
 import { checkWeighing, trend7 } from '../../../api/_lib/rules/weight'
 import type { WeightRow } from '../../lib/types'
+import { chip } from '../ui/Chips'
 
 type Stage = { kind: 'input' } | { kind: 'check'; value: number; suggestion: number | null }
 
@@ -179,7 +180,7 @@ export default function WeighSheet() {
               <BusyButton
                 busy="A guardar…"
                 onClick={() => save(stage.suggestion!)}
-                className="min-h-14 w-full rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
+                className="min-h-14 w-full rounded-2xl bg-cta font-semibold text-on-cta disabled:opacity-50"
               >
                 Sim, {fmt1(stage.suggestion)}
               </BusyButton>
@@ -206,7 +207,7 @@ export default function WeighSheet() {
               <BusyButton
                 busy="A guardar…"
                 onClick={() => save(Math.round(stage.value * 10) / 10)}
-                className="min-h-14 w-full rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50"
+                className="min-h-14 w-full rounded-2xl bg-cta font-semibold text-on-cta disabled:opacity-50"
               >
                 Sim, {fmt1(stage.value)} kg
               </BusyButton>
@@ -232,7 +233,7 @@ export default function WeighSheet() {
           disabled={saving || !value.trim()}
           aria-busy={saving || undefined}
           onClick={submit}
-          className={`min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40 ${saving ? 'opacity-100!' : ''}`}
+          className={`min-h-14 w-full rounded-2xl bg-cta text-[17px] font-semibold text-on-cta disabled:opacity-40 ${saving ? 'opacity-100!' : ''}`}
         >
           {busyContent(saving, 'A guardar…', 'Guardar')}
         </button>
@@ -287,7 +288,8 @@ export default function WeighSheet() {
               <button
                 key={back}
                 onClick={() => setDate(day)}
-                className={`rounded-full px-3 py-1.5 text-[15px] ${day === date ? 'bg-eat text-bg' : 'bg-surface2'}`}
+                aria-pressed={day === date}
+                className={chip(day === date, 'cta')}
               >
                 {back === 0 ? 'Hoje' : back === -1 ? 'Ontem' : 'Anteontem'}
               </button>

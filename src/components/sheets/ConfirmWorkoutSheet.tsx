@@ -498,12 +498,11 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
     setAdding(false)
   }
 
+  // O «confirma» fica por baixo do campo (que já tem a borda âmbar): no
+  // rótulo partia «Batimentos médios» em duas linhas e desalinhava os campos.
   const input = (label: string, key: keyof Draft, lowKey: string, unit: string) => (
     <label className="block space-y-1">
-      <span className="label flex items-center gap-2">
-        {label}
-        {low.has(lowKey) && <span className="rounded bg-attn/20 px-1.5 text-[11px] text-attn">confirma</span>}
-      </span>
+      <span className="label block">{label}</span>
       <span className="flex items-center gap-2">
         <input
           inputMode="numeric"
@@ -516,6 +515,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
         />
         <span className="w-10 text-[15px] text-dim">{unit}</span>
       </span>
+      {low.has(lowKey) && <span className="inline-block rounded bg-attn/15 px-1.5 text-[12px] text-attn">confirma</span>}
     </label>
   )
 
@@ -593,11 +593,11 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
           <div className="space-y-2">
             <p className="label">Já registaste este treino?</p>
             <div className="grid grid-cols-1 gap-2">
-              <button onClick={() => setMerge(true)} className={`${chip(merge)} !rounded-xl !py-3 text-left`}>
+              <button onClick={() => setMerge(true)} className={`${chip(merge, 'cta')} !rounded-xl !py-3 text-left`}>
                 Juntar à {workoutTitle(candidate).toLowerCase()} das{' '}
                 {timeOf(candidate.started_at ?? candidate.created_at)} ({candidate.minutes} min)
               </button>
-              <button onClick={() => setMerge(false)} className={`${chip(!merge)} !rounded-xl !py-3 text-left`}>
+              <button onClick={() => setMerge(false)} className={`${chip(!merge, 'cta')} !rounded-xl !py-3 text-left`}>
                 Guardar como novo
               </button>
             </div>
@@ -614,7 +614,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
         {!merging && (
           <div className="flex flex-wrap gap-2">
             {KINDS.map(([k, label]) => (
-              <button key={k} onClick={() => set({ kind: k })} className={chip(draft.kind === k)}>
+              <button key={k} onClick={() => set({ kind: k })} className={chip(draft.kind === k, 'cta')}>
                 {label}
               </button>
             ))}
@@ -626,10 +626,10 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
             <p className="label flex items-center gap-2">
               Dia e hora
               {(low.has('date') || low.has('start_time')) && (
-                <span className="rounded bg-attn/20 px-1.5 text-[11px] text-attn">confirma</span>
+                <span className="rounded bg-attn/15 px-1.5 text-[12px] text-attn">confirma</span>
               )}
             </p>
-            <DayChips today={today} value={draft.day} onChange={(day) => set({ day })} />
+            <DayChips today={today} value={draft.day} onChange={(day) => set({ day })} tone="cta" />
             {present.has('time') && (
               <label className="flex items-center gap-3 text-[15px] text-dim">
                 Começou às
@@ -848,11 +848,11 @@ function WorkoutDetail({ id }: { id: string }) {
           <p className="text-[15px] text-dim">
             {fmtDayShort(w.date)}
             {startGuessed(w) ? '' : ` · ${timeOf(at)}`} ·{' '}
-            {w.favorite_id ? 'favorito' : (SOURCE_LABEL[w.source] ?? w.source)}
+            {w.favorite_id ? 'teu treino' : (SOURCE_LABEL[w.source] ?? w.source)}
             {(w.merged_from?.length ?? 0) > 0 ? ' · com print' : ''}
           </p>
           <p className="num text-[40px] leading-tight text-burn">
-            {w.kcal_estimated ? '≈ ' : ''}+{fmtKcal(w.kcal_est ?? 0)} <span className="text-[20px] text-dim">no plano</span>
+            {w.kcal_estimated ? '≈ ' : ''}+{fmtKcal(w.kcal_est ?? 0)} <span className="text-[20px] text-dim">kcal do treino</span>
           </p>
           <p className="text-[14px] text-dim">
             {kcalExplanation({
@@ -878,7 +878,7 @@ function WorkoutDetail({ id }: { id: string }) {
                       patch({ favorite_id: w.favorite_id === f.id ? null : f.id }, w.favorite_id === f.id ? 'Tirado.' : `Agora é «${f.name}».`),
                     )
                   }
-                  className={chip(w.favorite_id === f.id)}
+                  className={chip(w.favorite_id === f.id, 'cta')}
                 >
                   {f.name}
                 </button>
@@ -918,7 +918,7 @@ function WorkoutDetail({ id }: { id: string }) {
               <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap gap-2">
                   {KINDS.map(([k, label]) => (
-                    <button key={k} onClick={() => setKind(k)} className={chip(kind === k)}>
+                    <button key={k} onClick={() => setKind(k)} className={chip(kind === k, 'cta')}>
                       {label}
                     </button>
                   ))}

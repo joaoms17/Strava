@@ -45,7 +45,7 @@ export default function PeopleSettings() {
             className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-[16px] focus:border-eat focus:outline-none"
           />
           {name != null && name.trim() !== me?.name && (
-            <BusyButton busy="A guardar…" onClick={saveName} className="min-h-11 rounded-xl bg-eat px-4 font-semibold text-bg">
+            <BusyButton busy="A guardar…" onClick={saveName} className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta">
               Guardar
             </BusyButton>
           )}

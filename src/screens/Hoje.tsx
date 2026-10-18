@@ -381,7 +381,7 @@ export default function Hoje() {
     week == null
       ? null
       : Math.abs(week.diff) < 50
-        ? 'no plano'
+        ? 'certa com o plano'
         : `${fmtKcal(Math.abs(week.diff))} kcal ${week.diff > 0 ? 'abaixo' : 'acima'} do plano`
   const yesterdayComplete = isDayComplete({
     mealCount: data.yesterday.meals,

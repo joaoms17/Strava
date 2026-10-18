@@ -2,9 +2,9 @@ import { useSheet } from '../lib/sheet'
 import Icon, { type IconName } from './ui/Icon'
 import ShotButton from './ui/ShotButton'
 
-// As três formas de registar um treino: o print do relógio, o print da app
-// (Strava, app do ginásio, consola…) ou dizer/escrever o que fizeste. Os dois
-// prints seguem o mesmo caminho (a IA lê qualquer um).
+// As formas de registar um treino: um print (do relógio, do Strava, da app do
+// ginásio, da consola… a IA lê qualquer um) ou dizer/escrever o que fizeste.
+// Eram dois botões de print com o mesmo caminho; ficou um (decisão 152).
 export default function WorkoutLogOptions({ date }: { date?: string | null }) {
   const sheet = useSheet()
   const box =
@@ -14,21 +14,24 @@ export default function WorkoutLogOptions({ date }: { date?: string | null }) {
       <Icon name={name} size={22} />
     </span>
   )
+  const hint = 'block font-sans text-[13px] font-normal tracking-normal text-dim normal-case'
   return (
     <section className="space-y-2" aria-label="Registar treino">
       <p className="label">Registar treino</p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <ShotButton className={box}>
           {icon('watch')}
-          Print do relógio
-        </ShotButton>
-        <ShotButton className={box}>
-          {icon('phone')}
-          Print da app
+          <span>
+            Print
+            <span className={hint}>relógio, Strava, consola…</span>
+          </span>
         </ShotButton>
         <button onClick={() => sheet.open('dizer-treino', date ? { data: date } : {})} className={box}>
           {icon('mic')}
-          Dizer ou escrever
+          <span>
+            Dizer ou escrever
+            <span className={hint}>ginásio, caminhada, aula…</span>
+          </span>
         </button>
       </div>
     </section>

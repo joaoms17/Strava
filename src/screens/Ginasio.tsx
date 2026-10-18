@@ -7,7 +7,7 @@ import { BusyButton } from '../lib/busy'
 import { emitDataChanged } from '../lib/events'
 import { useReadyProfile } from '../lib/profile'
 import { nutritionalDay } from '../lib/day'
-import { fmtDayShort } from '../lib/format'
+import { fmtDayShort, fmtKcal } from '../lib/format'
 import { lisbonInstant } from '../../api/_lib/rules/momentos'
 import { exerciseKey, sameExercise } from '../../api/_lib/rules/exercicios'
 import {
@@ -66,8 +66,8 @@ function writeDraft(draft: Draft | null) {
 }
 
 // Sessão de ginásio livre: séries de 8 a 12 repetições (ou as do teu treino)
-// com as cargas da última vez já preenchidas. ?fav= começa de um favorito;
-// ?id= edita uma sessão antiga; ?data= regista num dia passado.
+// com as cargas da última vez já preenchidas. ?fav= começa de um dos teus
+// treinos; ?id= edita uma sessão antiga; ?data= regista num dia passado.
 export default function Ginasio() {
   const [, navigate] = useLocation()
   const params = new URLSearchParams(useSearch())
@@ -202,6 +202,12 @@ export default function Ginasio() {
         i === ei ? { ...ex, sets: ex.sets.map((s, j) => (j === si ? { ...s, ...patch } : s)) } : ex,
       ),
     )
+  // «✓ Todas»: as séries que faltam deste exercício ficam feitas com o que se
+  // vê (as de 0 repetições ficam como estão).
+  const markAll = (ei: number) =>
+    setExercises(
+      d.exercises.map((ex, i) => (i === ei ? { ...ex, sets: ex.sets.map((s) => (s.reps > 0 ? { ...s, done: true } : s)) } : ex)),
+    )
   // A duração escrita; sem ela, a guardada (ao corrigir) ou o cronómetro.
   const timerMinutes = Math.max(1, Math.round((now - d.startedAt) / 60_000))
   const minutes = Math.max(1, Math.min(MAX_MINUTES, d.minutes ?? editing?.minutes ?? (d.day ? 60 : timerMinutes)))
@@ -269,7 +275,15 @@ export default function Ginasio() {
       writeDraft(null)
       emitDataChanged()
       setSavedId(workout.id)
-      toast(editId ? 'Sessão corrigida.' : `Ginásio registado · ${sets.length} séries${workout.kcal_est ? ` · +${workout.kcal_est} no plano` : ''}`)
+      toast(
+        editId
+          ? 'Sessão corrigida.'
+          : `Ginásio registado · ${sets.length} séries${workout.kcal_est ? ` · +${fmtKcal(workout.kcal_est)} kcal do treino` : ''}`,
+      )
+      // De um dos teus treinos ou a corrigir, o «Feito» não tem mais nada
+      // (o aviso já diz as séries): volta logo ao Treino. Numa sessão livre
+      // fica, para a guardar nos teus treinos.
+      if (editId || d.favoriteId) navigate('/treino')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar. Tenta outra vez.')
     }
@@ -298,7 +312,7 @@ export default function Ginasio() {
         })),
       },
     })
-    toast(error ? 'Não consegui guardar o favorito.' : `Favorito guardado · ${name}`)
+    toast(error ? 'Não consegui guardar o treino.' : `Guardado nos teus treinos · ${name}`)
     if (!error) {
       setFavName(null)
       emitDataChanged()
@@ -314,7 +328,7 @@ export default function Ginasio() {
         </p>
         {!editId && !d.favoriteId && favName == null && (
           <button onClick={() => setFavName('')} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
-            ☆ Guardar como favorito
+            ☆ Guardar nos meus treinos
           </button>
         )}
         {favName != null && (
@@ -324,7 +338,7 @@ export default function Ginasio() {
               value={favName}
               onChange={(e) => setFavName(e.target.value)}
               placeholder="Nome, ex.: Pernas C"
-              aria-label="Nome do favorito"
+              aria-label="Nome do treino"
               className="h-12 flex-1 rounded-xl border border-line bg-bg px-3 text-[17px]"
             />
             <BusyButton
@@ -358,7 +372,7 @@ export default function Ginasio() {
           {d.day && <span className="block text-[15px] font-semibold text-dim">Em {fmtDayShort(d.day)}</span>}
         </p>
         {!editId && d.exercises.length > 0 && (
-          <button onClick={restart} className="text-[14px] text-dim">
+          <button onClick={restart} className="-mr-3 min-h-11 px-3 text-[14px] text-dim">
             Recomeçar
           </button>
         )}
@@ -366,7 +380,7 @@ export default function Ginasio() {
 
       {d.exercises.length === 0 && (
         <div className="space-y-3">
-          {favorites.length > 0 && <p className="label">Começar de um favorito</p>}
+          {favorites.length > 0 && <p className="label">Começar de um dos teus treinos</p>}
           {favorites.map((f) => (
             <button
               key={f.id}
@@ -391,7 +405,7 @@ export default function Ginasio() {
         return (
           <section key={ex.name} className="space-y-2 rounded-[18px] border border-line bg-surface p-3">
             <div className="flex items-start justify-between gap-2">
-              <div>
+              <div className="min-w-0">
                 <p className="text-[17px] font-semibold">{ex.name}</p>
                 <p className="text-[14px] text-dim">
                   {sug?.firstTime
@@ -402,9 +416,24 @@ export default function Ginasio() {
                   )}
                 </p>
               </div>
-              <button onClick={() => removeExercise(ei)} className="px-1 text-dim" aria-label={`Tirar ${ex.name}`}>
-                <Icon name="close" size={18} />
-              </button>
+              <div className="-mt-1 -mr-2 flex shrink-0 items-center">
+                {ex.sets.some((s) => !s.done && s.reps > 0) && (
+                  <button
+                    onClick={() => markAll(ei)}
+                    className="flex min-h-11 items-center gap-1 rounded-lg px-2 text-[14px] font-semibold text-burn"
+                    aria-label={`Marcar as séries de ${ex.name} como feitas`}
+                  >
+                    <Icon name="check" size={16} /> Todas
+                  </button>
+                )}
+                <button
+                  onClick={() => removeExercise(ei)}
+                  className="flex h-11 w-11 items-center justify-center rounded-lg text-dim"
+                  aria-label={`Tirar ${ex.name}`}
+                >
+                  <Icon name="close" size={18} />
+                </button>
+              </div>
             </div>
             {ex.sets.map((s, si) => (
               <div key={si} className="flex items-center gap-2">
@@ -470,7 +499,7 @@ export default function Ginasio() {
                     ),
                   )
                 }}
-                className="text-[15px] text-dim"
+                className="-ml-2 min-h-11 px-2 text-[15px] text-dim"
               >
                 + série
               </button>
