@@ -80,6 +80,14 @@ function getOnce(url: URL, deadline: number): Promise<Page> {
         })
         stream.on('end', () => resolve({ status, headers: res.headers, body: Buffer.concat(chunks) }))
         stream.on('error', reject)
+        // A ligação cortada a meio (com gzip, o erro não passa pelo pipe).
+        if (stream !== res) res.on('error', reject)
+        res.on('close', () => {
+          if (res.complete) return
+          const err = new Error('ligação cortada')
+          if (Date.now() >= deadline) err.name = 'TimeoutError'
+          reject(err)
+        })
       },
     )
     req.on('error', reject)
