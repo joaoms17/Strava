@@ -88,7 +88,7 @@ export default function DietToday({
                 <span className="block text-[12px] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[d.slot]}</span>
                 <span className="block truncate text-[15px]">{main.name}</span>
                 <span className="block text-[13px] text-dim tabular-nums">
-                  {fmtKcal(main.kcal)} kcal · {fmtInt(Number(main.protein))} g
+                  {fmtKcal(main.kcal)} kcal · {fmtInt(Number(main.protein))} g prot.
                 </span>
               </span>
               <button

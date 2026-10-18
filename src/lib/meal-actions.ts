@@ -3,14 +3,12 @@ import { emitDataChanged } from './events'
 import { fmtKcal } from './format'
 import type { ToastAction } from './toast'
 import type { Favorite, Meal, Slot } from './types'
+import { PORTION_FACTORS, portionLabel } from '../../api/_lib/rules/favoritos'
 
 type ShowToast = (text: string, actions?: ToastAction[]) => void
 
-const PORTIONS: [string, number][] = [
-  ['½', 0.5],
-  ['1½', 1.5],
-  ['2', 2],
-]
+// As porções do aviso «Registado» (a 1 é a que fica).
+const PORTIONS: [string, number][] = PORTION_FACTORS.filter((f) => f !== 1).map((f) => [portionLabel(f), f])
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Não consegui gravar. Tenta outra vez.'

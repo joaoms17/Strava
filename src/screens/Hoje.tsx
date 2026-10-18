@@ -51,6 +51,7 @@ import WeekStrip from '../components/ui/WeekStrip'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
 import { proteinPicks } from '../../api/_lib/rules/favoritos'
+import { sharedFrom } from '../../api/_lib/rules/partilha'
 
 interface DayData {
   date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
@@ -619,6 +620,9 @@ export default function Hoje() {
     const stuck = !isRetrying && analysisStuck(meal, Date.now())
     const failed = !isRetrying && (meal.status === 'erro' || stuck)
     const pending = isRetrying || (meal.status === 'a_analisar' && !stuck)
+    // Partilhada por outra pessoa da casa: diz de quem é e, por rever, leva
+    // a confirmar a porção (a qualquer hora, não só no Rever da noite).
+    const from = analysed ? sharedFrom(meal.note) : null
     const subtitle = isRetrying
       ? 'A analisar outra vez…'
       : meal.status === 'erro'
@@ -631,7 +635,7 @@ export default function Hoje() {
               ? 'Sem análise (limite da IA)'
               : fromFavorite
                 ? SLOT_LABEL[slot]
-                : meal.items.map((i) => i.name).join(', ')
+                : `${from ? `de ${from} · ` : ''}${meal.items.map((i) => i.name).join(', ')}`
     entries.push({
       at: meal.logged_at,
       key: `m-${meal.id}`,
@@ -698,6 +702,14 @@ export default function Hoje() {
               </button>
             )}
           </div>
+          {from && meal.status === 'por_rever' && (
+            <button
+              onClick={() => sheet.open('rever', { id: meal.id })}
+              className="-my-1.5 ml-[72px] flex min-h-11 items-center text-[14px] text-eat"
+            >
+              Confirma a tua porção ›
+            </button>
+          )}
           {fresh && analysed && (
             <p className="pl-[72px] text-[13px] text-dim">
               acabado de registar ·{' '}
@@ -986,7 +998,12 @@ export default function Hoje() {
             })
             emitDataChanged()
           }}
-          onReview={() => sheet.open('rever')}
+          onReview={() => {
+            // Uma só: a folha da refeição (a partilhada, no Rever, que tem a porção).
+            const only = reviewMeals.length === 1 ? reviewMeals[0]! : null
+            if (only && !sharedFrom(only.note)) sheet.open('refeicao', { id: only.id })
+            else sheet.open('rever')
+          }}
           onRaiseLimit={() => navigate('/definicoes/avancado')}
           onConfirmWorkout={() => sheet.open('confirmar-treino', { import: data.importsToConfirm[0]! })}
           measureDaysSince={daysSinceMeasure(data.lastMeasureDate, today)}
@@ -1248,7 +1265,7 @@ function NextStepCard({
     <div className="flex flex-wrap gap-2">
       {favorites.map((fav) => (
         <button key={fav.id} onClick={() => onFavorite(fav)} className="rounded-full bg-surface2 px-3 py-2 text-[15px]">
-          {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g</span>
+          {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g prot.</span>
         </button>
       ))}
     </div>

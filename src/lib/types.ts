@@ -89,6 +89,12 @@ export interface Meal {
   analysis_attempts: number
   analysis_error: string | null
   model_reserve?: boolean // foto lida pelo modelo de reserva da IA (migração 20261018150002)
+  share_with?: string[] // «Também para …» à espera do fim da análise (migração 20261018160000)
+  // Foto do que sobrou e as kcal que ficaram no prato (migração 20261018200000),
+  // à parte das fotos do prato. Sem a migração, não vêm.
+  leftover_photo_path?: string | null
+  leftover_thumb_path?: string | null
+  leftover_kcal?: number | null
 }
 
 export type Slot = 'pequeno_almoco' | 'almoco' | 'lanche' | 'jantar' | 'ceia'

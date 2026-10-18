@@ -31,7 +31,6 @@ import NewFavoriteSheet from './components/sheets/NewFavoriteSheet'
 import DietSheet from './components/sheets/DietSheet'
 import PersonSheet from './components/sheets/PersonSheet'
 import NoteSheet from './components/sheets/NoteSheet'
-import QuickSheet from './components/sheets/QuickSheet'
 import BarcodeSheet from './components/sheets/BarcodeSheet'
 import MenuSheet from './components/sheets/MenuSheet'
 import ReviewSheet from './components/sheets/ReviewSheet'
@@ -191,7 +190,6 @@ function Sheets() {
   if (sheet.name === 'dieta') return <DietSheet key={sheet.params.get('id') ?? 'nova'} />
   if (sheet.name === 'pessoa') return <PersonSheet />
   if (sheet.name === 'nota' && sheet.params.get('id')) return <NoteSheet key={sheet.params.get('id')} />
-  if (sheet.name === 'numeros') return <QuickSheet />
   if (sheet.name === 'barras') return <BarcodeSheet />
   if (sheet.name === 'menu') return <MenuSheet />
   if (sheet.name === 'rever') return <ReviewSheet />

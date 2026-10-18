@@ -6,6 +6,7 @@ import { logFavorite, portion, remove, repeat, restore } from './_meal/quick.js'
 import { analyse, attach, capture, correct, detach, estimate, quick, update } from './_meal/async.js'
 import { favoriteCopy, people, share } from './_meal/share.js'
 import recipe from './_meal/recipe.js'
+import { leftovers, leftoversUndo } from './_meal/leftovers.js'
 
 // O plano Hobby do Vercel limita a 12 funções por deploy; os endpoints de
 // refeições vivem juntos numa função, com os caminhos originais preservados
@@ -26,6 +27,8 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   analyse,
   attach,
   detach,
+  leftovers,
+  'leftovers-undo': leftoversUndo,
   correct,
   update,
   quick,

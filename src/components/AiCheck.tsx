@@ -42,16 +42,28 @@ export default function AiCheck({ compact = false }: { compact?: boolean }) {
 
   return (
     <div className="space-y-2">
-      <button
-        disabled={busy}
-        onClick={() => void run()}
-        className={`flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[15px] disabled:opacity-60 ${
-          compact ? 'w-full' : ''
-        }`}
-      >
-        <Icon name="check" size={18} />
-        {busy ? 'A verificar…' : 'Verificar a IA'}
-      </button>
+      {compact ? (
+        // Na folha de uma refeição com erro: um link discreto, não um botão a
+        // competir com «Tentar outra vez» (o diagnóstico é para quem gere a IA).
+        <button disabled={busy} onClick={() => void run()} className="min-h-11 text-left text-[14px] text-dim disabled:opacity-60">
+          {busy ? (
+            'A verificar…'
+          ) : (
+            <>
+              A IA está a falhar? <span className="text-eat">Verificar</span>
+            </>
+          )}
+        </button>
+      ) : (
+        <button
+          disabled={busy}
+          onClick={() => void run()}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[15px] disabled:opacity-60"
+        >
+          <Icon name="check" size={18} />
+          {busy ? 'A verificar…' : 'Verificar a IA'}
+        </button>
+      )}
       {error && <p className="text-[14px] text-eat">{error}</p>}
       {result && (
         <div className="space-y-1.5 rounded-xl bg-surface2 p-3 text-[14px]">
