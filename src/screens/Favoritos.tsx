@@ -108,12 +108,20 @@ export default function Favoritos() {
       </div>
 
       {segment === 'refeicoes' && (
-        <button
-          onClick={() => sheet.open('nova-favorita')}
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
-        >
-          <Icon name="plus" size={18} /> Nova favorita
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => sheet.open('nova-favorita')}
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+          >
+            <Icon name="plus" size={18} /> Nova favorita
+          </button>
+          <button
+            onClick={() => sheet.open('nova-favorita', { modo: 'receita' })}
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+          >
+            Importar receita
+          </button>
+        </div>
       )}
 
       {segment === 'dieta' && <DietTab favorites={favorites ?? []} photos={photos} />}
@@ -123,8 +131,8 @@ export default function Favoritos() {
           <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
         ) : favorites.length === 0 ? (
           <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
-            Cria uma em «Nova favorita» (escrita, com foto, ou a partir de uma refeição) ou toca na ☆ de uma
-            refeição. Depois registas com 1 toque, sempre com a foto dela.
+            Cria uma em «Nova favorita» (escrita, com foto, de uma receita ou a partir de uma refeição) ou toca na
+            ☆ de uma refeição. Depois registas com 1 toque, sempre com a foto dela.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-3">

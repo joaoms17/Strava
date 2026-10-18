@@ -52,7 +52,7 @@ function mediaTypeFor(path: string): ImageMediaType {
   return 'image/jpeg'
 }
 
-async function foodLibrary(admin: SupabaseClient, userId: string) {
+export async function foodLibrary(admin: SupabaseClient, userId: string) {
   const { data } = await admin
     .from('foods')
     .select('id,name,default_portion_g,kcal_100g,protein_100g,carbs_100g,fat_100g')

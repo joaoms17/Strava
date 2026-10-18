@@ -35,8 +35,11 @@ const nonNegative = (n: number) => (Number.isFinite(n) && n > 0 ? round1(n) : 0)
 export const MAX_ITEM_GRAMS = 1500
 export const MAX_KCAL_PER_GRAM = 9
 
-export function implausibleItem(item: Pick<MealItem, 'grams' | 'kcal' | 'protein' | 'carbs' | 'fat'>): boolean {
-  if (item.grams > MAX_ITEM_GRAMS) return true
+export function implausibleItem(
+  item: Pick<MealItem, 'grams' | 'kcal' | 'protein' | 'carbs' | 'fat'>,
+  maxGrams = MAX_ITEM_GRAMS,
+): boolean {
+  if (item.grams > maxGrams) return true
   if (item.grams > 0 && item.kcal > item.grams * MAX_KCAL_PER_GRAM) return true
   const fromMacros = 4 * item.protein + 4 * item.carbs + 9 * item.fat
   return fromMacros > item.kcal * 1.25 + 20
@@ -44,8 +47,12 @@ export function implausibleItem(item: Pick<MealItem, 'grams' | 'kcal' | 'protein
 
 // Um item com números impossíveis fica com confiança baixa (e a refeição por
 // rever): os números não mudam, mas aparece «confirma» em vez de entrar
-// como certo.
-export function toMealItems(items: AnalysedItem[], refs: Record<string, string>): MealItem[] {
+// como certo. Numa receita inteira (várias doses) cabem mais gramas.
+export function toMealItems(
+  items: AnalysedItem[],
+  refs: Record<string, string>,
+  maxGrams = MAX_ITEM_GRAMS,
+): MealItem[] {
   return items
     .filter((item) => item.name.trim())
     .map((item) => {
@@ -56,7 +63,7 @@ export function toMealItems(items: AnalysedItem[], refs: Record<string, string>)
         carbs: nonNegative(item.carbs),
         fat: nonNegative(item.fat),
       }
-      const confidence: Confidence = implausibleItem(numbers) ? 'baixa' : item.confidence
+      const confidence: Confidence = implausibleItem(numbers, maxGrams) ? 'baixa' : item.confidence
       return {
         name: item.name.trim(),
         ...numbers,
