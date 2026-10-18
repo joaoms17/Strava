@@ -492,6 +492,17 @@ export default function MealSheet() {
               </p>
             </div>
 
+            {current.model_reserve && current.deleted_at == null && !reanalysing && (
+              <div className="space-y-2 rounded-xl bg-surface2 px-3 py-2">
+                <p className="text-[14px] text-dim">
+                  Lida pelo modelo de reserva da IA (o principal chegou ao limite gratuito de hoje), que acerta menos nas
+                  porções. Confirma as quantidades ou analisa outra vez mais logo.
+                </p>
+                <button onClick={() => void analyse({ reset: true }, 'A analisar outra vez…')} className="text-[15px] text-eat">
+                  Analisar outra vez
+                </button>
+              </div>
+            )}
             {current.analysis_error && (current.photo_paths?.length ?? 0) > 0 && current.deleted_at == null && (
               <p className="text-[14px] text-attn">
                 A foto nova não foi analisada. {splitStoredError(current.analysis_error).message} Junta o que faltava

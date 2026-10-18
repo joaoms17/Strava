@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_PEOPLE, initialOf, personName, startingTargets } from '../api/_lib/rules/pessoas'
+import { MAX_PEOPLE, initialOf, parseAccounts, personName, startingTargets, switchOutcome, upsertAccount } from '../api/_lib/rules/pessoas'
 
 describe('várias pessoas', () => {
   it('alvos de partida de uma mulher: fórmula menos o défice, proteína pelo peso alvo', () => {
@@ -37,5 +37,32 @@ describe('várias pessoas', () => {
     expect(personName('Um nome muito comprido que não cabe no separador', null)).toHaveLength(30)
     expect(initialOf('joana')).toBe('J')
     expect(MAX_PEOPLE).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('contas guardadas no telemóvel', () => {
+  const joao = { user_id: 'joao', refresh_token: 'r1', name: 'João' }
+  const joana = { user_id: 'joana', refresh_token: 'r2', name: 'Joana' }
+
+  it('lê só as contas válidas (lixo ou nada dá lista vazia)', () => {
+    expect(parseAccounts(JSON.stringify([joao, { user_id: 'x' }, null, joana]))).toEqual([joao, joana])
+    expect(parseAccounts('{nada')).toEqual([])
+    expect(parseAccounts(null)).toEqual([])
+    expect(parseAccounts('{"user_id":"joao"}')).toEqual([])
+  })
+
+  it('guardar a sessão renovada substitui a da pessoa sem mudar a ordem', () => {
+    const renewed = { ...joao, refresh_token: 'r3' }
+    expect(upsertAccount([joao, joana], renewed)).toEqual([renewed, joana])
+    expect(upsertAccount([joao], joana)).toEqual([joao, joana])
+  })
+
+  it('trocar de pessoa sem rede não a esquece; só quando a sessão acabou', () => {
+    expect(switchOutcome(null, true)).toBe('entrar')
+    expect(switchOutcome({ name: 'AuthRetryableFetchError', message: 'Load failed', status: 0 }, false)).toBe('sem-rede')
+    expect(switchOutcome({ name: 'AuthApiError', message: 'Invalid Refresh Token: Already Used', status: 400 }, false)).toBe(
+      'esquecer',
+    )
+    expect(switchOutcome(null, false)).toBe('esquecer')
   })
 })

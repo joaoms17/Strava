@@ -11,6 +11,7 @@ import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
+import { notifyMealAnalysed } from '../_lib/push.js'
 import { learnFoods } from '../_lib/foods.js'
 import { itemsToLearn } from '../_lib/rules/aprender.js'
 
@@ -125,6 +126,12 @@ function inBackground(task: Promise<unknown>) {
   waitUntil(safe)
 }
 
+// No fim da análise, avisa o telemóvel («Almoço analisado · 640 kcal») se a
+// pessoa o quiser.
+function analyseInBackground(admin: SupabaseClient, mealId: string) {
+  inBackground(claimAndAnalyse(admin, mealId).then((meal) => notifyMealAnalysed(admin, meal)))
+}
+
 async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
   const { data } = await db.from('meals').select('*').eq('id', mealId).maybeSingle()
   if (!data) throw new HttpError(404, 'Refeição não encontrada.')
@@ -210,7 +217,7 @@ export const capture = post(async ({ db, userId, body, res }) => {
     throw new HttpError(500, error.message)
   }
 
-  if (meal.status === 'a_analisar') inBackground(claimAndAnalyse(admin, meal.id as string))
+  if (meal.status === 'a_analisar') analyseInBackground(admin, meal.id as string)
   res.status(202).json({ meal })
 })
 
@@ -289,7 +296,7 @@ export const attach = post(async ({ db, userId, body, res }) => {
     .select()
     .single()
   if (error) throw new HttpError(500, error.message)
-  if (data.status === 'a_analisar') inBackground(claimAndAnalyse(admin, meal.id))
+  if (data.status === 'a_analisar') analyseInBackground(admin, meal.id)
   res.status(202).json({ meal: data, previous })
 })
 

@@ -64,3 +64,30 @@ export function sessionEnded(error: Failure | null): boolean {
   if (error.name === 'AuthSessionMissingError' || error.name === 'AuthInvalidTokenResponseError') return true
   return error.status != null && error.status >= 400 && error.status < 500
 }
+
+// As contas guardadas neste telemóvel (localStorage): só as que têm id e
+// refresh token; o resto (lixo, versão antiga) ignora-se.
+export function parseAccounts<T extends { user_id: string; refresh_token: string }>(raw: string | null): T[] {
+  try {
+    const list = raw ? (JSON.parse(raw) as T[]) : []
+    return Array.isArray(list) ? list.filter((a) => a && a.user_id && a.refresh_token) : []
+  } catch {
+    return []
+  }
+}
+
+// Guardar a sessão de uma pessoa: substitui a dela (os tokens renovam-se),
+// sem mudar a ordem do separador; uma pessoa nova vai para o fim.
+export function upsertAccount<T extends { user_id: string }>(list: T[], entry: T): T[] {
+  const i = list.findIndex((a) => a.user_id === entry.user_id)
+  return i >= 0 ? list.map((a, j) => (j === i ? entry : a)) : [...list, entry]
+}
+
+// Trocar de pessoa com a sessão guardada: entrar; sem rede (fica para
+// depois, a pessoa continua no telemóvel); ou esquecê-la (o servidor diz que
+// a sessão acabou).
+export function switchOutcome(error: Failure | null, hasSession: boolean): 'entrar' | 'sem-rede' | 'esquecer' {
+  if (error && !sessionEnded(error)) return 'sem-rede'
+  if (error || !hasSession) return 'esquecer'
+  return 'entrar'
+}

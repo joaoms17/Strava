@@ -7,6 +7,8 @@ import { ToastProvider, useToast } from './lib/toast'
 import { useSheet } from './lib/sheet'
 import { useQueueCount } from './lib/sync'
 import { onDuplicate, useCaptureSync } from './lib/capture-queue'
+import { checkPush, savedPushPrefs } from './lib/push'
+import { isBusy } from './lib/busy'
 import { fmtDayShort } from './lib/format'
 import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
@@ -213,6 +215,40 @@ function CaptureSync() {
   return null
 }
 
+// Notificações: ao abrir a app (e ao voltar a ela, no máximo de hora a hora)
+// confirma que a subscrição deste telemóvel continua viva, por trás. Tocar
+// numa notificação com a app aberta muda de ecrã sem recarregar.
+const PUSH_CHECK_MS = 3_600_000
+
+function PushSync() {
+  const [, navigate] = useLocation()
+  useEffect(() => {
+    let last = 0
+    const check = () => {
+      if (document.hidden || Date.now() - last < PUSH_CHECK_MS || !savedPushPrefs()) return
+      last = Date.now()
+      void checkPush().catch(() => undefined)
+    }
+    // Depois do arranque, para não atrasar o primeiro ecrã.
+    const timer = setTimeout(check, 3000)
+    document.addEventListener('visibilitychange', check)
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; url?: unknown } | null
+      // A meio de um «A guardar…» não se muda de ecrã (a app já está à frente).
+      if (data?.type === 'abrir' && typeof data.url === 'string' && /^\/(?!\/)/.test(data.url) && !isBusy()) {
+        navigate(data.url)
+      }
+    }
+    navigator.serviceWorker?.addEventListener('message', onMessage)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('visibilitychange', check)
+      navigator.serviceWorker?.removeEventListener('message', onMessage)
+    }
+  }, [navigate])
+  return null
+}
+
 function Shell() {
   const { status, reload, missingMigrations } = useProfile()
   const { accounts } = useAccounts()
@@ -287,6 +323,7 @@ function Shell() {
       <TabBar />
       <Sheets />
       <CaptureSync />
+      <PushSync />
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLocation } from 'wouter'
+import { useLocation, useSearch } from 'wouter'
 import {
   Bar as RBar,
   CartesianGrid,
@@ -69,7 +69,13 @@ export default function Balanco() {
   const version = useDataVersion()
   const colors = useThemeColors()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
-  const [monday, setMonday] = useState(() => mondayOf(today))
+  // Aberto pela notificação «Resumo da semana pronto»: ?semana=<segunda>.
+  const asked = new URLSearchParams(useSearch()).get('semana')
+  const askedMonday = asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= today ? mondayOf(asked) : null
+  const [monday, setMonday] = useState(() => askedMonday ?? mondayOf(today))
+  useEffect(() => {
+    if (askedMonday) setMonday(askedMonday)
+  }, [askedMonday])
   const [data, setData] = useState<WeekData | null>(null)
   const [details, setDetails] = useState(false)
   const [view, setView] = useState<'semana' | 'mes'>('semana')

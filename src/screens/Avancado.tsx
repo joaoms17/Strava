@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getApi } from '../lib/api'
 import { useToast } from '../lib/toast'
 import { BusyButton } from '../lib/busy'
 import { useReadyProfile, useProfile } from '../lib/profile'
@@ -18,9 +19,21 @@ const KIND_LABEL: Record<string, string> = {
   recipe: 'receitas',
   menu_pick: 'menus',
   workout_shot: 'prints do relógio',
+  workout_said: 'treinos ditos',
+  workout_said_audio: 'treinos ditos (áudio)',
+  evolution: 'análises da evolução',
+  training_week: 'planos da semana',
   ai_check: 'verificações',
   plan_generate: 'planos',
   weekly_review: 'resumos',
+}
+
+// Pedidos de hoje (a casa conta-se no servidor: cada pessoa só lê os seus).
+interface AiUsage {
+  provider: 'gemini' | 'anthropic'
+  sharedDaily: boolean
+  monthlyEur: boolean
+  today: { house: number; mine: number; housePhotos: number; minePhotos: number }
 }
 
 // O que é técnico ou pode causar ansiedade fica aqui, longe da vista.
@@ -29,6 +42,8 @@ export default function Avancado() {
   const { update } = useProfile()
   const toast = useToast()
   const [costs, setCosts] = useState<{ eur: number; usd: number; byKind: Record<string, number> } | null>(null)
+  const [usage, setUsage] = useState<AiUsage | null>(null)
+  const [usageFailed, setUsageFailed] = useState(false)
   const [cap, setCap] = useState(String(profile.ai_monthly_cap_eur ?? 10))
   const [visionCap, setVisionCap] = useState(String(profile.ai_daily_vision_cap ?? 40))
   const [catalog, setCatalog] = useState<CatalogExercise[]>([])
@@ -55,7 +70,12 @@ export default function Avancado() {
       setCatalog((exercises ?? []) as CatalogExercise[])
     }
     void load()
+    void getApi<AiUsage>('/api/day/ai-usage')
+      .then(setUsage)
+      .catch(() => setUsageFailed(true))
   }, [])
+  // Com o Gemini (plano gratuito) não há euros: só o número de pedidos.
+  const euros = usage ? usage.monthlyEur : usageFailed
 
   function change(id: string, patch: Partial<CatalogExercise>) {
     setCatalog((prev) => prev.map((e) => (e.id === id ? { ...e, ...patch } : e)))
@@ -88,18 +108,36 @@ export default function Avancado() {
       </section>
 
       <section className="space-y-2 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">Custos da IA</h2>
+        <h2 className="text-[15px] font-semibold">{euros ? 'Custos da IA' : 'Uso da IA'}</h2>
+        {usage && (
+          <p className="text-[15px] tabular-nums">
+            Pedidos à IA hoje:{' '}
+            {usage.sharedDaily
+              ? `casa ${fmtInt(usage.today.house)} (fotos ${fmtInt(usage.today.housePhotos)}) · tu ${fmtInt(usage.today.mine)} (fotos ${fmtInt(usage.today.minePhotos)})`
+              : `${fmtInt(usage.today.mine)} (fotos ${fmtInt(usage.today.minePhotos)})`}
+          </p>
+        )}
+        {usage?.sharedDaily && (
+          <p className="text-[13px] text-dim">
+            Com o Gemini (plano gratuito) a chave é uma só para a casa: não há custos, mas os pedidos de todos contam para
+            o mesmo limite diário da Google. Quando o modelo das fotos chega ao limite, as fotos são lidas pelo de reserva
+            e a refeição avisa.
+          </p>
+        )}
         {costs ? (
           <>
-            <p className="text-[15px] tabular-nums">
-              Este mês cerca de {costs.eur.toFixed(2).replace('.', ',')} € (aprox.)
-            </p>
+            {euros && (
+              <p className="text-[15px] tabular-nums">
+                Este mês cerca de {costs.eur.toFixed(2).replace('.', ',')} € (aprox.)
+              </p>
+            )}
             <p className="text-[13px] text-dim">
+              {euros ? '' : 'Este mês: '}
               {Object.entries(costs.byKind)
                 .map(([label, n]) => `${fmtInt(n)} ${label}`)
                 .join(' · ') || 'Nenhuma chamada este mês.'}
             </p>
-            {nearMonthlyCap(costs.usd, Number(profile.ai_monthly_cap_eur ?? 10)) && (
+            {euros && nearMonthlyCap(costs.usd, Number(profile.ai_monthly_cap_eur ?? 10)) && (
               <p className="text-[13px] text-attn">Estás perto do limite mensal que definiste.</p>
             )}
           </>
@@ -114,17 +152,19 @@ export default function Avancado() {
           Ao chegar ao limite, as fotos ficam guardadas sem análise e podes analisá-las à mesma. Nunca pergunto antes de
           cada foto.
         </p>
+        {euros && (
+          <label className="flex items-center justify-between gap-3 text-[15px]">
+            <span>Limite mensal (€)</span>
+            <input
+              inputMode="decimal"
+              value={cap}
+              onChange={(e) => setCap(e.target.value)}
+              className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
+            />
+          </label>
+        )}
         <label className="flex items-center justify-between gap-3 text-[15px]">
-          <span>Limite mensal (€)</span>
-          <input
-            inputMode="decimal"
-            value={cap}
-            onChange={(e) => setCap(e.target.value)}
-            className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
-          />
-        </label>
-        <label className="flex items-center justify-between gap-3 text-[15px]">
-          <span>Análises de fotos por dia</span>
+          <span>{usage?.sharedDaily ? 'Análises de fotos por dia (a casa toda)' : 'Análises de fotos por dia'}</span>
           <input
             inputMode="numeric"
             value={visionCap}
@@ -222,7 +262,7 @@ export default function Avancado() {
           em Definições › Calendário › Contas › Calendários subscritos.
         </p>
         <h2 className="pt-2 text-[15px] font-semibold text-ink">Versão</h2>
-        <p>Daily Track · 5 funções no Vercel</p>
+        <p>Daily Track · 6 funções no Vercel</p>
       </section>
     </div>
   )

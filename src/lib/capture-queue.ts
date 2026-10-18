@@ -5,8 +5,11 @@ import { emitDataChanged } from './events'
 import { STORES, inStore } from './idb'
 import { prepareImage, sha256Hex } from './image'
 import { activeUserId } from './scoped'
-import { failureText, isTransientFailure, retryDelayMs } from '../../api/_lib/rules/falhas'
+import { failureText, isTransientFailure } from '../../api/_lib/rules/falhas'
+import { RETRY_TEXT, afterFailure, ownCapture, sendableCapture } from '../../api/_lib/rules/fila'
 import type { Slot } from './types'
+
+export { RETRY_TEXT, ownCapture }
 
 // Captura sem espera: cada foto (ou texto) entra primeiro na base local com o
 // ficheiro original, e só sai quando o servidor responde. Envia-se uma de cada
@@ -31,11 +34,6 @@ export interface CaptureEntry {
 }
 
 export type NewCapture = Omit<CaptureEntry, 'client_id' | 'created_at' | 'state' | 'error' | 'user_id' | 'attempts'>
-
-// Só as da pessoa que está a usar a app (as antigas, sem dono, contam para todas).
-export function ownCapture(entry: CaptureEntry, userId: string | null): boolean {
-  return !entry.user_id || !userId || entry.user_id === userId
-}
 
 const EVENT = 'regresso:captures'
 const DUPLICATE_EVENT = 'regresso:duplicate'
@@ -153,25 +151,14 @@ async function send(entry: CaptureEntry, userId: string) {
   }
 }
 
-// O que a captura diz enquanto espera por outra tentativa.
-export const RETRY_TEXT = 'Ainda não consegui enviar: vou tentar outra vez sozinha.'
-
 let retryTimer: ReturnType<typeof setTimeout> | null = null
 
-function retryLater(attempts: number) {
+function retryLater(delayMs: number) {
   if (retryTimer) clearTimeout(retryTimer)
   retryTimer = setTimeout(() => {
     retryTimer = null
     void processCaptures()
-  }, retryDelayMs(attempts))
-}
-
-// Uma captura que já falhou por causa da rede (antes destas regras ficava em
-// «erro» com «Load failed») volta a seguir sozinha.
-function sendable(entry: CaptureEntry): boolean {
-  if (entry.state === 'pendente') return true
-  const legacyStatus = Number(/^Erro (\d{3})$/.exec(entry.error ?? '')?.[1]) || null
-  return isTransientFailure({ message: entry.error, status: legacyStatus })
+  }, delayMs)
 }
 
 let running: Promise<void> | null = null
@@ -193,31 +180,26 @@ export function processCaptures(): Promise<void> {
         } = await supabase.auth.getSession()
         if (!session) return
         for (const entry of await listCaptures()) {
-          if (!sendable(entry) || !ownCapture(entry, session.user.id)) continue
+          if (!sendableCapture(entry) || !ownCapture(entry, session.user.id)) continue
           if (!navigator.onLine) return
           try {
             await send(entry, session.user.id)
             await discardCapture(entry.client_id)
             emitDataChanged()
           } catch (err) {
-            if (err instanceof TransientFailure || isNetworkError(err)) {
-              // Sem rede ou rede fraca: fica por enviar e tenta mais tarde (o
-              // servidor reconhece o client_id, por isso repetir não duplica).
-              const attempts = (entry.attempts ?? 0) + 1
-              await putCapture({ ...entry, state: 'pendente', error: navigator.onLine ? RETRY_TEXT : null, attempts })
-              changed()
-              if (navigator.onLine) retryLater(attempts)
-              return
-            }
-            await putCapture({
-              ...entry,
-              state: 'erro',
-              error: failureText(
-                { message: err instanceof Error ? err.message : null, status: err instanceof ApiError ? err.status : null },
-                'Não consegui enviar.',
-              ),
+            // Sem rede ou rede fraca: fica por enviar e tenta mais tarde (o
+            // servidor reconhece o client_id, por isso repetir não duplica).
+            const transient = err instanceof TransientFailure || isNetworkError(err)
+            const next = afterFailure(entry, {
+              transient,
+              online: navigator.onLine,
+              message: err instanceof Error ? err.message : null,
+              status: err instanceof ApiError ? err.status : null,
             })
+            await putCapture(next.entry)
             changed()
+            if (next.retryInMs != null) retryLater(next.retryInMs)
+            if (transient) return
           }
         }
       } while (again)

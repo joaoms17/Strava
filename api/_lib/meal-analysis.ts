@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { MODELS, NO_THINKING, REQUEST_TEXT, REQUEST_VISION, structuredCall } from './anthropic.js'
+import { MODELS, NO_THINKING, REQUEST_TEXT, REQUEST_VISION, aiProvider, structuredCall } from './anthropic.js'
 import { AiError, describeAiError, errorForStorage } from './rules/resposta-ia.js'
 import { MealAnalysisSchema, type MealAnalysis } from './schemas.js'
 import {
@@ -14,7 +14,7 @@ import { mealTotals, type MealItem } from './rules/meal-totals.js'
 import { analysedStatus, foodRefs, guardedWrite, mergeAdded, toMealItems } from './rules/analise.js'
 import { mealIsEstimate } from './rules/estimativas.js'
 import { clockTime, lisbonClock, lisbonInstant } from './rules/momentos.js'
-import { dailyVisionCapReached, monthlyCapReached } from './rules/custos.js'
+import { VISION_KINDS, aiLimitsFor, dailyVisionCapReached, monthlyCapReached } from './rules/custos.js'
 import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
 
@@ -37,9 +37,9 @@ export interface MealRow {
   analysis_started_at: string | null
   analysis_attempts: number
   deleted_at: string | null
+  model_reserve?: boolean // migração 20261018150002
 }
 
-const VISION_KINDS = ['meal_photo', 'meal_parse_photo', 'workout_shot', 'menu_pick', 'label_read']
 const ANALYSIS_BUDGET_MS = 50_000
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
@@ -73,27 +73,32 @@ export async function foodLibrary(admin: SupabaseClient, userId: string) {
   return { refs, forPrompt }
 }
 
-// Limites da IA: teto mensal em euros e limite diário de fotos.
+// Limites da IA: teto mensal em euros e limite diário de fotos (com o
+// Gemini, as fotos de toda a casa, que partilha a chave; sem euros).
 export async function aiLimitReached(
   admin: SupabaseClient,
   userId: string,
   withPhotos: boolean,
 ): Promise<boolean> {
   const now = new Date()
+  const limits = aiLimitsFor(aiProvider())
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString()
   const dayStart = lisbonInstant(lisbonClock(now).date, '00:00').toISOString()
+  let visionQuery = admin
+    .from('api_calls')
+    .select('id', { count: 'exact', head: true })
+    .in('kind', VISION_KINDS)
+    .gte('created_at', dayStart)
+  if (!limits.sharedDaily) visionQuery = visionQuery.eq('user_id', userId)
   const [{ data: profile }, { data: monthCalls }, { count: visionToday }] = await Promise.all([
     admin.from('profile').select('ai_monthly_cap_eur,ai_daily_vision_cap').eq('user_id', userId).maybeSingle(),
-    admin.from('api_calls').select('cost_usd').eq('user_id', userId).gte('created_at', monthStart),
-    admin
-      .from('api_calls')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .in('kind', VISION_KINDS)
-      .gte('created_at', dayStart),
+    limits.monthlyEur
+      ? admin.from('api_calls').select('cost_usd').eq('user_id', userId).gte('created_at', monthStart)
+      : Promise.resolve({ data: [] as { cost_usd: number }[] }),
+    withPhotos ? visionQuery : Promise.resolve({ count: 0 }),
   ])
   const monthUsd = (monthCalls ?? []).reduce((acc, c) => acc + Number(c.cost_usd), 0)
-  if (monthlyCapReached(monthUsd, Number(profile?.ai_monthly_cap_eur ?? 10))) return true
+  if (limits.monthlyEur && monthlyCapReached(monthUsd, Number(profile?.ai_monthly_cap_eur ?? 10))) return true
   return withPhotos && dailyVisionCapReached(visionToday ?? 0, Number(profile?.ai_daily_vision_cap ?? 40))
 }
 
@@ -154,7 +159,14 @@ type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot
 async function runModel(
   admin: SupabaseClient,
   meal: ModelInput,
-): Promise<{ analysis: MealAnalysis; refs: Record<string, string>; model: string; prompt: string; cost: number }> {
+): Promise<{
+  analysis: MealAnalysis
+  refs: Record<string, string>
+  model: string
+  prompt: string
+  cost: number
+  reserve: boolean
+}> {
   const { refs, forPrompt } = await foodLibrary(admin, meal.user_id)
   const photos = meal.photo_paths ?? []
   const adding = addingToItems(meal)
@@ -198,7 +210,7 @@ async function runModel(
         }
       }),
     )
-    const { output: analysis, cost, model } = await structuredCall(
+    const { output: analysis, cost, model, reserve } = await structuredCall(
       admin,
       { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION },
       {
@@ -214,7 +226,8 @@ async function runModel(
     if (analysis.items.length === 0 && !adding) {
       throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
     }
-    return { analysis, refs, model, prompt: promptVersion(photoPrompt), cost }
+    // A reserva das fotos é o modelo do texto, que acerta menos nas porções.
+    return { analysis, refs, model, prompt: promptVersion(photoPrompt), cost, reserve }
   }
 
   const { output: analysis, cost, model } = await structuredCall(
@@ -230,7 +243,7 @@ async function runModel(
     MealAnalysisSchema,
   )
   if (analysis.items.length === 0) throw new AiError('Não percebi o que comeste. Escreve de outra forma.', 'análise sem itens')
-  return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost }
+  return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost, reserve: false }
 }
 
 // Analisar sem gravar (a «Nova favorita» escrita ou com foto): o mesmo
@@ -262,7 +275,7 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
   if (!claimedAt) return null
   const startedAt = Date.now()
   try {
-    const { analysis, refs, model, prompt, cost } = await runModel(admin, meal)
+    const { analysis, refs, model, prompt, cost, reserve } = await runModel(admin, meal)
     const analysed = toMealItems(analysis.items, refs)
     const adding = addingToItems(meal)
     const items = adding ? mergeAdded(meal.items, analysed) : analysed
@@ -311,6 +324,12 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
         return (await correctItems(admin, meal.user_id, current, note)).items
       },
     })
+    // Foto lida pelo modelo de reserva: a folha da refeição diz porquê. À
+    // parte e sem falhar (sem a migração 20261018150002 a coluna não existe).
+    if (written && (reserve || meal.model_reserve)) {
+      const { error } = await admin.from('meals').update({ model_reserve: reserve }).eq('id', meal.id)
+      if (!error) written.model_reserve = reserve
+    }
     // Uma refeição de texto ensina logo o que tem confiança alta (as fotos
     // e o que se juntou por foto só depois de confirmados).
     if (written && !adding && meal.input_type === 'text') {

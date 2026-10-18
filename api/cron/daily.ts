@@ -12,6 +12,7 @@ import {
 } from '../_lib/close-day.js'
 import { generateWeeklyReview } from '../_lib/review.js'
 import { syncUser } from '../_lib/intervals-sync.js'
+import { cronAuthorized } from '../_lib/secret.js'
 
 // Cron diária às 04:30 UTC (sempre depois das 04:00 em Lisboa, com ou sem DST):
 // marca análises presas como erro; recalcula, por ordem, os dias alterados
@@ -31,8 +32,7 @@ const SYNC_BUDGET_MS = 25_000
 const REVIEW_BUDGET_MS = 35_000
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const secret = process.env.CRON_SECRET
-  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+  if (!cronAuthorized(req.headers.authorization, process.env.CRON_SECRET)) {
     res.status(401).json({ error: 'Não autorizado.' })
     return
   }

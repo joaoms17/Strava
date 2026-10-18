@@ -9,7 +9,7 @@ Redesenho em curso (docs/redesenho-2026-09.md). Fases 1 e 2:
   Treino.tsx          «Já fiz», sugestão seguinte, plano de 4 semanas (até à Fase 5), histórico, progressão
   Corpo.tsx           peso médio, ritmo semanal, gráfico 1M · 3M · Tudo
   Favoritos.tsx       refeições favoritas (1 toque) e biblioteca de alimentos
-  Definicoes.tsx      perfil, bicicleta, balança, aparência, PIN, exportar
+  Definicoes.tsx      pessoas, perfil, bicicleta, ligações, notificações, balança, aparência, exportar
   Avancado.tsx        custos da IA, mínimo semanal, exercícios seguros, calendário
   Arquivo.tsx         capítulos, linha do tempo e resumos antigos (só leitura)
 /components
