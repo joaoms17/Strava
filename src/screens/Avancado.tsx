@@ -111,7 +111,7 @@ export default function Avancado() {
           <p className="text-[15px] tabular-nums">
             Pedidos à IA hoje:{' '}
             {usage.sharedDaily
-              ? `casa ${fmtInt(usage.today.house)} · tu ${fmtInt(usage.today.mine)} (fotos ${fmtInt(usage.today.minePhotos)})`
+              ? `casa ${fmtInt(usage.today.house)} (fotos ${fmtInt(usage.today.housePhotos)}) · tu ${fmtInt(usage.today.mine)} (fotos ${fmtInt(usage.today.minePhotos)})`
               : `${fmtInt(usage.today.mine)} (fotos ${fmtInt(usage.today.minePhotos)})`}
           </p>
         )}

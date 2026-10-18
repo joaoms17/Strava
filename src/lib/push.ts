@@ -47,11 +47,20 @@ function remember(prefs: PushPrefs | null): void {
 // O service worker (sem ele não há notificações). Em desenvolvimento não
 // existe: não fica à espera para sempre.
 async function worker(): Promise<ServiceWorkerRegistration> {
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('A app ainda se está a instalar. Fecha-a e abre outra vez.')), 10_000),
-  )
-  return Promise.race([navigator.serviceWorker.ready, timeout])
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('A app ainda se está a instalar. Fecha-a e abre outra vez.')), 10_000)
+  })
+  try {
+    return await Promise.race([navigator.serviceWorker.ready, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
 }
+
+// Uma verificação de cada vez (ao abrir a app e em Definições podem chegar
+// juntas): duas a refazer a subscrição deixavam uma perdida no servidor.
+let checking: Promise<PushState> | null = null
 
 let serverKey: Promise<string> | null = null
 function publicKey(): Promise<string> {
@@ -104,6 +113,8 @@ export async function applyPush(next: PushPrefs): Promise<PushState & { moved: b
   }
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error(permission === 'denied' ? DENIED_TEXT : 'Sem autorização, não há notificações.')
+  // Uma verificação por trás a meio acaba primeiro (não refazem as duas).
+  await checking?.catch(() => undefined)
   const registration = await worker()
   const key = await publicKey()
   const existing = await registration.pushManager.getSubscription()
@@ -119,6 +130,7 @@ export async function applyPush(next: PushPrefs): Promise<PushState & { moved: b
 }
 
 async function disablePush(): Promise<void> {
+  await checking?.catch(() => undefined)
   const sub = await (await worker()).pushManager.getSubscription()
   if (sub) {
     await postApi('/api/day/push-unsubscribe', { endpoint: sub.endpoint })
@@ -131,7 +143,14 @@ async function disablePush(): Promise<void> {
 // Se morreu (o serviço disse ao servidor que acabou), mudou de chave ou
 // desapareceu, faz-se outra com as escolhas guardadas aqui. Corre por trás,
 // sem bloquear; nunca tira o telemóvel a outra pessoa.
-export async function checkPush(): Promise<PushState> {
+export function checkPush(): Promise<PushState> {
+  checking ??= verify().finally(() => {
+    checking = null
+  })
+  return checking
+}
+
+async function verify(): Promise<PushState> {
   const saved = savedPushPrefs()
   if (pushSupport() !== 'ok' || Notification.permission !== 'granted') return { prefs: saved, other: false }
   const registration = await worker()

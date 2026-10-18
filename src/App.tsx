@@ -8,6 +8,7 @@ import { useSheet } from './lib/sheet'
 import { useQueueCount } from './lib/sync'
 import { onDuplicate, useCaptureSync } from './lib/capture-queue'
 import { checkPush, savedPushPrefs } from './lib/push'
+import { isBusy } from './lib/busy'
 import { fmtDayShort } from './lib/format'
 import { nutritionalDay } from './lib/day'
 import Login from './components/Login'
@@ -233,7 +234,10 @@ function PushSync() {
     document.addEventListener('visibilitychange', check)
     const onMessage = (event: MessageEvent) => {
       const data = event.data as { type?: string; url?: unknown } | null
-      if (data?.type === 'abrir' && typeof data.url === 'string' && /^\/(?!\/)/.test(data.url)) navigate(data.url)
+      // A meio de um «A guardar…» não se muda de ecrã (a app já está à frente).
+      if (data?.type === 'abrir' && typeof data.url === 'string' && /^\/(?!\/)/.test(data.url) && !isBusy()) {
+        navigate(data.url)
+      }
     }
     navigator.serviceWorker?.addEventListener('message', onMessage)
     return () => {
