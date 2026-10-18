@@ -76,18 +76,20 @@ const MAX_FIT_ATTEMPTS = 2
 async function readCiq(key: string, activityId: string, timeoutMs: number): Promise<CiqExtras | null> {
   // O ficheiro original (o que veio do Garmin); se falhar ou não for um FIT,
   // o FIT que o intervals.icu gera.
-  let downloaded = false
+  // Conta a última tentativa (o FIT gerado): se falhou, é erro e tenta-se
+  // outra vez; se chegou e não é um FIT, «sem dados».
+  let lastDownloaded = false
   for (const kind of ['file', 'fit-file'] as const) {
     try {
       const fields = fitDeveloperFields(await icuFile(key, activityId, kind, timeoutMs))
-      downloaded = true
+      lastDownloaded = true
       if (fields) return ciqExtras(fields)
     } catch (err) {
+      lastDownloaded = false
       console.error('FIT', kind, activityId, err instanceof Error ? err.message : err)
     }
   }
-  // Sem nenhum FIT: «sem dados» se chegou algum ficheiro, erro se nenhum.
-  return downloaded ? ciqExtras([]) : null
+  return lastDownloaded ? ciqExtras([]) : null
 }
 const fitAttempts = (raw: Record<string, unknown>) => (typeof raw.fit_tentativas === 'number' ? raw.fit_tentativas : 0)
 
