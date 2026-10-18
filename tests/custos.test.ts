@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { dailyVisionCapReached, monthlyCapReached, nearMonthlyCap } from '../api/_lib/rules/custos'
+import {
+  VISION_KINDS,
+  aiLimitsFor,
+  dailyVisionCapReached,
+  monthlyCapReached,
+  nearMonthlyCap,
+} from '../api/_lib/rules/custos'
 
 describe('limites da IA', () => {
   it('teto mensal em euros', () => {
@@ -12,5 +18,16 @@ describe('limites da IA', () => {
   it('limite diário de fotos', () => {
     expect(dailyVisionCapReached(39, 40)).toBe(false)
     expect(dailyVisionCapReached(40, 40)).toBe(true)
+  })
+
+  it('com o Gemini a casa partilha a quota e não há euros; com o Claude é por pessoa', () => {
+    expect(aiLimitsFor('gemini')).toEqual({ sharedDaily: true, monthlyEur: false })
+    expect(aiLimitsFor('anthropic')).toEqual({ sharedDaily: false, monthlyEur: true })
+  })
+
+  it('o áudio do «Dizer o treino» vai para o modelo das fotos e conta como tal', () => {
+    expect(VISION_KINDS).toContain('workout_said_audio')
+    expect(VISION_KINDS).toContain('menu_pick')
+    expect(VISION_KINDS).not.toContain('meal_text')
   })
 })

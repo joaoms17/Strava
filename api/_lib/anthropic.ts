@@ -83,13 +83,14 @@ export async function logApiCall(
 // quando a resposta não serve); os erros chegam como AiError, com uma frase
 // para a app e o detalhe para diagnóstico. As chamadas escrevem-se no formato
 // do Claude (MODELS.text / MODELS.vision); com o Gemini, o mesmo pedido vai
-// para o modelo Gemini desse papel. `model` é o modelo que respondeu.
+// para o modelo Gemini desse papel. `model` é o modelo que respondeu e
+// `reserve` diz se foi o de reserva (só com o Gemini).
 export async function structuredCall<T>(
   admin: SupabaseClient,
   meta: { userId: string; kind: string; request: { maxRetries: number; timeout: number } },
   params: Omit<MessageCreateParamsNonStreaming, 'output_config' | 'stream'>,
   schema: z.ZodType<T>,
-): Promise<{ output: T; cost: number; usage: Usage; model: string }> {
+): Promise<{ output: T; cost: number; usage: Usage; model: string; reserve: boolean }> {
   const json = outputSchema(schema)
   if (aiProvider() === 'gemini') {
     let result
@@ -102,7 +103,13 @@ export async function structuredCall<T>(
     }
     const cost = await logApiCall(admin, { user_id: meta.userId, kind: meta.kind, model: result.model ?? '', usage: result.usage })
     try {
-      return { output: parseStructured(result.text, schema, json), cost, usage: result.usage, model: result.model ?? '' }
+      return {
+        output: parseStructured(result.text, schema, json),
+        cost,
+        usage: result.usage,
+        model: result.model ?? '',
+        reserve: result.reserve,
+      }
     } catch (err) {
       const error = describeAiError(err)
       console.error(`IA (${meta.kind}, Gemini) resposta inválida:`, error.detail)
@@ -130,7 +137,7 @@ export async function structuredCall<T>(
     .map((block) => (block.type === 'text' ? block.text : ''))
     .join('')
   try {
-    return { output: parseStructured(text, schema, json), cost, usage: response.usage, model: params.model }
+    return { output: parseStructured(text, schema, json), cost, usage: response.usage, model: params.model, reserve: false }
   } catch (err) {
     const error = describeAiError(err)
     console.error(`IA (${meta.kind}) resposta inválida:`, error.detail)

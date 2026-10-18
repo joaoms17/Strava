@@ -99,6 +99,7 @@ export interface Meal {
   analysis_started_at: string | null
   analysis_attempts: number
   analysis_error: string | null
+  model_reserve?: boolean // foto lida pelo modelo de reserva da IA (migração 20261018150002)
 }
 
 export type Slot = 'pequeno_almoco' | 'almoco' | 'lanche' | 'jantar' | 'ceia'

@@ -37,22 +37,24 @@ async function generate(
   return { ...result, model: result.model ?? model }
 }
 
+// `reserve`: respondeu um modelo que não o primeiro da lista (o principal
+// esgotou o limite gratuito, não existe ou estava sobrecarregado).
 export async function geminiCall(
   models: string[],
   params: ClaudeLikeParams,
   jsonSchema: Record<string, unknown>,
   timeoutMs: number,
-): Promise<GeminiResult> {
+): Promise<GeminiResult & { reserve: boolean }> {
   const key = process.env.GEMINI_API_KEY?.trim()
   if (!key) throw new AiError('Falta a chave do Gemini no Vercel (GEMINI_API_KEY).', 'GEMINI_API_KEY vazia')
   const body = geminiRequest(params, jsonSchema)
   const started = Date.now()
   let last: unknown = null
-  for (const model of models) {
+  for (const [i, model] of models.entries()) {
     const left = timeoutMs - (Date.now() - started)
     if (last && left < 8_000) break
     try {
-      return await generate(key, model, body, last ? left : timeoutMs)
+      return { ...(await generate(key, model, body, last ? left : timeoutMs)), reserve: i > 0 }
     } catch (err) {
       last = err
       if (!(err as { fallback?: boolean }).fallback) throw err

@@ -5,6 +5,7 @@ import recompute from './_day/recompute.js'
 import evolution from './_day/evolution.js'
 import ingestToken from './_day/ingest-token.js'
 import { addPerson, createProfile } from './_day/people.js'
+import aiUsage from './_day/ai-usage.js'
 
 // Endpoints do dia (e o estado do deploy) numa só função, por causa do limite
 // do Hobby; caminhos preservados por rewrite (/api/day/:action).
@@ -16,6 +17,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   'create-profile': createProfile,
   evolution,
   'ingest-token': ingestToken,
+  'ai-usage': aiUsage,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
