@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton, runBusy } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { nutritionalDay } from '../../lib/day'
@@ -50,8 +51,9 @@ export default function BarcodeSheet() {
   const [grams, setGrams] = useState(100)
   const [basket, setBasket] = useState<MealItem[]>([])
   const [error, setError] = useState<string | null>(null)
-  // Um por folha: tocar outra vez depois de uma falha de rede não grava a dobrar.
-  const [clientId] = useState(() => crypto.randomUUID())
+  // Tocar outra vez depois de uma falha de rede não grava a dobrar; outros
+  // produtos (ou outro dia) são outro registo.
+  const clientIdFor = useClientId()
   const [target, setTarget] = useState<Target | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [dayMeals, setDayMeals] = useState<Target[]>([])
@@ -111,7 +113,7 @@ export default function BarcodeSheet() {
         : loggedAtFor(date, SLOT_TIME[slot ?? slotOf(now)], profile.nutrition_day_cutoff_hour, now)
     try {
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/save', {
-        client_id: clientId,
+        client_id: clientIdFor({ items, date, slot }),
         input_type: 'barcode',
         raw_text: items.length === 1 ? items[0]!.name : items.map((i) => i.name).join(', '),
         photo_path: null,

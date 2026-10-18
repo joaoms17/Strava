@@ -5,6 +5,7 @@ import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton, runBusy } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { emitDataChanged } from '../../lib/events'
@@ -40,8 +41,9 @@ export default function DizerTreinoSheet() {
   const [minutes, setMinutes] = useState('')
   const [day, setDay] = useState(sheet.params.get('data') ?? today)
   const [keep, setKeep] = useState(false)
-  // Um por folha: tocar outra vez depois de uma falha de rede não grava a dobrar.
-  const [clientId] = useState(() => crypto.randomUUID())
+  // Tocar outra vez depois de uma falha de rede não grava a dobrar; um
+  // treino corrigido é outro registo.
+  const clientIdFor = useClientId()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const recording = useRef<Recording | null>(null)
 
@@ -123,13 +125,10 @@ export default function DizerTreinoSheet() {
     let saved: Workout | null = null
     if (said.type === 'strength') {
       try {
+        const body = { started_at: startedAt, minutes: mins, sets: strengthSets(said.exercises), name, note: said.note }
         const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
-          client_id: clientId,
-          started_at: startedAt,
-          minutes: mins,
-          sets: strengthSets(said.exercises),
-          name,
-          note: said.note,
+          client_id: clientIdFor(body),
+          ...body,
         })
         saved = workout
         emitDataChanged()

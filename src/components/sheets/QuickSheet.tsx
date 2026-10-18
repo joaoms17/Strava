@@ -5,6 +5,7 @@ import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { nutritionalDay } from '../../lib/day'
@@ -20,9 +21,9 @@ export default function QuickSheet() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [values, setValues] = useState({ kcal: '', protein: '', carbs: '', fat: '', name: '' })
   const [when, setWhen] = useState<When>(() => whenFromParams(sheet.params, today))
-  // Um por folha: tocar outra vez depois de uma falha de rede (com o servidor
-  // já a ter gravado) não regista a dobrar.
-  const [clientId] = useState(() => crypto.randomUUID())
+  // Tocar outra vez depois de uma falha de rede (com o servidor já a ter
+  // gravado) não regista a dobrar; outros números são outro registo.
+  const clientIdFor = useClientId()
   const kcal = parseDecimal(values.kcal)
   const protein = parseDecimal(values.protein)
   const valid =
@@ -32,15 +33,15 @@ export default function QuickSheet() {
     try {
       const carbs = parseDecimal(values.carbs)
       const fat = parseDecimal(values.fat)
-      const { meal } = await postApi<{ meal: Meal }>('/api/meal/quick', {
-        client_id: clientId,
+      const body = {
         kcal,
         protein,
         ...(Number.isFinite(carbs) ? { carbs } : {}),
         ...(Number.isFinite(fat) ? { fat } : {}),
         ...(values.name.trim() ? { name: values.name.trim() } : {}),
         ...whenApi(when, today),
-      })
+      }
+      const { meal } = await postApi<{ meal: Meal }>('/api/meal/quick', { client_id: clientIdFor(body), ...body })
       emitDataChanged()
       sheet.close()
       toast('Registado', [

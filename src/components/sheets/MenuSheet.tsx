@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton } from '../../lib/busy'
+import { useClientId } from '../../lib/client-id'
 import { emitDataChanged } from '../../lib/events'
 import { prepareMenuPhoto } from '../../lib/image'
 import { fmt1, fmtInt, fmtKcal } from '../../lib/format'
@@ -38,8 +39,9 @@ export default function MenuSheet() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<MenuResult | null>(null)
   const [showAll, setShowAll] = useState(false)
-  // Um por folha: tocar outra vez depois de uma falha de rede não regista a dobrar.
-  const [clientId] = useState(() => crypto.randomUUID())
+  // Tocar outra vez no mesmo prato depois de uma falha de rede não regista a
+  // dobrar; outro prato é outro registo.
+  const clientIdFor = useClientId()
 
   function addPhotos(files: File[]) {
     const room = MAX_PHOTOS - photos.length
@@ -95,7 +97,7 @@ export default function MenuSheet() {
     if (!result) return
     try {
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/save', {
-        client_id: clientId,
+        client_id: clientIdFor(dish.name),
         input_type: 'text',
         raw_text: `Do menu: ${dish.name}`,
         items: [dishItem(dish)],
