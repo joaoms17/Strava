@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
+import { useDataVersion } from '../lib/events'
 import { GLASS_ML, waterGoalMl } from '../../api/_lib/rules/extras'
 
 const liters = (ml: number) => (ml / 1000).toFixed(ml % 1000 === 0 ? 0 : 2).replace(/0$/, '').replace('.', ',')
@@ -18,8 +19,12 @@ export default function Agua({ date }: { date: string }) {
   // atrás (para o gravado) quando já não há outro toque a caminho.
   const saved = useRef(0)
   const pending = useRef(0)
+  // Copos juntados noutro sítio (a «Pergunta à app», Anular): volta a ler.
+  const version = useDataVersion()
 
   useEffect(() => {
+    // Com um toque a gravar, o que está no ecrã é o mais recente.
+    if (pending.current > 0) return
     let alive = true
     void Promise.all([
       supabase.from('days').select('water_ml').eq('date', date).maybeSingle(),
@@ -35,7 +40,7 @@ export default function Agua({ date }: { date: string }) {
     return () => {
       alive = false
     }
-  }, [date])
+  }, [date, version])
 
   async function change(delta: number) {
     if (ml == null) return

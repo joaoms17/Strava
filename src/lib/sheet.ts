@@ -25,6 +25,7 @@ export type SheetName =
   | 'meu-treino'
   | 'dizer-treino'
   | 'menu'
+  | 'pergunta'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

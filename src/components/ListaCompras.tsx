@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { loadActiveDiet } from '../lib/diets'
 import { useToast } from '../lib/toast'
+import { readScoped, writeScoped } from '../lib/scoped'
+import { onShoppingChange, readShoppingExtra, setShoppingExtra } from '../lib/compras'
 import type { Favorite } from '../lib/types'
-import { shoppingList, shoppingText } from '../../api/_lib/rules/extras'
+import { shoppingList, shoppingText, type ShoppingLine } from '../../api/_lib/rules/extras'
 
 const CHECKED_KEY = 'lista-compras-feito'
 
 function readChecked(): string[] {
   try {
-    return JSON.parse(localStorage.getItem(CHECKED_KEY) ?? '[]') as string[]
+    const list = JSON.parse(readScoped(localStorage, CHECKED_KEY) ?? '[]') as unknown
+    return Array.isArray(list) ? list.filter((n): n is string => typeof n === 'string') : []
   } catch {
     return []
   }
@@ -16,11 +19,15 @@ function readChecked(): string[] {
 
 // Favoritas › Compras: escolhe quantas vezes vais comer cada favorita (por
 // omissão, a dieta ativa × 7 dias) e a app junta os alimentos numa lista,
-// com as gramas somadas, para riscar no supermercado ou partilhar.
+// com as gramas somadas, para riscar no supermercado ou partilhar. O que se
+// pediu à «Pergunta à app» entra na mesma lista.
 export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
   const toast = useToast()
   const [times, setTimes] = useState<Record<string, number>>({})
   const [checked, setChecked] = useState<string[]>(readChecked)
+  const [extra, setExtra] = useState(readShoppingExtra)
+
+  useEffect(() => onShoppingChange(() => setExtra(readShoppingExtra())), [])
 
   useEffect(() => {
     let alive = true
@@ -37,19 +44,35 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
     }
   }, [])
 
-  const lines = useMemo(
-    () => shoppingList(favorites.map((f) => ({ items: f.items, times: times[f.id] ?? 0 }))),
-    [favorites, times],
-  )
+  // As das favoritas e as pedidas à app, juntas pelo nome (as gramas somam-se).
+  const lines = useMemo(() => {
+    const merged = new Map<string, ShoppingLine>()
+    for (const line of shoppingList(favorites.map((f) => ({ items: f.items, times: times[f.id] ?? 0 })))) {
+      merged.set(line.name.toLocaleLowerCase('pt'), { ...line })
+    }
+    for (const item of extra) {
+      const key = item.name.toLocaleLowerCase('pt')
+      const line = merged.get(key) ?? { name: item.name, grams: 0, times: 0 }
+      line.grams += item.grams ?? 0
+      line.times += 1
+      merged.set(key, line)
+    }
+    return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, 'pt'))
+  }, [favorites, times, extra])
 
   function toggle(name: string) {
     const next = checked.includes(name) ? checked.filter((n) => n !== name) : [...checked, name]
     setChecked(next)
-    try {
-      localStorage.setItem(CHECKED_KEY, JSON.stringify(next))
-    } catch {
-      // sem armazenamento: risca só até fechar
-    }
+    // sem armazenamento: risca só até fechar
+    writeScoped(localStorage, CHECKED_KEY, JSON.stringify(next))
+  }
+
+  function clearExtra() {
+    const before = extra
+    setShoppingExtra([])
+    toast(`Tirei ${before.length === 1 ? '1 coisa' : `${before.length} coisas`} da lista.`, [
+      { label: 'Anular', run: () => setShoppingExtra(before) },
+    ])
   }
 
   async function share() {
@@ -101,11 +124,7 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
               <button
                 onClick={() => {
                   setChecked([])
-                  try {
-                    localStorage.removeItem(CHECKED_KEY)
-                  } catch {
-                    // nada
-                  }
+                  writeScoped(localStorage, CHECKED_KEY, null)
                 }}
                 className="text-[13px] text-dim"
               >
@@ -122,13 +141,23 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
                     <input type="checkbox" checked={done} onChange={() => toggle(l.name)} className="h-5 w-5 accent-current" />
                     <span className={`flex-1 ${done ? 'text-dim line-through' : ''}`}>{l.name}</span>
                     <span className="text-dim tabular-nums">
-                      {l.grams > 0 ? (l.grams >= 1000 ? `${(l.grams / 1000).toFixed(1).replace('.', ',')} kg` : `${l.grams} g`) : `× ${l.times}`}
+                      {l.grams > 0 ? (l.grams >= 1000 ? `${(l.grams / 1000).toFixed(1).replace('.', ',')} kg` : `${l.grams} g`) : l.times > 1 ? `× ${l.times}` : ''}
                     </span>
                   </label>
                 </li>
               )
             })}
           </ul>
+          {extra.length > 0 && (
+            <p className="flex items-center justify-between gap-3 text-[13px] text-dim">
+              <span>
+                {extra.length === 1 ? '1 coisa juntada' : `${extra.length} coisas juntadas`} pela «Pergunta à app»
+              </span>
+              <button onClick={clearExtra} className="shrink-0 px-1 py-1 text-[13px] text-dim underline">
+                Tirar
+              </button>
+            </p>
+          )}
           <button onClick={() => void share()} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] font-semibold">
             Partilhar a lista
           </button>

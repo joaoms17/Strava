@@ -27,24 +27,29 @@ async function undoInsert(meal: Meal, toast: ShowToast) {
 }
 
 // Favorito com 1 toque: regista e mostra «Registado · ½ · 1½ · 2 · Anular».
-// Com uma refeição escolhida (slot), fica nela e à hora habitual dela.
+// Com uma refeição escolhida (slot), fica nela e à hora habitual dela; com
+// uma porção (a «Pergunta à app»), já nessa porção. Devolve se gravou.
 export async function logFavorite(
-  favorite: Favorite,
+  favorite: Pick<Favorite, 'id' | 'name'>,
   date: string | null,
   toast: ShowToast,
   slot: Slot | null = null,
   whenText: string | null = null,
-) {
+  factor = 1,
+): Promise<boolean> {
   try {
     const { meal } = await postApi<{ meal: Meal }>('/api/meal/log-favorite', {
       favorite_id: favorite.id,
       ...(date ? { date } : {}),
       ...(slot ? { slot } : {}),
+      ...(factor !== 1 ? { factor } : {}),
     })
     emitDataChanged()
     showRegistered(meal, `Registado · ${favorite.name}${whenText ? ` · ${whenText}` : ''}`, toast)
+    return true
   } catch (err) {
     toast(errorText(err))
+    return false
   }
 }
 
@@ -78,7 +83,7 @@ export async function repeatMeal(
   text: string,
   toast: ShowToast,
   slot: Slot | null = null,
-) {
+): Promise<boolean> {
   try {
     const { meal } = await postApi<{ meal: Meal }>('/api/meal/repeat', {
       meal_id: mealId,
@@ -87,8 +92,10 @@ export async function repeatMeal(
     })
     emitDataChanged()
     toast(text, [{ label: 'Anular', run: () => undoInsert(meal, toast) }])
+    return true
   } catch (err) {
     toast(errorText(err))
+    return false
   }
 }
 
