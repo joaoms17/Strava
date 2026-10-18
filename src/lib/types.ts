@@ -204,7 +204,7 @@ export interface Workout {
   pain_next_day: number | null
   status: 'green' | 'yellow' | 'red' | null
   planned_session_id: string | null
-  raw: { calories?: number; sport?: string } | null
+  raw: { calories?: number; sport?: string; hora_estimada?: boolean } | null
   created_at: string
   deleted_at: string | null
   // Fase 3
@@ -225,6 +225,9 @@ export interface Workout {
   training_load?: number | null
   aerobic_te?: number | null
   anaerobic_te?: number | null
+  rpe?: number | null
+  hr_zones?: { zone: number; seconds: number }[] | null
+  external_id?: string | null
   source_paths?: string[]
   image_hashes?: string[]
   merged_from?: unknown[] | null

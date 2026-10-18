@@ -148,6 +148,14 @@ export function estimatedStart(loggedAt: Date, minutes: number | null): string {
   return new Date(loggedAt.getTime() - (minutes ?? 0) * 60_000).toISOString()
 }
 
+// A hora de início foi suposta (sem hora: «agora − duração», ou as 18:00 de
+// um dia passado): fica em raw.hora_estimada e não serve para comparar com o
+// relógio (o «Já fiz» das 21:00 pode ser a bicicleta das 07:00).
+export function startGuessed(w: object): boolean {
+  const raw = (w as { raw?: unknown }).raw
+  return !!raw && typeof raw === 'object' && (raw as { hora_estimada?: unknown }).hora_estimada === true
+}
+
 // ---------------------------------------------------------------------
 // Juntar um print a uma sessão existente: preenche o que falta e nunca
 // mexe no treino escolhido, na duração nem nos watts que a pessoa deu.
@@ -164,6 +172,7 @@ export const MERGE_FILL_FIELDS = [
   'elapsed_s',
   'kcal_device',
   'training_load',
+  'rpe',
   'aerobic_te',
   'anaerobic_te',
   'hr_zones',
@@ -186,12 +195,15 @@ export function mergePatch(
     if (value == null) continue
     if (existing[field] == null) patch[field] = value
   }
-  // Watts do dispositivo ou da consola só substituem os supostos (ou nenhuns).
+  // Watts confirmados (do dispositivo, da consola, à mão ou do teu treino) só
+  // substituem os supostos (ou nenhuns): o relógio sem potência ganha os
+  // watts do «Já fiz».
   const incomingWatts = incoming.watts ?? null
   if (
     incomingWatts != null &&
     (existing.watts == null || existing.watts_source === 'prefill') &&
-    (incoming.watts_source === 'device' || incoming.watts_source === 'console')
+    incoming.watts_source != null &&
+    incoming.watts_source !== 'prefill'
   ) {
     patch.watts = incomingWatts
     patch.watts_source = incoming.watts_source

@@ -13,7 +13,9 @@ import {
   bikeEfficiency,
   fitnessSeries,
   lastMondays,
+  preferIcuForm,
   weeklyStats,
+  type IcuForm,
   type PlanWorkout,
   type WellnessRow,
 } from '../_lib/rules/plano.js'
@@ -61,7 +63,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
     }
 
     const since = shiftDate(today, -90)
-    const [weights, measurements, days, workouts, health, meals] = await Promise.all([
+    const [weights, measurements, days, workouts, health, meals, icu] = await Promise.all([
       db.from('weights').select('date,kg').gte('date', since).order('date'),
       db
         .from('body_measurements')
@@ -85,6 +87,8 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .gte('date', shiftDate(today, -61))
         .lte('date', today),
       db.from('meals_counted').select('date,kcal').gte('date', shiftDate(today, -28)).lt('date', today),
+      // A forma do intervals.icu (sem a migração ou sem dados, fica a da app).
+      db.from('health_daily').select('date,ctl,atl,vo2max').gte('date', shiftDate(today, -28)).lte('date', today),
     ])
 
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
@@ -96,7 +100,9 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
       day.kcal += Number(m.kcal ?? 0)
     }
     const toConfirm = daysToConfirm((days.data ?? []) as { date: string; flags: string[] | null }[], mealsByDate, today)
-    const form = fitnessSeries(allWorkouts, shiftDate(today, -125), today)
+    const icuRows = (icu.data ?? []) as (IcuForm & { vo2max: number | null })[]
+    const form = preferIcuForm(fitnessSeries(allWorkouts, shiftDate(today, -125), today).slice(-29), icuRows).points
+    const vo2max = icuRows.filter((r) => r.vo2max != null).sort((a, b) => b.date.localeCompare(a.date))[0]?.vo2max ?? null
     const payload = {
       pessoa: {
         sexo: profile.sex === 'f' ? 'mulher' : 'homem',
@@ -132,6 +138,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         forma: {
           hoje: form[form.length - 1]?.ctl ?? null,
           ha_4_semanas: form[form.length - 29]?.ctl ?? null,
+          vo2max: vo2max != null ? Number(vo2max) : null,
         },
       },
       dias_por_confirmar: toConfirm,

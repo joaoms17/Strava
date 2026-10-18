@@ -157,12 +157,12 @@ export default function Hoje() {
       supabase.from('weights').select('date').eq('date', localCalendarDate()),
       supabase.from('weights').select('date', { count: 'exact', head: true }),
       supabase.from('meals_counted').select('id', { count: 'exact', head: true }),
-      // Prints lidos à espera de «Guardar» (a tabela só existe com a migração 4).
+      // Prints lidos à espera de «Guardar» (a tabela só existe com a migração 4),
+      // até serem guardados ou descartados: nunca contam sozinhos.
       supabase
         .from('workout_imports')
         .select('id')
         .eq('status', 'por_confirmar')
-        .gte('created_at', weekAgo)
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),

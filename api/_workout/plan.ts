@@ -17,10 +17,12 @@ import {
   isDeloadWeek,
   lastMondays,
   planProgress,
+  preferIcuForm,
   sessionLoad,
   weekNumber,
   weeklyStats,
   wellnessTrend,
+  type IcuForm,
   type PlanWorkout,
   type WeekPlan,
 } from '../_lib/rules/plano.js'
@@ -97,7 +99,7 @@ export default async function planWeek(req: VercelRequest, res: VercelResponse) 
     }
 
     const since = shiftDate(weekStart, -84)
-    const [{ data: workoutRows }, { data: healthRows }, { data: weights }, { data: previous }] = await Promise.all([
+    const [{ data: workoutRows }, { data: healthRows }, { data: weights }, { data: previous }, { data: icuRows }] = await Promise.all([
       db
         .from('workouts_active')
         .select('id,date,started_at,type,sport,minutes,moving_s,elapsed_s,distance_km,watts,np_w,avg_hr,max_hr,training_load')
@@ -117,11 +119,13 @@ export default async function planWeek(req: VercelRequest, res: VercelResponse) 
         .lt('start_date', weekStart)
         .order('start_date', { ascending: false })
         .limit(4),
+      // A forma do intervals.icu (sem a migração ou sem dados, fica a da app).
+      db.from('health_daily').select('date,ctl,atl').gte('date', shiftDate(today, -28)).lte('date', today),
     ])
     const workouts = (workoutRows ?? []) as (PlanWorkout & { sport?: string | null })[]
-    const fitness = fitnessSeries(workouts, since, today)
+    const fitness = preferIcuForm(fitnessSeries(workouts, since, today).slice(-29), (icuRows ?? []) as IcuForm[]).points
     const last = fitness[fitness.length - 1] ?? null
-    const fourWeeksAgo = fitness[fitness.length - 29] ?? null
+    const fourWeeksAgo = fitness.length >= 29 ? fitness[0]! : null
 
     const payload = {
       pessoa: {

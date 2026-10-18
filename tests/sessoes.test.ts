@@ -73,3 +73,59 @@ describe('falta informação', () => {
     expect(missingInfo({ ...ride, type: 'strength' })).toEqual([])
   })
 })
+
+describe('possível duplicado', () => {
+  const ride = {
+    id: 'relogio',
+    date: '2026-10-14',
+    type: 'bike' as const,
+    sport: 'VirtualRide',
+    source: 'intervals',
+    external_id: 'i1',
+    started_at: '2026-10-14T06:02:00Z',
+    minutes: 47,
+    raw: null,
+  }
+  const jaFiz = {
+    id: 'mao',
+    date: '2026-10-14',
+    type: 'bike' as const,
+    sport: null,
+    source: 'manual',
+    external_id: null,
+    started_at: '2026-10-14T19:15:00Z',
+    minutes: 45,
+    raw: { hora_estimada: true },
+  }
+
+  it('o «Já fiz» das 21:00 e a bicicleta do relógio das 07:00', async () => {
+    const { possibleDuplicates } = await import('../api/_lib/rules/sessoes')
+    expect([...possibleDuplicates([ride, jaFiz])].sort()).toEqual(['mao', 'relogio'])
+    // Antes desta marca, um registo à mão também não tem hora de confiança.
+    expect(possibleDuplicates([ride, { ...jaFiz, raw: null }]).size).toBe(2)
+  })
+
+  it('não avisa: dois do relógio, horas conhecidas longe, outro dia, outra duração ou outro desporto', async () => {
+    const { possibleDuplicates } = await import('../api/_lib/rules/sessoes')
+    expect(possibleDuplicates([ride, { ...ride, id: 'tarde', external_id: 'i2', started_at: '2026-10-14T17:00:00Z' }]).size).toBe(0)
+    const print = { ...jaFiz, id: 'print', source: 'screenshot', raw: null }
+    expect(possibleDuplicates([ride, print]).size).toBe(0) // print às 20:15, relógio às 07:02
+    expect(possibleDuplicates([ride, { ...print, started_at: '2026-10-14T06:20:00Z' }]).size).toBe(2)
+    expect(possibleDuplicates([ride, { ...jaFiz, date: '2026-10-15' }]).size).toBe(0)
+    expect(possibleDuplicates([ride, { ...jaFiz, minutes: 60 }]).size).toBe(0)
+    const walk = { ...jaFiz, type: 'other' as const, sport: 'caminhada' }
+    expect(possibleDuplicates([{ ...walk, id: 'w1' }, { ...walk, id: 'w2', sport: 'corrida' }]).size).toBe(0)
+  })
+})
+
+describe('minutos por zona', () => {
+  it('soma a zona pedida nas sessões que a têm', async () => {
+    const { zoneMinutes } = await import('../api/_lib/rules/sessoes')
+    const zones = (z2: number) => [
+      { zone: 1, seconds: 300 },
+      { zone: 2, seconds: z2 },
+    ]
+    expect(zoneMinutes([{ hr_zones: zones(1500) }, { hr_zones: zones(1230) }, { hr_zones: null }], 2)).toBe(46)
+    expect(zoneMinutes([{ hr_zones: null }, {}], 2)).toBeNull()
+  })
+})

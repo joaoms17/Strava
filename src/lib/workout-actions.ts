@@ -1,4 +1,5 @@
 import { SPORT_LABEL as SPORT_LABELS } from '../../api/_lib/rules/targets'
+import { findMergeCandidate, startGuessed } from '../../api/_lib/rules/treino'
 import { postApi } from './api'
 import { supabase } from './supabase'
 import { emitDataChanged } from './events'
@@ -37,6 +38,8 @@ export interface SaveWorkoutBody {
   sport?: string | null
   minutes: number
   started_at?: string | null
+  // A hora foi suposta (as 18:00 de um dia passado).
+  started_at_estimated?: boolean
   watts?: number | null
   watts_source?: Workout['watts_source']
   avg_hr?: number | null
@@ -61,7 +64,11 @@ export async function saveWorkout(body: SaveWorkoutBody, toast: ShowToast): Prom
     emitDataChanged()
     const w = result.workout
     if (result.merged) {
-      toast(`Juntei o print à ${workoutTitle(w).toLowerCase()} das ${timeOfStart(w)}.`)
+      toast(
+        body.import_id
+          ? `Juntei o print à ${workoutTitle(w).toLowerCase()} das ${timeOfStart(w)}.`
+          : `Juntei ao treino que já lá estava (${workoutTitle(w)} das ${timeOfStart(w)}): não conta duas vezes.`,
+      )
     } else {
       const kcal = w.kcal_est ?? 0
       toast(`${workoutTitle(w)} registad${w.type === 'strength' || w.type === 'other' ? 'o' : 'a'}${kcal > 0 ? ` · +${fmtKcal(kcal)} no plano` : ''}`, [
@@ -73,6 +80,27 @@ export async function saveWorkout(body: SaveWorkoutBody, toast: ShowToast): Prom
     toast(errorText(err))
     return null
   }
+}
+
+// Já há um treino parecido nesse dia (ex.: a bicicleta das 07:00 que veio do
+// relógio, e o «Já fiz» é às 21:00)? Mesmo tipo (e desporto), duração
+// parecida; a hora só conta quando foi escrita (uma hora suposta não).
+export async function sameDaySession(draft: {
+  type: Workout['type']
+  sport?: string | null
+  date: string
+  minutes: number
+  started_at: string | null
+}): Promise<Workout | null> {
+  const { data } = await supabase.from('workouts_active').select('*').eq('date', draft.date).eq('type', draft.type)
+  const rows = ((data ?? []) as Workout[]).filter(
+    (w) => draft.type !== 'other' || (w.sport ?? w.raw?.sport ?? 'outro') === (draft.sport ?? 'outro'),
+  )
+  const match = findMergeCandidate(
+    { type: draft.type, date: draft.date, minutes: draft.minutes, started_at: draft.started_at },
+    rows.map((w) => ({ ...w, started_at: startGuessed(w) ? null : (w.started_at ?? null) })),
+  )
+  return match ? (rows.find((w) => w.id === match.id) ?? null) : null
 }
 
 function timeOfStart(w: Workout): string {

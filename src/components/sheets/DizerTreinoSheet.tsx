@@ -7,7 +7,7 @@ import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { emitDataChanged } from '../../lib/events'
-import { saveWorkout } from '../../lib/workout-actions'
+import { sameDaySession, saveWorkout } from '../../lib/workout-actions'
 import { MAX_AUDIO_SECONDS, canRecord, startRecording, toWavBase64, type Recording } from '../../lib/audio'
 import { lisbonInstant } from '../../../api/_lib/rules/momentos'
 import { SPORT_LABEL, workoutKcal } from '../../../api/_lib/rules/targets'
@@ -16,6 +16,7 @@ import type { Favorite, FavoriteWorkout, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
 import { DayChips } from '../ui/Chips'
+import SameSession from '../SameSession'
 
 type Phase = 'input' | 'recording' | 'reading' | 'review'
 
@@ -41,6 +42,8 @@ export default function DizerTreinoSheet() {
   const [keep, setKeep] = useState(false)
   const [busy, setBusy] = useState(false)
   const [favorites, setFavorites] = useState<Favorite[]>([])
+  // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
+  const [match, setMatch] = useState<Workout | null>(null)
   const recording = useRef<Recording | null>(null)
 
   useEffect(() => {
@@ -113,18 +116,30 @@ export default function DizerTreinoSheet() {
 
   const mins = Number(minutes)
   const canSave = said != null && Number.isInteger(mins) && mins >= 1 && mins <= 600
+  useEffect(() => setMatch(null), [day, minutes, said])
 
-  async function save() {
-    if (!said || !canSave) return
+  // Sem decisão, vê primeiro se já há um treino parecido nesse dia (fora do
+  // ginásio: as séries vão para uma sessão nova).
+  async function save(decision?: 'merge' | 'new') {
+    if (!said || !canSave || busy) return
     setBusy(true)
     const startedAt = day !== today ? lisbonInstant(day, '18:00').toISOString() : null
     const name = title.trim() || null
+    if (!decision && said.type !== 'strength') {
+      const found = await sameDaySession({ type: said.type, sport: said.sport, date: day, minutes: mins, started_at: null })
+      if (found) {
+        setMatch(found)
+        setBusy(false)
+        return
+      }
+    }
     let saved: Workout | null = null
     if (said.type === 'strength') {
       try {
         const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
           client_id: crypto.randomUUID(),
           started_at: startedAt,
+          started_at_estimated: startedAt != null,
           minutes: mins,
           sets: strengthSets(said.exercises),
           name,
@@ -143,12 +158,14 @@ export default function DizerTreinoSheet() {
           sport: said.type === 'other' ? said.sport : null,
           minutes: mins,
           started_at: startedAt,
+          started_at_estimated: startedAt != null,
           watts: said.watts,
           watts_source: said.watts != null ? 'manual' : null,
           avg_hr: said.avg_hr,
           kcal_device: said.kcal_device,
           note: said.note,
           name,
+          merge_into: decision === 'merge' ? match?.id : null,
         },
         toast,
       )
@@ -179,9 +196,10 @@ export default function DizerTreinoSheet() {
     if (saved) sheet.close()
   }
 
+  const dateParam = sheet.params.get('data')
   const openFavorite = (f: Favorite) =>
     f.workout?.type === 'strength'
-      ? (sheet.close(), navigate(`/treino/ginasio?fav=${f.id}`))
+      ? (sheet.close(), navigate(`/treino/ginasio?fav=${f.id}${dateParam && dateParam !== today ? `&data=${dateParam}` : ''}`))
       : sheet.open('registar-treino', { fav: f.id, ...(sheet.params.get('data') ? { data: sheet.params.get('data')! } : {}) })
 
   const primary =
@@ -192,7 +210,9 @@ export default function DizerTreinoSheet() {
       title="O que fizeste?"
       onClose={sheet.close}
       footer={
-        phase === 'review' ? (
+        phase === 'review' && match ? (
+          <SameSession workout={match} busy={busy} onMerge={() => void save('merge')} onNew={() => void save('new')} />
+        ) : phase === 'review' ? (
           <button disabled={!canSave || busy} onClick={() => void save()} className={primary}>
             {busy ? 'A guardar…' : 'Registar'}
           </button>

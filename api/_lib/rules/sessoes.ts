@@ -2,6 +2,7 @@
 // só: no mesmo dia, do mesmo tipo (e desporto), com menos de 30 min entre o
 // fim de um e o início do seguinte. Junta-se só para mostrar e contar; na
 // base de dados ficam as partes como vieram. Sem supabase nem node.
+import { durationsMatch, startGuessed } from './treino.js'
 
 export const MERGE_GAP_MIN = 30
 
@@ -95,4 +96,51 @@ export function missingInfo(w: SessionLike & { source?: string | null }): string
   if (w.distance_km == null) missing.push('os km')
   if (w.watts == null) missing.push('a potência')
   return missing.length === 2 ? missing : []
+}
+
+// «Possível duplicado»: o mesmo treino registado duas vezes (ex.: o «Já fiz»
+// das 21:00 e a bicicleta do relógio das 07:00). Mesmo dia e tipo (e
+// desporto), duração parecida (±10 %, no mínimo 3 min), não vieram os dois do
+// relógio (as cópias do relógio já ficam de fora) e não se sabe que começaram
+// a mais de 30 min um do outro (uma hora suposta ou de um registo à mão não
+// conta). Só avisa: quem decide é a pessoa.
+export const DUPLICATE_START_GAP_MIN = 30
+
+export function possibleDuplicates<
+  T extends SessionLike & { source?: string | null; external_id?: string | null; raw?: unknown },
+>(sessions: T[]): Set<string> {
+  const out = new Set<string>()
+  const fromWatch = (w: T) => w.external_id != null || w.source === 'intervals'
+  const knownStart = (w: T) => (w.started_at && w.source !== 'manual' && !startGuessed(w) ? Date.parse(w.started_at) : NaN)
+  for (let i = 0; i < sessions.length; i++) {
+    for (let j = i + 1; j < sessions.length; j++) {
+      const a = sessions[i]!
+      const b = sessions[j]!
+      if (!a.id || !b.id || a.date !== b.date || !sameKind(a, b)) continue
+      if (a.minutes == null || b.minutes == null || !durationsMatch(a.minutes, b.minutes)) continue
+      if (fromWatch(a) && fromWatch(b)) continue
+      const gap = Math.abs(knownStart(a) - knownStart(b)) / 60_000
+      if (gap > DUPLICATE_START_GAP_MIN) continue
+      out.add(a.id)
+      out.add(b.id)
+    }
+  }
+  return out
+}
+
+// Minutos numa zona de FC (ex.: a zona 2, o ritmo leve) nas sessões com o
+// tempo por zona (do relógio ou do print); null se nenhuma o tem.
+export function zoneMinutes(sessions: { hr_zones?: unknown }[], zone: number): number | null {
+  let seconds = 0
+  let any = false
+  for (const s of sessions) {
+    if (!Array.isArray(s.hr_zones)) continue
+    for (const z of s.hr_zones as { zone?: unknown; seconds?: unknown }[]) {
+      if (z?.zone === zone && typeof z.seconds === 'number' && Number.isFinite(z.seconds)) {
+        seconds += z.seconds
+        any = true
+      }
+    }
+  }
+  return any ? Math.round(seconds / 60) : null
 }
