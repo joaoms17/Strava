@@ -16,8 +16,9 @@ import {
 
 // Lembretes por notificação (só para quem os ligou em Definições ›
 // Notificações). Corre duas vezes (vercel.json): às 20:45 UTC todos os dias
-// (21:45 em Lisboa no verão, 20:45 no inverno; no Hobby pode atrasar até
-// ~1 h) e às 08:00 UTC à segunda. Decide pela hora de Lisboa:
+// (21:45 em Lisboa no verão, 20:45 no inverno; no Hobby corre num minuto
+// qualquer dessa hora UTC, 20:00–20:59) e às 08:00 UTC à segunda. Decide pela
+// hora de Lisboa:
 // · à noite, «Já jantaste?» se o dia ainda não está completo (regra 5) e não
 //   há jantar registado;
 // · à segunda de manhã, «Resumo da semana pronto» se a cron das 04:30 fez o
@@ -67,11 +68,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const today = nutritionalDay(now, Number(profile.nutrition_day_cutoff_hour ?? 4))
       if (slot === 'noite') {
         const [{ data: meals }, { data: day }] = await Promise.all([
-          admin.from('meals_counted').select('slot,kcal').eq('user_id', profile.user_id).eq('date', today),
+          // Todas as não apagadas: um jantar ainda a analisar também conta como registado.
+          admin
+            .from('meals')
+            .select('slot,kcal,status')
+            .eq('user_id', profile.user_id)
+            .eq('date', today)
+            .is('deleted_at', null),
           admin.from('days').select('flags').eq('user_id', profile.user_id).eq('date', today).maybeSingle(),
         ])
         const flags = Array.isArray(day?.flags) ? (day.flags as string[]) : []
-        if (needsDinnerReminder((meals ?? []) as { slot: string | null; kcal: number | null }[], flags)) {
+        const dayMeals = (meals ?? []) as { slot: string | null; kcal: number | null; status: string | null }[]
+        if (needsDinnerReminder(dayMeals, flags)) {
           sent += await deliver(admin, rows, 'jantar', dinnerNotice(today))
         }
       } else {

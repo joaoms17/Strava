@@ -54,15 +54,20 @@ export function mealAnalysedNotice(meal: {
 
 // Lembrete da noite: o dia ainda não está completo (regra 5) e não há
 // jantar registado. Com o dia já respondido («Sim, foi tudo» ou «Não,
-// faltou algo») não se lembra nada.
+// faltou algo») não se lembra nada. `meals` são as refeições não apagadas do
+// dia: um jantar ainda a analisar, sem análise (limite da IA) ou com erro já
+// está registado; para a regra 5 só contam as analisadas (como meals_counted).
+const COUNTED = ['ok', 'por_rever']
+
 export function needsDinnerReminder(
-  meals: { slot: string | null; kcal: number | null }[],
+  meals: { slot: string | null; kcal: number | null; status?: string | null }[],
   flags: string[],
 ): boolean {
   if (flags.includes('dia_fechado') || flags.includes('faltou_algo')) return false
   if (meals.some((m) => m.slot === 'jantar')) return false
-  const kcalIn = meals.reduce((acc, m) => acc + Number(m.kcal ?? 0), 0)
-  return !isDayComplete({ mealCount: meals.length, kcalIn, manuallyClosed: false })
+  const counted = meals.filter((m) => m.status == null || COUNTED.includes(m.status))
+  const kcalIn = counted.reduce((acc, m) => acc + Number(m.kcal ?? 0), 0)
+  return !isDayComplete({ mealCount: counted.length, kcalIn, manuallyClosed: false })
 }
 
 export function dinnerNotice(date: string): PushNotice {
@@ -101,7 +106,8 @@ export const PUSH_TTL_S: Record<PushKind | 'teste', number> = {
 }
 
 // A cron dos lembretes corre duas vezes (às 08:00 UTC à segunda e às 20:45
-// UTC todos os dias; no Hobby do Vercel pode chegar até ~1 h depois): decide
+// UTC todos os dias; no Hobby do Vercel corre num minuto qualquer dessa hora
+// UTC, por isso entre as 20:00 e as 22:00 em Lisboa): decide
 // pela hora de Lisboa, com ou sem hora de verão.
 export type ReminderSlot = 'manha' | 'noite'
 

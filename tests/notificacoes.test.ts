@@ -82,6 +82,20 @@ describe('lembrete do jantar', () => {
     expect(needsDinnerReminder([{ slot: 'almoco', kcal: 700 }], ['faltou_algo'])).toBe(false)
   })
 
+  it('um jantar ainda a analisar ou sem análise já está registado; só as analisadas contam para a regra 5', () => {
+    expect(needsDinnerReminder([{ slot: 'jantar', kcal: null, status: 'a_analisar' }], [])).toBe(false)
+    expect(needsDinnerReminder([{ slot: 'jantar', kcal: null, status: 'sem_analise' }], [])).toBe(false)
+    expect(
+      needsDinnerReminder(
+        [
+          { slot: 'pequeno_almoco', kcal: 400, status: 'ok' },
+          { slot: 'almoco', kcal: 700, status: 'erro' },
+        ],
+        [],
+      ),
+    ).toBe(true)
+  })
+
   it('duas refeições com menos de 800 kcal ainda não chegam (regra 5)', () => {
     expect(
       needsDinnerReminder(
@@ -102,7 +116,7 @@ describe('horas da cron dos lembretes', () => {
     expect(reminderSlot(new Date('2026-01-05T20:45:00Z'))).toBe('noite')
     expect(reminderSlot(new Date('2026-07-06T08:00:00Z'))).toBe('manha')
     expect(reminderSlot(new Date('2026-01-05T08:59:00Z'))).toBe('manha')
-    // No Hobby a cron pode chegar até ~1 h depois.
+    // Mesmo fora da hora marcada continua a ser a da noite.
     expect(reminderSlot(new Date('2026-07-06T21:44:00Z'))).toBe('noite')
   })
 
