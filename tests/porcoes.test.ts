@@ -121,7 +121,16 @@ describe('dividir ao partilhar', () => {
     expect(splitFactors(1.5, null)).toEqual({ own: 1.5, copy: 1.5 })
   })
   it('nunca abaixo de 0,1', () => {
-    expect(splitFactors(0.2, 0.3)).toEqual({ own: 0.1, copy: 0.14 })
+    expect(splitFactors(0.2, 0.3)).toEqual({ own: 0.1, copy: 0.1 })
+  })
+  it('as duas partes somam a porção que havia', () => {
+    for (const base of [0.5, 0.75, 1, 1.25, 1.5, 2, 0.6]) {
+      for (const split of [0.5, 0.7, 0.6, 0.4, 0.3]) {
+        const { own, copy } = splitFactors(base, split)
+        expect(Math.round((own + copy) * 100)).toBe(Math.round(base * 100))
+      }
+    }
+    expect(splitFactors(0.75, 0.5)).toEqual({ own: 0.38, copy: 0.37 })
   })
   it('os itens e os totais ficam certos', () => {
     const items = [{ name: 'Poke de salmão', grams: 420, kcal: 640, protein: 32, carbs: 80, fat: 20, food_id: null, estimated: true }]

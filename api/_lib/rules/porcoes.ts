@@ -113,7 +113,10 @@ export function splitFor(targets: number, split: unknown): number | null {
 export function splitFactors(current: number, split: number | null): { own: number; copy: number } {
   const base = factorOf(current)
   if (split == null || !isSplit(split)) return { own: base, copy: base }
-  return { own: clampFactor(base * split), copy: clampFactor(base * (1 - split)) }
+  // A cópia fica com o que sobra (não com base × (1 − divisão) arredondado à
+  // parte): as duas somam a porção que havia na mesa.
+  const own = clampFactor(base * split)
+  return { own, copy: clampFactor(base - own) }
 }
 
 function percent(n: number): number {
