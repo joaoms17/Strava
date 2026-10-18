@@ -1,7 +1,9 @@
 // Fase 6 — Gasto (docs/redesenho-2026-09.md › Comer e Gasto). Três camadas
 // que a interface nunca mistura: o plano (o que pode comer), o gasto de hoje
 // (base sem treino + treino, só para mostrar) e o gasto medido pelo peso
-// (tdee_est, regra 4). Sem imports: o telemóvel usa as mesmas funções.
+// (tdee_est, regra 4). Sem imports do servidor: o telemóvel usa as mesmas
+// funções.
+import { FAST_LOSS_KG_WEEK } from './weight.js'
 
 export const KCAL_PER_KG = 7700
 export const SEDENTARY_FACTOR = 1.2
@@ -10,6 +12,7 @@ export const COHERENCE_KG_WEEK = 0.25
 export const FORMULA_GAP_KCAL = 300
 export const PLAN_DEFICIT_KCAL = 550
 export const MIN_BASE_KCAL = 1500
+export const MIN_BASE_KCAL_F = 1200
 export const BASE_SUGGESTION_MIN_CHANGE = 100
 export const MEASURED_MAX_GAP_KCAL = 400
 
@@ -122,11 +125,34 @@ export function persistentGap(weeklyGaps: number[]): boolean {
   return lastThree.length === 3 && lastThree.every((g) => g < -FORMULA_GAP_KCAL)
 }
 
+// O plano base mínimo: 1 200 nas mulheres, 1 500 nos homens.
+export function minBaseKcal(sex: string | null | undefined): number {
+  return sex === 'f' ? MIN_BASE_KCAL_F : MIN_BASE_KCAL
+}
+
 // Sugestão de plano base: gasto medido − treino médio − 550, a 50, nunca
-// abaixo de 1 500; só quando muda pelo menos 100.
-export function baseSuggestion(tdee: number, avgTrainingKcal: number, currentBase: number): number | null {
-  const y = Math.max(MIN_BASE_KCAL, Math.round((tdee - avgTrainingKcal - PLAN_DEFICIT_KCAL) / 50) * 50)
-  return Math.abs(y - currentBase) >= BASE_SUGGESTION_MIN_CHANGE ? y : null
+// abaixo do mínimo; só quando muda pelo menos 100. Com o mínimo a cortar
+// (`atMinimum`), perde-se menos de 0,5 kg por semana: `pace` é o ritmo com o
+// plano sugerido (kg por semana, negativo = a perder). Subir o plano só se
+// propõe quando o de hoje faz perder mais depressa do que a faixa segura.
+export interface BaseSuggestion {
+  base: number
+  pace: number
+  atMinimum: boolean
+}
+
+export function baseSuggestion(
+  tdee: number,
+  avgTrainingKcal: number,
+  currentBase: number,
+  sex: string | null = 'm',
+): BaseSuggestion | null {
+  const minimum = minBaseKcal(sex)
+  const ideal = Math.round((tdee - avgTrainingKcal - PLAN_DEFICIT_KCAL) / 50) * 50
+  const base = Math.max(minimum, ideal)
+  if (Math.abs(base - currentBase) < BASE_SUGGESTION_MIN_CHANGE) return null
+  if (base > currentBase && paceFromDiff(currentBase + avgTrainingKcal - tdee) >= -FAST_LOSS_KG_WEEK) return null
+  return { base, pace: paceFromDiff(base + avgTrainingKcal - tdee), atMinimum: ideal < minimum }
 }
 
 // «Qualidade da perda» (Corpo): que parte do peso perdido foi gordura; só

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkWeighing, isDeletedWeighing, weeklyRate } from '../api/_lib/rules/weight'
+import { checkWeighing, isDeletedWeighing, weeklyRate, weeklyRateAsOf } from '../api/_lib/rules/weight'
 
 function series(start: string, days: number, from: number, perDay: number, every = 1) {
   const out = []
@@ -22,6 +22,15 @@ describe('ritmo semanal do peso médio', () => {
 
   it('com menos de 8 pesagens nos últimos 14 dias não há ritmo', () => {
     expect(weeklyRate(series('2026-09-01', 21, 86, -0.05, 3))).toBeNull()
+  })
+
+  it('o ritmo de uma semana só com uma pesagem a 4 dias ou menos', () => {
+    const weights = series('2026-09-01', 21, 86, -0.4 / 7) // última a 21/9
+    expect(weeklyRateAsOf(weights, '2026-09-25')).toBeCloseTo(-0.4, 1)
+    // 2 semanas sem pesar: o ritmo antigo não é o desta semana
+    expect(weeklyRateAsOf(weights, '2026-10-04')).toBeNull()
+    // uma semana antiga vê só as pesagens até ao fim dela
+    expect(weeklyRateAsOf(weights, '2026-09-10')).toBeNull()
   })
 })
 

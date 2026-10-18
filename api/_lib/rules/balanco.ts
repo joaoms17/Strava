@@ -1,5 +1,8 @@
 // Balanço da semana: médias do que se comeu e do plano, só com os dias que
-// contam — já acabados, com refeições e sem «faltou algo».
+// contam — já acabados e completos pela regra 5 (2 refeições e 800 kcal, ou
+// «Sim, foi tudo»; sem «faltou algo» nem fotos por contar), como o Mês, a
+// Conta da gordura e o resumo da semana. Calcula-se a partir das refeições,
+// por isso muda logo.
 
 export interface BalanceDay {
   date: string
@@ -9,7 +12,7 @@ export interface BalanceDay {
   carbs: number
   fat: number
   meals: number
-  missingSomething: boolean
+  complete: boolean
 }
 
 export interface WeekAverages {
@@ -21,8 +24,13 @@ export interface WeekAverages {
   fat: number
 }
 
-export function countedDays(days: BalanceDay[], today: string): BalanceDay[] {
-  return days.filter((d) => d.date < today && d.meals > 0 && !d.missingSomething)
+export function countedDays<T extends BalanceDay>(days: T[], today: string): T[] {
+  return days.filter((d) => d.date < today && d.complete)
+}
+
+// Dias acabados com refeições que não contam (incompletos ou «faltou algo»).
+export function leftOutDays(days: BalanceDay[], today: string): number {
+  return days.filter((d) => d.date < today && d.meals > 0 && !d.complete).length
 }
 
 export function weekAverages(days: BalanceDay[], today: string): WeekAverages | null {
@@ -43,4 +51,26 @@ export function weekAverages(days: BalanceDay[], today: string): WeekAverages | 
 // Aviso âmbar: a média da semana abaixo do mínimo (regra 6, 1 400 por omissão).
 export function belowFloor(averages: WeekAverages | null, floorKcal: number): boolean {
   return averages != null && averages.days >= 3 && averages.eaten < floorKcal
+}
+
+// Hoje: a semana até agora contra o plano — os dias completos desde
+// segunda-feira (o que o fecho do dia guardou) mais hoje, ao vivo. `diff`
+// positivo = abaixo do plano. Sem nenhum dia completo antes de hoje, não há.
+export interface WeekSoFarDay {
+  date: string
+  kcal_in: number
+  kcal_target: number
+  is_complete: boolean
+}
+
+export function weekSoFar(
+  days: WeekSoFarDay[],
+  today: string,
+  todayPlan: number,
+  todayEaten: number,
+): { days: number; diff: number } | null {
+  const past = days.filter((d) => d.date < today && d.is_complete && Number(d.kcal_target) > 0)
+  if (past.length === 0) return null
+  const diff = past.reduce((a, d) => a + Number(d.kcal_target) - Number(d.kcal_in), todayPlan - todayEaten)
+  return { days: past.length, diff: Math.round(diff) }
 }

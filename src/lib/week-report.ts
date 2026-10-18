@@ -12,7 +12,7 @@ export interface WeekReport {
   sessions: number
   minutes: number
   rateKgWeek: number | null
-  completeDays: number // dias contados nesta semana
+  completeDays: number // dias completos (os que contam nas médias) nesta semana
 }
 
 const W = 1080
@@ -75,7 +75,7 @@ export function drawWeekReport(r: WeekReport): HTMLCanvasElement {
       r.rateKgWeek == null ? '—' : Math.abs(r.rateKgWeek) < 0.05 ? 'estável' : `${r.rateKgWeek < 0 ? '−' : '+'}${fmt1(Math.abs(r.rateKgWeek))} kg`,
       r.rateKgWeek == null ? '' : 'por semana',
     ],
-    ['Dias registados', `${r.completeDays} de 7`, ''],
+    ['Dias completos', `${r.completeDays} de 7`, ''],
   ]
   const colW = (W - 160 - 30) / 2
   const tileH = 190

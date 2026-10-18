@@ -6,6 +6,7 @@ import { useDataVersion } from '../lib/events'
 import { shiftDate } from '../lib/day'
 import { fmt1, fmtDayMonth, fmtInt, fmtKcal } from '../lib/format'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
+import { intakeLinks, type IntakeLink } from '../../api/_lib/rules/extras'
 import type { MealItem } from '../lib/types'
 
 interface Week {
@@ -27,13 +28,15 @@ function normalize(name: string): string {
 }
 
 // Balanço › Mês: as últimas 5 semanas (comeu contra gasto, só dias
-// completos), o gasto medido ao longo do tempo, passos e sono, e os 10
-// alimentos que mais se repetem.
+// completos), o gasto medido ao longo do tempo, passos e sono (e o que se
+// comeu depois de noites más ou com poucos passos), e os 10 alimentos que
+// mais se repetem.
 export default function BalancoMes({ today }: { today: string }) {
   const colors = useThemeColors()
   const version = useDataVersion()
   const [weeks, setWeeks] = useState<Week[] | null>(null)
   const [foods, setFoods] = useState<{ name: string; count: number; kcal: number }[]>([])
+  const [links, setLinks] = useState<ReturnType<typeof intakeLinks> | null>(null)
 
   const load = useCallback(async () => {
     const first = shiftDate(mondayOf(today), -28)
@@ -66,6 +69,14 @@ export default function BalancoMes({ today }: { today: string }) {
       })
     }
     setWeeks(list)
+    setLinks(
+      intakeLinks(
+        (days ?? [])
+          .filter((d) => d.is_complete && !((d.flags as string[] | null) ?? []).includes('faltou_algo'))
+          .map((d) => ({ date: d.date as string, kcal_in: Number(d.kcal_in) })),
+        (health ?? []) as Parameters<typeof intakeLinks>[1],
+      ),
+    )
 
     const counts = new Map<string, { name: string; count: number; kcal: number }>()
     for (const meal of (meals ?? []) as { items: MealItem[] }[]) {
@@ -98,6 +109,14 @@ export default function BalancoMes({ today }: { today: string }) {
     tdee: w.tdee,
   }))
   const withSteps = weeks.filter((w) => w.steps != null || w.sleep != null)
+  const compared = (link: IntakeLink) =>
+    Math.abs(link.diff) < 100
+      ? 'comeste cerca do mesmo que nos outros dias'
+      : `comeste em média ${fmtInt(Math.abs(link.diff))} kcal ${link.diff > 0 ? 'a mais' : 'a menos'} do que nos outros dias`
+  const linkLines = [
+    links?.sleep ? `Depois de noites más (menos de 6 h ou sono fraco), ${compared(links.sleep)}.` : null,
+    links?.steps ? `Nos dias com menos de ${fmtInt(links.steps.below)} passos, ${compared(links.steps)}.` : null,
+  ].filter((l): l is string => l != null)
 
   return (
     <div className="space-y-4">
@@ -148,6 +167,13 @@ export default function BalancoMes({ today }: { today: string }) {
               </span>
             </p>
           ))}
+          {linkLines.length > 0 && (
+            <div className="space-y-1 border-t border-line pt-2 text-[14px] text-dim">
+              {linkLines.map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+            </div>
+          )}
         </section>
       )}
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { proteinBySlot, shoppingList, shoppingText, waterGoalMl } from '../api/_lib/rules/extras'
+import { intakeLinks, proteinBySlot, shoppingList, shoppingText, waterGoalMl } from '../api/_lib/rules/extras'
 
 const item = (name: string, grams: number) => ({
   name,
@@ -48,5 +48,28 @@ describe('shoppingList', () => {
       { name: 'Ovo', grams: 0, times: 2 },
     ])
     expect(shoppingText(lines)).toBe('• Arroz — 240 g\n• Frango — 690 g\n• Ovo × 2')
+  })
+})
+
+describe('comer depois de noites más e com poucos passos', () => {
+  const dates = Array.from({ length: 10 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`)
+  const days = dates.map((date, i) => ({ date, kcal_in: i < 4 ? 2100 : 1800 }))
+
+  it('depois de noites más comeu mais 300 por dia', () => {
+    const health = dates.map((date, i) => ({ date, sleep_minutes: i < 4 ? 330 : 450, steps: null }))
+    expect(intakeLinks(days, health).sleep).toEqual({ diff: 300, days: 4 })
+  })
+
+  it('nos dias com menos passos (abaixo da mediana)', () => {
+    const health = dates.map((date, i) => ({ date, steps: i < 5 ? 4000 + i * 100 : 9000 }))
+    const { steps } = intakeLinks(days, health)
+    // abaixo de 9 000: 4 dias a 2 100 e 1 a 1 800 = 2 040 contra 1 800
+    expect(steps).toEqual({ diff: 240, days: 5, below: 9000 })
+  })
+
+  it('com menos de 4 dias em cada grupo não diz nada', () => {
+    const health = dates.map((date, i) => ({ date, sleep_minutes: i < 3 ? 330 : 450 }))
+    expect(intakeLinks(days, health).sleep).toBeNull()
+    expect(intakeLinks(days, []).steps).toBeNull()
   })
 })
