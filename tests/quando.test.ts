@@ -72,10 +72,11 @@ describe('Quando (dia e refeição)', () => {
     expect(dayLabel(TODAY, TODAY)).toBe('Hoje')
     expect(dayLabel('2026-10-03', TODAY)).toBe('Ontem')
     expect(dayLabel('2026-10-02', TODAY)).toBe('Anteontem')
-    expect(dayLabel('2026-09-28', TODAY)).toBe('seg 28 set')
+    // O dia e o mês não se separam na quebra de linha (espaço que não parte).
+    expect(dayLabel('2026-09-28', TODAY)).toBe('seg 28\u00a0set')
     expect(whenLabel({ date: '2026-10-03', slot: 'jantar' }, TODAY)).toBe('Ontem · jantar')
     expect(whenLabel({ date: TODAY, slot: 'agora' }, TODAY)).toBe('Hoje · agora')
-    expect(whenLabel({ date: '2026-09-28', slot: null }, TODAY)).toBe('seg 28 set')
+    expect(whenLabel({ date: '2026-09-28', slot: null }, TODAY)).toBe('seg 28\u00a0set')
   })
 })
 

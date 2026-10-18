@@ -63,7 +63,7 @@ export default function Ciclo({ today }: { today: string }) {
             </p>
           ) : info.waterWeek ? (
             <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
-              Semana de água: é normal o peso subir 0,5–2 kg agora. Não é gordura e desce depois do período.
+              Semana de água: é normal o peso subir 0,5–2&nbsp;kg agora. Não é gordura e desce depois do período.
             </p>
           ) : (
             <p className="text-[14px] text-dim">
@@ -140,7 +140,8 @@ export default function Ciclo({ today }: { today: string }) {
       </div>
 
       {starts.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-[13px] text-dim">
+        <div className="flex flex-wrap items-center gap-2 text-[13px] text-dim">
+          <span>Inícios marcados (toca para tirar):</span>
           {starts.slice(-4).reverse().map((d) => (
             <button
               key={d}

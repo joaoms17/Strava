@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_PEOPLE, initialOf, parseAccounts, personName, startingTargets, switchOutcome, upsertAccount } from '../api/_lib/rules/pessoas'
+import {
+  MAX_PEOPLE,
+  initialOf,
+  parseAccounts,
+  personName,
+  startingTargets,
+  switchOutcome,
+  switchPath,
+  upsertAccount,
+} from '../api/_lib/rules/pessoas'
 
 describe('várias pessoas', () => {
   it('alvos de partida de uma mulher: fórmula menos o défice, proteína pelo peso alvo', () => {
@@ -64,5 +73,24 @@ describe('contas guardadas no telemóvel', () => {
       'esquecer',
     )
     expect(switchOutcome(null, false)).toBe('esquecer')
+  })
+})
+
+describe('trocar de pessoa fica no mesmo separador', () => {
+  it('só o primeiro segmento: ids, datas e folhas são da outra pessoa', () => {
+    expect(switchPath('/balanco')).toBe('/balanco')
+    expect(switchPath('/treino/ginasio?id=abc')).toBe('/treino')
+    expect(switchPath('/hoje/2026-10-14')).toBe('/hoje')
+    expect(switchPath('/corpo/medidas')).toBe('/corpo')
+    expect(switchPath('/definicoes/avancado')).toBe('/definicoes')
+    expect(switchPath('/favoritos?folha=nova-favorita')).toBe('/favoritos')
+  })
+
+  it('fora dos separadores (ou sem caminho) vai para o Hoje', () => {
+    expect(switchPath('/')).toBe('/hoje')
+    expect(switchPath('')).toBe('/hoje')
+    expect(switchPath(null)).toBe('/hoje')
+    expect(switchPath('/qualquer-coisa')).toBe('/hoje')
+    expect(switchPath('//evil.example/hoje')).toBe('/hoje')
   })
 })

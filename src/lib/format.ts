@@ -1,5 +1,9 @@
 // Números em PT-PT: vírgula decimal e espaço fino nos milhares («1 880»).
 const THIN = ' '
+// Espaço que não parte a linha: entre o número e a unidade («80 %», «45 min»)
+// e entre o dia e o mês («17 ago»), para a unidade não ficar sozinha na
+// linha seguinte.
+export const NBSP = '\u00a0'
 
 export function fmtInt(n: number): string {
   const rounded = Math.round(n)
@@ -37,13 +41,13 @@ function parts(date: string) {
 // «seg 29 set»
 export function fmtDayShort(date: string): string {
   const { dow, day, month } = parts(date)
-  return `${WEEKDAY_SHORT[dow]} ${day} ${MONTH_SHORT[month]}`
+  return `${WEEKDAY_SHORT[dow]} ${day}${NBSP}${MONTH_SHORT[month]}`
 }
 
-// «29 set»
+// «29 set» (também nos eixos dos gráficos com datas)
 export function fmtDayMonth(date: string): string {
   const { day, month } = parts(date)
-  return `${day} ${MONTH_SHORT[month]}`
+  return `${day}${NBSP}${MONTH_SHORT[month]}`
 }
 
 export function weekdayShort(date: string): string {
@@ -62,8 +66,8 @@ export function monthLong(month: number): string {
 export function fmtRange(from: string, to: string): string {
   const a = parts(from)
   const b = parts(to)
-  if (a.month === b.month) return `${a.day}–${b.day} ${MONTH_SHORT[b.month]}`
-  return `${a.day} ${MONTH_SHORT[a.month]} – ${b.day} ${MONTH_SHORT[b.month]}`
+  if (a.month === b.month) return `${a.day}–${b.day}${NBSP}${MONTH_SHORT[b.month]}`
+  return `${a.day}${NBSP}${MONTH_SHORT[a.month]} – ${b.day}${NBSP}${MONTH_SHORT[b.month]}`
 }
 
 export function timeOf(iso: string): string {

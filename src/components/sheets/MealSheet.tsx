@@ -16,6 +16,7 @@ import ItemList from '../ItemList'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
 import AiCheck from '../AiCheck'
+import AvisarAnalise from '../AvisarAnalise'
 import { LeftoversButton, LeftoversNote } from '../Sobras'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
@@ -416,6 +417,7 @@ export default function MealSheet() {
           <div className="space-y-3">
             <p className="animate-pulse text-[17px]">A analisar…</p>
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
+            <AvisarAnalise className="-mt-2" />
             {goingTo.length > 0 && (
               <p className="text-[13px] text-dim">Depois vai também para {goingTo.map((p) => p.name).join(' e ')}.</p>
             )}
