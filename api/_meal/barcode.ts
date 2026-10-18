@@ -213,7 +213,9 @@ export async function label(req: VercelRequest, res: VercelResponse) {
 
 // ---------------------------------------------------------------------
 // Pesquisa pelo nome: cache na memória da função e em off_searches (7 dias),
-// e um limite partilhado pelas pessoas da casa.
+// e um limite partilhado pelas pessoas da casa. Cada pesquisa faz no máximo
+// 2 pedidos (a nova e, sem resultados, a antiga): 5 por minuto ficam dentro
+// dos 10 do Open Food Facts.
 // ---------------------------------------------------------------------
 const CACHE_MS = 7 * 86_400_000
 const SEARCHES_PER_MINUTE = 5
@@ -225,7 +227,8 @@ async function searchOff(query: string): Promise<OffHit[]> {
   const fields = 'code,product_name,product_name_pt,brands,nutriments'
   try {
     const found = await fetchJson(`https://search.openfoodfacts.org/search?q=${q}&langs=pt,en&page_size=15&fields=${fields}`, 8_000)
-    if (found.status >= 200 && found.status < 300 && found.json) return offSearchResults(found.json)
+    const hits = found.status >= 200 && found.status < 300 ? offSearchResults(found.json) : []
+    if (hits.length) return hits
   } catch {
     // tenta a pesquisa antiga
   }
@@ -289,6 +292,7 @@ export async function foodSearch(req: VercelRequest, res: VercelResponse) {
       throw new HttpError(502, 'O Open Food Facts não respondeu. Tenta outra vez.')
     }
     memory.set(key, { at: now, results })
+    if (memory.size > 200) memory.delete(memory.keys().next().value!)
     if (!storeError) {
       await admin.from('off_searches').upsert({ q: key, results, fetched_at: new Date(now).toISOString() })
     }
