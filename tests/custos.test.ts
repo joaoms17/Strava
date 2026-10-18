@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ASK_DAILY_CAP,
+  ASK_KIND,
   VISION_KINDS,
   aiLimitsFor,
+  dailyAskCapReached,
   dailyVisionCapReached,
   monthlyCapReached,
   nearMonthlyCap,
@@ -18,6 +21,14 @@ describe('limites da IA', () => {
   it('limite diário de fotos', () => {
     expect(dailyVisionCapReached(39, 40)).toBe(false)
     expect(dailyVisionCapReached(40, 40)).toBe(true)
+  })
+
+  it('«Pergunta à app»: no máximo 60 perguntas por dia, e não contam como fotos', () => {
+    expect(ASK_DAILY_CAP).toBe(60)
+    expect(dailyAskCapReached(59)).toBe(false)
+    expect(dailyAskCapReached(60)).toBe(true)
+    expect(dailyAskCapReached(5, 0)).toBe(false) // 0 = sem limite
+    expect(VISION_KINDS).not.toContain(ASK_KIND)
   })
 
   it('com o Gemini a casa partilha a quota e não há euros; com o Claude é por pessoa', () => {

@@ -26,6 +26,16 @@ export function dailyVisionCapReached(visionCallsToday: number, cap: number): bo
   return cap > 0 && visionCallsToday >= cap
 }
 
+// «Pergunta à app»: no máximo 60 perguntas por dia (com o Gemini, as de toda
+// a casa, como as fotos; com o Claude, por pessoa). Uma conversa a correr
+// não pode gastar a quota gratuita do dia nem o teto do mês.
+export const ASK_KIND = 'ask'
+export const ASK_DAILY_CAP = 60
+
+export function dailyAskCapReached(asksToday: number, cap = ASK_DAILY_CAP): boolean {
+  return cap > 0 && asksToday >= cap
+}
+
 // Aviso nas Definições › Avançado a partir de 80 % do teto.
 export function nearMonthlyCap(monthUsd: number, capEur: number): boolean {
   return capEur > 0 && monthUsd * USD_TO_EUR >= 0.8 * capEur

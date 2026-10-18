@@ -15,6 +15,7 @@ export const PROMPT_TRAINING_WEEK = 'training-week.v1.md'
 export const PROMPT_EVOLUTION = 'evolution.v3.md'
 export const PROMPT_WORKOUT_SAID = 'workout-said.v2.md'
 export const PROMPT_MENU_PICK = 'menu-pick.v1.md'
+export const PROMPT_ASK = 'ask.v1.md'
 
 export function readPrompt(filename: string): string {
   const candidates = [

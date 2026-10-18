@@ -60,6 +60,28 @@ export function shoppingList(selection: { items: MealItem[]; times: number }[]):
     .sort((a, b) => a.name.localeCompare(b.name, 'pt'))
 }
 
+// O que se junta à lista fora das favoritas (a «Pergunta à app»): o nome e
+// as gramas, quando se sabem.
+export interface ShoppingItem {
+  name: string
+  grams: number | null
+}
+export const MAX_ITEM_GRAMS = 10_000
+
+// Junta à lista sem repetir nomes (sem maiúsculas): as gramas somam-se.
+export function mergeShopping(current: ShoppingItem[], added: ShoppingItem[]): ShoppingItem[] {
+  const out = current.map((i) => ({ ...i }))
+  for (const item of added) {
+    const name = item.name.trim()
+    if (!name) continue
+    const key = name.toLocaleLowerCase('pt')
+    const same = out.find((i) => i.name.toLocaleLowerCase('pt') === key)
+    if (!same) out.push({ name, grams: item.grams })
+    else if (item.grams != null) same.grams = Math.min(MAX_ITEM_GRAMS, (same.grams ?? 0) + item.grams)
+  }
+  return out
+}
+
 export function shoppingText(lines: ShoppingLine[]): string {
   return lines
     .map((l) => `• ${l.name}${l.grams > 0 ? ` — ${l.grams >= 1000 ? `${(l.grams / 1000).toFixed(1).replace('.', ',')} kg` : `${l.grams} g`}` : l.times > 1 ? ` × ${l.times}` : ''}`)

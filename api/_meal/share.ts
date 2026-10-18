@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
+import { otherPeople, personName } from '../_lib/people.js'
 
 // Partilhar uma refeição com outra pessoa da app (ex.: o João e a Joana a
 // comer o mesmo): copia-a para a conta dela, no mesmo dia, refeição e hora,
@@ -14,23 +15,12 @@ import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
 
 const ShareSchema = z.object({ meal_id: z.string().uuid(), to_user_id: z.string().uuid() })
 
-async function personName(admin: ReturnType<typeof adminClient>, userId: string): Promise<string> {
-  const { data } = await admin.auth.admin.getUserById(userId)
-  const name = data.user?.user_metadata?.name
-  return typeof name === 'string' && name.trim() ? name.trim() : (data.user?.email?.split('@')[0] ?? 'Outra pessoa')
-}
-
 // GET /api/meal/people: as outras pessoas da app, para «Partilhar com …».
 export async function people(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== 'GET') throw new HttpError(405, 'Método não suportado.')
     const { user } = await requireUser(req)
-    const admin = adminClient()
-    const { data } = await admin.from('profile').select('user_id').neq('user_id', user.id).order('created_at')
-    const list = await Promise.all(
-      (data ?? []).map(async (p) => ({ user_id: p.user_id as string, name: await personName(admin, p.user_id as string) })),
-    )
-    res.status(200).json({ people: list })
+    res.status(200).json({ people: await otherPeople(adminClient(), user.id) })
   } catch (err) {
     respondError(res, err)
   }
