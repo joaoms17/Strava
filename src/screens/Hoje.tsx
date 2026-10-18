@@ -816,7 +816,7 @@ export default function Hoje() {
                   : 'Ficaste abaixo do plano'
               : over && !unknown
                 ? 'Passaste o plano'
-                : `${counted.length === 0 ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 ? ' cerca de' : ''}`}
+                : `${counted.length === 0 || unknown ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 && !unknown ? ' cerca de' : ''}`}
           </p>
           <p className="label">Ver o plano ›</p>
         </div>
@@ -1127,11 +1127,16 @@ export default function Hoje() {
                 &nbsp;kcal
               </p>
             )}
-            <p className="tabular-nums">
-              Comeste {fmtKcal(kcalIn)}&nbsp;kcal
-              {isToday && !over && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
-              {over && <> · Passaste {fmtKcal(-left)}&nbsp;kcal do plano</>}
-            </p>
+            {unknown ? (
+              // Sem rede não se sabe o que já se comeu: nada de «Comeste 0».
+              <p className="text-dim">Sem rede: o que comeste aparece quando houver rede.</p>
+            ) : (
+              <p className="tabular-nums">
+                Comeste {fmtKcal(kcalIn)}&nbsp;kcal
+                {isToday && !over && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
+                {over && <> · Passaste {fmtKcal(-left)}&nbsp;kcal do plano</>}
+              </p>
+            )}
             {week && weekText && (
               <p className="tabular-nums">
                 Esta semana, com hoje: {weekText}{' '}
@@ -1140,10 +1145,12 @@ export default function Hoje() {
                 </span>
               </p>
             )}
-            <p className="text-dim tabular-nums">
-              <span className="text-protein">Proteína {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g</span> ·
-              Hidratos {fmtInt(carbsIn)} g · Gordura {fmtInt(fatIn)} g
-            </p>
+            {!unknown && (
+              <p className="text-dim tabular-nums">
+                <span className="text-protein">Proteína {fmtInt(proteinIn)} de {fmtInt(profile.protein_g)} g</span> ·
+                Hidratos {fmtInt(carbsIn)} g · Gordura {fmtInt(fatIn)} g
+              </p>
+            )}
             {workoutKcals.length > 0 && (
               <ul className="space-y-1 text-dim">
                 {workoutKcals.map(({ workout, kcal }) => (
@@ -1164,7 +1171,7 @@ export default function Hoje() {
                 ))}
               </ul>
             )}
-            {kcalExercise === 0 && !maintenance && (
+            {kcalExercise === 0 && !maintenance && !unknown && (
               <p className="text-dim">Um treino aumenta o que podes comer.</p>
             )}
             <details className="text-dim">
