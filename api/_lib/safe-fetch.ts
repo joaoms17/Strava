@@ -117,8 +117,15 @@ export async function fetchPublicPage(input: string): Promise<{ url: string; htm
     }
     if (page.status >= 300 && page.status < 400) {
       const location = page.headers.location
-      if (!location || hop === MAX_REDIRECTS) break
-      const next = checkRecipeUrl(new URL(location, url).toString())
+      if (!location) throw new HttpError(422, 'Não consegui abrir essa página.')
+      if (hop === MAX_REDIRECTS) break
+      let target: string
+      try {
+        target = new URL(location, url).toString()
+      } catch {
+        throw new HttpError(422, 'Não consegui abrir essa página.')
+      }
+      const next = checkRecipeUrl(target)
       if ('error' in next) throw new HttpError(400, next.error)
       url = next.url
       continue
