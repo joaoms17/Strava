@@ -24,17 +24,20 @@ import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
 import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
-import { deleteMeal, repeatMeal } from '../../lib/meal-actions'
+import { changePortion, deleteMeal, repeatMeal, shareMeals } from '../../lib/meal-actions'
 import { deleteFavorite, favoriteFromMeal } from '../../lib/favorites'
 import { diffText } from '../../lib/meal-diff'
 import { usePeople, type Person } from '../../lib/people'
+import { useAccounts } from '../../lib/accounts'
+import { PortionRow, ScopeToggle, ShareChooser } from '../Porcao'
 import { favoriteName, patternKey, similarCount, SIMILAR_MIN_COUNT } from '../../../api/_lib/rules/favoritos'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
+import { canChangePortion, factorOf, joinNames, sameFactor, slotScope, slotScopeLabel, splitText } from '../../../api/_lib/rules/porcoes'
 import type { Meal, MealItem, Slot } from '../../lib/types'
 
 const MAIN_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
-type Mode = 'view' | 'favorite' | 'when' | 'correct' | 'write'
+type Mode = 'view' | 'favorite' | 'when' | 'correct' | 'write' | 'share'
 
 // Ver, confirmar, corrigir, repetir, guardar como favorito ou apagar uma
 // refeição, com os itens sempre visíveis.
@@ -52,6 +55,16 @@ export default function MealSheet() {
   const [mode, setMode] = useState<Mode>('view')
   // Partilhada agora mesmo nesta folha (o servidor só o diz ao abrir).
   const [shared, setShared] = useState<string[]>([])
+  // «Partilhar com …» tocado: a escolha de como comeram.
+  const [sharing, setSharing] = useState<Person | null>(null)
+  const [peopleTick, setPeopleTick] = useState(0)
+  // As refeições analisadas do mesmo dia e momento (a aberta primeiro), para
+  // «Todo o jantar (5)», e os dois interruptores da porção (desligados).
+  const [slotMeals, setSlotMeals] = useState<Meal[]>([])
+  const [allSlot, setAllSlot] = useState(false)
+  const [alsoCopies, setAlsoCopies] = useState(false)
+  const { accounts, currentId } = useAccounts()
+  const me = accounts.find((a) => a.user_id === currentId)?.name ?? 'Eu'
   const [name, setName] = useState('')
   const [slot, setSlot] = useState<Slot>('almoco')
   const [text, setText] = useState('')
@@ -73,6 +86,7 @@ export default function MealSheet() {
     setFavoriteId(row.favorite_id ?? favs?.[0]?.id ?? null)
     setName(favoriteName(row.items))
     setSlot(row.slot ?? slotOf(new Date(row.logged_at)))
+    void loadSlot(row)
     const paths = row.photo_paths?.length ? row.photo_paths : row.photo_path ? [row.photo_path] : []
     if (paths.length) {
       const urls = await signedUrls(paths)
@@ -95,6 +109,21 @@ export default function MealSheet() {
     }
   }
 
+  // O jantar de entrega em 5 fotos: as outras analisadas do mesmo momento.
+  async function loadSlot(row: Meal) {
+    if (!canChangePortion(row)) {
+      setSlotMeals([])
+      return
+    }
+    const { data } = await supabase
+      .from('meals')
+      .select('*')
+      .eq('date', row.date)
+      .is('deleted_at', null)
+      .in('status', ['ok', 'por_rever'])
+    setSlotMeals(slotScope(row, (data ?? []) as Meal[]))
+  }
+
   useEffect(() => {
     void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,7 +134,8 @@ export default function MealSheet() {
   // As outras pessoas da app, para «Partilhar com …» (comeram o mesmo), e com
   // quem já está partilhada; outra vez quando a análise acaba (o «Também para
   // …» do ＋ partilha nessa altura).
-  const people = usePeople(id, analysing)
+  const slotIds = slotMeals.length > 1 ? slotMeals.map((m) => m.id) : []
+  const people = usePeople(id, `${analysing}:${peopleTick}`, slotIds)
   useEffect(() => {
     if (!analysing) return
     const timer = setInterval(() => {
@@ -141,8 +171,25 @@ export default function MealSheet() {
   // «Também para …» do ＋, à espera do fim da análise.
   const shareWith = current.share_with ?? []
   const goingTo = people.filter((p) => shareWith.includes(p.user_id) && !p.shared)
+  // E como comeram («a meias»), só com uma pessoa.
+  const goingSplit = goingTo.length === 1 ? splitText(current.share_split, me, goingTo[0]!.name) : null
   // Mexer nos alimentos de uma refeição por rever também a confirma.
   const confirming = current.status === 'por_rever'
+  // A porção: nesta ou em todo o momento («Todo o jantar (5)») e, quando há
+  // cópias partilhadas dessas refeições, também nelas («Também na de Joana»).
+  const factor = factorOf(current.portion_factor)
+  const inSlot = slotMeals.length > 1 && allSlot ? slotMeals.map((m) => m.id) : [current.id]
+  const copiesIn = (p: Person) =>
+    inSlot.filter((mealId) => (p.shared_in ?? (p.shared ? [current.id] : [])).includes(mealId) || (mealId === current.id && shared.includes(p.user_id)))
+  const copyPeople = people.filter((p) => copiesIn(p).length > 0)
+  const copyCount = copyPeople.reduce((n, p) => n + copiesIn(p).length, 0)
+  const others = inSlot.filter((mealId) => mealId !== current.id)
+  const scopeToggle =
+    slotMeals.length > 1 ? (
+      <ScopeToggle on={allSlot} onChange={setAllSlot}>
+        {slotScopeLabel(mealSlot, slotMeals.length)}
+      </ScopeToggle>
+    ) : null
 
   async function call<T>(path: string, body: unknown): Promise<T | null> {
     try {
@@ -247,18 +294,53 @@ export default function MealSheet() {
     ])
   }
 
-  async function shareTo(person: Person) {
-    const result = await call<{ ok: boolean; to: string; already?: boolean }>('/api/meal/share', {
-      meal_id: current.id,
-      to_user_id: person.user_id,
+  // Com a divisão escolhida e, com «Todo o jantar», as do momento todas.
+  async function shareTo(person: Person, split: number | null) {
+    const result = await shareMeals({
+      meal: current,
+      person,
+      mealIds: others,
+      split,
+      me,
+      today,
+      toast,
+      onUndone: () => {
+        setShared((list) => list.filter((userId) => userId !== person.user_id))
+        setPeopleTick((n) => n + 1)
+        void load()
+      },
     })
     if (!result) return
     setShared([...shared, person.user_id])
-    toast(
-      result.already
-        ? `Já estava partilhada com ${result.to}.`
-        : `Partilhada com ${result.to}. Aparece-lhe no Hoje para confirmar a porção.`,
-    )
+    setPeopleTick((n) => n + 1)
+    setSharing(null)
+    setMode('view')
+    updateRows(result.meals)
+  }
+
+  // As linhas que o servidor mudou (porção, divisão): a aberta e as do momento.
+  function updateRows(rows: Meal[]) {
+    const mine = rows.find((m) => m.id === current.id)
+    if (mine) {
+      setMeal(mine)
+      setItems(mine.items)
+    }
+    if (rows.length) setSlotMeals((list) => list.map((m) => rows.find((r) => r.id === m.id) ?? m))
+  }
+
+  async function pickPortion(next: number) {
+    const withShared = alsoCopies && copyPeople.length > 0
+    if (sameFactor(next, factor) && others.length === 0 && !withShared) return
+    const result = await changePortion({
+      meal: current,
+      factor: next,
+      mealIds: others,
+      withShared,
+      today,
+      toast,
+      onUndone: () => void load(),
+    })
+    if (result) updateRows(result.meals)
   }
 
   async function confirm() {
@@ -420,7 +502,10 @@ export default function MealSheet() {
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
             <AvisarAnalise className="-mt-2" />
             {goingTo.length > 0 && (
-              <p className="text-[13px] text-dim">Depois vai também para {goingTo.map((p) => p.name).join(' e ')}.</p>
+              <p className="text-[13px] text-dim">
+                Depois vai também para {joinNames(goingTo.map((p) => p.name))}
+                {goingSplit ? ` · ${goingSplit}` : ''}.
+              </p>
             )}
             <button onClick={() => sheet.open('nota', { id: current.id })} className={`${secondary} w-full`}>
               ＋ Nota
@@ -509,6 +594,21 @@ export default function MealSheet() {
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
+            {mode === 'view' && !dirty && !reanalysing && canChangePortion(current) && (
+              <div className="space-y-2">
+                {(scopeToggle || copyPeople.length > 0) && (
+                  <div className="flex flex-wrap gap-2">
+                    {scopeToggle}
+                    {copyPeople.length > 0 && (
+                      <ScopeToggle on={alsoCopies} onChange={setAlsoCopies}>
+                        Também {copyCount > 1 ? 'nas' : 'na'} de {joinNames(copyPeople.map((p) => p.name))}
+                      </ScopeToggle>
+                    )}
+                  </div>
+                )}
+                <PortionRow value={factor} onPick={pickPortion} />
+              </div>
+            )}
             <LeftoversNote meal={current} />
 
             {current.model_reserve && current.deleted_at == null && !reanalysing && (
@@ -553,6 +653,18 @@ export default function MealSheet() {
                   </div>
                 )}
 
+                {mode === 'share' && sharing && (
+                  <ShareChooser
+                    me={me}
+                    other={sharing.name}
+                    scope={scopeToggle}
+                    onPick={(split) => shareTo(sharing, split)}
+                    onCancel={() => {
+                      setSharing(null)
+                      setMode('view')
+                    }}
+                  />
+                )}
                 {mode === 'correct' ? (
                   <div className="space-y-2">
                     <input
@@ -587,7 +699,8 @@ export default function MealSheet() {
                       )}
                       <LeftoversButton meal={current} onDone={() => void load()} className="text-eat" />
                       {people.map((p) =>
-                        p.shared || shared.includes(p.user_id) || shareWith.includes(p.user_id) ? (
+                        // Uma cópia não se partilha de volta com quem a partilhou.
+                        p.from ? null : p.shared || shared.includes(p.user_id) || shareWith.includes(p.user_id) ? (
                           // Um estado, não um botão: sem contorno.
                           <span key={p.user_id} className="!border-transparent bg-surface2 text-dim">
                             <span>
@@ -595,9 +708,16 @@ export default function MealSheet() {
                             </span>
                           </span>
                         ) : (
-                          <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareTo(p)} className="text-eat">
+                          <button
+                            key={p.user_id}
+                            onClick={() => {
+                              setSharing(p)
+                              setMode('share')
+                            }}
+                            className="text-eat"
+                          >
                             Partilhar com {p.name}
-                          </BusyButton>
+                          </button>
                         ),
                       )}
                     </div>

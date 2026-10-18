@@ -28,6 +28,7 @@ export interface CaptureEntry {
   date: string | null // dia escolhido quando a hora é desconhecida ou é um dia passado
   slot: Slot | null
   share_with?: string[] // «Também para …»: segue para essas pessoas no fim da análise
+  share_split?: number | null // a parte de quem regista (0,5 a meias); sem ela, cada um comeu isto tudo
   state: 'pendente' | 'erro'
   error: string | null
   user_id?: string | null // de quem é (várias pessoas no mesmo telemóvel)
@@ -140,6 +141,7 @@ async function send(entry: CaptureEntry, userId: string) {
       date: entry.date ?? undefined,
       slot: entry.slot ?? undefined,
       ...(entry.share_with?.length ? { share_with: entry.share_with } : {}),
+      ...(entry.share_with?.length && entry.share_split != null ? { share_split: entry.share_split } : {}),
     })
     if (result.duplicate) {
       window.dispatchEvent(new CustomEvent(DUPLICATE_EVENT, { detail: result.meal }))

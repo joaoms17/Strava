@@ -25,6 +25,8 @@ import { BusyLabel, runBusy, useBusyKey } from '../../lib/busy'
 import { loadActiveDiet } from '../../lib/diets'
 import { useSignedUrls } from '../../lib/photos'
 import { usePeople } from '../../lib/people'
+import { useAccounts } from '../../lib/accounts'
+import { SplitChips } from '../Porcao'
 import Thumb from '../ui/Thumb'
 import { LeftoversQuestion } from '../Sobras'
 import {
@@ -67,6 +69,12 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   // «Também para …»: comeram o mesmo; segue para essa pessoa quando a análise acabar.
   const people = usePeople()
   const [shareWith, setShareWith] = useState<string[]>([])
+  // Como comeram (só com uma pessoa): a parte de quem regista, 0,5 a meias;
+  // null, cada um comeu isto tudo (como antes).
+  const [split, setSplit] = useState<number | null>(null)
+  const { accounts, currentId } = useAccounts()
+  const me = accounts.find((a) => a.user_id === currentId)?.name ?? 'Eu'
+  const sharingWith = people.filter((p) => shareWith.includes(p.user_id))
   const [sendKey, busy] = useBusyKey()
   const [askSlot, setAskSlot] = useState(false)
   // O rascunho guardado (fotos e texto de antes): lê-se uma vez ao abrir;
@@ -229,7 +237,8 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
         taken_at: takenAt,
         date: api.date ?? null,
         slot: api.slot ?? null,
-        share_with: people.filter((p) => shareWith.includes(p.user_id)).map((p) => p.user_id),
+        share_with: sharingWith.map((p) => p.user_id),
+        share_split: sharingWith.length === 1 ? split : null,
       })
       sent.current = true
       await saveCaptureDraft(null)
@@ -426,17 +435,23 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
           <p className="-mt-2 text-[13px] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
         )}
         {hasContent && people.length > 0 && (
-          <div className="-mt-1 flex flex-wrap gap-2">
-            {people.map((p) => (
-              <button
-                key={p.user_id}
-                aria-pressed={shareWith.includes(p.user_id)}
-                onClick={() => setShareWith(toggle(shareWith, p.user_id))}
-                className={chip(shareWith.includes(p.user_id))}
-              >
-                Também para {p.name}
-              </button>
-            ))}
+          <div className="-mt-1 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {people.map((p) => (
+                <button
+                  key={p.user_id}
+                  aria-pressed={shareWith.includes(p.user_id)}
+                  onClick={() => setShareWith(toggle(shareWith, p.user_id))}
+                  className={chip(shareWith.includes(p.user_id))}
+                >
+                  Também para {p.name}
+                </button>
+              ))}
+            </div>
+            {/* Com uma pessoa: como comeram (a divisão aplica-se no fim da análise). */}
+            {sharingWith.length === 1 && (
+              <SplitChips me={me} other={sharingWith[0]!.name} value={split} onChange={setSplit} />
+            )}
           </div>
         )}
 

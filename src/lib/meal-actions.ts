@@ -1,9 +1,12 @@
 import { postApi } from './api'
 import { emitDataChanged } from './events'
 import { fmtKcal } from './format'
+import { recomputeFrom } from './recompute'
+import type { Person } from './people'
 import type { ToastAction } from './toast'
 import type { Favorite, Meal, Slot } from './types'
 import { PORTION_FACTORS, portionLabel } from '../../api/_lib/rules/favoritos'
+import { portionToast, shareToast, type FactorChange } from '../../api/_lib/rules/porcoes'
 
 type ShowToast = (text: string, actions?: ToastAction[]) => void
 
@@ -140,5 +143,152 @@ export async function retryAnalysis(mealId: string, toast: ShowToast): Promise<b
     emitDataChanged()
     toast(errorText(err))
     return false
+  }
+}
+
+// A porção de antes de cada linha que mudou (as cópias vêm marcadas).
+export type PortionChange = FactorChange & { copy?: boolean }
+
+export interface PortionAnswer {
+  meal: Meal
+  meals: Meal[]
+  previous: PortionChange[]
+  copies: number
+  shared_with: string[]
+  kcal_delta: number
+}
+
+// A porção na folha da refeição: nesta, nas outras do mesmo momento
+// («Todo o jantar», `mealIds`) e, com `withShared`, nas cópias que outras
+// pessoas receberam. O aviso diz o que mudou, com Anular (volta cada linha à
+// porção de antes). Não ensina a biblioteca: é a porção, não os alimentos.
+export async function changePortion(o: {
+  meal: Pick<Meal, 'id' | 'date'>
+  factor: number
+  mealIds?: string[]
+  withShared?: boolean
+  today: string
+  toast: ShowToast
+  onUndone?: () => void
+}): Promise<PortionAnswer | null> {
+  const { meal, factor, mealIds = [], withShared = false, today, toast } = o
+  try {
+    const result = await postApi<PortionAnswer>('/api/meal/portion', {
+      meal_id: meal.id,
+      factor,
+      ...(mealIds.length ? { meal_ids: mealIds } : {}),
+      ...(withShared ? { with_shared: true } : {}),
+    })
+    emitDataChanged()
+    recomputeFrom(meal.date, today)
+    const copies = result.previous.filter((p) => p.copy).length
+    const text = portionToast(
+      {
+        factor,
+        count: result.previous.length - copies,
+        copies,
+        sharedWith: result.shared_with,
+        kcalDelta: result.kcal_delta,
+      },
+      fmtKcal,
+    )
+    toast(
+      text,
+      result.previous.length
+        ? [
+            {
+              label: 'Anular',
+              run: async () => {
+                try {
+                  await postApi('/api/meal/portion-undo', { changes: result.previous })
+                  emitDataChanged()
+                  recomputeFrom(meal.date, today)
+                  o.onUndone?.()
+                } catch (err) {
+                  toast(errorText(err))
+                }
+              },
+            },
+          ]
+        : [],
+    )
+    return result
+  } catch (err) {
+    toast(errorText(err))
+    return null
+  }
+}
+
+export interface ShareAnswer {
+  ok: boolean
+  to: string
+  shared: number
+  already?: boolean
+  already_count: number
+  split: number | null
+  meals: Meal[]
+  kcal_delta: number
+  undo: { copies: string[]; changes: FactorChange[] }
+}
+
+// «Partilhar com …» com a divisão escolhida (`split`: a parte de quem
+// partilha; null, cada um comeu isto tudo), também para as outras do mesmo
+// momento (`mealIds`). Anular apaga as cópias e volta a porção de antes.
+export async function shareMeals(o: {
+  meal: Pick<Meal, 'id' | 'date'>
+  person: Person
+  mealIds?: string[]
+  split: number | null
+  me: string
+  today: string
+  toast: ShowToast
+  onUndone?: () => void
+}): Promise<ShareAnswer | null> {
+  const { meal, person, mealIds = [], split, me, today, toast } = o
+  try {
+    const result = await postApi<ShareAnswer>('/api/meal/share', {
+      meal_id: meal.id,
+      to_user_id: person.user_id,
+      ...(mealIds.length ? { meal_ids: mealIds } : {}),
+      ...(split != null ? { split } : {}),
+    })
+    emitDataChanged()
+    if (result.meals.length) recomputeFrom(meal.date, today)
+    const text = shareToast(
+      {
+        to: result.to,
+        shared: result.shared,
+        already: result.already_count ?? (result.already ? 1 : 0),
+        split,
+        me,
+        kcalDelta: result.kcal_delta ?? 0,
+      },
+      fmtKcal,
+    )
+    const undo = result.undo
+    toast(
+      text,
+      undo?.copies.length
+        ? [
+            {
+              label: 'Anular',
+              run: async () => {
+                try {
+                  await postApi('/api/meal/share-undo', undo)
+                  emitDataChanged()
+                  if (undo.changes.length) recomputeFrom(meal.date, today)
+                  o.onUndone?.()
+                } catch (err) {
+                  toast(errorText(err))
+                }
+              },
+            },
+          ]
+        : [],
+    )
+    return result
+  } catch (err) {
+    toast(errorText(err))
+    return null
   }
 }
