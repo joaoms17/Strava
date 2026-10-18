@@ -3,6 +3,7 @@ import { Link } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { toCsv, downloadCsv } from '../lib/csv'
 import type { Profile } from '../lib/types'
 import IntervalsSettings from '../components/IntervalsSettings'
@@ -131,7 +132,11 @@ export default function Definicoes() {
     Object.fromEntries(fields.map((f) => [f.key, profile[f.key] != null ? String(profile[f.key]) : '']))
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial(GOALS), ...initial(BIKE), ...initial(BODY) }))
   const [watts, setWatts] = useState((profile.bike_watts_options ?? []).join(' · '))
-  const [busy, setBusy] = useState(false)
+  // Os interruptores mudam logo; se não gravar, voltam atrás e avisa.
+  const set = (patch: Partial<Profile>) =>
+    void update(patch).then((ok) => {
+      if (!ok) toast('Não consegui guardar. Tenta outra vez.')
+    })
 
   async function saveFields(fields: Field[]) {
     const patch: Record<string, number | null | number[]> = {}
@@ -159,16 +164,12 @@ export default function Definicoes() {
       }
       patch.bike_watts_options = [...new Set(options)].sort((a, b) => a - b)
     }
-    setBusy(true)
     const ok = await update(patch as Partial<Profile>)
-    setBusy(false)
     toast(ok ? 'Guardado.' : 'Não consegui guardar. Tenta outra vez.')
   }
 
   async function exportTable(table: string, filename: string) {
-    setBusy(true)
     const { data, error } = await supabase.from(table).select('*').limit(20_000)
-    setBusy(false)
     if (error || !data) {
       toast(`Não consegui exportar ${filename}.`)
       return
@@ -197,13 +198,13 @@ export default function Definicoes() {
   }
 
   const saveButton = (fields: Field[]) => (
-    <button
-      disabled={busy}
-      onClick={() => void saveFields(fields)}
+    <BusyButton
+      busy="A guardar…"
+      onClick={() => saveFields(fields)}
       className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-50"
     >
       Guardar
-    </button>
+    </BusyButton>
   )
 
   return (
@@ -221,7 +222,7 @@ export default function Definicoes() {
               ['f', 'Mulher'],
             ]}
             value={profile.sex === 'f' ? 'f' : 'm'}
-            onChange={(v) => void update({ sex: v })}
+            onChange={(v) => set({ sex: v })}
           />
           <p className="text-[13px] text-dim">Muda a fórmula da gordura (as mulheres medem também a anca), o gasto e as categorias.</p>
         </div>
@@ -230,7 +231,7 @@ export default function Definicoes() {
           label="Semana de pausa da dieta"
           help="A cada 6 semanas, uma semana a comer o que gastas, para o corpo descansar da dieta."
           value={profile.maintenance_enabled !== false}
-          onChange={(v) => void update({ maintenance_enabled: v })}
+          onChange={(v) => set({ maintenance_enabled: v })}
         />
         {saveButton(GOALS)}
       </Section>
@@ -253,13 +254,13 @@ export default function Definicoes() {
           label="Gravo os treinos num relógio (Garmin, Amazfit…)"
           help="O print do relógio junta os batimentos às sessões. Os treinos automáticos (intervals.icu) vêm mais tarde."
           value={profile.has_garmin_watch ?? false}
-          onChange={(v) => void update({ has_garmin_watch: v })}
+          onChange={(v) => set({ has_garmin_watch: v })}
         />
         <Toggle
           label="A consola da bicicleta mostra os watts"
           help="Sem watts, a app usa os da última sessão (≈), que não contam para subir a potência."
           value={profile.console_shows_watts ?? false}
-          onChange={(v) => void update({ console_shows_watts: v })}
+          onChange={(v) => set({ console_shows_watts: v })}
         />
       </Section>
 
@@ -280,7 +281,7 @@ export default function Definicoes() {
           label="A minha balança mede gordura"
           help="Mostra um campo opcional na pesagem. É outra forma de medir; não se mistura com a fita."
           value={profile.scale_has_bodyfat}
-          onChange={(v) => void update({ scale_has_bodyfat: v })}
+          onChange={(v) => set({ scale_has_bodyfat: v })}
         />
       </Section>
 
@@ -292,36 +293,36 @@ export default function Definicoes() {
             ['light', 'Claro'],
           ]}
           value={profile.theme ?? 'system'}
-          onChange={(v) => void update({ theme: v })}
+          onChange={(v) => set({ theme: v })}
         />
         <Toggle
           label="Modo calmo"
           help="Esconde o peso de cada dia; no Corpo mostra só a média da semana."
           value={profile.calm_mode}
-          onChange={(v) => void update({ calm_mode: v })}
+          onChange={(v) => set({ calm_mode: v })}
         />
       </Section>
 
       <Section title="Sessão">
         <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
         <ChangePassword />
-        <button onClick={() => void signOutCurrent()} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
+        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 rounded-xl bg-surface2 text-[15px] text-pain">
           Terminar sessão
-        </button>
+        </BusyButton>
       </Section>
 
       <Section title="Os meus dados">
         <p className="text-[13px] text-dim">Exportar em CSV (abre no Excel ou no Numbers).</p>
         <div className="grid grid-cols-2 gap-2">
           {EXPORT_TABLES.map(([table, filename]) => (
-            <button
+            <BusyButton
               key={table}
-              disabled={busy}
-              onClick={() => void exportTable(table, filename)}
+              busy="A exportar…"
+              onClick={() => exportTable(table, filename)}
               className="min-h-11 rounded-xl bg-surface2 text-[15px] capitalize disabled:opacity-50"
             >
               {filename}
-            </button>
+            </BusyButton>
           ))}
         </div>
       </Section>

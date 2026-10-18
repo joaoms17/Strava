@@ -1,8 +1,9 @@
-// Base local (IndexedDB) da app: a fila antiga de refeições de texto e a fila
-// das capturas (fotos e textos) que ainda não chegaram ao servidor.
+// Base local (IndexedDB) da app: a fila antiga de refeições de texto, a fila
+// das capturas (fotos e textos) que ainda não chegaram ao servidor e o
+// rascunho do Registar (a foto antes de «Registar»).
 const DB_NAME = 'regresso'
-const VERSION = 2
-export const STORES = { meals: 'meal_queue', captures: 'captures' } as const
+const VERSION = 3
+export const STORES = { meals: 'meal_queue', captures: 'captures', drafts: 'drafts' } as const
 
 export function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -13,6 +14,7 @@ export function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORES.captures)) {
         db.createObjectStore(STORES.captures, { keyPath: 'client_id' })
       }
+      if (!db.objectStoreNames.contains(STORES.drafts)) db.createObjectStore(STORES.drafts, { keyPath: 'key' })
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error ?? new Error('IndexedDB indisponível'))

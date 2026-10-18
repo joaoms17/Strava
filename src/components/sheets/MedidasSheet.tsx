@@ -3,6 +3,7 @@ import { useLocation } from 'wouter'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { emitDataChanged } from '../../lib/events'
 import { useReadyProfile } from '../../lib/profile'
 import { localCalendarDate, shiftDate } from '../../lib/day'
@@ -70,7 +71,6 @@ export default function MedidasSheet() {
   const [showOptional, setShowOptional] = useState(false)
   const [weightText, setWeightText] = useState('')
   const [confirmReplace, setConfirmReplace] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<BodyMeasurement | null>(null)
 
   useEffect(() => {
@@ -144,12 +144,10 @@ export default function MedidasSheet() {
       setConfirmReplace(true)
       return
     }
-    setBusy(true)
     const {
       data: { user },
     } = await supabase.auth.getUser()
     if (!user) {
-      setBusy(false)
       toast('Sessão expirada. Volta a entrar.')
       return
     }
@@ -197,7 +195,6 @@ export default function MedidasSheet() {
       .upsert(row, { onConflict: 'user_id,date,method' })
       .select()
       .single()
-    setBusy(false)
     setConfirmReplace(false)
     if (error) {
       toast('Não consegui gravar a medição. Tenta outra vez.')
@@ -390,26 +387,23 @@ export default function MedidasSheet() {
           <div className="space-y-2">
             <p className="text-[15px]">Já mediste {date === today ? 'hoje' : 'nesse dia'}. Substituir a medição?</p>
             <div className="grid grid-cols-2 gap-2">
-              <button
-                disabled={busy}
-                onClick={() => void save(true)}
-                className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta"
-              >
+              <BusyButton busy="A guardar…" onClick={() => save(true)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
                 Substituir
-              </button>
+              </BusyButton>
               <button onClick={() => setConfirmReplace(false)} className="min-h-12 rounded-xl border border-line">
                 Cancelar
               </button>
             </div>
           </div>
         ) : (
-          <button
-            disabled={!canSave || busy}
-            onClick={() => void save()}
+          <BusyButton
+            busy="A guardar…"
+            disabled={!canSave}
+            onClick={() => save()}
             className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
-            {busy ? 'A guardar…' : 'Guardar'}
-          </button>
+            Guardar
+          </BusyButton>
         )
       }
     >
@@ -463,9 +457,9 @@ export default function MedidasSheet() {
         {showOptional && OPTIONAL.map((z) => zoneInput(z, false))}
 
         {editId && existing && (
-          <button onClick={() => void remove()} className="min-h-12 w-full rounded-xl border border-line text-[15px] text-pain">
+          <BusyButton busy="A apagar…" onClick={remove} className="min-h-12 w-full rounded-xl border border-line text-[15px] text-pain">
             Apagar esta medição
-          </button>
+          </BusyButton>
         )}
       </div>
     </BottomSheet>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { postApi } from './api'
-import { personName } from '../../api/_lib/rules/pessoas'
+import { personName, sessionEnded } from '../../api/_lib/rules/pessoas'
 
 // Várias pessoas no mesmo telemóvel, cada uma com a sua conta: guarda-se a
 // sessão de cada uma (só neste telemóvel) e troca-se num toque. Os dados de
@@ -59,6 +59,20 @@ export function rememberSession(session: Session): void {
   write(list)
 }
 
+// Sem rede e com o token por renovar (mais de 1 h sem abrir), o supabase-js
+// não devolve a sessão mas guarda-a: a app abre com ela, sem rede, para a
+// pessoa registar (a fila das fotos), e renova-a quando a rede voltar.
+export function storedSession(): Session | null {
+  try {
+    const key = (supabase.auth as unknown as { storageKey: string }).storageKey
+    const raw = key ? localStorage.getItem(key) : null
+    const session = raw ? (JSON.parse(raw) as Session) : null
+    return session?.user?.id && session.refresh_token ? session : null
+  } catch {
+    return null
+  }
+}
+
 export function forgetAccount(userId: string): void {
   write(read().filter((a) => a.user_id !== userId))
 }
@@ -71,7 +85,9 @@ export function startAccountTracking(): () => void {
 }
 
 // Trocar de pessoa: entra com a sessão guardada e recarrega a app (nada da
-// pessoa anterior fica em memória).
+// pessoa anterior fica em memória). Só se esquece a pessoa quando o servidor
+// diz que a sessão dela acabou: sem rede (ou com o servidor em baixo) a
+// sessão continua válida e a troca fica para quando houver rede.
 export async function switchTo(userId: string): Promise<void> {
   const target = read().find((a) => a.user_id === userId)
   if (!target) throw new Error('Essa pessoa já não está neste telemóvel.')
@@ -79,6 +95,9 @@ export async function switchTo(userId: string): Promise<void> {
     access_token: target.access_token,
     refresh_token: target.refresh_token,
   })
+  if (error && !sessionEnded({ name: error.name, message: error.message, status: error.status ?? null })) {
+    throw new Error('Sem rede. Tenta outra vez quando tiveres rede.')
+  }
   if (error || !data.session) {
     forgetAccount(userId)
     throw new Error(`A sessão de ${target.name} acabou. Junta-a outra vez com o email e a palavra-passe.`)
@@ -133,7 +152,7 @@ export async function signOutCurrent(): Promise<void> {
       await switchTo(other.user_id)
       return
     } catch {
-      // essa sessão acabou: tenta a seguinte
+      // essa sessão acabou (ou não há rede, e a pessoa fica para «Entrar como…»): tenta a seguinte
     }
   }
   window.location.assign('/')

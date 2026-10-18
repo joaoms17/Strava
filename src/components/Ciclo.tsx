@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
+import { runBusy } from '../lib/busy'
 import { fmtDayMonth } from '../lib/format'
 import { PHASE_LABEL, cleanStarts, cycleInfo, cycleOptions } from '../../api/_lib/rules/ciclo'
 
@@ -28,13 +29,15 @@ export default function Ciclo({ today }: { today: string }) {
       toast('Não consegui guardar.')
       return
     }
-    toast(message, [{ label: 'Anular', run: () => void update({ goals: { ...(profile.goals ?? {}), ciclo: previous } }) }])
+    toast(message, [{ label: 'Anular', run: async () => void (await update({ goals: { ...(profile.goals ?? {}), ciclo: previous } })) }])
   }
 
   const add = (d: string) => {
     if (d > today) return
     setOther(false)
-    void save(cleanStarts([...starts, d]), d === today ? 'Marcado: começou hoje.' : `Marcado: começou a ${fmtDayMonth(d)}.`, starts)
+    void runBusy('A guardar…', () =>
+      save(cleanStarts([...starts, d]), d === today ? 'Marcado: começou hoje.' : `Marcado: começou a ${fmtDayMonth(d)}.`, starts),
+    )
   }
 
   return (
@@ -109,7 +112,7 @@ export default function Ciclo({ today }: { today: string }) {
           <input
             type="checkbox"
             checked={options.pill === true}
-            onChange={(e) => void setOptions(e.target.checked, e.target.checked ? 91 : 28)}
+            onChange={(e) => void runBusy('A guardar…', () => setOptions(e.target.checked, e.target.checked ? 91 : 28))}
             className="h-5 w-5 accent-current"
           />
         </label>
@@ -123,7 +126,7 @@ export default function Ciclo({ today }: { today: string }) {
             ).map(([days, text]) => (
               <button
                 key={days}
-                onClick={() => void setOptions(true, days)}
+                onClick={() => void runBusy('A guardar…', () => setOptions(true, days))}
                 className={`min-h-10 rounded-xl ${options.defaultLength === days ? 'bg-cta text-on-cta' : 'bg-surface2'}`}
               >
                 {text}
@@ -141,7 +144,7 @@ export default function Ciclo({ today }: { today: string }) {
           {starts.slice(-4).reverse().map((d) => (
             <button
               key={d}
-              onClick={() => void save(starts.filter((s) => s !== d), `Tirado: ${fmtDayMonth(d)}.`, starts)}
+              onClick={() => void runBusy('A guardar…', () => save(starts.filter((s) => s !== d), `Tirado: ${fmtDayMonth(d)}.`, starts))}
               className="rounded-full border border-line px-2.5 py-1"
               aria-label={`tirar ${fmtDayMonth(d)}`}
             >

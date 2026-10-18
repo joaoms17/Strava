@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
 import { useSheet } from '../lib/sheet'
 import { useToast } from '../lib/toast'
+import { BusyButton } from '../lib/busy'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { nutritionalDay, shiftDate } from '../lib/day'
 import { weekdayShort } from '../lib/format'
@@ -140,17 +141,18 @@ export default function WeekPlanCard({ workouts }: { workouts: Workout[] }) {
         {stepper('bicicleta', 'Bicicleta')}
         {stepper('ginasio', 'Ginásio')}
         <div className="flex gap-2">
-          <button
+          <BusyButton
+            busy="A guardar…"
             disabled={counts.bicicleta + counts.ginasio === 0}
-            onClick={() => void savePrefs(true)}
+            onClick={() => savePrefs(true)}
             className="min-h-12 flex-1 rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-40"
           >
             {prefs?.ativo ? 'Guardar' : 'Começar o plano'}
-          </button>
+          </BusyButton>
           {prefs?.ativo && (
-            <button onClick={() => void savePrefs(false)} className="min-h-12 rounded-xl border border-line px-3 text-[15px] text-dim">
+            <BusyButton busy="A desligar…" onClick={() => savePrefs(false)} className="min-h-12 rounded-xl border border-line px-3 text-[15px] text-dim">
               Desligar
-            </button>
+            </BusyButton>
           )}
         </div>
         {editing && (
@@ -174,8 +176,12 @@ export default function WeekPlanCard({ workouts }: { workouts: Workout[] }) {
         {error ? (
           <>
             <p className="text-[15px] text-pain">{error}</p>
-            <button onClick={() => void generate(false)} className="min-h-11 rounded-xl border border-line px-4 text-[15px]">
-              Tentar outra vez
+            <button
+              disabled={busy}
+              onClick={() => void generate(false)}
+              className="min-h-11 rounded-xl border border-line px-4 text-[15px] disabled:opacity-40"
+            >
+              {busy ? 'A preparar…' : 'Tentar outra vez'}
             </button>
           </>
         ) : (

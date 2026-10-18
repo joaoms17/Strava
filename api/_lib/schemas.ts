@@ -60,6 +60,8 @@ export const MealItemInputSchema = ParsedItemSchema.extend({
 
 // Corpo do POST /api/meal/save — validado no servidor antes de gravar.
 export const SaveMealSchema = z.object({
+  // Repetir o mesmo envio (rede caiu depois de o servidor gravar) devolve o que já existe.
+  client_id: z.string().uuid().optional(),
   input_type: z.enum(['text', 'photo', 'barcode', 'manual']),
   raw_text: z.string().nullable().optional(),
   photo_path: z.string().nullable().optional(),

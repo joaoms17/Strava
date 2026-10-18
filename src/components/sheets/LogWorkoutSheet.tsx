@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
+import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, fmtKcal } from '../../lib/format'
@@ -20,7 +21,6 @@ export default function LogWorkoutSheet() {
   const favId = sheet.params.get('fav')
   const date = sheet.params.get('data')
   const [favorite, setFavorite] = useState<Favorite | null | undefined>(undefined)
-  const [busy, setBusy] = useState(false)
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
 
   useEffect(() => {
@@ -53,7 +53,6 @@ export default function LogWorkoutSheet() {
   const kind = w.type === 'bike' ? 'Bicicleta' : w.type === 'strength' ? 'Ginásio' : (SPORT_LABEL[w.sport ?? 'outro'] ?? 'Treino')
 
   async function save() {
-    setBusy(true)
     const saved = await saveWorkout(
       {
         type: w.type,
@@ -67,7 +66,6 @@ export default function LogWorkoutSheet() {
       },
       toast,
     )
-    setBusy(false)
     if (saved) sheet.close()
   }
 
@@ -76,13 +74,13 @@ export default function LogWorkoutSheet() {
       title={favorite.name}
       onClose={sheet.close}
       footer={
-        <button
-          disabled={busy}
-          onClick={() => void save()}
+        <BusyButton
+          busy="A guardar…"
+          onClick={save}
           className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
-          {busy ? 'A guardar…' : 'Registar'}
-        </button>
+          Registar
+        </BusyButton>
       }
     >
       <div className="space-y-3 pb-2">

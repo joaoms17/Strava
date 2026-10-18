@@ -1,8 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useToast } from '../../lib/toast'
 import { useSheet } from '../../lib/sheet'
 import { emitDataChanged } from '../../lib/events'
 import { sendShots } from '../../lib/workout-actions'
+import { BusyLabel, runBusy, useBusyKey } from '../../lib/busy'
 
 // «Juntar print do relógio»: escolhe 1 a 4 imagens (Fototeca ou câmara, no
 // mesmo toque) e abre a folha Confirmar treino enquanto o print é lido. Com
@@ -18,10 +19,10 @@ export default function ShotButton({
 }) {
   const toast = useToast()
   const sheet = useSheet()
-  const [busy, setBusy] = useState(false)
+  const [key, busy] = useBusyKey()
   return (
-    <label className={`cursor-pointer ${busy ? 'pointer-events-none opacity-60' : ''} ${className ?? ''}`}>
-      {busy ? 'A enviar…' : children}
+    <label className={`cursor-pointer ${busy ? 'pointer-events-none' : ''} ${className ?? ''}`} aria-busy={busy || undefined}>
+      {busy ? <BusyLabel text="A enviar o print…" /> : children}
       <input
         type="file"
         accept="image/*"
@@ -32,19 +33,22 @@ export default function ShotButton({
           const files = [...(event.target.files ?? [])]
           event.target.value = ''
           if (files.length === 0) return
-          setBusy(true)
-          sendShots(files)
-            .then((result) => {
-              emitDataChanged()
-              if (result.workout) {
-                toast('Este print já estava registado.')
-                sheet.open('confirmar-treino', { id: result.workout.id })
-              } else if (result.import) {
-                sheet.open('confirmar-treino', { import: result.import.id, ...(target ? { para: target } : {}) })
-              }
-            })
-            .catch((err) => toast(err instanceof Error ? err.message : 'Não consegui enviar o print.'))
-            .finally(() => setBusy(false))
+          void runBusy(
+            'A enviar o print…',
+            () =>
+              sendShots(files)
+                .then((result) => {
+                  emitDataChanged()
+                  if (result.workout) {
+                    toast('Este print já estava registado.')
+                    sheet.open('confirmar-treino', { id: result.workout.id })
+                  } else if (result.import) {
+                    sheet.open('confirmar-treino', { import: result.import.id, ...(target ? { para: target } : {}) })
+                  }
+                })
+                .catch((err) => toast(err instanceof Error ? err.message : 'Não consegui enviar o print.')),
+            key,
+          )
         }}
       />
     </label>
