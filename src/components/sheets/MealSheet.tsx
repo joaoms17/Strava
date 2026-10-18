@@ -3,7 +3,7 @@ import BottomSheet from '../ui/BottomSheet'
 import WhenPicker from '../ui/WhenPicker'
 import { whenLabel, type When } from '../../lib/when'
 import { supabase } from '../../lib/supabase'
-import { getApi, postApi } from '../../lib/api'
+import { postApi } from '../../lib/api'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton, runBusy } from '../../lib/busy'
@@ -12,10 +12,13 @@ import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
 import { MAX_MEAL_PHOTOS } from '../../lib/capture'
 import AttachPhotoButton from '../ui/AttachPhotoButton'
+import ItemList from '../ItemList'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
 import { chip } from '../ui/Chips'
 import AiCheck from '../AiCheck'
+import AvisarAnalise from '../AvisarAnalise'
+import { LeftoversButton, LeftoversNote } from '../Sobras'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
 import { recomputeFrom } from '../../lib/recompute'
@@ -23,7 +26,8 @@ import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
 import { deleteMeal, repeatMeal } from '../../lib/meal-actions'
 import { deleteFavorite, favoriteFromMeal } from '../../lib/favorites'
-import { diffText, stepItem } from '../../lib/meal-diff'
+import { diffText } from '../../lib/meal-diff'
+import { usePeople, type Person } from '../../lib/people'
 import { favoriteName, patternKey, similarCount, SIMILAR_MIN_COUNT } from '../../../api/_lib/rules/favoritos'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
@@ -46,20 +50,8 @@ export default function MealSheet() {
   const [suggest, setSuggest] = useState(false)
   const [items, setItems] = useState<MealItem[]>([])
   const [mode, setMode] = useState<Mode>('view')
-  // As outras pessoas da app, para «Partilhar com …» (comeram o mesmo).
-  const [people, setPeople] = useState<{ user_id: string; name: string }[]>([])
+  // Partilhada agora mesmo nesta folha (o servidor só o diz ao abrir).
   const [shared, setShared] = useState<string[]>([])
-  useEffect(() => {
-    let alive = true
-    getApi<{ people: { user_id: string; name: string }[] }>('/api/meal/people')
-      .then((r) => {
-        if (alive) setPeople(r.people)
-      })
-      .catch(() => undefined)
-    return () => {
-      alive = false
-    }
-  }, [])
   const [name, setName] = useState('')
   const [slot, setSlot] = useState<Slot>('almoco')
   const [text, setText] = useState('')
@@ -110,6 +102,10 @@ export default function MealSheet() {
 
   // Enquanto analisa, os números chegam sozinhos.
   const analysing = meal?.status === 'a_analisar'
+  // As outras pessoas da app, para «Partilhar com …» (comeram o mesmo), e com
+  // quem já está partilhada; outra vez quando a análise acaba (o «Também para
+  // …» do ＋ partilha nessa altura).
+  const people = usePeople(id, analysing)
   useEffect(() => {
     if (!analysing) return
     const timer = setInterval(() => {
@@ -142,6 +138,11 @@ export default function MealSheet() {
   const dirty = JSON.stringify(items) !== JSON.stringify(current.items)
   const totals = mealTotals(items)
   const proteinOk = MAIN_SLOTS.includes(mealSlot) && totals.protein >= profile.protein_per_meal_g
+  // «Também para …» do ＋, à espera do fim da análise.
+  const shareWith = current.share_with ?? []
+  const goingTo = people.filter((p) => shareWith.includes(p.user_id) && !p.shared)
+  // Mexer nos alimentos de uma refeição por rever também a confirma.
+  const confirming = current.status === 'por_rever'
 
   async function call<T>(path: string, body: unknown): Promise<T | null> {
     try {
@@ -164,17 +165,22 @@ export default function MealSheet() {
     const result = await call<{ meal: Meal; previous: { items: MealItem[] } }>('/api/meal/update', {
       meal_id: current.id,
       items,
+      ...(confirming ? { confirm: true } : {}),
     })
     if (!result) return
     await afterWrite(result.meal)
     const mealId = current.id
-    toast(`Guardado · ${diffText(result.previous.items, result.meal.items)}`, [
+    toast(`${confirming ? 'Confirmado' : 'Guardado'} · ${diffText(result.previous.items, result.meal.items)}`, [
       {
         label: 'Anular',
         run: async () => {
-          await postApi('/api/meal/update', { meal_id: mealId, items: result.previous.items, undo: true }).catch(
-            () => null,
-          )
+          // Anular volta aos alimentos de antes e, se estava por rever, a por rever.
+          await postApi('/api/meal/update', {
+            meal_id: mealId,
+            items: result.previous.items,
+            undo: true,
+            ...(confirming ? { confirm: false } : {}),
+          }).catch(() => null)
           emitDataChanged()
           recomputeFrom(current.date, today)
         },
@@ -241,7 +247,7 @@ export default function MealSheet() {
     ])
   }
 
-  async function shareWith(person: { user_id: string; name: string }) {
+  async function shareTo(person: Person) {
     const result = await call<{ ok: boolean; to: string; already?: boolean }>('/api/meal/share', {
       meal_id: current.id,
       to_user_id: person.user_id,
@@ -251,7 +257,7 @@ export default function MealSheet() {
     toast(
       result.already
         ? `Já estava partilhada com ${result.to}.`
-        : `Partilhada com ${result.to}. Fica em «Rever» na conta de ${result.to}, para ajustar a porção.`,
+        : `Partilhada com ${result.to}. Aparece-lhe no Hoje para confirmar a porção.`,
     )
   }
 
@@ -260,6 +266,8 @@ export default function MealSheet() {
     if (!result) return
     await afterWrite(result.meal)
     toast('Confirmado', [{ label: 'Anular', run: () => undo({ confirm: false }) }])
+    // O aviso tem Anular; a folha volta a abrir-se pela refeição.
+    sheet.close()
   }
 
   async function saveFavorite() {
@@ -316,8 +324,8 @@ export default function MealSheet() {
         <button onClick={() => setItems(current.items)} className={secondary}>
           Desfazer
         </button>
-        <BusyButton busy="A guardar…" onClick={saveItems} className={primary}>
-          Guardar alterações
+        <BusyButton busy={confirming ? 'A confirmar…' : 'A guardar…'} onClick={saveItems} className={primary}>
+          {confirming ? 'Guardar e confirmar' : 'Guardar alterações'}
         </BusyButton>
       </div>
     )
@@ -410,6 +418,10 @@ export default function MealSheet() {
           <div className="space-y-3">
             <p className="animate-pulse text-[17px]">A analisar…</p>
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
+            <AvisarAnalise className="-mt-2" />
+            {goingTo.length > 0 && (
+              <p className="text-[13px] text-dim">Depois vai também para {goingTo.map((p) => p.name).join(' e ')}.</p>
+            )}
             <button onClick={() => sheet.open('nota', { id: current.id })} className={`${secondary} w-full`}>
               ＋ Nota
             </button>
@@ -425,6 +437,11 @@ export default function MealSheet() {
               />
             ) : (
               <p className="text-[17px]">Chegaste ao limite da IA que definiste. A foto está guardada.</p>
+            )}
+            {goingTo.length > 0 && (
+              <p className="text-[13px] text-dim">
+                Vai para {goingTo.map((p) => p.name).join(' e ')} quando for analisada.
+              </p>
             )}
             {failed && (
               <button
@@ -492,11 +509,12 @@ export default function MealSheet() {
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
+            <LeftoversNote meal={current} />
 
             {current.model_reserve && current.deleted_at == null && !reanalysing && (
               <div className="space-y-2 rounded-xl bg-surface2 px-3 py-2">
                 <p className="text-[14px] text-dim">
-                  Lida pelo modelo de reserva da IA (o principal chegou ao limite gratuito de hoje), que acerta menos nas
+                  Hoje a IA principal já não estava disponível; esta foto foi lida por outra que acerta menos nas
                   porções. Confirma as quantidades ou analisa outra vez mais logo.
                 </p>
                 <button onClick={() => void analyse({ reset: true }, 'A analisar outra vez…')} className="text-[15px] text-eat">
@@ -511,47 +529,7 @@ export default function MealSheet() {
               </p>
             )}
 
-            <ul className="divide-y divide-line rounded-2xl bg-surface2">
-              {items.map((item, i) => (
-                <li key={i} className="flex items-center gap-2 px-3 py-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px]">{item.name}</p>
-                    <p className="text-[13px] text-dim tabular-nums">
-                      {item.grams > 0 && `${fmtInt(item.grams)} g · `}
-                      {fmtInt(item.kcal)} kcal
-                      {item.confidence === 'baixa' && <span className="ml-1 text-attn">confirma a porção</span>}
-                    </p>
-                  </div>
-                  {current.deleted_at == null && items.length > 1 && (
-                    <button
-                      onClick={() => setItems(items.filter((_, j) => j !== i))}
-                      className="h-10 w-10 shrink-0 rounded-lg bg-surface text-[17px] text-pain"
-                      aria-label={`tirar ${item.name}`}
-                    >
-                      ×
-                    </button>
-                  )}
-                  {item.grams > 0 && current.deleted_at == null && (
-                    <>
-                      <button
-                        onClick={() => setItems(items.map((it, j) => (j === i ? stepItem(it, -10) : it)))}
-                        className="h-10 w-10 shrink-0 rounded-lg bg-surface text-[17px]"
-                        aria-label={`menos 10 g de ${item.name}`}
-                      >
-                        −
-                      </button>
-                      <button
-                        onClick={() => setItems(items.map((it, j) => (j === i ? stepItem(it, 10) : it)))}
-                        className="h-10 w-10 shrink-0 rounded-lg bg-surface text-[17px]"
-                        aria-label={`mais 10 g de ${item.name}`}
-                      >
-                        +
-                      </button>
-                    </>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
 
             {current.deleted_at == null && (
               <>
@@ -607,8 +585,9 @@ export default function MealSheet() {
                           Juntar foto
                         </AttachPhotoButton>
                       )}
+                      <LeftoversButton meal={current} onDone={() => void load()} className="text-eat" />
                       {people.map((p) =>
-                        shared.includes(p.user_id) ? (
+                        p.shared || shared.includes(p.user_id) || shareWith.includes(p.user_id) ? (
                           // Um estado, não um botão: sem contorno.
                           <span key={p.user_id} className="!border-transparent bg-surface2 text-dim">
                             <span>
@@ -616,7 +595,7 @@ export default function MealSheet() {
                             </span>
                           </span>
                         ) : (
-                          <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareWith(p)} className="text-eat">
+                          <BusyButton key={p.user_id} busy="A partilhar…" onClick={() => shareTo(p)} className="text-eat">
                             Partilhar com {p.name}
                           </BusyButton>
                         ),

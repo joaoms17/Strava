@@ -149,6 +149,11 @@ export default function Definicoes() {
     Object.fromEntries(fields.map((f) => [f.key, profile[f.key] != null ? String(profile[f.key]) : '']))
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...initial(GOALS), ...initial(BIKE), ...initial(BODY) }))
   const [watts, setWatts] = useState((profile.bike_watts_options ?? []).join(' · '))
+  // Nas mulheres a anca também se mede (decisões 178 e 192).
+  const body =
+    profile.sex === 'f'
+      ? BODY.map((f) => (f.key === 'measure_interval_days' ? { ...f, label: 'Medir cintura, anca e pescoço a cada' } : f))
+      : BODY
   // Os interruptores mudam logo; se não gravar, voltam atrás e avisa.
   const set = (patch: Partial<Profile>) =>
     void update(patch).then((ok) => {
@@ -230,6 +235,11 @@ export default function Definicoes() {
         <PeopleSettings />
       </Section>
 
+      {/* Logo a seguir às pessoas: cada pessoa liga as suas neste telemóvel. */}
+      <Section title="Notificações">
+        <Notificacoes />
+      </Section>
+
       <Section title="Perfil e metas">
         <div className="space-y-1">
           <p className="text-[15px]">Sexo</p>
@@ -292,18 +302,14 @@ export default function Definicoes() {
       </Section>
 
       <Section title="Corpo e balança">
-        {BODY.map(numberInput)}
-        {saveButton(BODY)}
+        {body.map(numberInput)}
+        {saveButton(body)}
         <Toggle
           label="A minha balança mede gordura"
           help="Mostra um campo opcional na pesagem. É outra forma de medir; não se mistura com a fita."
           value={profile.scale_has_bodyfat}
           onChange={(v) => set({ scale_has_bodyfat: v })}
         />
-      </Section>
-
-      <Section title="Notificações">
-        <Notificacoes />
       </Section>
 
       <Section title="Aparência">

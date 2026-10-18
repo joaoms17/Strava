@@ -22,7 +22,7 @@ import ProteinaRefeicao from '../components/ProteinaRefeicao'
 import { useDataVersion } from '../lib/events'
 import { useThemeColors } from '../lib/colors'
 import { nutritionalDay, shiftDate } from '../lib/day'
-import { fmt1, fmtInt, fmtKcal, fmtRange, weekdayLetter } from '../lib/format'
+import { NBSP, fmt1, fmtInt, fmtKcal, fmtRange, weekdayLetter, weekdayShort } from '../lib/format'
 import { isDayComplete } from '../../api/_lib/rules/day-close'
 import { waterWeekDuring } from '../../api/_lib/rules/ciclo'
 import { mondayOf, isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
@@ -39,7 +39,7 @@ import {
   weekSentence,
 } from '../../api/_lib/rules/gasto'
 import { weeklyRateAsOf } from '../../api/_lib/rules/weight'
-import { belowFloor, countedDays, leftOutDays, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
+import { belowFloor, countedDays, leftOutDates, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
 import type { Meal, Workout } from '../lib/types'
 import BalancoMes from '../components/BalancoMes'
 import ContaGordura from '../components/ContaGordura'
@@ -327,7 +327,9 @@ export default function Balanco() {
   const thisWeek = monday === mondayOf(today)
   const averages = weekAverages(data.days, today)
   const counted = countedDays(data.days, today)
-  const leftOut = leftOutDays(data.days, today)
+  // Os dias que ficaram de fora abrem-se no Hoje, onde se responde «Foi tudo neste dia?».
+  const leftOutList = leftOutDates(data.days, today)
+  const leftOut = leftOutList.length
   const avgOut = counted.length ? counted.reduce((a, d) => a + d.out, 0) / counted.length : null
   const hasAny = data.days.some((d) => d.meals > 0)
   const rate = data.rate
@@ -444,9 +446,22 @@ export default function Balanco() {
               <p className="text-[14px] text-dim">Semana de água do ciclo: o peso pode subir sem ser gordura.</p>
             )}
             {leftOut > 0 && (
-              <p className="text-[14px] text-dim">
-                {leftOut} {leftOut === 1 ? 'dia ficou' : 'dias ficaram'} de fora (incompletos ou com «faltou algo»).
-              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[14px] text-dim">
+                <span>
+                  {leftOut === 1
+                    ? `1 dia ficou de fora (incompleto ou com «faltou${NBSP}algo»):`
+                    : `${leftOut} dias ficaram de fora (incompletos ou com «faltou${NBSP}algo»):`}
+                </span>
+                {leftOutList.map((date) => (
+                  <button
+                    key={date}
+                    onClick={() => openDay(date)}
+                    className="min-h-9 rounded-full border border-line px-3 whitespace-nowrap text-eat"
+                  >
+                    {weekdayShort(date)} {Number(date.slice(8))} ›
+                  </button>
+                ))}
+              </div>
             )}
             {exp.learning && (
               <p className="text-[14px] text-dim">Gasto (a aprender): {learningText} Até lá uso uma fórmula.</p>

@@ -13,7 +13,6 @@ export type SheetName =
   | 'dieta'
   | 'pessoa'
   | 'nota'
-  | 'numeros'
   | 'barras'
   | 'rever'
   | 'treino'

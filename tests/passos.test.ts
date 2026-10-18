@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daySteps } from '../api/_lib/rules/passos'
+import { daySteps, stepsAverage } from '../api/_lib/rules/passos'
 
 const rows = [
   { date: '2026-10-06', steps: 4200 },
@@ -23,5 +23,18 @@ describe('daySteps', () => {
 
   it('com menos de 3 dias antes, sem média', () => {
     expect(daySteps(rows, '2026-10-04')).toEqual({ steps: 7000, avg: null })
+  })
+})
+
+describe('stepsAverage', () => {
+  it('a média dos 30 dias antes também sem passos no próprio dia (Corpo)', () => {
+    expect(stepsAverage(rows, '2026-10-07')).toBe(7050)
+    expect(stepsAverage(rows, '2026-10-06')).toBe(daySteps(rows, '2026-10-06')!.avg)
+  })
+
+  it('não conta os dias a 0 nem os de há mais de 30 dias', () => {
+    const withZero = [...rows, { date: '2026-10-01', steps: 0 }]
+    expect(stepsAverage(withZero, '2026-10-06')).toBe(8000)
+    expect(stepsAverage(rows, '2026-08-31')).toBeNull()
   })
 })

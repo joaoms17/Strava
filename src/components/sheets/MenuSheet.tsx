@@ -296,7 +296,7 @@ export default function MenuSheet() {
                         </span>
                         <span className="shrink-0 text-right text-[14px] tabular-nums">
                           {fmtKcal(d.kcal)} kcal
-                          <span className="block text-protein">{fmtInt(d.protein)} g</span>
+                          <span className="block text-protein">{fmtInt(d.protein)} g prot.</span>
                         </span>
                       </BusyButton>
                     </li>

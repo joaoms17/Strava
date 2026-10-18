@@ -137,16 +137,20 @@ export function BusyLabel({ text }: { text: string }) {
 }
 
 // Botão cujo toque espera pelo servidor: corre por `runBusy`, mostra o
-// rótulo `busy` com o círculo a rodar e não aceita outro toque.
+// rótulo `busy` com o círculo a rodar e não aceita outro toque. `compact`
+// (botões pequenos, como as porções): só o círculo; o rótulo aparece na
+// camada por cima de tudo.
 export function BusyButton({
   busy: busyText,
   onClick,
   disabled,
+  compact = false,
   className = '',
   children,
   ...rest
-}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & { busy: string; onClick: () => unknown }) {
-  const [key, mine] = useBusyKey()
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & { busy: string; onClick: () => unknown; compact?: boolean }) {
+  // Com `compact` o botão só mostra o círculo: o rótulo fica na camada.
+  const [key, mine] = useBusyKey(!compact)
   return (
     <button
       {...rest}
@@ -155,7 +159,7 @@ export function BusyButton({
       onClick={() => void runBusy(busyText, onClick, key)}
       className={`${className} ${mine ? 'opacity-100!' : ''}`}
     >
-      {mine ? <BusyLabel text={busyText} /> : children}
+      {mine ? compact ? <Spinner className="mx-auto" /> : <BusyLabel text={busyText} /> : children}
     </button>
   )
 }

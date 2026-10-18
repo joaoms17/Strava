@@ -36,6 +36,16 @@ export default function TemplateSheet() {
   const [watts, setWatts] = useState<number | null>(null)
   const [exercises, setExercises] = useState<TemplateExercise[]>([])
   const [picking, setPicking] = useState(false)
+  // A carga a ser escrita, por exercício (o nome é único): «17,» fica no campo
+  // até se escrever o 5, em vez de voltar logo a «17». Ao sair do campo
+  // mostra-se o número guardado, com vírgula.
+  const [loadDrafts, setLoadDrafts] = useState<Record<string, string>>({})
+  const dropDraft = (name: string) =>
+    setLoadDrafts((prev) => {
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
   useEffect(() => {
@@ -230,7 +240,10 @@ export default function TemplateSheet() {
                       ↓
                     </button>
                     <button
-                      onClick={() => setExercises(exercises.filter((_, j) => j !== i))}
+                      onClick={() => {
+                        setExercises(exercises.filter((_, j) => j !== i))
+                        dropDraft(e.name)
+                      }}
                       aria-label={`Tirar ${e.name}`}
                       className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-dim"
                     >
@@ -272,9 +285,14 @@ export default function TemplateSheet() {
                     <input
                       inputMode="decimal"
                       aria-label={`Carga de ${e.name} em kg`}
-                      value={e.load_kg ?? ''}
+                      value={loadDrafts[e.name] ?? (e.load_kg != null ? String(e.load_kg).replace('.', ',') : '')}
                       placeholder="—"
-                      onChange={(ev) => updateExercise(i, { load_kg: ev.target.value.trim() ? num(ev.target.value) : null })}
+                      onChange={(ev) => {
+                        const text = ev.target.value.replace(/[^\d,.]/g, '')
+                        setLoadDrafts((prev) => ({ ...prev, [e.name]: text }))
+                        updateExercise(i, { load_kg: text.trim() ? num(text) : null })
+                      }}
+                      onBlur={() => dropDraft(e.name)}
                       className={small}
                     />
                     kg

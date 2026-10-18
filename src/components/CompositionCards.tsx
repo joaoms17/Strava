@@ -14,6 +14,7 @@ import {
   confirmationSentence,
   daysSinceMeasure,
   earlyDietWeeks,
+  lossSentence,
   sameWaistSite,
   scaleFatAverage,
   targetBodyFatPct,
@@ -123,6 +124,9 @@ export default function CompositionCards() {
   const bmi = last ? Number(last.m.weight_used_kg) / (height / 100) ** 2 : null
   // Que parte do peso perdido foi gordura (3 medições ou mais, 3 kg ou mais).
   const quality = lossQuality(comparable.map((x) => ({ weight_used_kg: Number(x.m.weight_used_kg), fatKg: x.c.fatKg })))
+  // Com a qualidade da perda, a mudança e a parte que foi gordura numa frase só
+  // (eram duas seguidas com a mesma descida); sem ela, como antes (decisão 112).
+  const merged = quality ? lossSentence(quality) : null
 
   return (
     <>
@@ -146,7 +150,7 @@ export default function CompositionCards() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <p className="num text-[34px] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>
-              <p className="text-[14px] text-dim">gordura · cerca de {last.c.shown.pct} %</p>
+              <p className="text-[14px] text-dim">gordura · cerca de {last.c.shown.pct}&nbsp;%</p>
             </div>
             <div>
               <p className="num text-[34px] leading-none font-extrabold">{fmt1(last.c.shown.leanKg)} kg</p>
@@ -155,23 +159,23 @@ export default function CompositionCards() {
           </div>
           {change && firstOne ? (
             <p className="text-[15px]">
-              Desde {fmtDayMonth(firstOne.m.date)}: {changeSentence(change)} ·{' '}
+              Desde {fmtDayMonth(firstOne.m.date)}: {merged ?? changeSentence(change)} ·{' '}
               <span className={change.confirmed ? '' : 'text-dim'}>{confirmationSentence(change)}</span>
             </p>
           ) : (
             <p className="text-[14px] text-dim">Na próxima medição mostro o que mudou.</p>
           )}
-          {quality && quality.weightKg < 0 && firstOne && (
+          {quality && quality.weightKg < 0 && firstOne && !merged && (
             <p className="text-[15px]">
-              Dos {fmt1(Math.abs(quality.weightKg))} kg que perdeste desde {fmtDayMonth(firstOne.m.date)}, cerca de{' '}
-              {Math.max(0, Math.min(100, quality.fatShare))} % foram gordura.
+              Dos {fmt1(Math.abs(quality.weightKg))}&nbsp;kg que perdeste desde {fmtDayMonth(firstOne.m.date)}, cerca de{' '}
+              {Math.max(0, Math.min(100, quality.fatShare))}&nbsp;% foram gordura.
             </p>
           )}
           {earlyDietWeeks(profile.maintenance_anchor ?? null, today) && (
             <p className="text-[14px] text-dim">Nas primeiras semanas perdes água e glicogénio, não músculo.</p>
           )}
           {profile.scale_has_bodyfat && scaleAvg != null && (
-            <p className="text-[14px] text-dim">Balança: cerca de {Math.round(scaleAvg)} % (média) · outra forma de medir, não se mistura.</p>
+            <p className="text-[14px] text-dim">Balança: cerca de {Math.round(scaleAvg)}&nbsp;% (média) · outra forma de medir, não se mistura.</p>
           )}
           <button onClick={() => setDetails(!details)} className="flex items-center gap-1 text-[14px] text-dim">
             <Icon name="info" size={18} /> Como é calculado?
@@ -184,7 +188,7 @@ export default function CompositionCards() {
                 peso médio desse dia ({fmt1(Number(last.m.weight_used_kg))} kg).
               </p>
               <p>
-                Intervalo provável: {last.c.range.pct[0]}–{last.c.range.pct[1]} % de gordura ({fmt1(last.c.range.fatKg[0])}–
+                Intervalo provável: {last.c.range.pct[0]}–{last.c.range.pct[1]}&nbsp;% de gordura ({fmt1(last.c.range.fatKg[0])}–
                 {fmt1(last.c.range.fatKg[1])} kg). A fita erra cerca de ±4 pontos, mas acerta na direção ao longo de semanas.
               </p>
               <p>

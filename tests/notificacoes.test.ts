@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MEAL_PUSH_HINT,
   NO_PUSH,
   TEST_NOTICE,
   anyPush,
@@ -11,6 +12,7 @@ import {
   isMonday,
   mealAnalysedNotice,
   needsDinnerReminder,
+  offerMealPush,
   pushEndpointAllowed,
   sameServerKey,
   vapidSubject,
@@ -156,5 +158,28 @@ describe('chaves VAPID', () => {
     expect(sameServerKey(other.buffer, key)).toBe(false)
     // Sem a chave da subscrição não se sabe: fica.
     expect(sameServerKey(null, key)).toBe(true)
+  })
+})
+
+describe('«Avisar-me quando acabar»', () => {
+  const offer = { support: 'ok' as const, permission: 'default', prefs: null, other: false, dismissed: false }
+
+  it('aparece com notificações possíveis e «Refeição analisada» desligada', () => {
+    expect(offerMealPush(offer)).toBe(true)
+    expect(offerMealPush({ ...offer, permission: 'granted', prefs: { ...NO_PUSH, jantar: true } })).toBe(true)
+    expect(MEAL_PUSH_HINT).toBe('avisar_refeicao')
+  })
+
+  it('não aparece já ligada, recusada, sem notificações ou dispensada', () => {
+    expect(offerMealPush({ ...offer, prefs: { ...NO_PUSH, refeicao: true } })).toBe(false)
+    expect(offerMealPush({ ...offer, permission: 'denied' })).toBe(false)
+    expect(offerMealPush({ ...offer, support: 'instalar' })).toBe(false)
+    expect(offerMealPush({ ...offer, support: 'nao' })).toBe(false)
+    expect(offerMealPush({ ...offer, dismissed: true })).toBe(false)
+  })
+
+  it('nunca tira as notificações a outra pessoa (nem antes de saber de quem são)', () => {
+    expect(offerMealPush({ ...offer, other: true })).toBe(false)
+    expect(offerMealPush({ ...offer, other: null })).toBe(false)
   })
 })

@@ -2,9 +2,11 @@ import { switchTo, useAccounts } from '../lib/accounts'
 import { useToast } from '../lib/toast'
 import { BusyButton } from '../lib/busy'
 import { SEGMENT_TRACK, segment } from './ui/Chips'
+import { switchPath } from '../../api/_lib/rules/pessoas'
 
 // O separador no topo: de quem é a app agora (só aparece com duas ou mais
-// pessoas neste telemóvel). Um toque troca de pessoa.
+// pessoas neste telemóvel). Um toque troca de pessoa e fica no mesmo
+// separador (no Balanço, o Balanço da outra pessoa).
 export default function PeopleSwitcher() {
   const toast = useToast()
   const { accounts, currentId } = useAccounts()
@@ -13,7 +15,7 @@ export default function PeopleSwitcher() {
   async function pick(userId: string) {
     if (userId === currentId) return
     try {
-      await switchTo(userId)
+      await switchTo(userId, switchPath(window.location.pathname))
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui trocar.')
     }

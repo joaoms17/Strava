@@ -19,11 +19,22 @@ export function diffText(before: MealItem[], after: MealItem[]): string {
   return [...parts.slice(0, 2), kcal].join(' · ')
 }
 
-// Passos de 10 g num item: kcal e macros escalam na mesma proporção.
+// Gramas escritas à mão num item: kcal e macros escalam na mesma proporção
+// e deixa de ser estimativa. Itens sem gramas («Registo rápido») e valores
+// impossíveis não mexem.
+export const MAX_ITEM_GRAMS = 5000
+
+export function setItemGrams(item: MealItem, grams: number): MealItem {
+  if (item.grams <= 0 || !Number.isFinite(grams) || grams <= 0) return item
+  const next = Math.min(MAX_ITEM_GRAMS, Math.round(grams * 10) / 10)
+  if (next === item.grams) return item
+  const k = next / item.grams
+  const r = (n: number) => Math.round(n * k * 10) / 10
+  return { ...item, grams: next, kcal: r(item.kcal), protein: r(item.protein), carbs: r(item.carbs), fat: r(item.fat), estimated: false, confidence: 'alta' }
+}
+
+// Passos de 10 g num item (nunca abaixo de 5 g).
 export function stepItem(item: MealItem, deltaGrams: number): MealItem {
   if (item.grams <= 0) return item
-  const grams = Math.max(5, item.grams + deltaGrams)
-  const k = grams / item.grams
-  const r = (n: number) => Math.round(n * k * 10) / 10
-  return { ...item, grams, kcal: r(item.kcal), protein: r(item.protein), carbs: r(item.carbs), fat: r(item.fat), estimated: false, confidence: 'alta' }
+  return setItemGrams(item, Math.max(5, item.grams + deltaGrams))
 }

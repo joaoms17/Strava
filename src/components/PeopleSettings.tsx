@@ -3,6 +3,7 @@ import { useSheet } from '../lib/sheet'
 import { useToast } from '../lib/toast'
 import { forgetAccount, renameCurrent, switchTo, useAccounts } from '../lib/accounts'
 import { BusyButton } from '../lib/busy'
+import { switchPath } from '../../api/_lib/rules/pessoas'
 
 // Definições › Pessoas: quem usa a app neste telemóvel. Cada pessoa tem a
 // sua conta e os seus registos; o separador do topo troca entre elas.
@@ -26,7 +27,7 @@ export default function PeopleSettings() {
 
   async function change(userId: string) {
     try {
-      await switchTo(userId)
+      await switchTo(userId, switchPath(window.location.pathname))
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui trocar.')
     }
@@ -91,7 +92,7 @@ export default function PeopleSettings() {
         onClick={() => sheet.open('pessoa')}
         className="min-h-12 w-full rounded-xl border border-dashed border-line text-[15px]"
       >
-        ＋ Juntar pessoa (ex.: a Joana)
+        ＋ Juntar pessoa
       </button>
     </div>
   )

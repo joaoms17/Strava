@@ -7,6 +7,7 @@ import { useReadyProfile } from '../lib/profile'
 import BemEstar from './BemEstar'
 import EvolucaoIA from './EvolucaoIA'
 import { nutritionalDay, shiftDate } from '../lib/day'
+import { fmtDayMonth } from '../lib/format'
 import {
   cleanWellness,
   fitnessSeries,
@@ -19,7 +20,6 @@ import {
 } from '../../api/_lib/rules/plano'
 
 const WEEKS = 12
-const dm = (date: string) => `${date.slice(8, 10)}/${date.slice(5, 7)}`
 
 // Corpo › Evolução: a análise da IA de tudo, o relógio dia a dia (passos,
 // sono, FC em repouso e HRV), minutos de treino por semana (bicicleta e
@@ -67,7 +67,7 @@ export default function Evolucao() {
 
   const weeks = useMemo(() => {
     const stats = weeklyStats(workouts, lastMondays(today, WEEKS))
-    return stats.map((w) => ({ label: dm(w.start), bike: w.bike.minutes, gym: w.gym.minutes, sessions: w.bike.sessions + w.gym.sessions }))
+    return stats.map((w) => ({ label: fmtDayMonth(w.start), bike: w.bike.minutes, gym: w.gym.minutes, sessions: w.bike.sessions + w.gym.sessions }))
   }, [workouts, today])
   // A forma começa 6 semanas antes, para não arrancar do zero no gráfico; a do
   // intervals.icu (com o histórico todo) quando cobre as 12 semanas.
@@ -181,11 +181,11 @@ export default function Evolucao() {
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={form} margin={{ top: 8, right: 8, bottom: 0, left: -24 }}>
                 <CartesianGrid stroke={colors.line} vertical={false} />
-                <XAxis dataKey="date" tickFormatter={dm} {...axis} minTickGap={40} />
+                <XAxis dataKey="date" tickFormatter={fmtDayMonth} {...axis} minTickGap={40} />
                 <YAxis {...axis} allowDecimals={false} />
                 <Tooltip
                   {...tooltipStyle}
-                  labelFormatter={(label) => dm(String(label))}
+                  labelFormatter={(label) => fmtDayMonth(String(label))}
                   formatter={(value, name) => [Number(value).toFixed(0), name === 'ctl' ? 'Forma' : String(name)]}
                 />
                 <Line isAnimationActive={false} dataKey="ctl" stroke={colors['chart-bike']} strokeWidth={2} dot={false} />

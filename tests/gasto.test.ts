@@ -134,7 +134,7 @@ describe('qualidade da perda', () => {
         { weight_used_kg: 86, fatKg: 17.6 },
         { weight_used_kg: 84.5, fatKg: 16.2 },
       ]),
-    ).toEqual({ fatShare: 80, weightKg: -3.5 })
+    ).toEqual({ fatShare: 80, weightKg: -3.5, fatKg: -2.8 })
   })
 })
 

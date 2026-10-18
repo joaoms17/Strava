@@ -22,6 +22,26 @@ export function anyPush(prefs: PushPrefs): boolean {
   return PUSH_KINDS.some((kind) => prefs[kind])
 }
 
+// «Avisar-me quando acabar» enquanto uma foto está a analisar (no Hoje e na
+// folha da refeição): só quando este telemóvel recebe notificações, a
+// autorização não foi recusada, «Refeição analisada» ainda está desligada e
+// o telemóvel não as recebe para outra pessoa (ligar aqui passava-as para
+// esta, sem ela saber; decisão 234). Com `other` por saber (null) não
+// aparece; «Não, obrigado» esconde de vez (`dismissed`).
+export const MEAL_PUSH_HINT = 'avisar_refeicao'
+
+export function offerMealPush(input: {
+  support: 'ok' | 'instalar' | 'nao'
+  permission: string
+  prefs: PushPrefs | null
+  other: boolean | null
+  dismissed: boolean
+}): boolean {
+  if (input.dismissed || input.support !== 'ok' || input.permission === 'denied') return false
+  if (input.other !== false) return false
+  return input.prefs?.refeicao !== true
+}
+
 // A notificação de teste vai sempre para o telemóvel que a pediu.
 export function wantsPush(prefs: unknown, kind: PushKind | 'teste'): boolean {
   return kind === 'teste' || cleanPrefs(prefs)[kind]
