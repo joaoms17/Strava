@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linearSlope, projectWeight, trend7 } from '../api/_lib/rules/weight'
+import { goalDate, linearSlope, projectWeight, trend7, weeklyMeans } from '../api/_lib/rules/weight'
 
 // Regra 3: média móvel de 7 dias + projeção linear sobre 21 dias.
 describe('trend7', () => {
@@ -72,5 +72,38 @@ describe('projectWeight', () => {
   it('já no alvo, a data prevista é hoje', () => {
     const done = [{ date: '2026-09-21', value: 74.8 }]
     expect(projectWeight(done, 75).targetDate).toBe('2026-09-21')
+  })
+})
+
+// «Meta: cerca de <mês>»: só com o ritmo da semana (8 pesagens em 14 dias).
+describe('goalDate', () => {
+  it('ao ritmo da semana: 4 kg a 0,5 kg por semana = 56 dias', () => {
+    expect(goalDate('2026-10-18', 84, 80, -0.5)).toBe('2026-12-13')
+  })
+
+  it('sem ritmo, a subir, estável ou já no alvo, não há data', () => {
+    expect(goalDate('2026-10-18', 84, 80, null)).toBeNull()
+    expect(goalDate('2026-10-18', 84, 80, 0.2)).toBeNull()
+    expect(goalDate('2026-10-18', 84, 80, -0.04)).toBeNull()
+    expect(goalDate('2026-10-18', 79.5, 80, -0.5)).toBeNull()
+  })
+
+  it('a mais de um ano não promete nada', () => {
+    expect(goalDate('2026-10-18', 100, 80, -0.2)).toBeNull()
+  })
+})
+
+describe('weeklyMeans', () => {
+  it('um ponto por semana, na segunda-feira, com a média', () => {
+    const points = weeklyMeans([
+      { date: '2026-10-14', kg: 85 },
+      { date: '2026-10-12', kg: 86 },
+      { date: '2026-10-18', kg: 84.5 },
+      { date: '2026-10-19', kg: 84 },
+    ])
+    expect(points).toEqual([
+      { date: '2026-10-12', kg: 85.17 },
+      { date: '2026-10-19', kg: 84 },
+    ])
   })
 })
