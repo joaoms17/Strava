@@ -18,3 +18,5 @@ Cada regra tem testes; as implementações vivem em `/api/_lib/rules` como funç
 | 12. Estimativas (`is_estimate` em foto e "jantar fora"; % na semana) | `estimativas.test.ts` |
 
 Além das regras, testes do que falha no telemóvel e no deploy (também funções puras, sem browser): `guardas.test.ts` (funções a mais, imports, caminhos), `falhas.test.ts` (rede fraca e erros em português), `fila.test.ts` (fila das fotos sem rede), `pessoas.test.ts` (contas guardadas e trocar de pessoa), `cron-auth.test.ts` (crons fechadas sem `CRON_SECRET`) e `notificacoes.test.ts` (o que dizem, quando vão e para onde).
+
+A «Pergunta à app» tem os seus em `pergunta.test.ts` (o contexto que vai para a IA: hoje, semanas, fim de semana, dias, gasto, referências curtas) e `pergunta-acoes.test.ts` (a lista fechada das ações: só ids do contexto, dias dos últimos 28, limites, textos dos cartões e a conversa guardada).
