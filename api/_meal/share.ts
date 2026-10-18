@@ -19,7 +19,7 @@ import {
   splitFor,
   type FactorChange,
 } from '../_lib/rules/porcoes.js'
-import { FACTOR, rescaleRow, restoreFactors } from './quick.js'
+import { UndoChangeSchema, rescaleRow, restoreFactors } from './quick.js'
 
 // Partilhar uma refeição com outra pessoa da app (ex.: o João e a Joana a
 // comer o mesmo): copia-a para a conta dela, no mesmo dia, refeição e hora,
@@ -43,7 +43,7 @@ const ShareSchema = z.object({
 // quem partilhou voltam à porção de antes.
 const ShareUndoSchema = z.object({
   copies: z.array(z.string().uuid()).max(MAX_UNDO_ROWS),
-  changes: z.array(z.object({ meal_id: z.string().uuid(), factor: FACTOR })).max(MAX_UNDO_ROWS).default([]),
+  changes: z.array(UndoChangeSchema).max(MAX_UNDO_ROWS).default([]),
 })
 
 // GET /api/meal/people: as outras pessoas da app, para «Partilhar com …».
@@ -232,7 +232,7 @@ export async function share(req: VercelRequest, res: VercelResponse) {
       // A parte de quem partilha (uma vez só: se a porção mudou entretanto, fica).
       const updated = split != null ? await rescaleRow(db, source, factors.own, { once: true }) : null
       if (updated) {
-        changes.push({ meal_id: source.id as string, factor: factorOf(source.portion_factor) })
+        changes.push({ meal_id: source.id as string, factor: factorOf(source.portion_factor), items: source.items as MealItem[] })
         meals.push(updated)
         kcalDelta += Number(updated.kcal) - Number(source.kcal)
       }

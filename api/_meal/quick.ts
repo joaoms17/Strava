@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
+import { MealItemInputSchema } from '../_lib/schemas.js'
 import { personName } from '../_lib/people.js'
 import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
@@ -14,6 +15,7 @@ import {
   isFactor,
   liveCopies,
   sameFactor,
+  sameFoods,
   undoPlan,
   type FactorChange,
 } from '../_lib/rules/porcoes.js'
@@ -50,8 +52,15 @@ const PortionSchema = z.object({
   // «Também na de …»: a mesma porção nas cópias que outras pessoas receberam.
   with_shared: z.boolean().optional(),
 })
+// Uma linha a voltar atrás: a porção de antes e, numa refeição de quem pede,
+// os itens de antes (Anular exato, sem arredondar outra vez).
+export const UndoChangeSchema = z.object({
+  meal_id: z.string().uuid(),
+  factor: FACTOR,
+  items: z.array(MealItemInputSchema).min(1).max(30).optional(),
+})
 const PortionUndoSchema = z.object({
-  changes: z.array(z.object({ meal_id: z.string().uuid(), factor: FACTOR })).min(1).max(MAX_UNDO_ROWS),
+  changes: z.array(UndoChangeSchema).min(1).max(MAX_UNDO_ROWS),
 })
 const MealIdSchema = z.object({ meal_id: z.string().uuid() })
 
@@ -245,7 +254,7 @@ export const portion = post(async (db, userId, rawBody) => {
       continue
     }
     meals.push(updated)
-    previous.push({ meal_id: meal.id as string, factor: factorOf(meal.portion_factor) })
+    previous.push({ meal_id: meal.id as string, factor: factorOf(meal.portion_factor), items: meal.items as MealItem[] })
     kcalDelta += Number(updated.kcal) - Number(meal.kcal)
   }
 
@@ -309,7 +318,21 @@ export async function restoreFactors(db: SupabaseClient, userId: string, changes
 
   const meals: Record<string, unknown>[] = []
   for (const change of plan.own) {
-    const updated = await rescaleRow(db, own.find((m) => m.id === change.meal_id)!, change.factor)
+    const row = own.find((m) => m.id === change.meal_id)!
+    const before = change.items as MealItem[] | undefined
+    // Os mesmos alimentos: os itens de antes, exatamente (RLS: é de quem pede).
+    if (before && sameFoods(row.items as MealItem[] | null, before)) {
+      const { data, error } = await db
+        .from('meals')
+        .update({ items: before, portion_factor: change.factor, ...mealTotals(before) })
+        .eq('id', row.id as string)
+        .select()
+        .maybeSingle()
+      if (error) throw new HttpError(500, error.message)
+      if (data) meals.push(data as Record<string, unknown>)
+      continue
+    }
+    const updated = await rescaleRow(db, row, change.factor)
     if (updated) meals.push(updated)
   }
   for (const change of plan.copies) {

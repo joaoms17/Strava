@@ -17,6 +17,7 @@ import {
   splitFor,
   splitLabel,
   splitText,
+  sameFoods,
   undoPlan,
   type ScopeMeal,
 } from '../api/_lib/rules/porcoes'
@@ -173,6 +174,37 @@ describe('Anular: só o que é de quem pede e as cópias delas', () => {
     )
     expect(plan.own).toEqual([{ meal_id: 'a', factor: 1 }])
     expect(plan.copies).toEqual([{ meal_id: 'copia-a', factor: 1 }])
+  })
+  it('numa cópia de outra pessoa só a porção, nunca itens vindos do telemóvel', () => {
+    const forged = [{ name: 'Água', grams: 1, kcal: 0, protein: 0, carbs: 0, fat: 0 }]
+    const plan = undoPlan(
+      [
+        { meal_id: 'a', factor: 1, items: forged },
+        { meal_id: 'copia-a', factor: 1, items: forged },
+      ],
+      ['a'],
+      ['copia-a'],
+    )
+    expect(plan.own[0]!.items).toBe(forged)
+    expect(plan.copies).toEqual([{ meal_id: 'copia-a', factor: 1 }])
+  })
+  it('os itens de antes só servem com os mesmos alimentos, pela mesma ordem', () => {
+    const before = [{ name: 'Arroz' }, { name: 'Salmão' }]
+    expect(sameFoods([{ name: 'Arroz' }, { name: 'Salmão' }], before)).toBe(true)
+    expect(sameFoods([{ name: 'Salmão' }, { name: 'Arroz' }], before)).toBe(false)
+    expect(sameFoods([{ name: 'Arroz' }], before)).toBe(false)
+    expect(sameFoods(null, before)).toBe(false)
+  })
+  it('½ e Anular com os itens de antes volta exatamente ao que era', () => {
+    const items = [
+      { name: 'Arroz', grams: 125, kcal: 333.3, protein: 23.5, carbs: 41.7, fat: 12.3, food_id: null, estimated: true },
+      { name: 'Edamame', grams: 87, kcal: 151.1, protein: 9.5, carbs: 20.3, fat: 3.5, food_id: null, estimated: true },
+    ]
+    // Escalar de volta perde as décimas (23,5 → 11,8 → 23,6)…
+    const back = rescaleItems(rescaleItems(items, 1, 0.5), 0.5, 1)
+    expect(mealTotals(back)).not.toEqual(mealTotals(items))
+    // …por isso o Anular de uma refeição própria usa os itens de antes.
+    expect(sameFoods(rescaleItems(items, 1, 0.5), items)).toBe(true)
   })
   it('no máximo as linhas de um momento e das cópias', () => {
     const many = Array.from({ length: MAX_UNDO_ROWS + 5 }, (_, i) => ({ meal_id: `m${i}`, factor: 1 }))

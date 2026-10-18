@@ -144,25 +144,36 @@ export function splitText(split: number | null | undefined, me: string, other: s
 export interface FactorChange {
   meal_id: string
   factor: number
+  // Os itens de antes (só nas refeições de quem pede): o Anular volta a eles
+  // exatamente, sem o arredondamento de escalar duas vezes.
+  items?: readonly { name: string }[]
+}
+
+// Os itens de antes ainda servem se a refeição tem os mesmos alimentos, pela
+// mesma ordem (só a porção mudou entretanto). Se alguém a corrigiu, o Anular
+// volta só à porção.
+export function sameFoods(current: readonly { name: string }[] | null | undefined, before: readonly { name: string }[]): boolean {
+  return !!current && current.length === before.length && current.every((item, i) => item.name === before[i]!.name)
 }
 
 // O Anular revalidado no servidor: só as refeições de quem pede (lidas com o
 // RLS) e as que ainda são cópias delas noutras contas. O resto (um id de
 // outra pessoa, repetido, uma porção impossível) fica de fora.
-export function undoPlan(
-  changes: readonly FactorChange[],
+export function undoPlan<C extends FactorChange>(
+  changes: readonly C[],
   ownIds: Iterable<string>,
   copyIds: Iterable<string>,
-): { own: FactorChange[]; copies: FactorChange[] } {
+): { own: C[]; copies: C[] } {
   const own = new Set(ownIds)
   const copies = new Set(copyIds)
   const seen = new Set<string>()
-  const plan = { own: [] as FactorChange[], copies: [] as FactorChange[] }
+  const plan = { own: [] as C[], copies: [] as C[] }
   for (const change of changes.slice(0, MAX_UNDO_ROWS)) {
     if (seen.has(change.meal_id) || !isFactor(change.factor)) continue
     seen.add(change.meal_id)
     if (own.has(change.meal_id)) plan.own.push(change)
-    else if (copies.has(change.meal_id)) plan.copies.push(change)
+    // Numa cópia de outra pessoa só a porção: os itens nunca vêm do telemóvel.
+    else if (copies.has(change.meal_id)) plan.copies.push({ meal_id: change.meal_id, factor: change.factor } as C)
   }
   return plan
 }
