@@ -619,8 +619,8 @@ export default function Balanco() {
                       {' '}
                       Só pelo peso dava {fmtKcal(round10(exp.tdeeMeasured))}
                       {exp.tdeeMeasured > exp.tdeeFrozen
-                        ? ': o peso desceu depressa (água, no início ou depois de uma pausa).'
-                        : '.'}{' '}
+                        ? ': no início, ou depois de uma pausa, o peso desce depressa com água.'
+                        : ': a água e o sal às vezes escondem a descida do peso.'}{' '}
                       O gasto muda devagar (no máximo 30 kcal por dia) e nunca a mais de 400 da fórmula.
                     </span>
                   )}
