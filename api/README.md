@@ -4,11 +4,11 @@
 
 | Endpoint | Método | Descrição |
 | --- | --- | --- |
-| `/api/meal/capture` | POST | Captura sem espera (foto e/ou texto, nota, marcas, hora conhecida ou dia e momento): cria a refeição em `a_analisar`, responde 202 e analisa em segundo plano (`waitUntil`). Idempotente pelo `client_id`; a mesma foto (SHA-256) devolve a que já existe. Acima dos limites da IA fica `sem_analise`. |
+| `/api/meal/capture` | POST | Captura sem espera (foto e/ou texto, nota, marcas, hora conhecida ou dia e momento): cria a refeição em `a_analisar`, responde 202 e analisa em segundo plano (`waitUntil`). Idempotente pelo `client_id`; a mesma foto (SHA-256) devolve a que já existe. Acima dos limites da IA fica `sem_analise`. Com `share_with` («Também para …»), a refeição segue para essas pessoas no fim da primeira análise que correr bem (também a de `analyse`). |
 | `/api/meal/analyse` | POST | Outra tentativa com lease (`claim_meal_analysis`); `reset` para «Tentar de novo» e «Reanalisar foto», `force` para analisar acima do limite. |
 | `/api/meal/correct` | POST | «Corrigir por texto»: Haiku sobre os itens atuais, sem foto; devolve os itens anteriores para Anular. |
 | `/api/meal/update` | POST | Itens (passos de 10 g), dia e momento, nota (corrige se a análise já acabou), marcas, confirmar e anular a confirmação. |
-| `/api/meal/quick` | POST | Só números, com item sintético «Registo rápido». |
+| `/api/meal/quick` | POST | Só números, com item sintético «Registo rápido». Sem uso na app desde que o «Só números» saiu do ＋ (os números escrevem-se no texto). |
 | `/api/meal/estimate` | POST | Analisar sem gravar («Nova favorita»): o texto, ou a foto (em `<user>/…`) com o nome, pelo mesmo caminho das refeições (biblioteca com referências curtas, confiança por item e as guardas dos números). Devolve `{items[], title, confidence}`. |
 | `/api/meal/save` | POST | Grava a refeição confirmada: valida com Zod, calcula dia nutricional (regra 1) e totais no servidor. |
 | `/api/meal/log-favorite` | POST | Favorito com 1 toque, sem IA: itens × porção, dia nutricional e totais no servidor; num dia passado usa a hora habitual do momento. |
@@ -20,7 +20,7 @@
 | `/api/meal/food-search` | GET | `?q=`: produtos de marca pelo nome no Open Food Facts (search.openfoodfacts.org, com a pesquisa antiga como recurso), só a pedido. Cache de 7 dias (`off_searches`) e no máximo 5 pesquisas por minuto para a casa (o Open Food Facts aceita 10). |
 | `/api/meal/recipe` | POST | Favoritas › «Importar receita»: `url` (só https e endereços públicos, verificados na ligação; até 3 redirecionamentos, 2 MB e 8 s — `_lib/safe-fetch.ts`) ou `text`. Lê o schema.org Recipe (JSON-LD) e, sem ele, o texto visível (`rules/receita.ts`); a IA de texto dá os itens da receita toda com a biblioteca pessoal (`prompts/recipe.v1.md`). Não grava: a app divide pelas doses. |
 | `/api/meal/favorite-copy` | POST | Copia uma favorita para outra pessoa da casa (sem os `food_id`, com a foto); com `undo_id`, Anular apaga essa cópia (só nos 15 min seguintes). |
-| `/api/meal/people` · `/api/meal/share` | GET · POST | As outras pessoas da app e «Partilhar com …»: copia a refeição para a conta da outra pessoa, por rever, com as fotos; partilhar outra vez a mesma não a duplica (`source_meal_id`). |
+| `/api/meal/people` · `/api/meal/share` | GET · POST | As outras pessoas da app e «Partilhar com …»: copia a refeição para a conta da outra pessoa, por rever, com as fotos; partilhar outra vez a mesma não a duplica (`source_meal_id`). Com `?meal_id=`, `people` diz com quem essa refeição já está partilhada (`shared`). |
 | `/api/meal/menu` | POST | «Escolher pelo menu»: 1 a 3 fotos do menu (JPEG já no Storage, em `<user>/menu/`; apagam-se depois de lidas) e preferências opcionais; o modelo das fotos estima cada prato (`prompts/menu-pick.v1.md`), `rules/menu.ts` arruma e ordena pelo que falta comer hoje (calorias e proteína). Não grava: «Vou comer este» usa `/api/meal/save`. Conta para o limite diário de fotos. |
 | `/api/meal/attach` | POST | Junta até 4 fotos a uma refeição que já existe. Sem itens, volta a analisá-la com todas; com itens (analisada, código de barras, favorita…), os itens ficam e a IA só junta o que é novo (`prompts/meal-photo-add.v1.md`); devolve `previous` para Anular. |
 | `/api/meal/detach` | POST | Anular «Juntar foto»: volta aos itens, ao estado e às fotos de antes (só tira fotos) e solta a análise que ainda estiver a correr. |

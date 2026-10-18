@@ -203,7 +203,7 @@ export default function DietSheet() {
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[15px]">{fav.name}</span>
                         <span className="block text-[13px] text-dim tabular-nums">
-                          {i === 0 ? 'habitual' : 'alternativa'} · {fmtKcal(fav.kcal)} kcal · {fmtInt(Number(fav.protein))} g
+                          {i === 0 ? 'habitual' : 'alternativa'} · {fmtKcal(fav.kcal)} kcal · {fmtInt(Number(fav.protein))} g prot.
                         </span>
                       </span>
                       {i > 0 && (
