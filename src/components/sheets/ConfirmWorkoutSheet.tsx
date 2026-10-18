@@ -917,7 +917,7 @@ function WorkoutDetail({ id }: { id: string }) {
               {(type === 'bike' || w.max_hr != null) && numberField('Batimentos máximos', maxHr, setMaxHr, 'bpm')}
             </div>
 
-            <details className="text-[15px]" open={kindChanged || whenChanged}>
+            <details className="text-[15px]">
               <summary className="cursor-pointer text-dim">Mudar o tipo, o dia ou a hora</summary>
               <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap gap-2">

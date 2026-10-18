@@ -37,7 +37,7 @@ export default function SameSession({
           Não, é outro
         </button>
       </div>
-      <p className="text-[13px] text-dim">Se for, junto o que escreveste ao que lá está e não conta duas vezes.</p>
+      <p className="text-[13px] text-dim">Se for, junto os dois num só treino e não conta duas vezes.</p>
     </div>
   )
 }

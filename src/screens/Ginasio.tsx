@@ -204,7 +204,7 @@ export default function Ginasio() {
     )
   // A duração escrita; sem ela, a guardada (ao corrigir) ou o cronómetro.
   const timerMinutes = Math.max(1, Math.round((now - d.startedAt) / 60_000))
-  const minutes = Math.min(MAX_MINUTES, d.minutes ?? editing?.minutes ?? (d.day ? 60 : timerMinutes))
+  const minutes = Math.max(1, Math.min(MAX_MINUTES, d.minutes ?? editing?.minutes ?? (d.day ? 60 : timerMinutes)))
   const doneSets = d.exercises.reduce((a, ex) => a + ex.sets.filter((s) => s.done).length, 0)
 
   function startFrom(fav: Favorite) {
