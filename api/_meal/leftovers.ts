@@ -50,6 +50,13 @@ const UndoSchema = z.object({
   photo_path: z.string().min(3),
   items: z.array(MealItemInputSchema).min(1).max(30),
   status: z.enum(['ok', 'por_rever']),
+  // A confirmação de antes («Está certo»), para Anular a repor tal como era.
+  confirmed_at: z
+    .string()
+    .max(40)
+    .refine((v) => Number.isFinite(Date.parse(v)))
+    .nullable()
+    .optional(),
 })
 
 type Meal = MealRow & Record<string, unknown>
@@ -122,7 +129,7 @@ export const leftovers = post(async ({ db, userId, body, res }) => {
   }
   const admin = adminClient()
   if (await aiLimitReached(admin, userId, true)) {
-    throw new HttpError(429, 'Chegaste ao limite da IA que definiste. Escreve o que sobrou em «Corrigir por texto».')
+    throw new HttpError(429, 'Chegaste ao limite da IA que definiste. Acerta o que sobrou com o − e o + de cada item.')
   }
 
   // Reivindica a refeição (como a análise, por analysis_started_at): um
@@ -153,7 +160,7 @@ export const leftovers = post(async ({ db, userId, body, res }) => {
   // Comeu tudo: os números ficam, e a foto do depois guarda-se (já não se
   // pergunta outra vez).
   const applied = outcome === 'aplicado' ? applyLeftovers(items, shares) : { items, leftKcal: 0 }
-  const status = statusAfterLeftovers(meal.status as 'ok' | 'por_rever', applied.items)
+  const status = statusAfterLeftovers(meal.status as 'ok' | 'por_rever', shares)
   const { data, error } = await db
     .from('meals')
     .update({
@@ -178,7 +185,11 @@ export const leftovers = post(async ({ db, userId, body, res }) => {
   if (outcome === 'aplicado') {
     inBackground(learnFoods(db, userId, itemsToLearn('editada', meal.input_type, applied.items, items), meal.input_type))
   }
-  res.status(200).json({ outcome, meal: written, previous: { items, status: meal.status } })
+  res.status(200).json({
+    outcome,
+    meal: written,
+    previous: { items, status: meal.status, confirmed_at: (meal.confirmed_at as string | null) ?? null },
+  })
 })
 
 export const leftoversUndo = post(async ({ db, body, res }) => {
@@ -195,7 +206,8 @@ export const leftoversUndo = post(async ({ db, body, res }) => {
       ...mealTotals(items),
       is_estimate: estimateFor(meal, items),
       status: input.status,
-      confirmed_at: input.status === 'ok' ? ((meal.confirmed_at as string | null) ?? new Date().toISOString()) : null,
+      confirmed_at:
+        input.status === 'ok' ? (input.confirmed_at ?? (meal.confirmed_at as string | null) ?? new Date().toISOString()) : null,
       leftover_photo_path: null,
       leftover_thumb_path: null,
       leftover_kcal: null,

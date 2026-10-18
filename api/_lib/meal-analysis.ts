@@ -17,6 +17,7 @@ import { clockTime, lisbonClock, lisbonInstant } from './rules/momentos.js'
 import { VISION_KINDS, aiLimitsFor, dailyVisionCapReached, monthlyCapReached } from './rules/custos.js'
 import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
+import { LEFTOVERS_ADD_HINT, mergeAfterLeftovers } from './rules/sobras.js'
 
 // Análise de refeições em segundo plano (Fase 2): a refeição já existe com
 // estado 'a_analisar'; aqui lê-se a foto e/ou o texto, e o resultado grava-se
@@ -38,6 +39,7 @@ export interface MealRow {
   analysis_attempts: number
   deleted_at: string | null
   model_reserve?: boolean // migração 20261018150002
+  leftover_photo_path?: string | null // migração 20261018200000 («Sobrou comida?»)
 }
 
 const ANALYSIS_BUDGET_MS = 50_000
@@ -173,7 +175,8 @@ export function addingToItems(meal: Pick<MealRow, 'items' | 'photo_paths'>): boo
 }
 
 // O que a análise lê de uma refeição (ou de um pedido sem refeição gravada).
-type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot' | 'logged_at' | 'photo_paths' | 'items'>
+type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot' | 'logged_at' | 'photo_paths' | 'items'> &
+  Partial<Pick<MealRow, 'leftover_photo_path'>>
 
 async function runModel(
   admin: SupabaseClient,
@@ -203,6 +206,7 @@ async function runModel(
             confidence: i.confidence ?? (i.estimated ? 'media' : 'alta'),
             food_ref: i.food_id ? (byFood.get(i.food_id) ?? null) : null,
           })),
+          ...(meal.leftover_photo_path ? { sobras: LEFTOVERS_ADD_HINT } : {}),
         }
       : {}),
     texto: meal.raw_text || null,
@@ -284,7 +288,8 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
     const { analysis, refs, model, prompt, cost, reserve } = await runModel(admin, meal)
     const analysed = toMealItems(analysis.items, refs)
     const adding = addingToItems(meal)
-    const items = adding ? mergeAdded(meal.items, analysed) : analysed
+    // Já descontado o que sobrou: só entra o que é novo (rules/sobras.ts).
+    const items = !adding ? analysed : meal.leftover_photo_path ? mergeAfterLeftovers(meal.items, analysed) : mergeAdded(meal.items, analysed)
     const tags = meal.tags ?? []
     const inputType = meal.input_type === 'photo' ? 'photo' : 'text'
 

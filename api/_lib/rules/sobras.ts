@@ -110,11 +110,32 @@ export function applyLeftovers(items: MealItem[], shares: EatenShare[]): { items
   return { items: eaten, leftKcal: round1(Math.max(0, kcal(items) - kcal(eaten))) }
 }
 
-// Um item que a IA viu mal fica «confirma a porção» e a refeição por rever;
-// senão o estado não muda.
-export function statusAfterLeftovers(current: 'ok' | 'por_rever', items: Pick<MealItem, 'confidence'>[]): 'ok' | 'por_rever' {
-  return items.some((i) => i.confidence === 'baixa') ? 'por_rever' : current
+// Um item descontado que a IA viu mal («baixa») põe a refeição por rever;
+// senão o estado não muda. Só conta o que a foto do depois mexeu: um item
+// «baixa» que a pessoa já confirmou («Está certo») e que ficou igual não volta
+// a pôr por rever uma refeição confirmada.
+export function statusAfterLeftovers(current: 'ok' | 'por_rever', shares: EatenShare[]): 'ok' | 'por_rever' {
+  return shares.some((s) => s.fraction < 1 && s.confidence === 'baixa') ? 'por_rever' : current
 }
+
+// «Juntar foto» ou «Analisar outra vez» numa refeição já descontada: as
+// fotos do antes ainda mostram o prato cheio, e a IA (prompt de juntar) podia
+// devolver um item descontado com os gramas todos (os descontados ficam
+// «estimados», e mergeAdded troca os estimados) ou voltar a pôr o que ficou
+// no prato. Aqui só entra o que tem um nome novo; os itens que lá estão ficam
+// como estão.
+export function mergeAfterLeftovers(current: MealItem[], added: MealItem[]): MealItem[] {
+  const merged = [...current]
+  for (const item of added) {
+    if (!merged.some((m) => fold(m.name) === fold(item.name))) merged.push(item)
+  }
+  return merged
+}
+
+// O aviso que vai com os itens para o prompt de juntar foto, numa refeição já
+// descontada (os prompts são ficheiros fixos; isto segue no JSON).
+export const LEFTOVERS_ADD_HINT =
+  'Esta refeição já tem descontado o que sobrou no prato: itens_atuais é o que foi COMIDO. As fotografias antigas mostram o prato cheio, antes de comer. Não devolvas outra vez itens que já lá estão nem o que ficou no prato; devolve só o que é novo nas fotografias novas.'
 
 // ---------------------------------------------------------------------
 // Que refeições levam a foto do depois

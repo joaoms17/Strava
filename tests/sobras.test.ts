@@ -15,6 +15,7 @@ import {
   platePhotos,
   signatureSimilarity,
   statusAfterLeftovers,
+  mergeAfterLeftovers,
   type CandidateMeal,
 } from '../api/_lib/rules/sobras'
 import { mealTotals, type MealItem } from '../api/_lib/rules/meal-totals'
@@ -161,9 +162,18 @@ describe('aplicar o que sobrou aos itens', () => {
     expect(a).toMatchObject({ grams: 62.5, estimated: true, confidence: 'alta', food_id: 'f1' })
     expect(b!.confidence).toBe('baixa')
     expect(c!.confidence).toBe('media')
-    expect(statusAfterLeftovers('ok', [a!, b!])).toBe('por_rever')
-    expect(statusAfterLeftovers('ok', [a!, c!])).toBe('ok')
-    expect(statusAfterLeftovers('por_rever', [a!])).toBe('por_rever')
+    expect(statusAfterLeftovers('ok', [{ fraction: 0.5, confidence: 'alta' }, { fraction: 0.5, confidence: 'baixa' }])).toBe('por_rever')
+    expect(statusAfterLeftovers('ok', [{ fraction: 0.5, confidence: 'alta' }, { fraction: 0.5, confidence: null }])).toBe('ok')
+    expect(statusAfterLeftovers('por_rever', [{ fraction: 0.5, confidence: 'alta' }])).toBe('por_rever')
+    // tirado todo com «baixa» também pede para rever
+    expect(statusAfterLeftovers('ok', [{ fraction: 0, confidence: 'baixa' }, { fraction: 1, confidence: null }])).toBe('por_rever')
+  })
+
+  it('uma refeição confirmada com um item «baixa» que não mudou continua confirmada', () => {
+    // «Está certo» deixa a confiança dos itens como estava; comer tudo (ou só
+    // descontar outro item) não a volta a pôr por rever.
+    expect(statusAfterLeftovers('ok', [{ fraction: 1, confidence: 'baixa' }, { fraction: 0.5, confidence: 'alta' }])).toBe('ok')
+    expect(statusAfterLeftovers('ok', [{ fraction: 1, confidence: null }, { fraction: 1, confidence: null }])).toBe('ok')
   })
 
   it('itens sem gramas (registo rápido) também escalam as kcal', () => {
@@ -316,5 +326,18 @@ describe('cores do prato (sem IA)', () => {
     const empty = plateSignature(photo([[WHITE, 36]]), 10, 10)!
     expect(empty.chroma).toBe(0)
     expect(signatureSimilarity(before, empty)).toBeNull()
+  })
+})
+
+describe('juntar foto depois de descontar', () => {
+  it('só entra o que tem nome novo: os itens descontados ficam como estão', () => {
+    const eaten = [item('Arroz branco', 72, 94, { estimated: true, confidence: 'media' }), item('Frango grelhado', 130, 215)]
+    const added = [item('Arroz Branco', 160, 208, { confidence: 'alta' }), item('Pudim', 100, 150)]
+    const merged = mergeAfterLeftovers(eaten, added)
+    expect(merged.map((i) => [i.name, i.grams])).toEqual([
+      ['Arroz branco', 72],
+      ['Frango grelhado', 130],
+      ['Pudim', 100],
+    ])
   })
 })

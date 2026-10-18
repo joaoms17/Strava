@@ -21,6 +21,7 @@ import type { Meal, MealItem } from './types'
 export interface LeftoversPrevious {
   items: MealItem[]
   status: 'ok' | 'por_rever'
+  confirmed_at?: string | null
 }
 
 export type LeftoversResult =
