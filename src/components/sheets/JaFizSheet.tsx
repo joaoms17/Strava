@@ -6,13 +6,14 @@ import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { fmtKcal } from '../../lib/format'
-import { saveWorkout } from '../../lib/workout-actions'
+import { sameDaySession, saveWorkout } from '../../lib/workout-actions'
 import { instantInNutritionalDay, lisbonInstant } from '../../../api/_lib/rules/momentos'
 import { exerciseKcal } from '../../../api/_lib/rules/treino'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, type OtherSport } from '../../../api/_lib/rules/targets'
 import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import { DayChips, chip } from '../ui/Chips'
+import SameSession from '../SameSession'
 
 type Kind = 'bike' | 'strength' | OtherSport
 
@@ -52,7 +53,10 @@ export default function JaFizSheet() {
   const [otherMinutes, setOtherMinutes] = useState('')
   const [watts, setWatts] = useState<number | null>(null)
   const [avgHr, setAvgHr] = useState('')
+  const [maxHr, setMaxHr] = useState('')
   const [deviceKcal, setDeviceKcal] = useState('')
+  // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
+  const [match, setMatch] = useState<Workout | null>(null)
   const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
@@ -92,6 +96,9 @@ export default function JaFizSheet() {
     })()
   }, [favId, plannedMinutes])
 
+  // Mudou o tipo, o dia, a hora ou a duração: a pergunta já não vale.
+  useEffect(() => setMatch(null), [kind, day, time, minutes, otherMinutes])
+
   const type: Workout['type'] = kind === 'bike' || kind === 'strength' ? kind : 'other'
   const effectiveMinutes = minutes ?? toInt(otherMinutes)
   const canSave = effectiveMinutes != null && effectiveMinutes > 0
@@ -105,24 +112,37 @@ export default function JaFizSheet() {
     weightKg,
   })
 
-  async function save() {
+  // Sem decisão, vê primeiro se já há um treino parecido nesse dia.
+  async function save(decision?: 'merge' | 'new') {
     if (!canSave || effectiveMinutes == null) return
     const startedAt = time
       ? instantInNutritionalDay(day, time, profile.nutrition_day_cutoff_hour).toISOString()
       : day !== today
         ? lisbonInstant(day, '18:00').toISOString()
         : null
+    const sport = type === 'other' ? kind : null
+    if (!decision) {
+      const found = await sameDaySession({ type, sport, date: day, minutes: effectiveMinutes, started_at: time ? startedAt : null })
+      if (found) {
+        setMatch(found)
+        return
+      }
+    }
     const saved = await saveWorkout(
       {
         type,
-        sport: type === 'other' ? kind : null,
+        sport,
         minutes: effectiveMinutes,
         started_at: startedAt,
+        started_at_estimated: !time && startedAt != null,
         watts: type === 'bike' ? watts : null,
         watts_source: type === 'bike' && watts != null ? 'manual' : null,
         avg_hr: type === 'bike' ? toInt(avgHr) : null,
+        max_hr: type === 'bike' ? toInt(maxHr) : null,
         kcal_device: type === 'other' ? toInt(deviceKcal) : null,
         favorite_id: favId,
+        merge_into: decision === 'merge' ? match?.id : null,
+        not_duplicate: decision === 'new',
       },
       toast,
     )
@@ -137,14 +157,18 @@ export default function JaFizSheet() {
       title="Já fiz"
       onClose={sheet.close}
       footer={
-        <BusyButton
-          busy="A guardar…"
-          disabled={!canSave}
-          onClick={save}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
-        >
-          {`Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
-        </BusyButton>
+        match ? (
+          <SameSession workout={match} onMerge={() => save('merge')} onNew={() => save('new')} />
+        ) : (
+          <BusyButton
+            busy="A guardar…"
+            disabled={!canSave}
+            onClick={() => save()}
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+          >
+            {`Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
+          </BusyButton>
+        )
       }
     >
       <div className="space-y-5 pb-2">
@@ -215,17 +239,31 @@ export default function JaFizSheet() {
                   ))}
               </div>
             </div>
-            <label className="block space-y-1">
-              <span className="label">Batimentos médios (opcional)</span>
-              <input
-                inputMode="numeric"
-                value={avgHr}
-                onChange={(e) => setAvgHr(e.target.value.replace(/\D/g, ''))}
-                placeholder="ex.: 128"
-                className={field}
-              />
-              <span className="block text-[13px] text-dim">Para a app poder subir a potência.</span>
-            </label>
+            <div className="space-y-1">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block space-y-1">
+                  <span className="label">Batimentos médios</span>
+                  <input
+                    inputMode="numeric"
+                    value={avgHr}
+                    onChange={(e) => setAvgHr(e.target.value.replace(/\D/g, ''))}
+                    placeholder="ex.: 128"
+                    className={field}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="label">Batimentos máximos</span>
+                  <input
+                    inputMode="numeric"
+                    value={maxHr}
+                    onChange={(e) => setMaxHr(e.target.value.replace(/\D/g, ''))}
+                    placeholder="ex.: 145"
+                    className={field}
+                  />
+                </label>
+              </div>
+              <span className="block text-[13px] text-dim">Opcionais. Com os dois, a app pode subir a potência.</span>
+            </div>
           </>
         )}
 

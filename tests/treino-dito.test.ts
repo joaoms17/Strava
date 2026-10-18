@@ -36,6 +36,14 @@ describe('dizer o treino', () => {
     expect(favoriteExercises(w.exercises)[1]).toEqual({ name: 'Prancha', sets: 1, rep_min: 8, rep_max: 12, load_kg: null })
   })
 
+  it('nos exercícios de tempo as repetições são segundos (até 300)', () => {
+    const w = cleanSaid(
+      { tipo: 'strength', titulo: 'Core', exercicios: [{ nome: 'Prancha (segundos)', series: [{ reps: 90, carga_kg: null }] }] },
+      '2026-10-05',
+    )
+    expect(w.exercises[0]!.sets).toEqual([{ reps: 90, load_kg: null }])
+  })
+
   it('outros desportos e bicicleta; data no futuro ou antiga não serve', () => {
     const padel = cleanSaid({ tipo: 'other', desporto: 'padel', titulo: 'Padel', minutos: 90, data: '2026-10-09' }, '2026-10-05')
     expect(padel).toMatchObject({ type: 'other', sport: 'padel', minutes: 90, date: null, exercises: [] })

@@ -152,3 +152,12 @@ export function checkWeighing(value: number, reference: number | null): WeightCh
     .sort((a, b) => Math.abs(a - reference) - Math.abs(b - reference))
   return near[0] != null ? { kind: 'suggest', value: near[0] } : { kind: 'confirm' }
 }
+
+// Pesagem apagada (ex.: outra pessoa na balança): a mesma pesagem não volta
+// pela sincronização nem pelo Atalho. Uma pesagem nova nesse dia (outro peso)
+// entra como antes.
+export function isDeletedWeighing(kg: number, deleted: { kg: number | string | null } | undefined): boolean {
+  if (!deleted) return false
+  if (deleted.kg == null) return true
+  return Math.abs(kg - Number(deleted.kg)) < 0.15
+}

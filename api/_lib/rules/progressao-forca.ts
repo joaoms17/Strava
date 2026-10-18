@@ -33,11 +33,25 @@ export function deloadSets(plannedSets: number): number {
 // ---------------------------------------------------------------------
 // Fase 5 — ginásio livre. O esforço (RPE) fica escondido em «mais», por isso
 // uma série sem esforço conta como «com folga»; só um esforço acima de 8
-// trava a subida. Todas as séries no topo (12) em 2 sessões seguidas: +2 kg.
+// trava a subida. Todas as séries no topo do teu treino (12 por omissão; 8
+// num treino de 5–8, 20 num de 15–20) em 2 sessões seguidas: mais carga.
 // ---------------------------------------------------------------------
 export const FREE_REP_MIN = 8
 export const FREE_REP_MAX = 12
 export const LOAD_STEP_KG = 2
+// Abaixo de 10 kg (halteres leves, elevações laterais) sobe-se 1 kg: 2 kg
+// em 4 kg eram +50 %.
+export const LIGHT_LOAD_KG = 10
+export const LIGHT_STEP_KG = 1
+
+export function loadStep(loadKg: number | null | undefined): number {
+  return loadKg != null && loadKg < LIGHT_LOAD_KG ? LIGHT_STEP_KG : LOAD_STEP_KG
+}
+
+// A descer: de 10 kg para baixo já vai de 1 em 1.
+export function loadStepDown(loadKg: number | null | undefined): number {
+  return loadKg != null && loadKg <= LIGHT_LOAD_KG ? LIGHT_STEP_KG : LOAD_STEP_KG
+}
 
 export function readyForIncreaseFree(lastTwoSessions: LoggedSet[][], repMax = FREE_REP_MAX): boolean {
   if (lastTwoSessions.length < 2) return false
@@ -73,7 +87,7 @@ export function suggestExercise(sessions: LoggedSet[][], repMax = FREE_REP_MAX):
     lastSets,
     topLoad,
     ready,
-    today: topLoad == null ? null : ready ? topLoad + LOAD_STEP_KG : topLoad,
+    today: topLoad == null ? null : ready ? topLoad + loadStep(topLoad) : topLoad,
   }
 }
 

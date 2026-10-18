@@ -17,6 +17,7 @@ import {
   exerciseKcal,
   findMergeCandidate,
   kcalExplanation,
+  startGuessed,
   typeOfSport,
   type WattsSource,
 } from '../../../api/_lib/rules/treino'
@@ -318,7 +319,8 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       .eq('date', draft.day)
       .eq('type', type)
       .then(({ data }) => {
-        const sessions = ((data ?? []) as Workout[]).map((w) => ({ ...w, started_at: w.started_at ?? null }))
+        // Uma hora suposta («Já fiz» sem hora) não conta para comparar.
+        const sessions = ((data ?? []) as Workout[]).map((w) => ({ ...w, started_at: startGuessed(w) ? null : (w.started_at ?? null) }))
         setCandidate(
           findMergeCandidate(
             { type, date: draft.day, minutes: toInt(draft.minutes), started_at: draft.time ? startedAt : null },
@@ -525,6 +527,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
         sport: type === 'other' ? draft.kind : null,
         minutes,
         started_at: startedAt,
+        started_at_estimated: !draft.time && startedAt != null,
         watts,
         watts_source: watts != null ? draft.wattsSource : null,
         avg_hr: toInt(draft.avgHr),
@@ -693,16 +696,30 @@ function sortTemplates(templates: Favorite[], w: Workout): Favorite[] {
   return templates.slice().sort((a, b) => score(b) - score(a))
 }
 
+// O tipo de um treino guardado, como nos chips (bicicleta, ginásio ou o desporto).
+function kindOf(w: Workout): Kind {
+  if (w.type !== 'other') return w.type
+  const sport = w.sport ?? w.raw?.sport
+  return isOtherSport(sport) ? sport : 'outro'
+}
+const clock = (w: Workout) => (w.started_at && !startGuessed(w) ? timeOf(w.started_at) : '')
+
 function WorkoutDetail({ id }: { id: string }) {
   const sheet = useSheet()
   const [, navigate] = useLocation()
   const toast = useToast()
+  const profile = useReadyProfile()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [workout, setWorkout] = useState<Workout | null | undefined>(undefined)
   const [thumbs, setThumbs] = useState<string[]>([])
   const [minutes, setMinutes] = useState('')
   const [watts, setWatts] = useState('')
   const [avgHr, setAvgHr] = useState('')
   const [maxHr, setMaxHr] = useState('')
+  // Corrigir o tipo, o dia e a hora (ex.: a elíptica que entrou como bicicleta).
+  const [kind, setKind] = useState<Kind>('bike')
+  const [day, setDay] = useState('')
+  const [time, setTime] = useState('')
   const [templates, setTemplates] = useState<Favorite[]>([])
 
   const load = useCallback(async () => {
@@ -725,6 +742,9 @@ function WorkoutDetail({ id }: { id: string }) {
       setWatts(str(w.watts))
       setAvgHr(str(w.avg_hr))
       setMaxHr(str(w.max_hr))
+      setKind(kindOf(w))
+      setDay(w.date)
+      setTime(clock(w))
     }
   }, [id])
 
@@ -748,8 +768,21 @@ function WorkoutDetail({ id }: { id: string }) {
   }
 
   const w = workout
+  const kindChanged = kind !== kindOf(w)
+  const whenChanged = day !== w.date || time !== clock(w)
   const dirty =
-    minutes !== str(w.minutes) || watts !== str(w.watts) || avgHr !== str(w.avg_hr) || maxHr !== str(w.max_hr)
+    minutes !== str(w.minutes) ||
+    watts !== str(w.watts) ||
+    avgHr !== str(w.avg_hr) ||
+    maxHr !== str(w.max_hr) ||
+    kindChanged ||
+    whenChanged
+  const type: Workout['type'] = kind === 'bike' || kind === 'strength' ? kind : 'other'
+  // Sem hora escrita, as 18:00 desse dia (hora suposta).
+  const when = () =>
+    time
+      ? { started_at: instantInNutritionalDay(day, time, profile.nutrition_day_cutoff_hour).toISOString(), started_at_estimated: false }
+      : { started_at: lisbonInstant(day, '18:00').toISOString(), started_at_estimated: true }
   const at = w.started_at ?? w.created_at
   const deviceCalories = w.kcal_device ?? w.raw?.calories ?? null
 
@@ -794,9 +827,11 @@ function WorkoutDetail({ id }: { id: string }) {
               patch(
                 {
                   minutes: toInt(minutes) ?? undefined,
-                  ...(w.type === 'bike' ? { watts: toInt(watts) } : {}),
+                  ...(type === 'bike' && (watts !== str(w.watts) || kindChanged) ? { watts: toInt(watts) } : {}),
                   avg_hr: toInt(avgHr),
                   max_hr: toInt(maxHr),
+                  ...(kindChanged ? { type, sport: type === 'other' ? kind : null } : {}),
+                  ...(whenChanged ? when() : {}),
                 },
                 'Guardado.',
               )
@@ -811,7 +846,8 @@ function WorkoutDetail({ id }: { id: string }) {
       <div className="space-y-5 pb-2">
         <div>
           <p className="text-[15px] text-dim">
-            {fmtDayShort(w.date)} · {timeOf(at)} ·{' '}
+            {fmtDayShort(w.date)}
+            {startGuessed(w) ? '' : ` · ${timeOf(at)}`} ·{' '}
             {w.favorite_id ? 'favorito' : (SOURCE_LABEL[w.source] ?? w.source)}
             {(w.merged_from?.length ?? 0) > 0 ? ' · com print' : ''}
           </p>
@@ -871,10 +907,48 @@ function WorkoutDetail({ id }: { id: string }) {
             <Thumbs paths={thumbs} />
             <div className="grid grid-cols-2 gap-3">
               {numberField('Duração', minutes, setMinutes, 'min')}
-              {w.type === 'bike' && (w.watts != null || deviceCalories == null) && numberField('Potência', watts, setWatts, 'W')}
-              {w.avg_hr != null && numberField('Batimentos médios', avgHr, setAvgHr, 'bpm')}
-              {w.max_hr != null && numberField('Batimentos máximos', maxHr, setMaxHr, 'bpm')}
+              {type === 'bike' && (w.watts != null || deviceCalories == null || kindChanged) && numberField('Potência', watts, setWatts, 'W')}
+              {/* Na bicicleta pedem-se sempre: sem os dois a potência não sobe. */}
+              {(type === 'bike' || w.avg_hr != null) && numberField('Batimentos médios', avgHr, setAvgHr, 'bpm')}
+              {(type === 'bike' || w.max_hr != null) && numberField('Batimentos máximos', maxHr, setMaxHr, 'bpm')}
             </div>
+
+            <details className="text-[15px]">
+              <summary className="cursor-pointer text-dim">Mudar o tipo, o dia ou a hora</summary>
+              <div className="mt-3 space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {KINDS.map(([k, label]) => (
+                    <button key={k} onClick={() => setKind(k)} className={chip(kind === k)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap items-center gap-3 text-dim">
+                  <input
+                    type="date"
+                    value={day}
+                    max={today}
+                    onChange={(e) => e.target.value && setDay(e.target.value)}
+                    className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+                    aria-label="Dia do treino"
+                  />
+                  <label className="flex items-center gap-2">
+                    às
+                    <input
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+                      aria-label="Hora de início"
+                    />
+                  </label>
+                  {!time && <span className="text-[13px]">(sem hora: 18:00)</span>}
+                </div>
+                {w.type === 'strength' && type !== 'strength' && (
+                  <p className="text-[13px] text-attn">As séries registadas ficam, mas deixam de aparecer no ginásio.</p>
+                )}
+              </div>
+            </details>
             {(w.cadence != null || w.distance_km != null || w.aerobic_te != null) && (
               <p className="text-[14px] text-dim tabular-nums">
                 {[

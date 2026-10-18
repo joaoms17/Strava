@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { shiftDate } from '../api/_lib/rules/nutritional-day'
 import {
   cleanPlan,
   cleanPrefs,
   bikeEfficiency,
   fitnessSeries,
   isDeloadWeek,
+  preferIcuForm,
   lastMondays,
   planProgress,
   sessionLoad,
@@ -57,12 +59,45 @@ describe('plano semanal', () => {
   })
 
   it('forma e fadiga: sobem com o treino, a fadiga mais depressa', () => {
-    const series = fitnessSeries([w({ date: '2026-10-01', training_load: 70 })], '2026-10-01', '2026-10-03')
-    expect(series).toHaveLength(3)
-    expect(series[0]!.ctl).toBeCloseTo(1.7, 1)
-    expect(series[0]!.atl).toBe(10)
-    expect(series[0]!.tsb).toBeLessThan(0)
-    expect(series[2]!.atl).toBeLessThan(series[0]!.atl)
+    // Sem treino nas primeiras semanas parte do zero.
+    const workouts = [w({ date: '2026-11-15', training_load: 70 })]
+    const series = fitnessSeries(workouts, '2026-10-01', '2026-11-17')
+    expect(series[0]!.ctl).toBe(0)
+    const day = series.find((p) => p.date === '2026-11-15')!
+    expect(day.ctl).toBeCloseTo(1.7, 1)
+    expect(day.atl).toBe(10)
+    expect(day.tsb).toBeLessThan(0)
+    expect(series[series.length - 1]!.atl).toBeLessThan(day.atl)
+  })
+
+  it('com o mesmo treino todas as semanas a forma não sobe sozinha', () => {
+    // 3 bicicletas por semana de 50 de carga, durante 18 semanas.
+    const workouts: PlanWorkout[] = []
+    for (let d = '2026-06-01'; d <= '2026-10-04'; d = shiftDate(d, 7)) {
+      for (const k of [0, 2, 4]) workouts.push(w({ date: shiftDate(d, k), training_load: 50 }))
+    }
+    const series = fitnessSeries(workouts, '2026-06-01', '2026-10-04')
+    const weekly = series.filter((_, i) => i % 7 === 6).map((p) => p.ctl)
+    // Antes, o primeiro ponto vinha a ~60 % e a linha subia; agora fica à volta da média (≈ 21,4).
+    for (const ctl of weekly) expect(ctl).toBeGreaterThan(18)
+    expect(Math.max(...weekly) - Math.min(...weekly)).toBeLessThan(4)
+  })
+
+  it('forma do intervals.icu quando cobre o período; senão a da app', () => {
+    const local = fitnessSeries([w({ date: '2026-10-01', training_load: 70 })], '2026-10-01', '2026-10-10')
+    const days = local.map((p) => p.date)
+    const full = days.map((date, i) => ({ date, ctl: 40 + i, atl: 50 }))
+    const icu = preferIcuForm(local, full)
+    expect(icu.source).toBe('intervals')
+    expect(icu.points[9]).toEqual({ date: '2026-10-10', ctl: 49, atl: 50, tsb: -1 })
+    // Um dia em falta fica com o valor do dia antes.
+    const gap = preferIcuForm(local, full.filter((r) => r.date !== '2026-10-05'))
+    expect(gap.source).toBe('intervals')
+    expect(gap.points[4]!.ctl).toBe(43)
+    // Só os últimos dias (acabou de chegar) ou campos vazios: a da app, sem misturar.
+    expect(preferIcuForm(local, full.slice(-3)).source).toBe('app')
+    expect(preferIcuForm(local, days.map((date) => ({ date, ctl: null, atl: null }))).points).toEqual(local)
+    expect(preferIcuForm([], full).source).toBe('app')
   })
 
   it('estatísticas por semana', () => {

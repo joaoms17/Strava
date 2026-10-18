@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient } from '../_lib/supabase.js'
 import { tokenUser } from '../_lib/ingest-token.js'
+import { isDeletedWeighing } from '../_lib/rules/weight.js'
 
 const HealthSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -32,7 +33,8 @@ function localCalendarDate(): string {
 
 // Passos, sono e FC em repouso, enviados por um Atalho iOS todas as noites;
 // com `body[]`, também o peso e a % de gordura da balança (só entram em dias
-// sem pesagem do João; a % de gordura completa uma pesagem que não a tem).
+// sem pesagem do João nem pesagem apagada; a % de gordura completa uma
+// pesagem que não a tem).
 // Autenticado por Bearer (o Atalho não tem sessão): HEALTH_INGEST_TOKEN grava
 // na primeira conta (o João, como sempre); o token pessoal de Definições ›
 // Atalho do iPhone grava na conta dessa pessoa (ex.: a Joana).
@@ -68,7 +70,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let weights = 0
+    // Pesagens que a pessoa apagou (ex.: outra pessoa na balança): não voltam.
+    // Uma pesagem diferente nesse dia entra.
+    const dates = (body.data.body ?? []).map((b) => b.date)
+    const { data: deletedRows } = dates.length
+      ? await admin.from('weights_deleted').select('date,kg').eq('user_id', profile.user_id).in('date', dates)
+      : { data: [] }
+    const deleted = new Map((deletedRows ?? []).map((r) => [r.date as string, r as { kg: number | null }]))
     for (const entry of body.data.body ?? []) {
+      if (isDeletedWeighing(Math.round(entry.weight_kg * 10) / 10, deleted.get(entry.date))) continue
       const { data: existing } = await admin
         .from('weights')
         .select('date,body_fat_pct')

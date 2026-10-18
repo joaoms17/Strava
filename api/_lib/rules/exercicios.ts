@@ -174,6 +174,10 @@ const fold = (s: string) =>
     .toLowerCase()
     .trim()
 
+// A chave de um exercício para juntar o histórico (sem acentos nem maiúsculas):
+// «Supino Plano com Barra» e «supino plano com barra» são o mesmo.
+export const exerciseKey = (name: string) => fold(name).replace(/\s+/g, ' ')
+
 // Catálogo completo para escolher: o da app mais os da pessoa (os dela
 // mandam quando o nome coincide).
 export function mergeCatalog(own: { name: string; pattern: string | null }[]): CatalogExerciseDef[] {
@@ -200,6 +204,41 @@ export function searchExercises(catalog: CatalogExerciseDef[], query: string, gr
 
 export function sameExercise(a: string, b: string): boolean {
   return fold(a) === fold(b)
+}
+
+const STOP_WORDS = new Set(['com', 'de', 'da', 'do', 'das', 'dos', 'na', 'no', 'nas', 'nos', 'a', 'o', 'e', 'em', 'ao'])
+const words = (s: string) =>
+  fold(s)
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(' ')
+    .filter((w) => w && !STOP_WORDS.has(w))
+
+// O nome dito («supino com barra», «Remada sentada») para um exercício que já
+// conheces, para o histórico não se partir em dois: primeiro os do teu
+// histórico, depois o catálogo. Igual sem acentos → esse; senão, o único com
+// todas as palavras ditas (ou o único com menos palavras a mais); na dúvida
+// fica o nome dito.
+export function matchExerciseName(name: string, history: string[], catalog: string[]): string {
+  const said = words(name)
+  if (!said.length) return name
+  for (const list of [history, catalog]) {
+    const exact = list.find((k) => sameExercise(k, name))
+    if (exact) return exact
+  }
+  for (const list of [history, catalog]) {
+    const byKey = new Map<string, { name: string; extra: number }>()
+    for (const k of list) {
+      const known = words(k)
+      if (!said.every((w) => known.includes(w)) || byKey.has(exerciseKey(k))) continue
+      byKey.set(exerciseKey(k), { name: k, extra: known.length - said.length })
+    }
+    const found = [...byKey.values()]
+    if (!found.length) continue
+    const fewest = Math.min(...found.map((f) => f.extra))
+    const best = found.filter((f) => f.extra === fewest)
+    return best.length === 1 ? best[0]!.name : name
+  }
+  return name
 }
 
 // Ao criar um exercício com um grupo escolhido, o padrão que o representa.

@@ -79,13 +79,19 @@ export interface FitnessPoint {
   tsb: number // frescura
 }
 
-// Médias exponenciais da carga diária, de `from` a `to` (inclusive).
+// Médias exponenciais da carga diária, de `from` a `to` (inclusive). Não
+// arrancam do zero (com um treino igual todas as semanas a linha subia
+// sozinha): partem da carga média dos primeiros 42 dias, como se antes de
+// `from` se treinasse ao mesmo ritmo.
 export function fitnessSeries(workouts: PlanWorkout[], from: string, to: string): FitnessPoint[] {
   const byDay = new Map<string, number>()
   for (const w of workouts) byDay.set(w.date, (byDay.get(w.date) ?? 0) + sessionLoad(w))
   const out: FitnessPoint[] = []
-  let ctl = 0
-  let atl = 0
+  let first = 0
+  let days = 0
+  for (let d = from; d <= to && days < 42; d = shiftDate(d, 1), days++) first += byDay.get(d) ?? 0
+  let ctl = days ? first / days : 0
+  let atl = ctl
   for (let d = from; d <= to; d = shiftDate(d, 1)) {
     const load = byDay.get(d) ?? 0
     ctl += (load - ctl) / 42
@@ -93,6 +99,36 @@ export function fitnessSeries(workouts: PlanWorkout[], from: string, to: string)
     out.push({ date: d, ctl: Math.round(ctl * 10) / 10, atl: Math.round(atl * 10) / 10, tsb: Math.round((ctl - atl) * 10) / 10 })
   }
   return out
+}
+
+// A forma do intervals.icu (calculada com o histórico todo) quando cobre o
+// período (90 % dos dias; os que faltam ficam com o valor do dia antes);
+// senão a da app. Nunca se misturam as duas na mesma linha. Se o
+// intervals.icu deixar de mandar estes campos, fica a da app.
+export interface IcuForm {
+  date: string
+  ctl: number | null
+  atl: number | null
+}
+export function preferIcuForm(
+  local: FitnessPoint[],
+  icu: IcuForm[],
+): { points: FitnessPoint[]; source: 'intervals' | 'app' } {
+  const byDate = new Map<string, { ctl: number; atl: number }>()
+  for (const r of icu) {
+    const ctl = r.ctl != null ? Number(r.ctl) : NaN
+    const atl = r.atl != null ? Number(r.atl) : NaN
+    if (Number.isFinite(ctl) && Number.isFinite(atl)) byDate.set(r.date, { ctl, atl })
+  }
+  const covered = local.filter((p) => byDate.has(p.date)).length
+  if (!local.length || covered < 0.9 * local.length) return { points: local, source: 'app' }
+  const firstKnown = local.find((p) => byDate.has(p.date))!
+  let last = byDate.get(firstKnown.date)!
+  const points = local.map((p) => {
+    last = byDate.get(p.date) ?? last
+    return { date: p.date, ctl: last.ctl, atl: last.atl, tsb: Math.round((last.ctl - last.atl) * 10) / 10 }
+  })
+  return { points, source: 'intervals' }
 }
 
 export interface WeekStats {

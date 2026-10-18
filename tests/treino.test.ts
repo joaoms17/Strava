@@ -9,6 +9,7 @@ import {
   kcalExplanation,
   mergePatch,
   pickWatts,
+  startGuessed,
   typeOfSport,
 } from '../api/_lib/rules/treino'
 import { bikeSuggestion, nextBikeTarget, type BikeSessionSummary } from '../api/_lib/rules/progressao-bike'
@@ -164,6 +165,27 @@ describe('mergePatch', () => {
     const { patch } = mergePatch({ ...existing, watts_source: 'prefill' }, { watts: 150, watts_source: 'device' })
     expect(patch).toEqual({ watts: 150, watts_source: 'device' })
   })
+
+  it('a bicicleta do relógio sem potência ganha os watts do «Já fiz»; os supostos nunca entram', () => {
+    const watch = { ...existing, watts: null, watts_source: null, favorite_id: null }
+    expect(mergePatch(watch, { watts: 140, watts_source: 'manual' }).patch).toMatchObject({ watts: 140, watts_source: 'manual' })
+    expect(mergePatch(watch, { watts: 140, watts_source: 'prefill' }).patch).toEqual({})
+    // Os watts que lá estão (do relógio ou à mão) ficam.
+    expect(mergePatch({ ...existing, watts_source: 'device' }, { watts: 150, watts_source: 'manual' }).patch).toEqual({})
+  })
+
+  it('o esforço do print preenche o que falta', () => {
+    expect(mergePatch({ ...existing, rpe: null }, { rpe: 7 }).patch).toEqual({ rpe: 7 })
+  })
+})
+
+describe('hora suposta', () => {
+  it('marca em raw.hora_estimada', () => {
+    expect(startGuessed({ raw: { hora_estimada: true, sport: 'caminhada' } })).toBe(true)
+    expect(startGuessed({ raw: { sport: 'caminhada' } })).toBe(false)
+    expect(startGuessed({ raw: null })).toBe(false)
+    expect(startGuessed({})).toBe(false)
+  })
 })
 
 describe('leitura dos prints', () => {
@@ -208,8 +230,24 @@ describe('regra 10 revista', () => {
   it('sem batimentos, a 60 min e tudo verde, pede os batimentos', () => {
     const history = [session({ avg_hr: null, max_hr: null }), session({ avg_hr: null, max_hr: null })]
     const target = nextBikeTarget(history, OPTIONS, CAPS)
-    expect(target).toEqual({ watts: 130, minutes: 60, kind: 'need-hr' })
-    expect(bikeSuggestion(target)).toMatch(/preciso dos batimentos/)
+    expect(target).toEqual({ watts: 130, minutes: 60, kind: 'need-hr', missing: 'both' })
+    expect(bikeSuggestion(target)).toMatch(/preciso dos batimentos médios e máximos/)
+  })
+
+  it('só com os batimentos médios («Já fiz»), diz que faltam os máximos', () => {
+    const history = [session({ max_hr: null }), session({ max_hr: null })]
+    const target = nextBikeTarget(history, OPTIONS, CAPS)
+    expect(target).toMatchObject({ kind: 'need-hr', missing: 'max' })
+    expect(bikeSuggestion(target)).toBe(
+      'Para subir a potência preciso dos batimentos máximos das 2 últimas sessões: junta o print do relógio ou escreve-os no treino.',
+    )
+    expect(nextBikeTarget([session({ avg_hr: null }), session({})], OPTIONS, CAPS)).toMatchObject({ missing: 'avg' })
+  })
+
+  it('esforço 9 ou 10 no relógio: a seguinte é leve e não sobe', () => {
+    expect(nextBikeTarget([session({ rpe: 9 })], OPTIONS, CAPS)).toMatchObject({ kind: 'ease', minutes: 30 })
+    expect(nextBikeTarget([session({ rpe: 9 }), session({ rpe: 7 })], OPTIONS, CAPS).kind).toBe('hold')
+    expect(nextBikeTarget([session({ rpe: 7 }), session({ rpe: 8 })], OPTIONS, CAPS).kind).toBe('validate-next-watts')
   })
 
   it('sem batimentos o tempo continua a subir', () => {

@@ -8,10 +8,13 @@ import { PROMPT_WORKOUT_SAID, readPrompt } from '../_lib/prompts.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { SAID_SPORTS, SAID_TYPES, cleanSaid } from '../_lib/rules/treino-dito.js'
+import { exerciseKey, matchExerciseName, mergeCatalog } from '../_lib/rules/exercicios.js'
 
 // «Dizer o treino» (Treino): a pessoa escreve ou grava o que fez e a IA passa
 // isso para os campos do registo. Não grava nada: a app mostra o que foi
-// percebido e grava com /api/workout/save ou /api/workout/strength.
+// percebido e grava com /api/workout/save ou /api/workout/strength. Os
+// exercícios ficam com os nomes que a pessoa já usa (o histórico de cada um
+// é pelo nome).
 
 // O áudio chega já em WAV (16 kHz, mono), até ~60 s: cabe no limite de 4,5 MB.
 const MAX_AUDIO_B64 = 3_400_000
@@ -59,11 +62,25 @@ export default async function said(req: VercelRequest, res: VercelResponse) {
     if (await aiLimitReached(admin, user.id, false)) {
       throw new HttpError(429, 'Chegaste ao limite mensal da IA (Definições › Avançado).')
     }
-    const { data: profile } = await db.from('profile').select('nutrition_day_cutoff_hour').single()
+    const [{ data: profile }, { data: logged }, { data: own }] = await Promise.all([
+      db.from('profile').select('nutrition_day_cutoff_hour').single(),
+      db.from('exercise_log').select('exercise').order('created_at', { ascending: false }).limit(400),
+      db.from('exercise_catalog').select('name,pattern'),
+    ])
     const today = nutritionalDay(new Date(), Number(profile?.nutrition_day_cutoff_hour ?? 4))
+    // Os que já fizeste (do mais recente, com o nome da última vez) e o catálogo, sem repetidos.
+    const byKey = new Map<string, string>()
+    for (const r of logged ?? []) {
+      const key = exerciseKey(r.exercise as string)
+      if (!byKey.has(key)) byKey.set(key, r.exercise as string)
+    }
+    const history = [...byKey.values()]
+    const catalog = mergeCatalog((own ?? []) as { name: string; pattern: string | null }[]).map((c) => c.name)
+    const historyKeys = new Set(history.map(exerciseKey))
+    const known = [...history, ...catalog.filter((n) => !historyKeys.has(exerciseKey(n)))].slice(0, 250)
 
     const content = [
-      { type: 'text', text: JSON.stringify({ hoje: today, texto: text || null }) },
+      { type: 'text', text: JSON.stringify({ hoje: today, texto: text || null, exercicios_conhecidos: known }) },
       ...(audio ? [{ type: 'audio', source: { type: 'base64', media_type: 'audio/wav', data: audio } }] : []),
     ]
     const { output } = await structuredCall(
@@ -79,7 +96,11 @@ export default async function said(req: VercelRequest, res: VercelResponse) {
       },
       AiSchema,
     )
-    const workout = cleanSaid(output, today)
+    const said = cleanSaid(output, today)
+    const workout = {
+      ...said,
+      exercises: said.exercises.map((e) => ({ ...e, name: matchExerciseName(e.name, history, catalog) })),
+    }
     if (!workout.title && workout.minutes == null && workout.exercises.length === 0) {
       throw new HttpError(422, 'Não percebi o treino. Diz o que fizeste e quanto tempo (ex.: «45 min de bicicleta»).')
     }

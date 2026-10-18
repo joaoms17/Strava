@@ -45,6 +45,16 @@ describe('tipos', () => {
     expect(mapIcuType('Kayaking', false)).toEqual({ type: 'other', sport: 'outro' })
     expect(mapIcuType(null, true).type).toBe('bike')
   })
+
+  it('elíptica, remo, natação e escadas no relógio com «trainer» não são bicicleta', () => {
+    expect(mapIcuType('Elliptical', true)).toEqual({ type: 'other', sport: 'eliptica' })
+    expect(mapIcuType('Rowing', true)).toEqual({ type: 'other', sport: 'remo' })
+    expect(mapIcuType('VirtualRow', true)).toEqual({ type: 'other', sport: 'remo' })
+    expect(mapIcuType('Swim', true)).toEqual({ type: 'other', sport: 'natacao' })
+    expect(mapIcuType('StairStepper', true)).toEqual({ type: 'other', sport: 'outro' })
+    expect(mapIcuType('VirtualRide', true).type).toBe('bike')
+    expect(mapIcuType('Run', true)).toEqual({ type: 'other', sport: 'corrida' })
+  })
 })
 
 describe('atividade', () => {
@@ -80,6 +90,24 @@ describe('atividade', () => {
     expect(odd.watts).toBeNull()
   })
 
+  it('tempo por zona e esforço dado no relógio', () => {
+    const a = mapActivity({ ...garminRide, icu_hr_zone_times: [600, 1500.4, 480, 120, 0, 0, 0], icu_rpe: 6 })
+    expect(a.hr_zones).toEqual([
+      { zone: 1, seconds: 600 },
+      { zone: 2, seconds: 1500 },
+      { zone: 3, seconds: 480 },
+      { zone: 4, seconds: 120 },
+      { zone: 5, seconds: 0 },
+      { zone: 6, seconds: 0 },
+      { zone: 7, seconds: 0 },
+    ])
+    expect(a.rpe).toBe(6)
+    // Sem os campos (ou com lixo), null: nada parte.
+    expect(mapActivity(garminRide)).toMatchObject({ hr_zones: null, rpe: null })
+    expect(mapActivity({ ...garminRide, icu_hr_zone_times: [0, 0], icu_rpe: 14 })).toMatchObject({ hr_zones: null, rpe: null })
+    expect(mapActivity({ ...garminRide, icu_hr_zone_times: 'x' })).toMatchObject({ hr_zones: null })
+  })
+
   it('cópias vazias do Strava ficam de fora', () => {
     expect(isEmptyStravaCopy({ id: 1, source: 'STRAVA' })).toBe(true)
     expect(isEmptyStravaCopy(garminRide)).toBe(false)
@@ -98,6 +126,17 @@ describe('fusão silenciosa', () => {
     expect(syncMatch({ type: 'bike', date: '2026-09-29', minutes: 45, started_at: '2026-09-29T06:40:00Z' }, [habitual])).toBeNull()
     expect(syncMatch({ type: 'bike', date: '2026-09-29', minutes: 55, started_at: '2026-09-29T06:10:00Z' }, [habitual])).toBeNull()
   })
+
+  it('«Já fiz» às 21:00 sem hora (suposta): junta à bicicleta das 07:00 pela duração', () => {
+    const jaFiz = { id: 'manual', type: 'bike' as const, date: '2026-09-29', minutes: 45, started_at: '2026-09-29T19:15:00Z', start_guessed: true }
+    const ride = { type: 'bike' as const, date: '2026-09-29', minutes: 47, started_at: '2026-09-29T06:02:00Z' }
+    expect(syncMatch(ride, [jaFiz])?.id).toBe('manual')
+    // Com a hora escrita, a hora conta.
+    expect(syncMatch(ride, [{ ...jaFiz, start_guessed: false }])).toBeNull()
+    // Duração muito diferente ou outro dia: não.
+    expect(syncMatch({ ...ride, minutes: 60 }, [jaFiz])).toBeNull()
+    expect(syncMatch({ ...ride, date: '2026-09-30' }, [jaFiz])).toBeNull()
+  })
 })
 
 describe('bem-estar', () => {
@@ -113,7 +152,23 @@ describe('bem-estar', () => {
       hrv: null,
       avgSleepHr: null,
       steps: 8421,
+      ctl: null,
+      atl: null,
+      rampRate: null,
+      vo2max: null,
     })
+  })
+
+  it('forma e fadiga do intervals.icu e VO2máx; sem um dos dois, nenhum', () => {
+    expect(mapWellness({ id: '2026-10-17', ctl: 41.26, atl: 55.04, rampRate: 3.17, vo2max: 46 })).toMatchObject({
+      ctl: 41.3,
+      atl: 55,
+      rampRate: 3.2,
+      vo2max: 46,
+    })
+    // Bloqueado (campos ausentes) ou só metade: fica a forma da app.
+    expect(mapWellness({ id: '2026-10-17' })).toMatchObject({ ctl: null, atl: null, rampRate: null, vo2max: null })
+    expect(mapWellness({ id: '2026-10-17', ctl: 40, atl: null, vo2max: 3 })).toMatchObject({ ctl: null, atl: null, vo2max: null })
   })
 
   it('sono do Garmin: pontuação, qualidade, HRV e FC durante o sono', () => {

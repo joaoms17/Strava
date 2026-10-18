@@ -6,11 +6,12 @@ import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, fmtKcal } from '../../lib/format'
-import { SPORT_LABEL, saveWorkout } from '../../lib/workout-actions'
+import { SPORT_LABEL, sameDaySession, saveWorkout } from '../../lib/workout-actions'
 import { lisbonInstant } from '../../../api/_lib/rules/momentos'
 import { workoutKcal } from '../../../api/_lib/rules/targets'
-import type { Favorite } from '../../lib/types'
+import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
+import SameSession from '../SameSession'
 
 // Registar um dos teus treinos (bicicleta, corrida, padel…): o que costuma
 // ser, com «Foi diferente?» para mudar o tempo ou a potência. Dois toques.
@@ -21,6 +22,8 @@ export default function LogWorkoutSheet() {
   const favId = sheet.params.get('fav')
   const date = sheet.params.get('data')
   const [favorite, setFavorite] = useState<Favorite | null | undefined>(undefined)
+  // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
+  const [match, setMatch] = useState<Workout | null>(null)
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
 
   useEffect(() => {
@@ -52,7 +55,18 @@ export default function LogWorkoutSheet() {
   const kcal = workoutKcal({ type: w.type, minutes: w.minutes, watts: w.watts ?? null, deviceCalories: null })
   const kind = w.type === 'bike' ? 'Bicicleta' : w.type === 'strength' ? 'Ginásio' : (SPORT_LABEL[w.sport ?? 'outro'] ?? 'Treino')
 
-  async function save() {
+  // Sem decisão, vê primeiro se já há um treino parecido nesse dia.
+  async function save(decision?: 'merge' | 'new') {
+    const day = date ?? today
+    if (!decision) {
+      const found = await sameDaySession({ type: w.type, sport: w.sport ?? null, date: day, minutes: w.minutes, started_at: null })
+      if (found) {
+        setMatch(found)
+        return
+      }
+    }
+    // Num dia passado, a hora habitual do fim da tarde (suposta).
+    const startedAt = day !== today ? lisbonInstant(day, '18:00').toISOString() : null
     const saved = await saveWorkout(
       {
         type: w.type,
@@ -61,8 +75,10 @@ export default function LogWorkoutSheet() {
         watts: w.watts ?? null,
         watts_source: w.watts ? 'favorite' : null,
         favorite_id: favorite!.id,
-        // Num dia passado, a hora habitual do fim da tarde.
-        started_at: date && date !== today ? lisbonInstant(date, '18:00').toISOString() : null,
+        started_at: startedAt,
+        started_at_estimated: startedAt != null,
+        merge_into: decision === 'merge' ? match?.id : null,
+        not_duplicate: decision === 'new',
       },
       toast,
     )
@@ -74,13 +90,17 @@ export default function LogWorkoutSheet() {
       title={favorite.name}
       onClose={sheet.close}
       footer={
-        <BusyButton
-          busy="A guardar…"
-          onClick={save}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
-        >
-          Registar
-        </BusyButton>
+        match ? (
+          <SameSession workout={match} onMerge={() => save('merge')} onNew={() => save('new')} />
+        ) : (
+          <BusyButton
+            busy="A guardar…"
+            onClick={() => save()}
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+          >
+            Registar
+          </BusyButton>
+        )
       }
     >
       <div className="space-y-3 pb-2">

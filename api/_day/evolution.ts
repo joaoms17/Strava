@@ -24,7 +24,9 @@ import {
   bikeEfficiency,
   fitnessSeries,
   lastMondays,
+  preferIcuForm,
   weeklyStats,
+  type IcuForm,
   type PlanWorkout,
   type WellnessRow,
 } from '../_lib/rules/plano.js'
@@ -72,7 +74,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
     }
 
     const since = shiftDate(today, -WEIGHT_HISTORY_DAYS)
-    const [weights, measurements, days, workouts, health, meals, scale] = await Promise.all([
+    const [weights, measurements, days, workouts, health, meals, icu, scale] = await Promise.all([
       db.from('weights').select('date,kg').gte('date', since).order('date'),
       // Todas: o «desde» compara com a primeira, como no Corpo.
       db
@@ -96,6 +98,8 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .gte('date', shiftDate(today, -61))
         .lte('date', today),
       db.from('meals_counted').select('date,kcal').gte('date', shiftDate(today, -28)).lt('date', today),
+      // A forma do intervals.icu (sem a migração ou sem dados, fica a da app).
+      db.from('health_daily').select('date,ctl,atl').gte('date', shiftDate(today, -28)).lte('date', today),
       // A % de gordura da balança: as 60 leituras mais recentes.
       profile.scale_has_bodyfat
         ? db
@@ -116,7 +120,8 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
       day.kcal += Number(m.kcal ?? 0)
     }
     const toConfirm = daysToConfirm((days.data ?? []) as { date: string; flags: string[] | null }[], mealsByDate, today)
-    const form = fitnessSeries(allWorkouts, shiftDate(today, -125), today)
+    // A forma de hoje e de há 4 semanas: a do intervals.icu se cobre o período.
+    const form = preferIcuForm(fitnessSeries(allWorkouts, shiftDate(today, -125), today).slice(-29), (icu.data ?? []) as IcuForm[]).points
     const payload = {
       pessoa: {
         sexo: profile.sex === 'f' ? 'mulher' : 'homem',

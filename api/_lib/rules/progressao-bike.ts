@@ -7,7 +7,8 @@
 // trava o tempo, mas pede os batimentos antes de subir a potência.
 // Revista com duas pessoas: já não se pergunta pelo joelho. Uma sessão sem
 // resposta conta como normal; as antigas marcadas com incómodo (amarelo ou
-// vermelho) continuam a pedir uma sessão leve a seguir.
+// vermelho) continuam a pedir uma sessão leve a seguir, tal como uma em que
+// o esforço dado no relógio foi 9 ou 10 (muito duro).
 import type { Semaforo } from './semaforo.js'
 
 export interface BikeSessionSummary {
@@ -17,6 +18,7 @@ export interface BikeSessionSummary {
   max_hr: number | null
   status: Semaforo | null
   watts_source?: string | null
+  rpe?: number | null // esforço dado no relógio (1–10)
 }
 
 export interface BikeCaps {
@@ -28,7 +30,11 @@ export interface BikeTarget {
   watts: number
   minutes: number
   kind: 'start' | 'progress-time' | 'validate-next-watts' | 'hold' | 'ease' | 'need-hr'
+  // Em 'need-hr': o que falta nas últimas 2 sessões.
+  missing?: 'avg' | 'max' | 'both'
 }
+
+export const HARD_RPE = 9
 
 const MINUTES_LADDER = [30, 45, 60]
 
@@ -49,8 +55,8 @@ export function nextBikeTarget(
   const last = sessions[sessions.length - 1]
   if (!last) return { watts: lowest, minutes: 30, kind: 'start' }
 
-  // Sessão antiga com incómodo: a seguinte é leve.
-  const rough = (s: BikeSessionSummary) => s.status === 'yellow' || s.status === 'red'
+  // Sessão com incómodo ou muito dura: a seguinte é leve.
+  const rough = (s: BikeSessionSummary) => s.status === 'yellow' || s.status === 'red' || (s.rpe ?? 0) >= HARD_RPE
   if (rough(last)) return { watts: lowest, minutes: 30, kind: 'ease' }
 
   const currentW = nearestOption(last.watts!, options)
@@ -78,7 +84,9 @@ export function nextBikeTarget(
     lastTwo.every((s) => !rough(s)) &&
     lastTwo.some((s) => s.avg_hr == null || s.max_hr == null)
   ) {
-    return { watts: currentW, minutes: 60, kind: 'need-hr' }
+    const noAvg = lastTwo.some((s) => s.avg_hr == null)
+    const noMax = lastTwo.some((s) => s.max_hr == null)
+    return { watts: currentW, minutes: 60, kind: 'need-hr', missing: noAvg && noMax ? 'both' : noAvg ? 'avg' : 'max' }
   }
 
   const next = MINUTES_LADDER.find((m) => m > last.minutes!)
@@ -94,8 +102,11 @@ export function bikeSuggestion(target: BikeTarget): string {
       return `Próxima vez: ${target.watts} W durante ${target.minutes} min, para testar.`
     case 'ease':
       return `Bicicleta leve: ${target.minutes} min a ${target.watts} W, para recuperar.`
-    case 'need-hr':
-      return 'Para subir a potência preciso dos batimentos: junta o print do relógio ou escreve os batimentos médios.'
+    case 'need-hr': {
+      const what =
+        target.missing === 'avg' ? 'médios' : target.missing === 'max' ? 'máximos' : 'médios e máximos'
+      return `Para subir a potência preciso dos batimentos ${what} das 2 últimas sessões: junta o print do relógio ou escreve-os no treino.`
+    }
     default:
       return `Próxima bicicleta: ${target.minutes} min a ${target.watts} W.`
   }

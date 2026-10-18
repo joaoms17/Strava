@@ -12,7 +12,7 @@ export const PROMPT_MEAL_CORRECT = 'meal-correct.v1.md'
 export const PROMPT_WORKOUT_SHOT = 'workout-shot.v1.md'
 export const PROMPT_TRAINING_WEEK = 'training-week.v1.md'
 export const PROMPT_EVOLUTION = 'evolution.v3.md'
-export const PROMPT_WORKOUT_SAID = 'workout-said.v1.md'
+export const PROMPT_WORKOUT_SAID = 'workout-said.v2.md'
 export const PROMPT_MENU_PICK = 'menu-pick.v1.md'
 
 export function readPrompt(filename: string): string {

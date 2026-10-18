@@ -26,6 +26,8 @@ export interface IcuActivity {
   max_cadence?: number | null
   calories?: number | null
   icu_training_load?: number | null
+  icu_hr_zone_times?: unknown // segundos em cada zona de FC (Z1, Z2, …)
+  icu_rpe?: number | null // esforço que a pessoa deu no relógio (1–10)
   trainer?: boolean | null
   source?: string | null
 }
@@ -41,24 +43,31 @@ export interface IcuWellness {
   hrv?: number | null // rMSSD da noite, ms
   avgSleepingHR?: number | null
   steps?: number | null
+  // Forma e fadiga como o intervals.icu as calcula (com o histórico todo).
+  ctl?: number | null
+  atl?: number | null
+  rampRate?: number | null
+  vo2max?: number | null
 }
 
 // Ride, VirtualRide ou trainer=true → bicicleta; WeightTraining → ginásio;
-// o resto → outro.
+// o resto → outro. Elíptica, remo, natação e escadas vêm antes do «trainer»
+// (no rolo, na máquina de remo ou na elíptica o relógio também o marca).
 export function mapIcuType(type: string | null | undefined, trainer: boolean | null | undefined): {
   type: WorkoutType
   sport: OtherSport | null
 } {
   const t = (type ?? '').toLowerCase()
   if (t === 'weighttraining' || t === 'workout' || t.includes('strength')) return { type: 'strength', sport: null }
+  if (t.includes('elliptical')) return { type: 'other', sport: 'eliptica' }
+  if (t.includes('swim')) return { type: 'other', sport: 'natacao' }
+  if (t.includes('row')) return { type: 'other', sport: 'remo' }
+  if (t.includes('stair')) return { type: 'other', sport: 'outro' }
   if (t.includes('ride') || t === 'cycling' || (trainer && !t.includes('run') && !t.includes('walk'))) {
     return { type: 'bike', sport: null }
   }
   if (t.includes('walk') || t.includes('hike')) return { type: 'other', sport: 'caminhada' }
   if (t.includes('run')) return { type: 'other', sport: 'corrida' }
-  if (t.includes('elliptical')) return { type: 'other', sport: 'eliptica' }
-  if (t.includes('swim')) return { type: 'other', sport: 'natacao' }
-  if (t.includes('row')) return { type: 'other', sport: 'remo' }
   if (t.includes('soccer') || t.includes('football')) return { type: 'other', sport: 'futebol' }
   if (t.includes('padel')) return { type: 'other', sport: 'padel' }
   if (t.includes('tennis') || t.includes('squash') || t.includes('badminton')) return { type: 'other', sport: 'tenis' }
@@ -101,6 +110,17 @@ export interface MappedActivity {
   max_cadence: number | null
   kcal_device: number | null
   training_load: number | null
+  hr_zones: { zone: number; seconds: number }[] | null
+  rpe: number | null
+}
+
+// Tempo em cada zona de FC: [s na Z1, s na Z2, …] → [{ zone: 1, seconds }, …],
+// o formato dos prints. Sem nada (ou com a leitura do Garmin bloqueada), null.
+function hrZones(v: unknown): { zone: number; seconds: number }[] | null {
+  if (!Array.isArray(v) || v.length === 0 || v.length > 10) return null
+  if (!v.every((s) => typeof s === 'number' && Number.isFinite(s) && s >= 0)) return null
+  if (!v.some((s) => s > 0)) return null
+  return v.map((s, i) => ({ zone: i + 1, seconds: Math.round(s as number) }))
 }
 
 export function mapActivity(a: IcuActivity): MappedActivity {
@@ -110,6 +130,7 @@ export function mapActivity(a: IcuActivity): MappedActivity {
   const watts = int(a.icu_average_watts ?? a.average_watts)
   const hr = int(a.average_heartrate)
   const maxHr = int(a.max_heartrate)
+  const rpe = int(a.icu_rpe)
   // Sem distância (rolo), pela velocidade média × tempo em movimento.
   const speed = num(a.average_speed)
   const distance =
@@ -136,20 +157,27 @@ export function mapActivity(a: IcuActivity): MappedActivity {
     max_cadence: int(a.max_cadence),
     kcal_device: int(a.calories),
     training_load: num(a.icu_training_load),
+    hr_zones: hrZones(a.icu_hr_zone_times),
+    rpe: rpe != null && rpe >= 1 && rpe <= 10 ? rpe : null,
   }
 }
 
 // Fusão silenciosa com uma sessão já registada (Bicicleta habitual, foto da
 // consola, «Já fiz»): mesmo tipo e dia, início a ±15 min quando os dois têm
-// hora e duração a ±5 % (no mínimo ±2 min).
+// hora e duração a ±5 % (no mínimo ±2 min). Quando a hora da sessão foi
+// suposta (registada sem hora, horas depois ou num dia passado), a hora não
+// conta e a duração vai a ±10 % (no mínimo ±3 min), como nos prints.
 export const SYNC_START_WINDOW_MIN = 15
 
-export function syncMatch<T extends { type: WorkoutType; date: string; minutes: number | null; started_at: string | null }>(
-  activity: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null },
-  sessions: T[],
-): T | null {
+export function syncMatch<
+  T extends { type: WorkoutType; date: string; minutes: number | null; started_at: string | null; start_guessed?: boolean },
+>(activity: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null }, sessions: T[]): T | null {
   for (const s of sessions) {
     if (s.type !== activity.type || s.date !== activity.date) continue
+    if (s.start_guessed) {
+      if (durationsMatch(s.minutes, activity.minutes)) return s
+      continue
+    }
     if (s.minutes != null && activity.minutes != null) {
       const tolerance = Math.max(2, 0.05 * Math.max(s.minutes, activity.minutes))
       if (Math.abs(s.minutes - activity.minutes) > tolerance) continue
@@ -181,7 +209,8 @@ export function isSameActivity(
 }
 
 // Bem-estar: peso (só em dias sem pesagem do João), sono (horas, pontuação,
-// qualidade, HRV e FC durante o sono), FC em repouso e passos.
+// qualidade, HRV e FC durante o sono), FC em repouso, passos, a forma e a
+// fadiga do intervals.icu e o VO2máx.
 export function mapWellness(w: IcuWellness): {
   date: string
   weightKg: number | null
@@ -193,6 +222,10 @@ export function mapWellness(w: IcuWellness): {
   hrv: number | null
   avgSleepHr: number | null
   steps: number | null
+  ctl: number | null
+  atl: number | null
+  rampRate: number | null
+  vo2max: number | null
 } {
   const weight = num(w.weight)
   const fat = num(w.bodyFat)
@@ -203,6 +236,13 @@ export function mapWellness(w: IcuWellness): {
   const hrv = num(w.hrv)
   const sleepHr = int(w.avgSleepingHR)
   const steps = int(w.steps)
+  const ctl = num(w.ctl)
+  const atl = num(w.atl)
+  const ramp = num(w.rampRate)
+  const vo2 = num(w.vo2max)
+  const one = (v: number) => Math.round(v * 10) / 10
+  // Os dois ou nenhum (sem as atividades do Garmin podem deixar de vir).
+  const form = ctl != null && atl != null && ctl >= 0 && ctl <= 300 && atl >= 0 && atl <= 500
   return {
     date: w.id,
     weightKg: weight != null && weight >= 30 && weight <= 300 ? Math.round(weight * 10) / 10 : null,
@@ -214,6 +254,10 @@ export function mapWellness(w: IcuWellness): {
     hrv: hrv != null && hrv >= 5 && hrv <= 300 ? Math.round(hrv * 10) / 10 : null,
     avgSleepHr: sleepHr != null && sleepHr >= 25 && sleepHr <= 150 ? sleepHr : null,
     steps: steps != null && steps >= 0 && steps <= 200_000 ? steps : null,
+    ctl: form ? one(ctl) : null,
+    atl: form ? one(atl) : null,
+    rampRate: ramp != null && Math.abs(ramp) <= 100 ? one(ramp) : null,
+    vo2max: vo2 != null && vo2 >= 15 && vo2 <= 95 ? one(vo2) : null,
   }
 }
 

@@ -11,7 +11,9 @@ import {
   cleanWellness,
   fitnessSeries,
   lastMondays,
+  preferIcuForm,
   weeklyStats,
+  type IcuForm,
   type PlanWorkout,
   type WellnessRow,
 } from '../../api/_lib/rules/plano'
@@ -30,6 +32,8 @@ export default function Evolucao() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [health, setHealth] = useState<WellnessRow[]>([])
   const [workouts, setWorkouts] = useState<PlanWorkout[]>([])
+  // A forma e o VO2máx do intervals.icu (sem eles, a forma calculada aqui).
+  const [icu, setIcu] = useState<(IcuForm & { vo2max: number | null })[]>([])
 
   useEffect(() => {
     let alive = true
@@ -45,10 +49,16 @@ export default function Evolucao() {
         .gte('date', shiftDate(today, -7 * WEEKS - 42))
         .lte('date', today)
         .order('date'),
-    ]).then(([{ data: h }, { data: w }]) => {
+      supabase
+        .from('health_daily')
+        .select('date,ctl,atl,vo2max')
+        .gte('date', shiftDate(today, -7 * WEEKS))
+        .lte('date', today),
+    ]).then(([{ data: h }, { data: w }, { data: f }]) => {
       if (!alive) return
       setHealth(cleanWellness((h ?? []) as WellnessRow[]))
       setWorkouts((w ?? []) as PlanWorkout[])
+      setIcu((f ?? []) as (IcuForm & { vo2max: number | null })[])
     })
     return () => {
       alive = false
@@ -59,11 +69,13 @@ export default function Evolucao() {
     const stats = weeklyStats(workouts, lastMondays(today, WEEKS))
     return stats.map((w) => ({ label: dm(w.start), bike: w.bike.minutes, gym: w.gym.minutes, sessions: w.bike.sessions + w.gym.sessions }))
   }, [workouts, today])
-  // A forma começa 6 semanas antes, para não arrancar do zero no gráfico.
-  const form = useMemo(
-    () => fitnessSeries(workouts, shiftDate(today, -7 * WEEKS - 41), today).slice(-7 * WEEKS),
-    [workouts, today],
+  // A forma começa 6 semanas antes, para não arrancar do zero no gráfico; a do
+  // intervals.icu (com o histórico todo) quando cobre as 12 semanas.
+  const { points: form, source: formSource } = useMemo(
+    () => preferIcuForm(fitnessSeries(workouts, shiftDate(today, -7 * WEEKS - 41), today).slice(-7 * WEEKS), icu),
+    [workouts, today, icu],
   )
+  const vo2max = icu.filter((r) => r.vo2max != null).sort((a, b) => b.date.localeCompare(a.date))[0]?.vo2max ?? null
   const hasWeeks = weeks.some((w) => w.bike + w.gym > 0)
   const hasForm = form.some((p) => p.ctl > 0)
 
@@ -161,7 +173,9 @@ export default function Evolucao() {
           <p className="text-[15px] font-semibold">Forma (carga dos últimos 42 dias)</p>
           <p className="text-[13px] text-dim">
             Sobe com o treino feito com regularidade; hoje {form[form.length - 1]!.ctl.toFixed(0)}, há 4 semanas{' '}
-            {(form[form.length - 29] ?? form[0]!).ctl.toFixed(0)}.
+            {(form[form.length - 29] ?? form[0]!).ctl.toFixed(0)}
+            {formSource === 'intervals' ? ' (do intervals.icu)' : ''}.
+            {vo2max != null && ` VO2máx do relógio: ${Math.round(Number(vo2max))}.`}
           </p>
           <div className="mt-2 h-36">
             <ResponsiveContainer width="100%" height="100%">

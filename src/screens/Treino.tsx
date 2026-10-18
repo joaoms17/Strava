@@ -17,7 +17,7 @@ import { useAutoSync } from '../lib/intervals'
 import { useLocation } from 'wouter'
 import WorkoutLogOptions from '../components/WorkoutLogOptions'
 import PendingInfo from '../components/PendingInfo'
-import { mergeSessions } from '../../api/_lib/rules/sessoes'
+import { mergeSessions, possibleDuplicates, zoneMinutes } from '../../api/_lib/rules/sessoes'
 
 function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
@@ -67,20 +67,25 @@ export default function Treino() {
         .from('workout_imports')
         .select('*')
         .in('status', ['a_ler', 'por_confirmar', 'erro'])
-        .gte('created_at', new Date(Date.now() - 7 * 86_400_000).toISOString())
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(30),
+      // As séries mais recentes (as mais antigas ficavam e as de agora saíam do gráfico).
       supabase
         .from('exercise_log')
         .select('workout_id,exercise,set_index,reps,load_kg,rpe,created_at')
-        .order('created_at')
+        .order('created_at', { ascending: false })
         .limit(600),
       supabase.from('health_daily').select('*').eq('date', today).maybeSingle(),
     ])
     setData({
       workouts: (workouts ?? []) as Workout[],
       favorites: (favorites ?? []) as Favorite[],
-      pending: (pending ?? []) as WorkoutImport[],
-      logs: (logs ?? []) as ExerciseLogRow[],
+      // Os prints lidos ficam até serem guardados ou descartados (nunca contam
+      // sozinhos); os que estão a ler ou deram erro, só os da última semana.
+      pending: ((pending ?? []) as WorkoutImport[]).filter(
+        (row) => row.status === 'por_confirmar' || Date.now() - Date.parse(row.created_at) < 7 * 86_400_000,
+      ),
+      logs: ((logs ?? []) as ExerciseLogRow[]).reverse(),
       sleep: hasSleep(health as Partial<NightSleep> | null) ? (health as NightSleep) : null,
     })
   }, [today])
@@ -98,6 +103,10 @@ export default function Treino() {
   const week = sessions.filter((w) => w.date >= monday && w.date <= today)
   const weekMinutes = week.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const weekKcal = week.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
+  // Minutos em zona 2 (ritmo leve) esta semana, quando o relógio manda o tempo por zona.
+  const weekZone2 = zoneMinutes(week.flatMap((w) => w.parts), 2)
+  // O mesmo treino registado duas vezes (ex.: «Já fiz» e o do relógio).
+  const duplicates = possibleDuplicates(sessions)
 
   const openWorkout = (w: Workout & { parts?: Workout[] }) =>
     w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
@@ -117,6 +126,7 @@ export default function Treino() {
       max_hr: w.max_hr,
       status: w.status,
       watts_source: w.watts_source ?? null,
+      rpe: w.rpe ?? null,
     })),
     profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150],
     { avgHr: profile.bike_hr_avg_cap, maxHr: profile.bike_hr_max_cap },
@@ -173,6 +183,9 @@ export default function Treino() {
           ))}
         </div>
       )}
+      {weekZone2 != null && weekZone2 > 0 && (
+        <p className="-mt-2 text-[14px] text-dim">{weekZone2} min em zona 2 (ritmo leve, aeróbio) esta semana.</p>
+      )}
 
       <WorkoutLogOptions />
 
@@ -214,7 +227,12 @@ export default function Treino() {
                   <span className="num text-[24px] leading-none font-extrabold">{Number(w.date.slice(8))}</span>
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-[16px] font-semibold">{workoutTitle(w)}</span>
+                  <span className="flex items-center gap-2 text-[16px] font-semibold">
+                    {workoutTitle(w)}
+                    {duplicates.has(w.id) && (
+                      <span className="rounded bg-attn/20 px-1.5 text-[11px] font-normal text-attn">possível duplicado</span>
+                    )}
+                  </span>
                   <span className="block truncate text-[14px] text-dim">
                     {[
                       w.minutes != null ? `${w.minutes} min` : null,

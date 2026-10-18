@@ -6,8 +6,8 @@ import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { painStatus } from '../_lib/rules/semaforo.js'
-import { estimatedStart, exerciseKcal, mergePatch, type WattsSource } from '../_lib/rules/treino.js'
-import { OTHER_SPORTS, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
+import { estimatedStart, exerciseKcal, mergePatch, startGuessed, type WattsSource } from '../_lib/rules/treino.js'
+import { OTHER_SPORTS, isOtherSport, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { claimAndParse, type ImportRow } from '../_lib/workout-shot.js'
 
@@ -26,6 +26,10 @@ const SaveSchema = z.object({
   sport: SPORT.nullable().optional(),
   minutes: int(1, 600),
   started_at: z.string().nullable().optional(),
+  // A hora foi suposta pelo telemóvel (as 18:00 de um dia passado).
+  started_at_estimated: z.boolean().optional(),
+  // «Não, é outro»: havia um parecido nesse dia e a pessoa disse que não é o mesmo.
+  not_duplicate: z.boolean().optional(),
   watts: int(20, 700).nullable().optional(),
   watts_source: WATTS_SOURCE.nullable().optional(),
   avg_hr: int(35, 220).nullable().optional(),
@@ -47,6 +51,7 @@ const UpdateSchema = z.object({
   sport: SPORT.nullable().optional(),
   minutes: int(1, 600).optional(),
   started_at: z.string().optional(),
+  started_at_estimated: z.boolean().optional(),
   watts: int(20, 700).nullable().optional(),
   avg_hr: int(35, 220).nullable().optional(),
   max_hr: int(35, 230).nullable().optional(),
@@ -71,13 +76,15 @@ const StrengthSchema = z.object({
   client_id: z.string().uuid(),
   workout_id: z.string().uuid().nullable().optional(), // editar uma sessão antiga
   started_at: z.string().nullable().optional(),
-  minutes: int(1, 300),
+  started_at_estimated: z.boolean().optional(),
+  minutes: int(1, 600),
   sets: z
     .array(
       z.object({
         exercise: z.string().trim().min(1).max(80),
         set_index: int(1, 20),
-        reps: int(0, 60).nullable(),
+        // Nos exercícios de tempo («Prancha (segundos)») são os segundos.
+        reps: int(0, 600).nullable(),
         load_kg: z.number().min(0).max(300).nullable(),
         rpe: z.number().min(1).max(10).nullable(),
       }),
@@ -118,10 +125,35 @@ function post(
   }
 }
 
+// O primeiro campo que falhou, numa frase que se perceba (antes era sempre
+// «Pedido inválido.» e uma sessão de ginásio inteira não gravava sem se saber
+// porquê).
+const FIELD_ERROR: Record<string, string> = {
+  minutes: 'A duração tem de ser entre 1 e 600 min.',
+  reps: 'As repetições (ou os segundos) têm de ser até 600 por série.',
+  load_kg: 'A carga tem de ser até 300 kg.',
+  set_index: 'São no máximo 20 séries por exercício.',
+  sets: 'São no máximo 120 séries por sessão.',
+  watts: 'A potência tem de ser entre 20 e 700 W.',
+  avg_hr: 'Os batimentos médios têm de ser entre 35 e 220.',
+  max_hr: 'Os batimentos máximos têm de ser entre 35 e 230.',
+}
+
 function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body)
-  if (!result.success) throw new HttpError(400, 'Pedido inválido.')
+  if (!result.success) {
+    const path = result.error.issues[0]?.path ?? []
+    const field = [...path].reverse().find((p): p is string => typeof p === 'string' && p in FIELD_ERROR)
+    throw new HttpError(400, field ? FIELD_ERROR[field]! : 'Pedido inválido.')
+  }
   return result.data
+}
+
+// raw do treino com ou sem a marca «hora suposta».
+function withGuess(raw: unknown, guessed: boolean): Record<string, unknown> | null {
+  const { hora_estimada: _, ...rest } = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const next = guessed ? { ...rest, hora_estimada: true } : rest
+  return Object.keys(next).length ? next : null
 }
 
 async function cutoffHour(db: SupabaseClient): Promise<number> {
@@ -221,6 +253,9 @@ export const save = post(async ({ db, userId, body, res }) => {
   const now = new Date()
   const cutoff = await cutoffHour(db)
   const startedAt = instantOrNow(input.started_at, new Date(estimatedStart(now, input.minutes)))
+  // Sem hora (ou com a das 18:00 de um dia passado), a hora é suposta: a
+  // sincronização compara-a só pelo dia e pela duração.
+  const guessed = !input.started_at || input.started_at_estimated === true
   const date = nutritionalDay(startedAt, cutoff)
   const type = input.type as WorkoutType
 
@@ -290,20 +325,34 @@ export const save = post(async ({ db, userId, body, res }) => {
       watts: type === 'bike' ? watts : null,
       watts_source: wattsSource,
     })
+    // O teu treino («Pernas A») e a nota, se o que lá está não os tem.
+    if (input.favorite_id && favoriteName && !target.favorite_id) {
+      Object.assign(patch, { favorite_id: input.favorite_id, name: favoriteName })
+    }
+    if (input.note?.trim() && !target.note) patch.note = input.note.trim()
+    // Uma hora a sério (print) substitui uma suposta.
+    if (startGuessed(target) && !guessed) {
+      Object.assign(patch, { started_at: startedAt.toISOString(), raw: withGuess(target.raw, false) })
+    }
     // As calorias do print (o que o Garmin mostra) mandam sobre as que o
     // intervals.icu calculou.
     if (target.source === 'intervals' && input.kcal_device != null && input.kcal_device !== target.kcal_device) {
       patch.kcal_device = input.kcal_device
     }
-    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts.
+    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts
+    // ou noutro desporto (as do «Já fiz» numa caminhada do relógio).
     const wattsNow = (patch.watts ?? target.watts) as number | null
-    if (patch.watts != null || (target.type === 'bike' && wattsNow == null && patch.kcal_device != null)) {
+    const newDeviceKcal = patch.kcal_device != null && ((target.type === 'bike' && wattsNow == null) || target.type === 'other')
+    if (patch.watts != null || newDeviceKcal) {
+      const targetSport = (target.sport ?? (target.raw as { sport?: unknown } | null)?.sport) as string | null | undefined
       const again = exerciseKcal({
         type: target.type as WorkoutType,
         minutes: (target.minutes as number | null) ?? input.minutes,
-        watts: wattsNow,
+        watts: target.type === 'bike' ? wattsNow : null,
         wattsSource: (patch.watts_source ?? target.watts_source) as WattsSource,
-        deviceCalories: target.type === 'bike' ? ((patch.kcal_device ?? target.kcal_device) as number | null) : null,
+        deviceCalories:
+          target.type === 'bike' || target.type === 'other' ? ((patch.kcal_device ?? target.kcal_device) as number | null) : null,
+        sport: target.type === 'other' && isOtherSport(targetSport) ? targetSport : null,
       })
       Object.assign(patch, { kcal_est: again.kcal, kcal_rule: again.rule, kcal_estimated: again.estimated })
     }
@@ -352,7 +401,7 @@ export const save = post(async ({ db, userId, body, res }) => {
       source_paths: importRow?.source_paths ?? [],
       image_hashes: importRow?.image_hashes ?? [],
       note: input.note?.trim() || null,
-      raw: sport ? { sport } : null,
+      raw: withGuess({ ...(sport ? { sport } : {}), ...(input.not_duplicate ? { outro_treino: true } : {}) }, guessed),
     })
     .select()
     .single()
@@ -429,6 +478,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
   }
   const now = new Date()
   const startedAt = instantOrNow(input.started_at, new Date(estimatedStart(now, input.minutes)))
+  const guessed = !input.started_at || input.started_at_estimated === true
   const date = nutritionalDay(startedAt, await cutoffHour(db))
   if (favorite) {
     await db
@@ -454,6 +504,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
       favorite_id: favorite?.id ?? null,
       ...(favorite ? { name: favorite.name } : input.name ? { name: input.name } : {}),
       note: input.note?.trim() || null,
+      raw: withGuess(null, guessed),
     })
     .select()
     .single()
@@ -510,16 +561,23 @@ export const update = post(async ({ db, body, res }) => {
     patch.watts = input.watts
     patch.watts_source = input.watts == null ? null : 'manual'
   }
+  let raw = (workout.raw ?? null) as Record<string, unknown> | null
   if (input.started_at) {
     const startedAt = instantOrNow(input.started_at, new Date())
     patch.started_at = startedAt.toISOString()
     patch.date = nutritionalDay(startedAt, await cutoffHour(db))
+    raw = withGuess(raw, input.started_at_estimated === true)
   }
   const type = (patch.type ?? workout.type) as WorkoutType
   const sport = (type === 'other' ? (input.sport ?? (workout.raw as { sport?: OtherSport } | null)?.sport ?? 'outro') : null) as
     | OtherSport
     | null
-  if (input.sport !== undefined && type === 'other') patch.raw = { ...((workout.raw as object) ?? {}), sport }
+  if (type === 'other' && (input.sport !== undefined || patch.type !== undefined)) raw = { ...(raw ?? {}), sport }
+  if (raw !== workout.raw) patch.raw = raw
+  // Mudar o tipo (ex.: a elíptica que entrou como bicicleta): o desporto
+  // mostrado acompanha.
+  if (type === 'other' && (input.sport !== undefined || patch.type !== undefined)) patch.sport = sport
+  else if (patch.type !== undefined && patch.type !== workout.type && workout.type === 'other') patch.sport = null
 
   // Editar o que entra nas contas recalcula as kcal deste treino.
   if (['type', 'minutes', 'watts', 'sport'].some((k) => (input as Record<string, unknown>)[k] !== undefined)) {

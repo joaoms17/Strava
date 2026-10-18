@@ -31,6 +31,9 @@ export interface SaidWorkout {
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
+// Repetições por série, ou segundos nos exercícios de tempo (5 min de prancha
+// ou de remo); acima disto é engano da leitura.
+export const MAX_SAID_REPS = 300
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
 function num(v: unknown, min: number, max: number, digits = 0): number | null {
   const n = typeof v === 'string' ? Number(v.replace(',', '.')) : typeof v === 'number' ? v : NaN
@@ -57,7 +60,8 @@ export function cleanSaid(raw: unknown, today: string): SaidWorkout {
               name: text(x.nome, 80),
               sets: (Array.isArray(x.series) ? x.series : []).slice(0, 10).map((s) => {
                 const y = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>
-                return { reps: num(y.reps, 0, 60), load_kg: num(y.carga_kg, 0, 300, 1) }
+                // Nos de tempo («Prancha (segundos)») as repetições são segundos.
+                return { reps: num(y.reps, 0, MAX_SAID_REPS), load_kg: num(y.carga_kg, 0, 300, 1) }
               }),
             }
           })

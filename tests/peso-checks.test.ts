@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkWeighing, weeklyRate } from '../api/_lib/rules/weight'
+import { checkWeighing, isDeletedWeighing, weeklyRate } from '../api/_lib/rules/weight'
 
 function series(start: string, days: number, from: number, perDay: number, every = 1) {
   const out = []
@@ -42,5 +42,15 @@ describe('verificação da pesagem', () => {
   it('sem troca óbvia pede confirmação', () => {
     expect(checkWeighing(72, 85)).toEqual({ kind: 'confirm' })
     expect(checkWeighing(58.4, 85)).toEqual({ kind: 'suggest', value: 85.4 })
+  })
+})
+
+describe('pesagem apagada', () => {
+  it('a mesma pesagem não volta; um peso diferente nesse dia entra', () => {
+    expect(isDeletedWeighing(61.2, { kg: 61.2 })).toBe(true)
+    expect(isDeletedWeighing(61.2, { kg: '61.20' })).toBe(true)
+    expect(isDeletedWeighing(84.6, { kg: 61.2 })).toBe(false)
+    expect(isDeletedWeighing(84.6, { kg: null })).toBe(true)
+    expect(isDeletedWeighing(84.6, undefined)).toBe(false)
   })
 })

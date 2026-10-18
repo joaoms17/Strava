@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { nutritionalDay, shiftDate } from './rules/nutritional-day.js'
 import { lisbonInstant } from './rules/momentos.js'
-import { exerciseKcal, mergePatch, type WattsSource } from './rules/treino.js'
+import { exerciseKcal, mergePatch, startGuessed, type WattsSource } from './rules/treino.js'
 import {
   isEmptyStravaCopy,
   isSameActivity,
@@ -17,6 +17,7 @@ import {
 import type { WorkoutType } from './rules/targets.js'
 import { ciqExtras, hasCiq, type CiqExtras } from './rules/ciq.js'
 import { fitDeveloperFields } from './fit.js'
+import { isDeletedWeighing } from './rules/weight.js'
 
 // Fase 7 — intervals.icu. A chave vive em `integrations` (RLS sem
 // políticas): só a service role a lê. Autenticação HTTP Basic com o
@@ -68,22 +69,29 @@ async function icuFile(key: string, activityId: string, kind: 'file' | 'fit-file
 
 // Os campos das apps Connect IQ (km, velocidade, potência, calorias da app da
 // bicicleta) só estão no ficheiro FIT. Lê-se no máximo MAX_FIT_READS por
-// sincronização, para caber no tempo; um erro não pára a sincronização.
+// sincronização, para caber no tempo; um erro não pára a sincronização. Uma
+// atividade cujo ficheiro falhou MAX_FIT_ATTEMPTS vezes não se tenta mais.
 const MAX_FIT_READS = 4
+const MAX_FIT_ATTEMPTS = 2
 async function readCiq(key: string, activityId: string, timeoutMs: number): Promise<CiqExtras | null> {
-  try {
-    // O ficheiro original (o que veio do Garmin); se não for um FIT, o FIT
-    // que o intervals.icu gera.
-    const fields =
-      fitDeveloperFields(await icuFile(key, activityId, 'file', timeoutMs)) ??
-      fitDeveloperFields(await icuFile(key, activityId, 'fit-file', timeoutMs)) ??
-      []
-    return ciqExtras(fields)
-  } catch (err) {
-    console.error('FIT', activityId, err instanceof Error ? err.message : err)
-    return null
+  // O ficheiro original (o que veio do Garmin); se falhar ou não for um FIT,
+  // o FIT que o intervals.icu gera.
+  // Conta a última tentativa (o FIT gerado): se falhou, é erro e tenta-se
+  // outra vez; se chegou e não é um FIT, «sem dados».
+  let lastDownloaded = false
+  for (const kind of ['file', 'fit-file'] as const) {
+    try {
+      const fields = fitDeveloperFields(await icuFile(key, activityId, kind, timeoutMs))
+      lastDownloaded = true
+      if (fields) return ciqExtras(fields)
+    } catch (err) {
+      lastDownloaded = false
+      console.error('FIT', kind, activityId, err instanceof Error ? err.message : err)
+    }
   }
+  return lastDownloaded ? ciqExtras([]) : null
 }
+const fitAttempts = (raw: Record<string, unknown>) => (typeof raw.fit_tentativas === 'number' ? raw.fit_tentativas : 0)
 
 // Valida a chave e devolve o atleta (id e nome), sem nunca a devolver.
 export async function testKey(key: string): Promise<{ id: string | null; name: string | null }> {
@@ -250,7 +258,11 @@ export async function syncIntervals(
     const fitRaw = (id: string) => {
       if (!fitByActivity.has(id)) return {}
       const ciq = fitByActivity.get(id)
-      return { fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro', ...(ciq && hasCiq(ciq) ? { ciq } : {}) }
+      return {
+        fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro',
+        ...(ciq && hasCiq(ciq) ? { ciq } : {}),
+        ...(ciq ? {} : { fit_tentativas: 1 }),
+      }
     }
 
     // As que já entraram: ganham os km do ficheiro (uma vez) e as kcal pela
@@ -258,7 +270,7 @@ export async function syncIntervals(
     if (known.size > 0) {
       const { data: knownFull } = await admin
         .from('workouts')
-        .select('id,date,type,source,minutes,watts,watts_source,kcal_device,kcal_est,kcal_rule,distance_km,raw,deleted_at,external_id')
+        .select('id,date,type,source,minutes,watts,watts_source,kcal_device,kcal_est,kcal_rule,distance_km,hr_zones,rpe,raw,deleted_at,external_id')
         .eq('user_id', userId)
         .eq('type', 'bike')
         .is('deleted_at', null)
@@ -271,12 +283,28 @@ export async function syncIntervals(
         let wattsSource = row.watts_source as WattsSource | null
         let deviceCalories = row.kcal_device as number | null
         // A distância pela velocidade média do intervals.icu (rolo).
-        const apiDistance = fromApi.get(row.external_id as string)?.distance_km ?? null
+        const api = fromApi.get(row.external_id as string)
+        const apiDistance = api?.distance_km ?? null
         if (row.distance_km == null && apiDistance != null) patch.distance_km = apiDistance
-        if (row.distance_km == null && apiDistance == null && raw.fit !== 'lido' && raw.fit !== 'sem_dados' && canReadFit()) {
+        // O tempo em cada zona e o esforço dado no relógio, quando chegam depois.
+        if (row.hr_zones == null && api?.hr_zones) patch.hr_zones = api.hr_zones
+        if (row.rpe == null && api?.rpe != null) patch.rpe = api.rpe
+        if (
+          row.distance_km == null &&
+          apiDistance == null &&
+          raw.fit !== 'lido' &&
+          raw.fit !== 'sem_dados' &&
+          fitAttempts(raw) < MAX_FIT_ATTEMPTS &&
+          canReadFit()
+        ) {
           fitReads++
           const ciq = await readCiq(key, row.external_id as string, fitTimeout)
-          patch.raw = { ...raw, fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro', ...(ciq && hasCiq(ciq) ? { ciq } : {}) }
+          patch.raw = {
+            ...raw,
+            fit: ciq && hasCiq(ciq) ? 'lido' : ciq ? 'sem_dados' : 'erro',
+            ...(ciq && hasCiq(ciq) ? { ciq } : {}),
+            ...(ciq ? {} : { fit_tentativas: fitAttempts(raw) + 1 }),
+          }
           if (ciq?.distance_km != null) patch.distance_km = ciq.distance_km
           if (watts == null && ciq?.power_w != null) {
             watts = ciq.power_w
@@ -319,7 +347,10 @@ export async function syncIntervals(
           .in('date', dates)
           .neq('source', 'intervals')
       : { data: [] }
-    const candidates = (sameDayRows ?? []) as SameDayRow[]
+    // Uma sessão com a hora suposta compara-se só pelo dia e pela duração.
+    const candidates = ((sameDayRows ?? []) as SameDayRow[]).map(
+      (c): SameDayRow & { start_guessed: boolean } => ({ ...c, start_guessed: startGuessed(c) }),
+    )
     const used = new Set<string>()
     const inserts: Record<string, unknown>[] = []
 
@@ -332,6 +363,8 @@ export async function syncIntervals(
         max_w: a.max_w,
         max_cadence: a.max_cadence,
         training_load: a.training_load,
+        hr_zones: a.hr_zones,
+        rpe: a.rpe,
         name: a.name,
       }
       const match = syncMatch(
@@ -351,6 +384,13 @@ export async function syncIntervals(
           watts: a.watts,
           watts_source: a.watts_source,
         })
+        // A hora do relógio substitui a suposta (o «Já fiz» das 21:00 passa a
+        // ser a bicicleta das 07:00).
+        if (match.start_guessed) {
+          const { hora_estimada: _, ...raw } = ((match.raw ?? {}) as Record<string, unknown>)
+          Object.assign(patch, { started_at: startedAt, raw: Object.keys(raw).length ? raw : null })
+          filled.push('started_at')
+        }
         if (patch.watts != null) {
           const kcal = exerciseKcal({
             type: a.type,
@@ -435,16 +475,20 @@ export async function syncIntervals(
   if (days.length > 0) {
     const first = days.reduce((min, m) => (m.date < min ? m.date : min), days[0]!.date)
     const last = days.reduce((max, m) => (m.date > max ? m.date : max), days[0]!.date)
-    const [{ data: weightRows }, { data: healthRows }] = await Promise.all([
+    const [{ data: weightRows }, { data: healthRows }, { data: deletedRows }] = await Promise.all([
       admin.from('weights').select('date').eq('user_id', userId).gte('date', first).lte('date', last),
       admin.from('health_daily').select('*').eq('user_id', userId).gte('date', first).lte('date', last),
+      // Pesagens que a pessoa apagou: não voltam (sem a migração, nada fica de fora).
+      admin.from('weights_deleted').select('date,kg').eq('user_id', userId).gte('date', first).lte('date', last),
     ])
 
     result.weightDays = days.filter((m) => m.weightKg != null).length
-    // Peso: só em dias sem pesagem do João (nunca substitui).
+    // Peso: só em dias sem pesagem do João (nunca substitui), e uma pesagem
+    // que ele apagou não volta.
     const weighed = new Set((weightRows ?? []).map((r) => r.date as string))
+    const deleted = new Map((deletedRows ?? []).map((r) => [r.date as string, r as { kg: number | null }]))
     const newWeights = days
-      .filter((m) => m.weightKg != null && !weighed.has(m.date))
+      .filter((m) => m.weightKg != null && !weighed.has(m.date) && !isDeletedWeighing(m.weightKg, deleted.get(m.date)))
       .map((m) => ({
         user_id: userId,
         date: m.date,
@@ -465,8 +509,8 @@ export async function syncIntervals(
 
     // Sono, FC em repouso e passos (regras em mergeDailyHealth: os passos
     // ficam com o maior, o Atalho manda nas horas e na FC que preencheu); a
-    // pontuação, a qualidade, o HRV e a FC do sono só vêm do relógio (o valor
-    // mais recente manda).
+    // pontuação, a qualidade, o HRV e a FC do sono, a forma e a fadiga do
+    // intervals.icu e o VO2máx só vêm de lá (o valor mais recente manda).
     const byDate = new Map((healthRows ?? []).map((r) => [r.date as string, r as Record<string, unknown>]))
     const rows: { base: Record<string, unknown>; extras: Record<string, unknown>; night: boolean }[] = []
     for (const m of days) {
@@ -475,6 +519,10 @@ export async function syncIntervals(
         sleep_quality: m.sleepQuality,
         hrv: m.hrv,
         avg_sleep_hr: m.avgSleepHr,
+        ctl: m.ctl,
+        atl: m.atl,
+        ramp_rate: m.rampRate,
+        vo2max: m.vo2max,
       }
       const hasExtras = Object.values(sleepExtras).some((v) => v != null)
       if (m.restingHr == null && m.sleepMinutes == null && m.steps == null && !hasExtras) continue
@@ -490,12 +538,20 @@ export async function syncIntervals(
       })
     }
     if (rows.length > 0) {
-      let { error } = await admin
-        .from('health_daily')
-        .upsert(rows.map((r) => ({ ...r.base, ...r.extras })), { onConflict: 'user_id,date' })
-      // Antes da migração 9 as colunas do sono não existem: grava o resto.
+      const upsert = (list: Record<string, unknown>[]) =>
+        admin.from('health_daily').upsert(list, { onConflict: 'user_id,date' })
+      let { error } = await upsert(rows.map((r) => ({ ...r.base, ...r.extras })))
+      // Antes da migração da forma, sem a forma; antes da 9, sem o sono.
+      if (error && /ctl|atl|ramp_rate|vo2max/i.test(error.message)) {
+        ;({ error } = await upsert(
+          rows.map((r) => {
+            const { ctl: _c, atl: _a, ramp_rate: _r, vo2max: _v, ...sleep } = r.extras
+            return { ...r.base, ...sleep }
+          }),
+        ))
+      }
       if (error && /sleep_score|sleep_quality|hrv|avg_sleep_hr|column/i.test(error.message)) {
-        ;({ error } = await admin.from('health_daily').upsert(rows.map((r) => r.base), { onConflict: 'user_id,date' }))
+        ;({ error } = await upsert(rows.map((r) => r.base)))
       }
       if (error) console.error('health_daily:', error.message)
       else result.nights += rows.filter((r) => r.night).length
