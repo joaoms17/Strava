@@ -14,6 +14,7 @@ import {
   PROMPT_LABEL_READ,
   PROMPT_RECIPE,
   PROMPT_WORKOUT_SHOT,
+  PROMPT_ASK,
   readPrompt,
 } from '../_lib/prompts.js'
 
@@ -86,6 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       PROMPT_LABEL_READ,
       PROMPT_RECIPE,
       PROMPT_WORKOUT_SHOT,
+      PROMPT_ASK,
     ].map((file) => {
       try {
         return [file, readPrompt(file).length > 0]

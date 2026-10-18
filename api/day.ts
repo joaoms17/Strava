@@ -7,6 +7,7 @@ import ingestToken from './_day/ingest-token.js'
 import { addPerson, createProfile } from './_day/people.js'
 import aiUsage from './_day/ai-usage.js'
 import { pushKey, pushSubscribe, pushTest, pushUnsubscribe } from './_day/push.js'
+import ask from './_day/ask.js'
 
 // Endpoints do dia (e o estado do deploy) numa só função, por causa do limite
 // do Hobby; caminhos preservados por rewrite (/api/day/:action).
@@ -23,6 +24,7 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   'push-subscribe': pushSubscribe,
   'push-unsubscribe': pushUnsubscribe,
   'push-test': pushTest,
+  ask,
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

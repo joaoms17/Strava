@@ -23,6 +23,7 @@ const KIND_LABEL: Record<string, string> = {
   workout_said: 'treinos ditos',
   workout_said_audio: 'treinos ditos (áudio)',
   evolution: 'análises da evolução',
+  ask: 'perguntas à app',
   training_week: 'planos da semana',
   ai_check: 'verificações',
   plan_generate: 'planos',

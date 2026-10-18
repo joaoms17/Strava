@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { mealTotals, type MealItem } from '../_lib/rules/meal-totals.js'
+import { otherPeople, personName } from '../_lib/people.js'
 import { shareTargets, sharedNote } from '../_lib/rules/partilha.js'
 
 // Partilhar uma refeição com outra pessoa da app (ex.: o João e a Joana a
@@ -16,12 +17,6 @@ import { shareTargets, sharedNote } from '../_lib/rules/partilha.js'
 
 const ShareSchema = z.object({ meal_id: z.string().uuid(), to_user_id: z.string().uuid() })
 
-async function personName(admin: SupabaseClient, userId: string): Promise<string> {
-  const { data } = await admin.auth.admin.getUserById(userId)
-  const name = data.user?.user_metadata?.name
-  return typeof name === 'string' && name.trim() ? name.trim() : (data.user?.email?.split('@')[0] ?? 'Outra pessoa')
-}
-
 // GET /api/meal/people: as outras pessoas da app, para «Partilhar com …».
 // Com ?meal_id= (uma refeição de quem pede), diz também com quem já está
 // partilhada, para a folha mostrar «Partilhada com … ✓» ao abrir.
@@ -32,7 +27,6 @@ export async function people(req: VercelRequest, res: VercelResponse) {
     if (req.method !== 'GET') throw new HttpError(405, 'Método não suportado.')
     const { user, db } = await requireUser(req)
     const admin = adminClient()
-    const { data } = await admin.from('profile').select('user_id').neq('user_id', user.id).order('created_at')
     const mealId = typeof req.query.meal_id === 'string' && UUID.test(req.query.meal_id) ? req.query.meal_id : null
     const sharedWith = new Set<string>()
     if (mealId) {
@@ -48,14 +42,8 @@ export async function people(req: VercelRequest, res: VercelResponse) {
         for (const copy of copies ?? []) sharedWith.add(copy.user_id as string)
       }
     }
-    const list = await Promise.all(
-      (data ?? []).map(async (p) => ({
-        user_id: p.user_id as string,
-        name: await personName(admin, p.user_id as string),
-        shared: sharedWith.has(p.user_id as string),
-      })),
-    )
-    res.status(200).json({ people: list })
+    const people = await otherPeople(admin, user.id)
+    res.status(200).json({ people: people.map((p) => ({ ...p, shared: sharedWith.has(p.user_id) })) })
   } catch (err) {
     respondError(res, err)
   }

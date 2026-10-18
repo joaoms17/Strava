@@ -5,6 +5,7 @@ import {
   favoritesGrid,
   itemNameSet,
   jaccard,
+  mealName,
   portionLabel,
   proteinPicks,
   patternKey,
@@ -142,5 +143,14 @@ describe('proteinPicks (cartão da proteína no Hoje)', () => {
     expect(proteinPicks(favorites, -200, 2).map((f) => f.id)).toEqual(['skyr', 'atum'])
     expect(proteinPicks(favorites, null).map((f) => f.id)).toEqual(['skyr', 'atum', 'frango'])
     expect(proteinPicks([fav('agua', 0, 20)], 500)).toEqual([])
+  })
+})
+
+describe('nome de uma refeição registada', () => {
+  it('o da favorita, senão os alimentos, senão o texto', () => {
+    expect(mealName({ input_type: 'favorite', raw_text: 'Pequeno-almoço habitual', items: [{ name: 'Pão' }] })).toBe('Pequeno-almoço habitual')
+    expect(mealName({ input_type: 'text', raw_text: 'comi pão com queijo', items: [{ name: 'Pão' }, { name: 'Queijo' }] })).toBe('Pão, Queijo')
+    expect(mealName({ input_type: 'photo', raw_text: null, items: [] })).toBe('Refeição')
+    expect(mealName({ input_type: 'text', raw_text: 'sopa', items: [] })).toBe('sopa')
   })
 })

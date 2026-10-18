@@ -97,6 +97,14 @@ export function favoriteName(items: { name: string }[]): string {
   return names.length > 3 ? `${shown} + …` : shown
 }
 
+// O nome que se reconhece de uma refeição registada: o da favorita, senão os
+// alimentos, senão o texto escrito.
+export function mealName(meal: { input_type: string; raw_text: string | null; items: { name: string }[] }): string {
+  if (meal.input_type === 'favorite' && meal.raw_text) return meal.raw_text
+  const names = meal.items.map((i) => i.name).filter(Boolean)
+  return names.length > 0 ? names.join(', ') : (meal.raw_text ?? 'Refeição')
+}
+
 // Sugestão de favorito: a 3.ª refeição parecida no mesmo momento do dia em
 // 30 dias (Jaccard ≥ 70 % nos nomes dos itens).
 export const SIMILAR_THRESHOLD = 0.7

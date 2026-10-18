@@ -1,4 +1,5 @@
 import { slotOf } from '../../api/_lib/rules/momentos'
+import { mealName } from '../../api/_lib/rules/favoritos'
 import type { Meal } from './types'
 
 // Refeições de outros dias para repetir: só as que têm conta (analisadas).
@@ -13,11 +14,7 @@ export function repeatable(meal: RepeatSource): boolean {
 }
 
 // O nome que se reconhece: o do favorito, senão os alimentos.
-export function mealName(meal: Pick<Meal, 'input_type' | 'raw_text' | 'items'>): string {
-  if (meal.input_type === 'favorite' && meal.raw_text) return meal.raw_text
-  const names = meal.items.map((i) => i.name).filter(Boolean)
-  return names.length > 0 ? names.join(', ') : (meal.raw_text ?? 'Refeição')
-}
+export { mealName }
 
 export function mealSlot(meal: Pick<Meal, 'slot' | 'logged_at'>) {
   return meal.slot ?? slotOf(new Date(meal.logged_at))

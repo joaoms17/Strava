@@ -82,6 +82,8 @@ const Avancado = screen(() => import('./screens/Avancado'))
 const Arquivo = screen(() => import('./screens/Arquivo'))
 const MedidasHistorico = screen(() => import('./screens/MedidasHistorico'))
 const Ginasio = screen(() => import('./screens/Ginasio'))
+// A «Pergunta à app» (e a validação das ações) só carrega quando se abre.
+const PerguntaSheet = screen(() => import('./components/sheets/PerguntaSheet'))
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -161,6 +163,7 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
             Voltar a hoje ›
           </button>
         )}
+        {(location.startsWith('/hoje') || location.startsWith('/balanco')) && <AskButton />}
         {/* De quem é a app vê-se no separador do topo; aqui só as definições. */}
         {!location.startsWith('/definicoes') && (
           <Link
@@ -173,6 +176,20 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
         )}
       </div>
     </header>
+  )
+}
+
+// «Pergunta à app»: ao lado da pessoa, no Hoje e no Balanço.
+function AskButton() {
+  const sheet = useSheet()
+  return (
+    <button
+      onClick={() => sheet.open('pergunta')}
+      className="flex h-11 w-11 items-center justify-center rounded-xl border border-line bg-surface"
+      aria-label="Pergunta à app"
+    >
+      <Icon name="ask" size={22} />
+    </button>
   )
 }
 
@@ -201,6 +218,13 @@ function Sheets() {
   if (sheet.name === 'como-medir') return <ComoMedirSheet />
   if (sheet.name === 'meu-treino') return <TemplateSheet key={sheet.params.get('id') ?? 'novo'} />
   if (sheet.name === 'dizer-treino') return <DizerTreinoSheet />
+  if (sheet.name === 'pergunta') {
+    return (
+      <Suspense fallback={null}>
+        <PerguntaSheet />
+      </Suspense>
+    )
+  }
   return null
 }
 
