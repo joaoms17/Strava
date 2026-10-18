@@ -15,6 +15,7 @@ import AttachPhotoButton from '../ui/AttachPhotoButton'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
 import AiCheck from '../AiCheck'
+import { LeftoversButton, LeftoversNote } from '../Sobras'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
 import { recomputeFrom } from '../../lib/recompute'
@@ -491,6 +492,7 @@ export default function MealSheet() {
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
+            <LeftoversNote meal={current} />
 
             {current.model_reserve && current.deleted_at == null && !reanalysing && (
               <div className="space-y-2 rounded-xl bg-surface2 px-3 py-2">
@@ -605,6 +607,7 @@ export default function MealSheet() {
                           Juntar foto
                         </AttachPhotoButton>
                       )}
+                      <LeftoversButton meal={current} onDone={() => void load()} className="text-eat" />
                       {people.map((p) =>
                         shared.includes(p.user_id) ? (
                           <span key={p.user_id} className="text-dim">

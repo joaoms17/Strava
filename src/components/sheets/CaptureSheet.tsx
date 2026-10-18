@@ -26,6 +26,7 @@ import { BusyLabel, runBusy, useBusyKey } from '../../lib/busy'
 import { loadActiveDiet } from '../../lib/diets'
 import { useSignedUrls } from '../../lib/photos'
 import Thumb from '../ui/Thumb'
+import { LeftoversQuestion } from '../Sobras'
 import {
   dayLabel,
   needsSlot,
@@ -355,6 +356,16 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
                 </label>
               )}
             </div>
+            {/* Pouco depois de uma refeição por foto: «Isto é o que sobrou…?» (Registar continua a criar outra). */}
+            <LeftoversQuestion
+              file={photos.length === 1 ? photos[0]!.file : null}
+              active={isNow}
+              note={text}
+              onApplied={() => {
+                forgetDraft()
+                sheet.close()
+              }}
+            />
             <p className="text-[13px] text-dim">
               Junta uma nota se quiseres (o que não se vê, o que sobrou) e carrega em Registar.
             </p>

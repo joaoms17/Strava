@@ -7,8 +7,17 @@ export const DEFAULT_MONTHLY_CAP_EUR = 10
 export const DEFAULT_DAILY_VISION_CAP = 40
 
 // O que conta como «análise de foto» para o limite diário: os pedidos ao
-// modelo das fotos (também o áudio do «Dizer o treino», que vai para ele).
-export const VISION_KINDS = ['meal_photo', 'meal_parse_photo', 'workout_shot', 'menu_pick', 'label_read', 'workout_said_audio']
+// modelo das fotos (também o áudio do «Dizer o treino», que vai para ele, e
+// a foto do que sobrou, comparada com a do prato cheio).
+export const VISION_KINDS = [
+  'meal_photo',
+  'meal_parse_photo',
+  'workout_shot',
+  'menu_pick',
+  'label_read',
+  'workout_said_audio',
+  'meal_leftovers',
+]
 
 // Com o Gemini (plano gratuito) a chave e a quota são uma só para a casa:
 // o limite diário de fotos conta as de todas as pessoas, e não há custos em
