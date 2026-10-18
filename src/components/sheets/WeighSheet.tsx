@@ -118,17 +118,27 @@ export default function WeighSheet() {
     }
     const gone = existing as WeightRow & { source?: string | null }
     const { error: deleteError } = await supabase.from('weights').delete().eq('user_id', user.id).eq('date', date)
-    setBusy(false)
     if (deleteError) {
+      setBusy(false)
       setError('Não consegui apagar. Tenta outra vez.')
       return
     }
+    // Fica a marca, para a pesagem do relógio ou do Atalho não voltar na
+    // sincronização seguinte (sem a migração, falha calada).
+    await supabase
+      .from('weights_deleted')
+      .upsert(
+        { user_id: user.id, date, kg: gone.kg, source: gone.source ?? null, deleted_at: new Date().toISOString() },
+        { onConflict: 'user_id,date' },
+      )
+    setBusy(false)
     emitDataChanged()
     recomputeFrom(date, today)
     toast(`Pesagem apagada · ${fmt1(gone.kg)} kg`, [
       {
         label: 'Anular',
         run: async () => {
+          await supabase.from('weights_deleted').delete().eq('user_id', user.id).eq('date', date)
           await supabase.from('weights').insert({
             user_id: user.id,
             date,
