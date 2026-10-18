@@ -52,6 +52,25 @@ function mediaTypeFor(path: string): ImageMediaType {
   return 'image/jpeg'
 }
 
+// As fotos da refeição (Storage, com a service role) como blocos de imagem
+// para a IA, pela ordem dada.
+export async function photoContent(admin: SupabaseClient, paths: string[]) {
+  return Promise.all(
+    paths.map(async (path) => {
+      const { data, error } = await admin.storage.from('meal-photos').download(path)
+      if (error || !data) throw new AiError('Uma das fotos não foi encontrada. Junta-a outra vez.', `storage: ${path}: ${error?.message ?? 'sem dados'}`)
+      return {
+        type: 'image' as const,
+        source: {
+          type: 'base64' as const,
+          media_type: mediaTypeFor(path),
+          data: Buffer.from(await data.arrayBuffer()).toString('base64'),
+        },
+      }
+    }),
+  )
+}
+
 export async function foodLibrary(admin: SupabaseClient, userId: string) {
   const { data } = await admin
     .from('foods')
@@ -196,20 +215,7 @@ async function runModel(
   const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V2
 
   if (photos.length > 0) {
-    const images = await Promise.all(
-      photos.slice(0, 4).map(async (path) => {
-        const { data, error } = await admin.storage.from('meal-photos').download(path)
-        if (error || !data) throw new AiError('Uma das fotos não foi encontrada. Junta-a outra vez.', `storage: ${path}: ${error?.message ?? 'sem dados'}`)
-        return {
-          type: 'image' as const,
-          source: {
-            type: 'base64' as const,
-            media_type: mediaTypeFor(path),
-            data: Buffer.from(await data.arrayBuffer()).toString('base64'),
-          },
-        }
-      }),
-    )
+    const images = await photoContent(admin, photos.slice(0, 4))
     const { output: analysis, cost, model, reserve } = await structuredCall(
       admin,
       { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION },

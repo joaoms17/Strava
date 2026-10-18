@@ -96,7 +96,7 @@ const QuickSchema = z.object({
 
 type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void>
 
-function post(run: (ctx: { db: SupabaseClient; userId: string; body: unknown; res: VercelResponse }) => Promise<void>): Handler {
+export function post(run: (ctx: { db: SupabaseClient; userId: string; body: unknown; res: VercelResponse }) => Promise<void>): Handler {
   return async (req, res) => {
     try {
       if (req.method !== 'POST') throw new HttpError(405, 'Método não suportado.')
@@ -108,7 +108,7 @@ function post(run: (ctx: { db: SupabaseClient; userId: string; body: unknown; re
   }
 }
 
-function parse<T>(schema: z.ZodType<T>, body: unknown): T {
+export function parse<T>(schema: z.ZodType<T>, body: unknown): T {
   const result = schema.safeParse(body)
   if (!result.success) throw new HttpError(400, 'Pedido inválido.')
   return result.data
@@ -121,7 +121,7 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
 
 // A análise (e a aprendizagem dos alimentos) continua depois da resposta
 // (até aos 60 s da função).
-function inBackground(task: Promise<unknown>) {
+export function inBackground(task: Promise<unknown>) {
   const safe = task.catch((err) => console.error('Em segundo plano falhou:', err))
   waitUntil(safe)
 }
@@ -132,7 +132,7 @@ function analyseInBackground(admin: SupabaseClient, mealId: string) {
   inBackground(claimAndAnalyse(admin, mealId).then((meal) => notifyMealAnalysed(admin, meal)))
 }
 
-async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
+export async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
   const { data } = await db.from('meals').select('*').eq('id', mealId).maybeSingle()
   if (!data) throw new HttpError(404, 'Refeição não encontrada.')
   return data as MealRow & Record<string, unknown>
