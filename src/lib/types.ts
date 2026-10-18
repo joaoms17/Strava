@@ -10,17 +10,6 @@ export interface MealItem {
   confidence?: 'alta' | 'media' | 'baixa'
 }
 
-export interface ParsedMealResponse {
-  items: MealItem[]
-  confidence: number
-  questions: string[]
-  assumed_portions?: string[]
-  is_estimate: boolean
-  prompt_version: string
-  model: string
-  cost_usd: number
-}
-
 export interface Profile {
   id: string
   target_weight_kg: number

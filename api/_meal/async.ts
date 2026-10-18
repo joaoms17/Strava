@@ -10,7 +10,7 @@ import { duplicatePhotoWindow } from '../_lib/rules/captura.js'
 import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
-import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, type MealRow } from '../_lib/meal-analysis.js'
+import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
 import { learnFoods } from '../_lib/foods.js'
 import { itemsToLearn } from '../_lib/rules/aprender.js'
 
@@ -64,6 +64,12 @@ const DetachSchema = MealIdSchema.extend({
 })
 
 const CorrectSchema = MealIdSchema.extend({ text: z.string().trim().min(1).max(500) })
+
+// Analisar sem gravar (Nova favorita): o que leva, ou a foto (com o nome).
+const EstimateSchema = z.object({
+  text: z.string().max(1000).optional(),
+  photo_path: z.string().min(3).optional(),
+})
 
 const UpdateSchema = MealIdSchema.extend({
   items: z.array(MealItemInputSchema).min(1).max(30).optional(),
@@ -412,6 +418,21 @@ export const update = post(async ({ db, userId, body, res }) => {
       : []
   if (learned.length) inBackground(learnFoods(db, userId, learned, meal.input_type))
   res.status(200).json({ meal: data, previous })
+})
+
+export const estimate = post(async ({ userId, body, res }) => {
+  const input = parse(EstimateSchema, body)
+  const text = input.text?.trim() || null
+  const photo = input.photo_path ?? null
+  if (!text && !photo) throw new HttpError(400, 'Falta a foto ou o texto.')
+  // A foto é lida com a service role: tem de estar na pasta de quem pede.
+  if (photo && (!photo.startsWith(`${userId}/`) || photo.includes('..'))) throw new HttpError(403, 'Fotografia inválida.')
+  const admin = adminClient()
+  if (await aiLimitReached(admin, userId, photo != null)) {
+    throw new HttpError(429, 'Chegaste ao limite da IA (Definições › Avançado).')
+  }
+  const result = await estimateItems(admin, userId, { text, photo_paths: photo ? [photo] : [] })
+  res.status(200).json(result)
 })
 
 // Só números: um item sintético «Registo rápido», para uma edição futura

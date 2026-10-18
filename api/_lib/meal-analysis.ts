@@ -148,9 +148,12 @@ export function addingToItems(meal: Pick<MealRow, 'items' | 'photo_paths'>): boo
   return (meal.items?.length ?? 0) > 0 && (meal.photo_paths?.length ?? 0) > 0
 }
 
+// O que a análise lê de uma refeição (ou de um pedido sem refeição gravada).
+type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot' | 'logged_at' | 'photo_paths' | 'items'>
+
 async function runModel(
   admin: SupabaseClient,
-  meal: MealRow,
+  meal: ModelInput,
 ): Promise<{ analysis: MealAnalysis; refs: Record<string, string>; model: string; prompt: string; cost: number }> {
   const { refs, forPrompt } = await foodLibrary(admin, meal.user_id)
   const photos = meal.photo_paths ?? []
@@ -228,6 +231,28 @@ async function runModel(
   )
   if (analysis.items.length === 0) throw new AiError('Não percebi o que comeste. Escreve de outra forma.', 'análise sem itens')
   return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost }
+}
+
+// Analisar sem gravar (a «Nova favorita» escrita ou com foto): o mesmo
+// caminho das refeições (biblioteca com referências curtas, confiança por
+// item e as guardas dos números), sem linha em meals. Com foto, o texto é a
+// descrição dela.
+export async function estimateItems(
+  admin: SupabaseClient,
+  userId: string,
+  input: { text: string | null; photo_paths: string[] },
+): Promise<{ items: MealItem[]; title: string; confidence: MealAnalysis['meal_confidence'] }> {
+  const { analysis, refs } = await runModel(admin, {
+    user_id: userId,
+    raw_text: input.text,
+    note: null,
+    tags: [],
+    slot: null,
+    logged_at: new Date().toISOString(),
+    photo_paths: input.photo_paths,
+    items: [],
+  })
+  return { items: toMealItems(analysis.items, refs), title: analysis.title, confidence: analysis.meal_confidence }
 }
 
 // Analisa uma refeição já reivindicada (claim_meal_analysis) e grava o

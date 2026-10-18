@@ -19,7 +19,7 @@ import { peekDietDraft, saveDietDraft } from '../../lib/diets'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL } from '../../../api/_lib/rules/momentos'
 import { chip } from '../ui/Chips'
-import type { MealItem, ParsedMealResponse, Slot } from '../../lib/types'
+import type { MealItem, Slot } from '../../lib/types'
 
 type Mode = 'escrever' | 'refeicao'
 
@@ -69,15 +69,15 @@ export default function NewFavoriteSheet() {
   async function calculate() {
     if (!text.trim() && !photo) return
     try {
-      // Com texto contam as palavras (mais exatas); só com foto, a IA olha para a foto.
-      const parsed = text.trim()
-        ? await postApi<ParsedMealResponse>('/api/meal/parse-text', { text: text.trim() })
-        : await postApi<ParsedMealResponse>('/api/meal/parse-photo', {
-            photo_path: await photoPath(),
-            note: name.trim(),
-          })
-      if (parsed.items.length === 0) toast('Não percebi o que leva. Escreve os alimentos e as quantidades.')
-      setItems(parsed.items.length ? parsed.items : null)
+      // Com texto contam as palavras (mais exatas); só com foto, a IA olha para
+      // a foto (com o nome como descrição). As mesmas contas das refeições.
+      const estimated = await postApi<{ items: MealItem[]; title: string }>(
+        '/api/meal/estimate',
+        text.trim() ? { text: text.trim() } : { text: name.trim() || undefined, photo_path: (await photoPath()) ?? undefined },
+      )
+      if (estimated.items.length === 0) toast('Não percebi o que leva. Escreve os alimentos e as quantidades.')
+      setItems(estimated.items.length ? estimated.items : null)
+      if (estimated.items.length && !name.trim() && estimated.title) setName(estimated.title.slice(0, 60))
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui calcular. Tenta outra vez.')
     }
