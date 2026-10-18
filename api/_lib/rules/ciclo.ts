@@ -21,8 +21,15 @@ export interface CycleInfo {
   nextStart: string
   daysToNext: number
   phase: CyclePhase
-  waterWeek: boolean // até 7 dias antes do próximo, ou nos 3 primeiros dias
+  daysLate: number // dias depois da data prevista (0 = ainda não passou)
+  overdue: boolean // mais de LATE_WATER_DAYS de atraso: provavelmente faltou marcar
+  waterWeek: boolean // até 7 dias antes do próximo (e até 7 de atraso), ou nos 3 primeiros dias
 }
+
+// Uma semana de atraso ainda conta como semana de água. Depois disso a app já
+// não sabe em que dia está (o mais provável é ter faltado marcar o início) e
+// deixa de desculpar o peso com água — também na pílula de 3 em 3 meses.
+export const LATE_WATER_DAYS = 7
 
 export function cleanStarts(raw: unknown): string[] {
   const list = Array.isArray(raw) ? raw : []
@@ -57,10 +64,22 @@ export function cycleInfo(starts: string[], today: string, options: CycleOptions
   // Se já passou da data prevista, o próximo é «a qualquer momento» (hoje).
   const nextStart = dayOfCycle > length ? today : shiftDate(lastStart, length)
   const daysToNext = dayDiff(today, nextStart)
+  const daysLate = Math.max(0, dayOfCycle - 1 - length)
+  const overdue = daysLate > LATE_WATER_DAYS
   const ovulation = length - 14
   const phase: CyclePhase =
     dayOfCycle <= 5 ? 'menstrual' : options.pill ? 'pilula' : Math.abs(dayOfCycle - ovulation) <= 1 ? 'ovulacao' : dayOfCycle < ovulation ? 'folicular' : 'lutea'
-  return { lastStart, dayOfCycle, length, nextStart, daysToNext, phase, waterWeek: daysToNext <= 7 || dayOfCycle <= 3 }
+  return {
+    lastStart,
+    dayOfCycle,
+    length,
+    nextStart,
+    daysToNext,
+    phase,
+    daysLate,
+    overdue,
+    waterWeek: (daysToNext <= 7 && !overdue) || dayOfCycle <= 3,
+  }
 }
 
 export const PHASE_LABEL: Record<CyclePhase, string> = {

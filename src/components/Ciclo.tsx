@@ -44,13 +44,21 @@ export default function Ciclo({ today }: { today: string }) {
         <>
           <p className="text-[17px]">
             Dia {info.dayOfCycle}
-            {options.pill && info.phase === 'pilula' ? ` de ~${info.length}` : ''} · {PHASE_LABEL[info.phase]}
-            <span className="text-dim">
-              {' '}
-              · próximo {info.daysToNext <= 0 ? 'a qualquer momento' : `por volta de ${fmtDayMonth(info.nextStart)}`}
-            </span>
+            {options.pill && info.phase === 'pilula' ? ` de ~${info.length}` : ''} ·{' '}
+            {info.overdue ? 'atrasado' : PHASE_LABEL[info.phase]}
+            {!info.overdue && (
+              <span className="text-dim">
+                {' '}
+                · próximo {info.daysToNext <= 0 ? 'a qualquer momento' : `por volta de ${fmtDayMonth(info.nextStart)}`}
+              </span>
+            )}
           </p>
-          {info.waterWeek ? (
+          {info.overdue ? (
+            // Mais de uma semana depois da data prevista: já não se desculpa o peso com água.
+            <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+              Passaram {info.daysLate} dias da data prevista. Já começou? Marca o dia em que começou.
+            </p>
+          ) : info.waterWeek ? (
             <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
               Semana de água: é normal o peso subir 0,5–2 kg agora. Não é gordura e desce depois do período.
             </p>

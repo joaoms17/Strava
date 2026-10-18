@@ -34,6 +34,18 @@ describe('cycleInfo', () => {
     const c = cycleInfo(['2026-09-01'], '2026-10-05')!
     expect(c.nextStart).toBe('2026-10-05')
     expect(c.daysToNext).toBe(0)
+    // previsto a 29/9: 6 dias de atraso, ainda semana de água
+    expect(c.daysLate).toBe(6)
+    expect(c.overdue).toBe(false)
+    expect(c.waterWeek).toBe(true)
+  })
+
+  it('mais de 7 dias de atraso: deixa de ser semana de água', () => {
+    expect(cycleInfo(['2026-09-01'], '2026-09-29')!.daysLate).toBe(0)
+    expect(cycleInfo(['2026-09-01'], '2026-10-06')!).toMatchObject({ daysLate: 7, overdue: false, waterWeek: true })
+    expect(cycleInfo(['2026-09-01'], '2026-10-07')!).toMatchObject({ daysLate: 8, overdue: true, waterWeek: false })
+    // esqueceu-se de marcar durante meses
+    expect(cycleInfo(['2026-03-01'], '2026-10-14')!).toMatchObject({ overdue: true, waterWeek: false })
   })
 
   it('limpa datas repetidas ou inválidas', () => {
@@ -52,6 +64,15 @@ describe('cycleInfo com pílula', () => {
     expect(c.waterWeek).toBe(false)
     expect(cycleInfo(['2026-09-01'], '2026-11-26', opts)!.waterWeek).toBe(true)
     expect(cycleInfo(['2026-09-01'], '2026-09-02', opts)!.phase).toBe('menstrual')
+  })
+
+  it('pílula contínua atrasada: uma semana de água a mais e depois não', async () => {
+    const { cycleInfo } = await import('../api/_lib/rules/ciclo')
+    const opts = { pill: true, defaultLength: 91 }
+    // previsto a 1/12
+    expect(cycleInfo(['2026-09-01'], '2026-12-08', opts)!).toMatchObject({ daysLate: 7, overdue: false, waterWeek: true })
+    expect(cycleInfo(['2026-09-01'], '2026-12-09', opts)!).toMatchObject({ daysLate: 8, overdue: true, waterWeek: false })
+    expect(cycleInfo(['2026-09-01'], '2027-02-20', opts)!).toMatchObject({ overdue: true, waterWeek: false, phase: 'pilula' })
   })
 
   it('aprende ciclos de 3 meses do histórico', async () => {
