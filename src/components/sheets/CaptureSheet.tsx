@@ -271,8 +271,16 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
 
   // Favorita (ou da dieta) no «Quando» escolhido; da dieta fica na refeição
   // dela mesmo com «Agora».
+  // Registou-se outra coisa (favorita, igual a ontem): o texto escrito não
+  // volta na próxima vez.
+  function forgetDraft() {
+    sent.current = true
+    void saveCaptureDraft(null)
+  }
+
   function pickFavorite(favorite: Favorite, dietSlot: Slot | null = null) {
     if (!slotChosen()) return
+    forgetDraft()
     sheet.close()
     void runBusy('A registar…', () =>
       logFavorite(favorite, api.date ?? null, toast, api.slot ?? dietSlot, isNow ? null : label),
@@ -513,6 +521,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             <button
               onClick={() => {
                 if (!slotChosen()) return
+                forgetDraft()
                 sheet.close()
                 void runBusy('A registar…', () =>
                   repeatMeal(

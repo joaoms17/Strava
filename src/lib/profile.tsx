@@ -119,6 +119,8 @@ export function ProfileProvider({ children, token }: { children: ReactNode; toke
         if (patch.theme) applyTheme(profile.theme)
         return false
       }
+      // A cópia deste telemóvel acompanha (sem rede abre com o tema e os alvos novos).
+      writeScoped(localStorage, CACHE, JSON.stringify({ ...profile, ...patch }))
       return true
     },
     [profile],
