@@ -81,8 +81,14 @@ describe('agrupar fotos da galeria', () => {
 
   it('as capturas de ecrã sem hora escolhidas juntas são o mesmo pedido (até 4)', () => {
     const shot = (id: string) => ({ id, at: null, screenshot: true })
-    const groups = groupPhotos([shot('s1'), at(null), at('2026-09-27T12:05:00Z'), shot('s2')])
-    expect(groups.map((g) => g.map((p) => p.id))).toEqual([['2026-09-27T12:05:00Z'], ['s1', 's2'], ['sem']])
+    const groups = groupPhotos([shot('s1'), at(null), at('2026-09-27T12:05:00Z'), at('2026-09-27T20:40:00Z'), shot('s2')])
+    expect(groups.map((g) => g.map((p) => p.id))).toEqual([['2026-09-27T12:05:00Z'], ['2026-09-27T20:40:00Z'], ['s1', 's2'], ['sem']])
+    // A foto do prato e a captura do pedido dele: uma refeição, na hora da foto.
+    const mixed = groupPhotos([shot('s1'), at('2026-09-27T20:40:00Z'), shot('s2'), at(null)])
+    expect(mixed.map((g) => g.map((p) => p.id))).toEqual([['2026-09-27T20:40:00Z', 's1', 's2'], ['sem']])
+    // Sem caber nas 4 fotos, as capturas ficam à parte.
+    const full = groupPhotos([...['20:40', '20:42', '20:44'].map((t) => at(`2026-09-27T${t}:00Z`)), shot('s1'), shot('s2')])
+    expect(full.map((g) => g.length)).toEqual([3, 2])
     const many = groupPhotos(['a', 'b', 'c', 'd', 'e'].map(shot))
     expect(many.map((g) => g.length)).toEqual([4, 1])
     // Uma captura com hora junta-se pela hora, como as outras fotos.

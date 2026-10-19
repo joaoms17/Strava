@@ -108,6 +108,7 @@ export function orderPeople(people: unknown): number | null {
 }
 
 interface SplitState {
+  source_meal_id?: string | null
   share_with?: readonly string[] | null
   share_split?: unknown
   tags?: readonly string[] | null
@@ -116,9 +117,12 @@ interface SplitState {
 
 // «Pedido para 2» fica à espera só quando a pessoa não disse como o dividiu:
 // sem «Também para …» (nem divisão), sem «Comi metade» e na porção 1. Se já
-// disse, o pedido conta como ela escolheu e não há dica.
+// disse, o pedido conta como ela escolheu e não há dica. Numa cópia
+// partilhada (`source_meal_id`) também não: a porção dela já vem da divisão,
+// mesmo que a reanalise ou mude a nota.
 export function pendingSplit(people: number | null, meal: SplitState): number | null {
   if (people == null) return null
+  if (meal.source_meal_id) return null
   if ((meal.share_with?.length ?? 0) > 0 || meal.share_split != null) return null
   if (meal.tags?.includes('comi_metade')) return null
   if (!sameFactor(factorOf(meal.portion_factor), 1)) return null
@@ -142,4 +146,18 @@ export function orderHintText(people: number): string {
   return people === 2
     ? 'Pedido para 2 · divide em Porção ½ ou partilha a meias'
     : `Pedido para ${people} · escolhe a tua porção`
+}
+
+// A quantidade de uma linha do pedido no nome («2× Poke de salmão», «3x
+// Coca-Cola»); sem ela, 1.
+export function orderQuantity(name: string): number {
+  const match = /^\s*(\d{1,2})\s*[×xX]\s/.exec(name)
+  return match ? Number(match[1]) : 1
+}
+
+// Num pedido, uma linha de 2 ou mais doses não se liga a um alimento da
+// biblioteca: ao confirmar, a porção habitual dele aprendia as 2 doses juntas
+// («Poke de salmão» passava a 900 g).
+export function unlinkMultiples<T extends { name: string; food_ref: string | null }>(items: readonly T[]): T[] {
+  return items.map((item) => (item.food_ref && orderQuantity(item.name) > 1 ? { ...item, food_ref: null } : item))
 }

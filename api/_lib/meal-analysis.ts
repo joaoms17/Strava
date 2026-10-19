@@ -18,7 +18,7 @@ import { VISION_KINDS, aiLimitsFor, dailyVisionCapReached, monthlyCapReached } f
 import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
 import { LEFTOVERS_ADD_HINT, mergeAfterLeftovers } from './rules/sobras.js'
-import { dedupeOrderLines, dropNonFood, orderPeople, pendingSplit, type Order } from './rules/pedido.js'
+import { dedupeOrderLines, dropNonFood, orderPeople, pendingSplit, unlinkMultiples, type Order } from './rules/pedido.js'
 
 // Análise de refeições em segundo plano (Fase 2): a refeição já existe com
 // estado 'a_analisar'; aqui lê-se a foto e/ou o texto, e o resultado grava-se
@@ -45,6 +45,7 @@ export interface MealRow {
   share_with?: string[] | null // migração 20261018160000
   share_split?: number | null // migração 20261018210000
   order_people?: number | null // migração 20261018220000 (pedido de entrega para 2 ou mais)
+  source_meal_id?: string | null // cópia partilhada por outra pessoa
 }
 
 const ANALYSIS_BUDGET_MS = 50_000
@@ -248,6 +249,7 @@ async function runModel(
     // deixe passar; e a mesma linha de duas capturas sobrepostas conta uma vez.
     let items = dropNonFood(output.items)
     if (order && images.length > 1) items = dedupeOrderLines(items)
+    if (order) items = unlinkMultiples(items)
     const analysis: MealAnalysis = { ...output, items }
     // A juntar, «nada de novo» é uma resposta válida: ficam os itens que havia.
     if (analysis.items.length === 0 && !adding) {
@@ -308,7 +310,13 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
     // Um pedido de entrega para 2 ou mais em que a pessoa não disse como o
     // dividiu fica por rever, com a dica «Pedido para 2» (rules/pedido.ts). A
     // juntar fotos, fica o que a primeira análise disse.
-    const people = pendingSplit(orderPeople(adding ? meal.order_people : order?.people), meal)
+    let people = pendingSplit(orderPeople(adding ? meal.order_people : order?.people), meal)
+    // Reanalisada depois de partilhada (o «Também para …» já foi e limpou-se):
+    // a cópia da outra pessoa diz que já dividiram.
+    if (people != null && !adding) {
+      const { data: copies } = await admin.from('meals').select('id').eq('source_meal_id', meal.id).is('deleted_at', null).limit(1)
+      if (copies?.length) people = null
+    }
     // Já descontado o que sobrou: só entra o que é novo (rules/sobras.ts).
     const items = !adding ? analysed : meal.leftover_photo_path ? mergeAfterLeftovers(meal.items, analysed) : mergeAdded(meal.items, analysed)
     const tags = meal.tags ?? []

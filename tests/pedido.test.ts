@@ -6,8 +6,10 @@ import {
   nonFoodLine,
   orderHintText,
   orderPeople,
+  orderQuantity,
   orderSplitHint,
   pendingSplit,
+  unlinkMultiples,
 } from '../api/_lib/rules/pedido'
 import { toMealItems } from '../api/_lib/rules/analise'
 import { outputSchema, parseStructured } from '../api/_lib/rules/resposta-ia'
@@ -114,6 +116,23 @@ describe('para quantas pessoas é o pedido', () => {
     // Outras marcas não dizem nada sobre a divisão; sem as migrações, as colunas não vêm.
     expect(pendingSplit(2, { tags: ['jantar_fora', 'sem_molho'] })).toBe(2)
     expect(pendingSplit(2, { portion_factor: '1.00' })).toBe(2)
+    // Uma cópia partilhada (a da Joana), mesmo reanalisada ou com outra nota: nunca.
+    expect(pendingSplit(2, { ...plain, source_meal_id: 'm-joao' })).toBeNull()
+    expect(orderSplitHint({ ...plain, order_people: 2, status: 'por_rever', note: 'sem wasabi', source_meal_id: 'm-joao' })).toBeNull()
+  })
+
+  it('uma linha de 2 ou mais doses não ensina a porção de um alimento da biblioteca', () => {
+    expect(orderQuantity('2× Poke de salmão')).toBe(2)
+    expect(orderQuantity('3x Coca-Cola 33 cl')).toBe(3)
+    expect(orderQuantity('Combinado 24 peças')).toBe(1)
+    expect(orderQuantity('1× Gyoza de frango (6)')).toBe(1)
+    expect(orderQuantity('Xarope')).toBe(1)
+    const items = [
+      { name: '2× Poke de salmão', food_ref: 'a3' },
+      { name: 'Coca-Cola 33 cl', food_ref: 'a7' },
+      { name: '1× Edamame', food_ref: 'a9' },
+    ]
+    expect(unlinkMultiples(items).map((i) => i.food_ref)).toEqual([null, 'a7', 'a9'])
   })
 })
 

@@ -39,7 +39,8 @@ export const MAX_GROUP_PHOTOS = 4
 // ou menos da anterior; uma foto sem hora fica sempre sozinha. As capturas de
 // ecrã sem hora (`screenshot`; o iPhone grava-as em PNG, sem a hora no EXIF)
 // escolhidas juntas são o mesmo pedido de entrega, que às vezes precisa de 2
-// capturas: ficam juntas, até 4 por refeição, e «Separar» parte-as.
+// capturas: ficam juntas, até 4 por refeição, e «Separar» parte-as. Com as
+// fotos de uma só refeição com hora, juntam-se a ela.
 export function groupPhotos<T extends { at: Date | null; screenshot?: boolean }>(photos: T[]): T[][] {
   const known = photos
     .filter((p) => p.at != null)
@@ -55,6 +56,12 @@ export function groupPhotos<T extends { at: Date | null; screenshot?: boolean }>
     }
   }
   const shots = photos.filter((p) => p.at == null && p.screenshot)
+  // A foto do prato e a captura do pedido dele escolhidas juntas: uma refeição
+  // só, na hora da foto (só com um grupo com hora e cabendo nas 4 fotos).
+  if (groups.length === 1 && shots.length > 0 && groups[0]!.length + shots.length <= MAX_GROUP_PHOTOS) {
+    groups[0]!.push(...shots)
+    shots.length = 0
+  }
   for (let i = 0; i < shots.length; i += MAX_GROUP_PHOTOS) groups.push(shots.slice(i, i + MAX_GROUP_PHOTOS))
   for (const photo of photos) if (photo.at == null && !photo.screenshot) groups.push([photo])
   return groups
