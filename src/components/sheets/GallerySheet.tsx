@@ -116,7 +116,10 @@ export default function GallerySheet() {
         if (queued.current.has(key)) continue
         const state = stateOf(key)
         const at = group[0]!.at
-        const shareWith = people.filter((p) => state.shareWith.includes(p.user_id)).map((p) => p.user_id)
+        // O chip só aparece nas capturas: um «Separar» depois de o escolher não partilha a foto do prato.
+        const shareWith = group.some((photo) => photo.screenshot)
+          ? people.filter((p) => state.shareWith.includes(p.user_id)).map((p) => p.user_id)
+          : []
         await enqueueCapture({
           files: group.map((p) => p.file),
           text: null,
@@ -222,7 +225,8 @@ export default function GallerySheet() {
                   })
                 }
               />
-              {people.length > 0 && (
+              {/* Só nas capturas (o pedido de entrega): nas fotos normais seria mais um chip por refeição. */}
+              {people.length > 0 && group.some((photo) => photo.screenshot) && (
                 <AlsoFor
                   people={people}
                   me={me}
