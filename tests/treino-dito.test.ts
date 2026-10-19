@@ -50,6 +50,8 @@ describe('dizer o treino', () => {
     const bike = cleanSaid({ tipo: 'bike', minutos: 45, watts: 140, fc_media: 128, data: '2026-09-01' }, '2026-10-05')
     expect(bike).toMatchObject({ type: 'bike', sport: null, watts: 140, avg_hr: 128, date: null })
     expect(saidSummary(bike, (s) => s)).toBe('Bicicleta · 45 min · 140 W · FC 128')
+    const gym = cleanSaid({ tipo: 'strength', minutos: 47, kcal_relogio: 210, exercicios: [{ nome: 'Agachamento', series: [] }] }, '2026-10-05')
+    expect(saidSummary(gym, (s) => s)).toBe('Ginásio · 1 exercício · 47 min · 210 kcal do relógio')
     expect(cleanSaid({ tipo: 'nada' }, '2026-10-05')).toMatchObject({ type: 'other', sport: 'outro', title: '' })
   })
 

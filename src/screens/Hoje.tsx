@@ -27,6 +27,7 @@ import { weekSoFar, type WeekSoFarDay } from '../../api/_lib/rules/balanco'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { useAutoSync } from '../lib/intervals'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
+import { strengthReason } from '../../api/_lib/rules/kcal-ginasio'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
 import { analysisStalled, analysisStuck } from '../../api/_lib/rules/analise'
@@ -809,7 +810,11 @@ export default function Hoje() {
             {workout.minutes != null && ` · ${workout.minutes} min`}
             {workout.distance_km != null && ` · ${String(workout.distance_km).replace('.', ',')} km`}
           </span>
-          {kcal > 0 && <span className="num text-[22px] text-burn">+{fmtKcal(kcal)}</span>}
+          {kcal > 0 && (
+            <span className="num shrink-0 text-[22px] text-burn">
+              {workout.kcal_estimated ? '≈ ' : ''}+{fmtKcal(kcal)}
+            </span>
+          )}
         </button>
       ),
     })
@@ -1190,11 +1195,11 @@ export default function Hoje() {
               <ul className="space-y-1 text-dim">
                 {workoutKcals.map(({ workout, kcal }) => (
                   <li key={workout.id} className="tabular-nums">
-                    {workoutTitle(workout)} · +{fmtKcal(kcal)}&nbsp;kcal{' '}
+                    {workoutTitle(workout)} · {workout.kcal_estimated ? '≈ ' : ''}+{fmtKcal(kcal)}&nbsp;kcal{' '}
                     {workout.type === 'bike' && workout.watts != null
                       ? `pela potência (${workout.watts} W × ${workout.minutes} min)`
                       : workout.type === 'strength'
-                        ? '150 fixas por ginásio de 30 min ou mais'
+                        ? strengthReason(workout.kcal_rule)
                         : workout.type === 'bike' && workout.kcal_rule === 'device'
                           ? 'as calorias do relógio (já contam com os watts)'
                           : workout.kcal_rule === 'device_x0.7' || workout.raw?.calories != null

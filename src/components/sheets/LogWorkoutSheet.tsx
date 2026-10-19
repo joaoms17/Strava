@@ -8,7 +8,9 @@ import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, fmtKcal } from '../../lib/format'
 import { SPORT_LABEL, sameDaySession, saveWorkout } from '../../lib/workout-actions'
 import { lisbonInstant } from '../../../api/_lib/rules/momentos'
-import { workoutKcal } from '../../../api/_lib/rules/targets'
+import { exerciseKcal } from '../../../api/_lib/rules/treino'
+import { isOtherSport } from '../../../api/_lib/rules/targets'
+import { useKcalContext } from '../../lib/kcal-context'
 import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import SameSession from '../SameSession'
@@ -35,6 +37,8 @@ export default function LogWorkoutSheet() {
       .maybeSingle()
       .then(({ data }) => setFavorite((data ?? null) as Favorite | null))
   }, [favId])
+  // As kcal como o servidor as conta: o peso desse dia e, no ginásio, o teu ritmo.
+  const context = useKcalContext(date ?? today, today, favorite?.workout?.type ?? null)
 
   if (favorite === undefined) {
     return (
@@ -52,7 +56,16 @@ export default function LogWorkoutSheet() {
   }
 
   const w = favorite.workout
-  const kcal = workoutKcal({ type: w.type, minutes: w.minutes, watts: w.watts ?? null, deviceCalories: null })
+  const { kcal } = exerciseKcal({
+    type: w.type,
+    minutes: w.minutes,
+    watts: w.watts ?? null,
+    wattsSource: w.watts ? 'favorite' : null,
+    deviceCalories: null,
+    sport: w.type === 'other' && isOtherSport(w.sport) ? w.sport : null,
+    weightKg: context.weightKg,
+    gymPace: context.gymPace,
+  })
   const kind = w.type === 'bike' ? 'Bicicleta' : w.type === 'strength' ? 'Ginásio' : (SPORT_LABEL[w.sport ?? 'outro'] ?? 'Treino')
 
   // Sem decisão, vê primeiro se já há um treino parecido nesse dia.

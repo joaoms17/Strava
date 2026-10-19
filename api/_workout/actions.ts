@@ -9,6 +9,7 @@ import { painStatus } from '../_lib/rules/semaforo.js'
 import { estimatedStart, exerciseKcal, mergePatch, startGuessed, type WattsSource } from '../_lib/rules/treino.js'
 import { OTHER_SPORTS, isOtherSport, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
+import { strengthContext, weightNear } from '../_lib/kcal-context.js'
 import { claimAndParse, type ImportRow } from '../_lib/workout-shot.js'
 
 // Treino (Fase 3): guardar em poucos toques (favorito, «Já fiz», rascunho de
@@ -94,6 +95,8 @@ const StrengthSchema = z.object({
   favorite_id: z.string().uuid().nullable().optional(),
   note: z.string().max(500).nullable().optional(),
   name: z.string().trim().max(80).nullable().optional(),
+  // As calorias do relógio ditas («Dizer ou escrever»): contam por inteiro.
+  kcal_device: int(0, 5000).nullable().optional(),
 })
 
 const ShotAddSchema = z.object({
@@ -161,16 +164,25 @@ async function cutoffHour(db: SupabaseClient): Promise<number> {
   return data?.nutrition_day_cutoff_hour ?? 4
 }
 
-// Peso médio dos 7 dias até esta data (para as kcal de um «Outro» sem relógio).
-async function weightNear(db: SupabaseClient, date: string): Promise<number | null> {
-  const { data: recent } = await db
-    .from('weights')
-    .select('kg')
-    .gte('date', shiftDate(date, -6))
-    .lte('date', date)
-  if (recent?.length) return recent.reduce((acc, w) => acc + Number(w.kg), 0) / recent.length
-  const { data: last } = await db.from('weights').select('kg').lte('date', date).order('date', { ascending: false }).limit(1)
-  return last?.[0] ? Number(last[0].kg) : null
+// As calorias do relógio guardadas num treino (as do Strava antigo ficam em raw).
+function storedDeviceKcal(w: Record<string, unknown>): number | null {
+  if (w.kcal_device != null) return Number(w.kcal_device)
+  const calories = (w.raw as { calories?: unknown } | null)?.calories
+  return typeof calories === 'number' ? calories : null
+}
+
+// O que um ginásio sem calorias do relógio precisa (o ritmo da pessoa ou o
+// peso); com elas, nada. Só os registos da própria pessoa (a RLS já o garante;
+// o filtro fica explícito).
+async function strengthNeeds(
+  db: SupabaseClient,
+  userId: string,
+  cutoff: number,
+  date: string,
+  deviceCalories: number | null,
+): Promise<{ gymPace: number | null; weightKg: number | null }> {
+  if (deviceCalories != null && deviceCalories > 0) return { gymPace: null, weightKg: null }
+  return strengthContext(db, nutritionalDay(new Date(), cutoff), date, userId)
 }
 
 // Últimos watts confirmados (não supostos) nos 30 dias antes desta data.
@@ -294,7 +306,13 @@ export const save = post(async ({ db, userId, body, res }) => {
   }
 
   const sport = (type === 'other' ? (input.sport ?? 'outro') : null) as OtherSport | null
-  const weightKg = type === 'other' && input.kcal_device == null ? await weightNear(db, date) : null
+  // Ginásio sem calorias do relógio: o ritmo da pessoa (ou o peso). Junto a
+  // uma sessão que já existe, as contas são as dela (abaixo).
+  const gym =
+    type === 'strength' && !input.merge_into
+      ? await strengthNeeds(db, userId, cutoff, date, input.kcal_device ?? null)
+      : { gymPace: null, weightKg: null }
+  const weightKg = type === 'other' && input.kcal_device == null ? await weightNear(db, date) : gym.weightKg
   const kcal = exerciseKcal({
     type,
     minutes: input.minutes,
@@ -303,6 +321,7 @@ export const save = post(async ({ db, userId, body, res }) => {
     deviceCalories: input.kcal_device ?? null,
     sport,
     weightKg,
+    gymPace: gym.gymPace,
   })
 
   const fromShot = importRow?.parsed ? extrasFromImport(importRow) : {}
@@ -339,10 +358,15 @@ export const save = post(async ({ db, userId, body, res }) => {
     if (target.source === 'intervals' && input.kcal_device != null && input.kcal_device !== target.kcal_device) {
       patch.kcal_device = input.kcal_device
     }
-    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts
-    // ou noutro desporto (as do «Já fiz» numa caminhada do relógio).
+    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts,
+    // noutro desporto (as do «Já fiz» numa caminhada do relógio) ou no ginásio
+    // (o print junto ao ginásio dito ou com séries: contam as do relógio).
     const wattsNow = (patch.watts ?? target.watts) as number | null
-    const newDeviceKcal = patch.kcal_device != null && ((target.type === 'bike' && wattsNow == null) || target.type === 'other')
+    const newDeviceKcal =
+      patch.kcal_device != null &&
+      ((target.type === 'bike' && wattsNow == null) ||
+        target.type === 'other' ||
+        (target.type === 'strength' && Number(patch.kcal_device) > 0))
     if (patch.watts != null || newDeviceKcal) {
       const targetSport = (target.sport ?? (target.raw as { sport?: unknown } | null)?.sport) as string | null | undefined
       const again = exerciseKcal({
@@ -350,8 +374,7 @@ export const save = post(async ({ db, userId, body, res }) => {
         minutes: (target.minutes as number | null) ?? input.minutes,
         watts: target.type === 'bike' ? wattsNow : null,
         wattsSource: (patch.watts_source ?? target.watts_source) as WattsSource,
-        deviceCalories:
-          target.type === 'bike' || target.type === 'other' ? ((patch.kcal_device ?? target.kcal_device) as number | null) : null,
+        deviceCalories: (patch.kcal_device ?? target.kcal_device) as number | null,
         sport: target.type === 'other' && isOtherSport(targetSport) ? targetSport : null,
       })
       Object.assign(patch, { kcal_est: again.kcal, kcal_rule: again.rule, kcal_estimated: again.estimated })
@@ -422,10 +445,20 @@ export const save = post(async ({ db, userId, body, res }) => {
 })
 
 // Sessão de ginásio livre (Fase 5): cria (ou, com workout_id, edita) o
-// treino e grava as séries em exercise_log. As kcal são as 150 fixas.
+// treino e grava as séries em exercise_log. As kcal são as calorias do
+// relógio, quando as há, ou os minutos ao ritmo da pessoa (ou pelo peso).
 export const strength = post(async ({ db, userId, body, res }) => {
   const input = parse(StrengthSchema, body)
-  const kcal = exerciseKcal({ type: 'strength', minutes: input.minutes, watts: null, wattsSource: null, deviceCalories: null })
+  const cutoff = await cutoffHour(db)
+  const kcalFor = async (date: string, deviceCalories: number | null) =>
+    exerciseKcal({
+      type: 'strength',
+      minutes: input.minutes,
+      watts: null,
+      wattsSource: null,
+      deviceCalories,
+      ...(await strengthNeeds(db, userId, cutoff, date, deviceCalories)),
+    })
   const rows = (workoutId: string) =>
     input.sets.map((s) => ({
       user_id: userId,
@@ -448,11 +481,13 @@ export const strength = post(async ({ db, userId, body, res }) => {
 
   if (input.workout_id) {
     const target = await ownWorkout(db, input.workout_id)
-    const patch: Record<string, unknown> = {
-      minutes: input.minutes,
-      kcal_est: kcal.kcal,
-      kcal_rule: kcal.rule,
-      kcal_estimated: false,
+    const patch: Record<string, unknown> = { minutes: input.minutes }
+    if (input.kcal_device != null) patch.kcal_device = input.kcal_device
+    // Só a duração ou as calorias do relógio mudam as contas: corrigir as
+    // séries de uma sessão antiga não reescreve as kcal dela (decisão 64).
+    if (input.minutes !== target.minutes || (input.kcal_device != null && input.kcal_device !== target.kcal_device)) {
+      const kcal = await kcalFor(target.date as string, input.kcal_device ?? storedDeviceKcal(target))
+      Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
     }
     if (favorite) Object.assign(patch, { favorite_id: favorite.id, name: favorite.name })
     if (input.pain_during !== undefined) {
@@ -479,7 +514,8 @@ export const strength = post(async ({ db, userId, body, res }) => {
   const now = new Date()
   const startedAt = instantOrNow(input.started_at, new Date(estimatedStart(now, input.minutes)))
   const guessed = !input.started_at || input.started_at_estimated === true
-  const date = nutritionalDay(startedAt, await cutoffHour(db))
+  const date = nutritionalDay(startedAt, cutoff)
+  const kcal = await kcalFor(date, input.kcal_device ?? null)
   if (favorite) {
     await db
       .from('favorites')
@@ -496,9 +532,10 @@ export const strength = post(async ({ db, userId, body, res }) => {
       source: 'manual',
       type: 'strength',
       minutes: input.minutes,
+      kcal_device: input.kcal_device ?? null,
       kcal_est: kcal.kcal,
       kcal_rule: kcal.rule,
-      kcal_estimated: false,
+      kcal_estimated: kcal.estimated,
       pain_during: input.pain_during ?? null,
       status: painStatus(input.pain_during ?? null, null),
       favorite_id: favorite?.id ?? null,
@@ -529,7 +566,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
   res.status(200).json({ workout })
 })
 
-export const update = post(async ({ db, body, res }) => {
+export const update = post(async ({ db, userId, body, res }) => {
   const input = parse(UpdateSchema, body)
   const workout = await ownWorkout(db, input.workout_id)
   const previous = { ...workout }
@@ -579,22 +616,32 @@ export const update = post(async ({ db, body, res }) => {
   if (type === 'other' && (input.sport !== undefined || patch.type !== undefined)) patch.sport = sport
   else if (patch.type !== undefined && patch.type !== workout.type && workout.type === 'other') patch.sport = null
 
-  // Editar o que entra nas contas recalcula as kcal deste treino.
-  if (['type', 'minutes', 'watts', 'sport'].some((k) => (input as Record<string, unknown>)[k] !== undefined)) {
+  // Mudar o que entra nas contas (o tipo, a duração, os watts, o desporto)
+  // recalcula as kcal deste treino, com as calorias do relógio guardadas.
+  // Corrigir só os batimentos ou a hora não mexe nelas (decisão 64).
+  const storedSport = (workout.raw as { sport?: OtherSport } | null)?.sport ?? (workout.sport as string | null) ?? 'outro'
+  const changed =
+    (input.type !== undefined && input.type !== workout.type) ||
+    (input.minutes !== undefined && input.minutes !== workout.minutes) ||
+    // Os mesmos watts confirmados à mão deixam de ser «≈ da última sessão».
+    (input.watts !== undefined && (input.watts !== workout.watts || patch.watts_source !== workout.watts_source)) ||
+    (input.sport !== undefined && type === 'other' && input.sport !== storedSport)
+  if (changed) {
     const date = (patch.date ?? workout.date) as string
-    const deviceCalories =
-      (workout.kcal_device as number | null) ??
-      (typeof (workout.raw as { calories?: unknown } | null)?.calories === 'number'
-        ? (workout.raw as { calories: number }).calories
-        : null)
+    const deviceCalories = storedDeviceKcal(workout)
+    const gym =
+      type === 'strength'
+        ? await strengthNeeds(db, userId, await cutoffHour(db), date, deviceCalories)
+        : { gymPace: null, weightKg: null }
     const kcal = exerciseKcal({
       type,
       minutes: (patch.minutes ?? workout.minutes) as number | null,
       watts: type === 'bike' ? ((patch.watts !== undefined ? patch.watts : workout.watts) as number | null) : null,
       wattsSource: ((patch.watts_source !== undefined ? patch.watts_source : workout.watts_source) as WattsSource | null) ?? null,
-      deviceCalories: type === 'other' || type === 'bike' ? deviceCalories : null,
+      deviceCalories,
       sport,
-      weightKg: type === 'other' && deviceCalories == null ? await weightNear(db, date) : null,
+      weightKg: type === 'other' && deviceCalories == null ? await weightNear(db, date) : gym.weightKg,
+      gymPace: gym.gymPace,
     })
     Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
   }

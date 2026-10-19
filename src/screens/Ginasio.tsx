@@ -7,7 +7,7 @@ import { BusyButton } from '../lib/busy'
 import { emitDataChanged } from '../lib/events'
 import { useReadyProfile } from '../lib/profile'
 import { nutritionalDay } from '../lib/day'
-import { fmtDayShort, fmtKcal } from '../lib/format'
+import { fmtDayShort } from '../lib/format'
 import { lisbonInstant } from '../../api/_lib/rules/momentos'
 import { exerciseKey, sameExercise } from '../../api/_lib/rules/exercicios'
 import {
@@ -24,6 +24,8 @@ import type { ExerciseLogRow, Favorite, TemplateExercise, Workout } from '../lib
 import ExercisePicker from '../components/ExercisePicker'
 import Icon from '../components/ui/Icon'
 import { readScoped, writeScoped } from '../lib/scoped'
+import { kcalOfWorkout } from '../lib/workout-actions'
+import { workoutKcal } from '../../api/_lib/rules/targets'
 
 interface DraftSet {
   reps: number
@@ -278,7 +280,7 @@ export default function Ginasio() {
       toast(
         editId
           ? 'Sessão corrigida.'
-          : `Ginásio registado · ${sets.length} séries${workout.kcal_est ? ` · +${fmtKcal(workout.kcal_est)} kcal do treino` : ''}`,
+          : `Ginásio registado · ${sets.length} séries${kcalOfWorkout(workout)}`,
       )
       // De um dos teus treinos ou a corrigir, o «Feito» não tem mais nada
       // (o aviso já diz as séries): volta logo ao Treino. Numa sessão livre
@@ -300,7 +302,8 @@ export default function Ginasio() {
       user_id: user.id,
       kind: 'workout',
       name,
-      kcal: 150,
+      // Sem relógio, pelos minutos (a lista dos teus treinos mostra o ritmo de agora).
+      kcal: workoutKcal({ type: 'strength', minutes, watts: null, deviceCalories: null }),
       workout: {
         type: 'strength',
         minutes,

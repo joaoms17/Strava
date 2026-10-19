@@ -7,9 +7,9 @@ import {
   workoutKcal,
 } from '../api/_lib/rules/targets'
 
-// Regra 2: bike = watts x minutos x 0,06; força = 150 se >= 30 min;
-// outros = calorias do dispositivo x 0,7 ou METs líquidos x peso x horas.
-// Nunca as kcal do relógio para bike/força.
+// Regra 2: bike = watts x minutos x 0,06; ginásio = as calorias do relógio
+// por inteiro ou, sem elas, pelos minutos (sem mínimo de 30 min); outros =
+// calorias do dispositivo x 0,7 ou METs líquidos x peso x horas.
 describe('workoutKcal', () => {
   it('bike usa watts x minutos x 0,06', () => {
     expect(workoutKcal({ type: 'bike', watts: 140, minutes: 45, deviceCalories: 999 })).toBe(378)
@@ -20,13 +20,16 @@ describe('workoutKcal', () => {
     expect(workoutKcal({ type: 'bike', watts: 140, minutes: null, deviceCalories: 500 })).toBe(0)
   })
 
-  it('força vale 150 a partir de 30 minutos', () => {
-    expect(workoutKcal({ type: 'strength', watts: null, minutes: 30, deviceCalories: 400 })).toBe(150)
-    expect(workoutKcal({ type: 'strength', watts: null, minutes: 60, deviceCalories: 400 })).toBe(150)
+  it('ginásio: as calorias do relógio por inteiro, com qualquer duração', () => {
+    expect(workoutKcal({ type: 'strength', watts: null, minutes: 30, deviceCalories: 400 })).toBe(400)
+    expect(workoutKcal({ type: 'strength', watts: null, minutes: 29, deviceCalories: 210 })).toBe(210)
   })
 
-  it('força abaixo de 30 minutos vale 0', () => {
-    expect(workoutKcal({ type: 'strength', watts: null, minutes: 29, deviceCalories: 400 })).toBe(0)
+  it('ginásio sem calorias do relógio: pelos minutos e pelo peso, nunca 0 nem 150 fixas', () => {
+    // 4 METs líquidos × 60 kg × 0,5 h = 120
+    expect(workoutKcal({ type: 'strength', watts: null, minutes: 30, deviceCalories: null, weightKg: 60 })).toBe(120)
+    // Sem peso: 4 kcal por minuto.
+    expect(workoutKcal({ type: 'strength', watts: null, minutes: 20, deviceCalories: null })).toBe(80)
   })
 
   it('outros usam as calorias do dispositivo x 0,7', () => {
@@ -70,7 +73,7 @@ describe('storedExerciseKcal', () => {
   it('calcula pela regra quando não há valor guardado', () => {
     expect(
       storedExerciseKcal([{ type: 'strength', watts: null, minutes: 45, deviceCalories: null, kcal_est: null }]),
-    ).toBe(150)
+    ).toBe(180)
   })
 })
 
@@ -80,8 +83,8 @@ describe('kcalTarget', () => {
       { type: 'bike', watts: 130, minutes: 30, deviceCalories: null },
       { type: 'strength', watts: null, minutes: 45, deviceCalories: null },
     ])
-    expect(exercise).toBe(234 + 150)
-    expect(kcalTarget(1500, exercise)).toBe(1884)
+    expect(exercise).toBe(234 + 180)
+    expect(kcalTarget(1500, exercise)).toBe(1914)
   })
 })
 
