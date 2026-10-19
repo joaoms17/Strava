@@ -52,6 +52,7 @@ import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
 import { proteinPicks } from '../../api/_lib/rules/favoritos'
 import { sharedFrom } from '../../api/_lib/rules/partilha'
+import { orderSplitHint } from '../../api/_lib/rules/pedido'
 
 interface DayData {
   date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
@@ -638,6 +639,8 @@ export default function Hoje() {
     // Partilhada por outra pessoa da casa: diz de quem é e, por rever, leva
     // a confirmar a porção (a qualquer hora, não só no Rever da noite).
     const from = analysed ? sharedFrom(meal.note) : null
+    // Um pedido de entrega para 2 ainda por dividir diz-se logo na linha.
+    const order = analysed ? orderSplitHint(meal) : null
     const subtitle = isRetrying
       ? 'A analisar outra vez…'
       : meal.status === 'erro'
@@ -650,7 +653,7 @@ export default function Hoje() {
               ? 'Sem análise (limite da IA)'
               : fromFavorite
                 ? SLOT_LABEL[slot]
-                : `${from ? `de ${from} · ` : ''}${meal.items.map((i) => i.name).join(', ')}`
+                : `${from ? `de ${from} · ` : ''}${order ? `Pedido para ${order} · ` : ''}${meal.items.map((i) => i.name).join(', ')}`
     entries.push({
       at: meal.logged_at,
       key: `m-${meal.id}`,

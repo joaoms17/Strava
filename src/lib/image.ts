@@ -17,10 +17,23 @@ async function toJpegBlob(bitmap: ImageBitmap, maxDim: number, quality: number):
   return blob
 }
 
+// Capturas de ecrã (o resumo de um pedido do Glovo, do Uber Eats…): o iPhone
+// grava-as em PNG e ao alto (1179 × 2556, 2,2 : 1). Com 1024 px no lado maior
+// ficam com 472 px de largura e as linhas pequenas do pedido (peças, extras,
+// «sem molho») deixam de se ler. Vão como as fotos do menu (2048 px). As
+// fotos da comida (4 : 3, HEIC ou JPEG) não mudam.
+export const SCREENSHOT_MIN_ASPECT = 1.9
+
+export function screenshotLike(width: number, height: number, type = ''): boolean {
+  if (!(width > 0 && height > 0)) return false
+  return type === 'image/png' || height / width >= SCREENSHOT_MIN_ASPECT
+}
+
 // Foto de 1024 px (JPEG q0,75, ~150 KB) e miniatura de 256 px, a partir do
 // ficheiro original; o bitmap fecha-se logo a seguir. Com `detail` (refeição
 // com 2 ou mais fotos, muitas vezes o prato e o rótulo) sobe a 1568 px
-// (q0,8), para a letra pequena da tabela nutricional se ler.
+// (q0,8), para a letra pequena da tabela nutricional se ler. Uma captura de
+// ecrã vai a 2048 px (`readableJpeg`).
 export async function prepareImage(file: Blob, detail = false): Promise<{ full: Blob; thumb: Blob }> {
   let bitmap: ImageBitmap
   try {
@@ -29,7 +42,11 @@ export async function prepareImage(file: Blob, detail = false): Promise<{ full: 
     throw new Error('Este formato de foto não é suportado. Tenta outra foto.')
   }
   try {
-    const full = detail ? await toJpegBlob(bitmap, 1568, 0.8) : await toJpegBlob(bitmap, 1024, 0.75)
+    const full = screenshotLike(bitmap.width, bitmap.height, file.type)
+      ? await readableJpeg(bitmap)
+      : detail
+        ? await toJpegBlob(bitmap, 1568, 0.8)
+        : await toJpegBlob(bitmap, 1024, 0.75)
     const thumb = await toJpegBlob(bitmap, 256, 0.7)
     return { full, thumb }
   } finally {
@@ -76,8 +93,19 @@ export async function prepareShot(file: Blob): Promise<{ full: Blob; thumb: Blob
   }
 }
 
-// Fotos do menu: até 2048 px (JPEG q0,8) para as letras pequenas se lerem;
-// se ainda passar de ~1,4 MB, mais pequena.
+// Texto para ler (menu, rótulo, captura de um pedido): até 2048 px (JPEG
+// q0,8) para as letras pequenas se lerem; se ainda passar de ~1,4 MB, mais
+// pequena.
+export const READABLE_MAX_BYTES = 1_400_000
+
+async function readableJpeg(bitmap: ImageBitmap): Promise<Blob> {
+  let jpeg = await toJpegBlob(bitmap, 2048, 0.8)
+  if (jpeg.size > READABLE_MAX_BYTES) jpeg = await toJpegBlob(bitmap, 1600, 0.7)
+  if (jpeg.size > READABLE_MAX_BYTES) jpeg = await toJpegBlob(bitmap, 1280, 0.6)
+  return jpeg
+}
+
+// Fotos do menu e do rótulo.
 export async function prepareMenuPhoto(file: Blob): Promise<Blob> {
   let bitmap: ImageBitmap
   try {
@@ -86,10 +114,7 @@ export async function prepareMenuPhoto(file: Blob): Promise<Blob> {
     throw new Error('Este formato de foto não é suportado. Tenta outra.')
   }
   try {
-    let jpeg = await toJpegBlob(bitmap, 2048, 0.8)
-    if (jpeg.size > 1_400_000) jpeg = await toJpegBlob(bitmap, 1600, 0.7)
-    if (jpeg.size > 1_400_000) jpeg = await toJpegBlob(bitmap, 1280, 0.6)
-    return jpeg
+    return await readableJpeg(bitmap)
   } finally {
     bitmap.close()
   }

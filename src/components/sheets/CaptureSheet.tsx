@@ -26,7 +26,7 @@ import { loadActiveDiet } from '../../lib/diets'
 import { useSignedUrls } from '../../lib/photos'
 import { usePeople } from '../../lib/people'
 import { useAccounts } from '../../lib/accounts'
-import { SplitChips } from '../Porcao'
+import { AlsoFor } from '../Porcao'
 import Thumb from '../ui/Thumb'
 import { LeftoversQuestion } from '../Sobras'
 import {
@@ -439,32 +439,18 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
           <p className="-mt-2 text-[13px] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
         )}
         {hasContent && people.length > 0 && (
-          <div className="-mt-1 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {people.map((p) => (
-                <button
-                  key={p.user_id}
-                  aria-pressed={shareWith.includes(p.user_id)}
-                  onClick={() => setShareWith(toggle(shareWith, p.user_id))}
-                  className={chip(shareWith.includes(p.user_id))}
-                >
-                  Também para {p.name}
-                </button>
-              ))}
-            </div>
-            {/* Com uma pessoa: como comeram (a divisão aplica-se no fim da análise). */}
-            {sharingWith.length === 1 && (
-              <SplitChips
-                me={me}
-                other={sharingWith[0]!.name}
-                value={split}
-                onChange={(value) => {
-                  setSplit(value)
-                  if (value != null) setTags((marks) => marks.filter((mark) => mark !== 'comi_metade'))
-                }}
-              />
-            )}
-          </div>
+          <AlsoFor
+            className="-mt-1"
+            people={people}
+            me={me}
+            shareWith={shareWith}
+            split={split}
+            onShareWith={setShareWith}
+            onSplit={(value) => {
+              setSplit(value)
+              if (value != null) setTags((marks) => marks.filter((mark) => mark !== 'comi_metade'))
+            }}
+          />
         )}
 
         {reviewing ? (
