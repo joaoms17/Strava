@@ -172,15 +172,17 @@ function storedDeviceKcal(w: Record<string, unknown>): number | null {
 }
 
 // O que um ginásio sem calorias do relógio precisa (o ritmo da pessoa ou o
-// peso); com elas, nada.
+// peso); com elas, nada. Só os registos da própria pessoa (a RLS já o garante;
+// o filtro fica explícito).
 async function strengthNeeds(
   db: SupabaseClient,
+  userId: string,
   cutoff: number,
   date: string,
   deviceCalories: number | null,
 ): Promise<{ gymPace: number | null; weightKg: number | null }> {
   if (deviceCalories != null && deviceCalories > 0) return { gymPace: null, weightKg: null }
-  return strengthContext(db, nutritionalDay(new Date(), cutoff), date)
+  return strengthContext(db, nutritionalDay(new Date(), cutoff), date, userId)
 }
 
 // Últimos watts confirmados (não supostos) nos 30 dias antes desta data.
@@ -308,7 +310,7 @@ export const save = post(async ({ db, userId, body, res }) => {
   // uma sessão que já existe, as contas são as dela (abaixo).
   const gym =
     type === 'strength' && !input.merge_into
-      ? await strengthNeeds(db, cutoff, date, input.kcal_device ?? null)
+      ? await strengthNeeds(db, userId, cutoff, date, input.kcal_device ?? null)
       : { gymPace: null, weightKg: null }
   const weightKg = type === 'other' && input.kcal_device == null ? await weightNear(db, date) : gym.weightKg
   const kcal = exerciseKcal({
@@ -455,7 +457,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
       watts: null,
       wattsSource: null,
       deviceCalories,
-      ...(await strengthNeeds(db, cutoff, date, deviceCalories)),
+      ...(await strengthNeeds(db, userId, cutoff, date, deviceCalories)),
     })
   const rows = (workoutId: string) =>
     input.sets.map((s) => ({
@@ -564,7 +566,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
   res.status(200).json({ workout })
 })
 
-export const update = post(async ({ db, body, res }) => {
+export const update = post(async ({ db, userId, body, res }) => {
   const input = parse(UpdateSchema, body)
   const workout = await ownWorkout(db, input.workout_id)
   const previous = { ...workout }
@@ -621,14 +623,15 @@ export const update = post(async ({ db, body, res }) => {
   const changed =
     (input.type !== undefined && input.type !== workout.type) ||
     (input.minutes !== undefined && input.minutes !== workout.minutes) ||
-    (input.watts !== undefined && input.watts !== workout.watts) ||
+    // Os mesmos watts confirmados à mão deixam de ser «≈ da última sessão».
+    (input.watts !== undefined && (input.watts !== workout.watts || patch.watts_source !== workout.watts_source)) ||
     (input.sport !== undefined && type === 'other' && input.sport !== storedSport)
   if (changed) {
     const date = (patch.date ?? workout.date) as string
     const deviceCalories = storedDeviceKcal(workout)
     const gym =
       type === 'strength'
-        ? await strengthNeeds(db, await cutoffHour(db), date, deviceCalories)
+        ? await strengthNeeds(db, userId, await cutoffHour(db), date, deviceCalories)
         : { gymPace: null, weightKg: null }
     const kcal = exerciseKcal({
       type,

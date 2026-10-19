@@ -51,7 +51,7 @@ ritmo as (
     and w.kcal_device > 0
     and w.date between p.hoje - 120 and p.hoje
     and w.minutes between 10 and 240
-    and w.kcal_device::numeric / w.minutes between 1.5 and 15
+    and w.kcal_device::numeric / nullif(w.minutes, 0) between 1.5 and 15
 ),
 alvo as (
   select w.id, w.user_id, w.date, w.kcal_est, w.kcal_rule,
@@ -111,7 +111,7 @@ ritmo as (
     and w.kcal_device > 0
     and w.date between p.hoje - 120 and p.hoje
     and w.minutes between 10 and 240
-    and w.kcal_device::numeric / w.minutes between 1.5 and 15
+    and w.kcal_device::numeric / nullif(w.minutes, 0) between 1.5 and 15
 ),
 alvo as (
   select w.id, w.user_id, w.date,
