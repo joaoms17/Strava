@@ -1,7 +1,9 @@
 // Regra 2: kcal_target(dia) = base_kcal + kcal_exercise(dia).
-// kcal_exercise: bike = watts x minutos x 0,06; força = 150 por sessão >= 30 min;
-// outros = calorias do dispositivo x 0,7 ou, sem elas, METs líquidos x peso x horas.
-// Nunca usar kcal do relógio para bike ou força.
+// kcal_exercise: bike = watts x minutos x 0,06 (sem watts, as calorias do
+// relógio por inteiro: decisão 159); ginásio = as calorias do relógio por
+// inteiro ou, sem elas, pelos minutos (`rules/kcal-ginasio.ts`); outros =
+// calorias do dispositivo x 0,7 ou, sem elas, METs líquidos x peso x horas.
+import { strengthKcal } from './kcal-ginasio.js'
 
 export type WorkoutType = 'bike' | 'strength' | 'other'
 
@@ -72,8 +74,10 @@ export function workoutKcal(w: WorkoutForKcal): number {
     case 'bike':
       if (w.watts == null || w.minutes == null) return 0
       return Math.round(w.watts * w.minutes * 0.06)
+    // Sem a base de dados não há o ritmo da pessoa: as calorias do relógio ou
+    // os minutos pelo peso (sem peso, 4 kcal por minuto).
     case 'strength':
-      return (w.minutes ?? 0) >= 30 ? 150 : 0
+      return strengthKcal({ minutes: w.minutes, deviceCalories: w.deviceCalories, weightKg: w.weightKg ?? null }).kcal
     case 'other':
       if (w.deviceCalories != null) return Math.round(w.deviceCalories * 0.7)
       if (w.weightKg == null || w.minutes == null) return 0

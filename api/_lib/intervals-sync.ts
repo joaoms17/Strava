@@ -18,6 +18,7 @@ import type { WorkoutType } from './rules/targets.js'
 import { ciqExtras, hasCiq, type CiqExtras } from './rules/ciq.js'
 import { fitDeveloperFields } from './fit.js'
 import { isDeletedWeighing } from './rules/weight.js'
+import { gymPaceFor, weightNear } from './kcal-context.js'
 
 // Fase 7 — intervals.icu. A chave vive em `integrations` (RLS sem
 // políticas): só a service role a lê. Autenticação HTTP Basic com o
@@ -353,6 +354,13 @@ export async function syncIntervals(
     )
     const used = new Set<string>()
     const inserts: Record<string, unknown>[] = []
+    // Um ginásio do relógio sem calorias (raro): o ritmo da pessoa, lido uma
+    // vez por sincronização, ou o peso perto desse dia.
+    let pace: number | null | undefined
+    const strengthNeeds = async (date: string) => {
+      if (pace === undefined) pace = await gymPaceFor(admin, today, userId)
+      return { gymPace: pace, weightKg: pace == null ? await weightNear(admin, date, userId) : null }
+    }
 
     for (const { a, startedAt, date } of fresh) {
       const extras = {
@@ -400,6 +408,17 @@ export async function syncIntervals(
             deviceCalories: null,
           })
           Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
+        } else if (match.type === 'strength' && Number(patch.kcal_device) > 0) {
+          // O ginásio registado com séries (ou dito) ganha as calorias do
+          // relógio: passam a contar por inteiro.
+          const kcal = exerciseKcal({
+            type: 'strength',
+            minutes: match.minutes ?? a.minutes,
+            watts: null,
+            wattsSource: null,
+            deviceCalories: patch.kcal_device as number,
+          })
+          Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
         }
         await admin
           .from('workouts')
@@ -417,14 +436,17 @@ export async function syncIntervals(
         continue
       }
 
+      // No ginásio, as calorias do relógio contam por inteiro (sem elas, o
+      // ritmo da pessoa ou o peso).
       const kcal = exerciseKcal({
         type: a.type,
         minutes: a.minutes,
         watts: a.watts,
         wattsSource: a.watts_source,
-        deviceCalories: a.type === 'strength' ? null : a.kcal_device,
+        deviceCalories: a.kcal_device,
         sport: a.sport,
         weightKg: null,
+        ...(a.type === 'strength' && !(Number(a.kcal_device) > 0) ? await strengthNeeds(date) : {}),
       })
       inserts.push({
         user_id: userId,

@@ -51,9 +51,15 @@ describe('exerciseKcal', () => {
     expect(exerciseKcal({ type: 'bike', minutes: 45, watts: null, wattsSource: null, deviceCalories: null }).kcal).toBe(0)
   })
 
-  it('ginásio: 150 fixas a partir de 30 min', () => {
-    expect(exerciseKcal({ type: 'strength', minutes: 40, watts: null, wattsSource: null, deviceCalories: 300 }).kcal).toBe(150)
-    expect(exerciseKcal({ type: 'strength', minutes: 20, watts: null, wattsSource: null, deviceCalories: 300 }).kcal).toBe(0)
+  it('ginásio: as calorias do relógio por inteiro; sem elas, ao ritmo da pessoa', () => {
+    expect(exerciseKcal({ type: 'strength', minutes: 40, watts: null, wattsSource: null, deviceCalories: 300 })).toEqual({
+      kcal: 300,
+      rule: 'device',
+      estimated: false,
+    })
+    expect(
+      exerciseKcal({ type: 'strength', minutes: 20, watts: null, wattsSource: null, deviceCalories: null, gymPace: 4.5 }),
+    ).toEqual({ kcal: 90, rule: 'strength_rate', estimated: true })
   })
 
   it('outro com calorias do relógio: 70 %', () => {
@@ -84,6 +90,18 @@ describe('kcalExplanation', () => {
     expect(
       kcalExplanation({ type: 'bike', minutes: 45, watts: 140, kcal: 378, rule: 'watts', deviceCalories: 520 }),
     ).toBe('O relógio diz 520 kcal. Contamos 378 pela potência (140 W × 45 min), porque os relógios exageram na bicicleta.')
+  })
+
+  it('ginásio: as do relógio, ao teu ritmo ou a regra de antes nas sessões antigas', () => {
+    expect(kcalExplanation({ type: 'strength', minutes: 47, watts: null, kcal: 210, rule: 'device', deviceCalories: 210 })).toBe(
+      'As 210 kcal do relógio.',
+    )
+    expect(
+      kcalExplanation({ type: 'strength', minutes: 30, watts: null, kcal: 122, rule: 'strength_rate', deviceCalories: null }),
+    ).toBe('≈ 122 kcal: 30 min ao teu ritmo dos últimos ginásios.')
+    expect(
+      kcalExplanation({ type: 'strength', minutes: 45, watts: null, kcal: 150, rule: 'strength_flat', deviceCalories: 400 }),
+    ).toMatch(/a regra de antes/)
   })
 
   it('sem potência pede a foto da consola', () => {

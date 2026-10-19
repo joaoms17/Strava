@@ -11,6 +11,7 @@ import { signedUrls } from '../../lib/photos'
 import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, fmtKcal, timeOf } from '../../lib/format'
 import { addShots, deleteWorkout, saveWorkout, workoutTitle } from '../../lib/workout-actions'
+import { useKcalContext } from '../../lib/kcal-context'
 import { instantInNutritionalDay, lisbonInstant } from '../../../api/_lib/rules/momentos'
 import {
   countedMinutes,
@@ -329,6 +330,8 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
         )
       })
   }, [draft?.day, draft?.kind, draft?.minutes, draft?.time]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Sem calorias do relógio, o ritmo no ginásio e o peso desse dia (como o servidor).
+  const context = useKcalContext(draft?.day ?? today, today, draft ? type : null)
 
   function startManual() {
     setPresent(new Set(['minutes', 'watts', 'kcalDevice']))
@@ -452,14 +455,17 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   const merging = candidate != null && merge
   const minutes = toInt(draft.minutes)
   const watts = type === 'bike' ? toInt(draft.watts) : null
+  // As contas que o servidor faz ao gravar (no ginásio, as calorias do
+  // relógio por inteiro; sem elas, o ritmo da pessoa ou o peso).
   const kcal = exerciseKcal({
     type,
     minutes,
     watts,
     wattsSource: draft.wattsSource,
-    deviceCalories: type === 'strength' ? null : toInt(draft.kcalDevice),
+    deviceCalories: toInt(draft.kcalDevice),
     sport: type === 'other' ? (draft.kind as OtherSport) : null,
-    weightKg: null,
+    weightKg: context.weightKg,
+    gymPace: context.gymPace,
   })
   const canSave = minutes != null && minutes > 0
   const set = (patch: Partial<Draft>) => {
@@ -653,7 +659,10 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
             input('Potência', 'watts', 'avg_power_w', 'W')}
           {present.has('avgHr') && input('Batimentos médios', 'avgHr', 'avg_hr', 'bpm')}
           {present.has('maxHr') && input('Batimentos máximos', 'maxHr', 'max_hr', 'bpm')}
-          {((type === 'bike' && (present.has('kcalDevice') || !present.has('watts'))) || type === 'other') &&
+          {/* No ginásio, só se o print as trouxe (decisão 160): contam por inteiro. */}
+          {((type === 'bike' && (present.has('kcalDevice') || !present.has('watts'))) ||
+            type === 'other' ||
+            (type === 'strength' && present.has('kcalDevice'))) &&
             input('Calorias do relógio', 'kcalDevice', 'calories_device', 'kcal')}
         </div>
 

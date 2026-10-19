@@ -18,6 +18,10 @@ import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
 import { SEGMENT_TRACK, chip, segment as tabStyle } from '../components/ui/Chips'
 import { useSheet } from '../lib/sheet'
+import { useReadyProfile } from '../lib/profile'
+import { nutritionalDay } from '../lib/day'
+import { useKcalContext } from '../lib/kcal-context'
+import { strengthKcal } from '../../api/_lib/rules/kcal-ginasio'
 
 type Segment = 'refeicoes' | 'dieta' | 'treinos' | 'alimentos' | 'compras'
 const SEGMENTS: Segment[] = ['refeicoes', 'dieta', 'treinos', 'alimentos', 'compras']
@@ -38,6 +42,22 @@ export default function Favoritos() {
   const [workoutFavs, setWorkoutFavs] = useState<Favorite[]>([])
   const sheet = useSheet()
   const [, navigate] = useLocation()
+  const profile = useReadyProfile()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+  // Um ginásio sem relógio conta ao teu ritmo de agora (as kcal guardadas no
+  // treino eram as 150 fixas de antes).
+  const hasGym = segment === 'treinos' && workoutFavs.some((f) => f.workout?.type === 'strength')
+  const context = useKcalContext(today, today, hasGym ? 'strength' : null)
+  const workoutKcalText = (favorite: Favorite) => {
+    if (favorite.workout?.type !== 'strength') return favorite.kcal ? ` · +${fmtKcal(favorite.kcal)}` : ''
+    const { kcal } = strengthKcal({
+      minutes: favorite.workout.minutes,
+      deviceCalories: null,
+      pace: context.gymPace,
+      weightKg: context.weightKg,
+    })
+    return kcal > 0 ? ` · ≈ +${fmtKcal(kcal)}` : ''
+  }
 
   const load = useCallback(async () => {
     const [{ data: favRows }, { data: foodRows }, { data: workoutRows }] = await Promise.all([
@@ -200,7 +220,7 @@ export default function Favoritos() {
                     : ''}
                   {favorite.workout?.minutes} min
                   {favorite.workout?.watts ? ` · ${favorite.workout.watts} W` : ''}
-                  {favorite.kcal ? ` · +${fmtKcal(favorite.kcal)}` : ''}
+                  {workoutKcalText(favorite)}
                 </span>
               </span>
               <button

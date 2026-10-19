@@ -257,7 +257,10 @@ export default function Treino() {
                       .join(' · ')}
                   </span>
                 </span>
-                <span className="num text-[22px] text-burn">+{fmtKcal(w.kcal_est ?? 0)}</span>
+                {/* «≈» numa estimativa (ex.: o ginásio sem calorias do relógio, ao teu ritmo). */}
+                <span className="num shrink-0 text-[22px] text-burn">
+                  {w.kcal_estimated ? '≈ ' : ''}+{fmtKcal(w.kcal_est ?? 0)}
+                </span>
               </button>
             ))}
           </div>

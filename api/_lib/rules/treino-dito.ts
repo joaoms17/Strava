@@ -125,6 +125,8 @@ export function saidSummary(w: SaidWorkout, sportLabel: (s: OtherSport) => strin
     w.watts != null ? `${w.watts} W` : null,
     w.distance_km != null ? `${String(w.distance_km).replace('.', ',')} km` : null,
     w.avg_hr != null ? `FC ${w.avg_hr}` : null,
+    // As calorias do relógio ditas contam (no ginásio, por inteiro): vê-se que foram percebidas.
+    w.kcal_device != null ? `${w.kcal_device} kcal do relógio` : null,
   ]
     .filter(Boolean)
     .join(' · ')

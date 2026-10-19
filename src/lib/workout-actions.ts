@@ -72,8 +72,7 @@ export async function saveWorkout(body: SaveWorkoutBody, toast: ShowToast): Prom
           : `Juntei ao treino que já lá estava (${workoutTitle(w)} das ${timeOfStart(w)}): não conta duas vezes.`,
       )
     } else {
-      const kcal = w.kcal_est ?? 0
-      toast(`${workoutTitle(w)} registad${w.type === 'strength' || w.type === 'other' ? 'o' : 'a'}${kcal > 0 ? ` · +${fmtKcal(kcal)} kcal do treino` : ''}`, [
+      toast(`${workoutTitle(w)} registad${w.type === 'strength' || w.type === 'other' ? 'o' : 'a'}${kcalOfWorkout(w)}`, [
         { label: 'Anular', run: () => undoWorkout(w.id, toast) },
       ])
     }
@@ -103,6 +102,12 @@ export async function sameDaySession(draft: {
     rows.map((w) => ({ ...w, started_at: startGuessed(w) ? null : (w.started_at ?? null) })),
   )
   return match ? (rows.find((w) => w.id === match.id) ?? null) : null
+}
+
+// « · +210 kcal do treino» (« · ≈ +122 …» numa estimativa) para os avisos.
+export function kcalOfWorkout(w: Pick<Workout, 'kcal_est' | 'kcal_estimated'>): string {
+  const kcal = w.kcal_est ?? 0
+  return kcal > 0 ? ` · ${w.kcal_estimated ? '≈ ' : ''}+${fmtKcal(kcal)} kcal do treino` : ''
 }
 
 function timeOfStart(w: Workout): string {

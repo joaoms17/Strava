@@ -46,7 +46,8 @@ export function mapActivityToWorkout(activity: StravaActivity, userId: string) {
       type === 'bike' && activity.average_cadence ? Math.round(activity.average_cadence) : null,
     avg_hr: activity.average_heartrate ? Math.round(activity.average_heartrate) : null,
     max_hr: activity.max_heartrate ? Math.round(activity.max_heartrate) : null,
-    // Regra 2 — nunca as kcal do relógio para bike ou força
+    // Regra 2 — na bicicleta com watts, nunca as kcal do relógio; no ginásio
+    // contam por inteiro
     kcal_est: workoutKcal({
       type,
       minutes,

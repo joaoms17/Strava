@@ -8,7 +8,8 @@ import { nutritionalDay } from '../../lib/day'
 import { fmtKcal } from '../../lib/format'
 import { sameDaySession, saveWorkout } from '../../lib/workout-actions'
 import { instantInNutritionalDay, lisbonInstant } from '../../../api/_lib/rules/momentos'
-import { exerciseKcal } from '../../../api/_lib/rules/treino'
+import { exerciseKcal, kcalExplanation } from '../../../api/_lib/rules/treino'
+import { useKcalContext } from '../../lib/kcal-context'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, type OtherSport } from '../../../api/_lib/rules/targets'
 import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
@@ -57,7 +58,6 @@ export default function JaFizSheet() {
   const [deviceKcal, setDeviceKcal] = useState('')
   // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
   const [match, setMatch] = useState<Workout | null>(null)
-  const [weightKg, setWeightKg] = useState<number | null>(null)
   const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
 
   // Uma duração fora dos botões (ex.: 52 min do relógio) vai para «outro»,
@@ -98,8 +98,6 @@ export default function JaFizSheet() {
         if (last.minutes) showMinutes(last.minutes)
         if (last.watts) setWatts(last.watts)
       }
-      const { data: weights } = await supabase.from('weights').select('kg').order('date', { ascending: false }).limit(7)
-      if (weights?.length) setWeightKg(weights.reduce((a, w) => a + Number(w.kg), 0) / weights.length)
     })()
   }, [favId, plannedMinutes])
 
@@ -109,14 +107,19 @@ export default function JaFizSheet() {
   const type: Workout['type'] = kind === 'bike' || kind === 'strength' ? kind : 'other'
   const effectiveMinutes = minutes ?? toInt(otherMinutes)
   const canSave = effectiveMinutes != null && effectiveMinutes > 0
+  // As calorias do relógio contam no ginásio (por inteiro) e nos outros desportos.
+  const withDeviceKcal = type === 'other' || type === 'strength'
+  // Sem elas, o peso desse dia e, no ginásio, o teu ritmo (como o servidor).
+  const context = useKcalContext(day, today, type)
   const preview = exerciseKcal({
     type,
     minutes: effectiveMinutes,
     watts: type === 'bike' ? watts : null,
     wattsSource: 'manual',
-    deviceCalories: type === 'other' ? toInt(deviceKcal) : null,
+    deviceCalories: withDeviceKcal ? toInt(deviceKcal) : null,
     sport: type === 'other' ? (kind as OtherSport) : null,
-    weightKg,
+    weightKg: context.weightKg,
+    gymPace: context.gymPace,
   })
 
   // Sem decisão, vê primeiro se já há um treino parecido nesse dia.
@@ -146,7 +149,7 @@ export default function JaFizSheet() {
         watts_source: type === 'bike' && watts != null ? 'manual' : null,
         avg_hr: type === 'bike' ? toInt(avgHr) : null,
         max_hr: type === 'bike' ? toInt(maxHr) : null,
-        kcal_device: type === 'other' ? toInt(deviceKcal) : null,
+        kcal_device: withDeviceKcal ? toInt(deviceKcal) : null,
         favorite_id: favId,
         merge_into: decision === 'merge' ? match?.id : null,
         not_duplicate: decision === 'new',
@@ -280,7 +283,7 @@ export default function JaFizSheet() {
           </>
         )}
 
-        {type === 'other' && (
+        {withDeviceKcal && (
           <label className="block space-y-1">
             <span className="label">Calorias do relógio (opcional)</span>
             <input
@@ -290,7 +293,18 @@ export default function JaFizSheet() {
               placeholder="ex.: 250"
               className={field}
             />
-            <span className="block text-[13px] text-dim">Sem elas, estimo pelo tempo e pelo teu peso.</span>
+            <span className="block text-[13px] text-dim">
+              {type === 'strength'
+                ? kcalExplanation({
+                    type,
+                    minutes: effectiveMinutes,
+                    watts: null,
+                    kcal: preview.kcal,
+                    rule: preview.rule,
+                    deviceCalories: toInt(deviceKcal),
+                  })
+                : 'Sem elas, estimo pelo tempo e pelo teu peso.'}
+            </span>
           </label>
         )}
       </div>

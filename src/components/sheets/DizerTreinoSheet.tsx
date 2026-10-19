@@ -9,7 +9,7 @@ import { useClientId } from '../../lib/client-id'
 import { useReadyProfile } from '../../lib/profile'
 import { nutritionalDay } from '../../lib/day'
 import { emitDataChanged } from '../../lib/events'
-import { sameDaySession, saveWorkout } from '../../lib/workout-actions'
+import { kcalOfWorkout, sameDaySession, saveWorkout } from '../../lib/workout-actions'
 import { MAX_AUDIO_SECONDS, canRecord, startRecording, toWavBase64, type Recording } from '../../lib/audio'
 import { lisbonInstant } from '../../../api/_lib/rules/momentos'
 import { SPORT_LABEL, workoutKcal } from '../../../api/_lib/rules/targets'
@@ -145,6 +145,8 @@ export default function DizerTreinoSheet() {
           sets: strengthSets(said.exercises),
           name,
           note: said.note,
+          // As calorias do relógio ditas contam por inteiro.
+          kcal_device: said.kcal_device,
         }
         const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
           client_id: clientIdFor(body),
@@ -152,7 +154,7 @@ export default function DizerTreinoSheet() {
         })
         saved = workout
         emitDataChanged()
-        toast(`${name ?? 'Ginásio'} registado`)
+        toast(`${name ?? 'Ginásio'} registado${kcalOfWorkout(workout)}`)
       } catch (err) {
         toast(err instanceof Error ? err.message : 'Não consegui gravar.')
       }

@@ -1,9 +1,12 @@
 // Fase 3 — treino: de onde vêm os watts, que regra dá as kcal, quando um
 // print é da mesma sessão que já está registada e como se juntam os dois.
 import { NET_METS, isOtherSport, workoutKcal, type OtherSport, type WorkoutType } from './targets.js'
+import { strengthExplanation, strengthKcal, type StrengthRule } from './kcal-ginasio.js'
 
 export type WattsSource = 'device' | 'console' | 'manual' | 'favorite' | 'prefill'
-export type KcalRule = 'watts' | 'watts_prefill' | 'strength_flat' | 'device' | 'device_x0.7' | 'met'
+// 'strength_flat' (150 fixas com 30 min ou mais) já não se grava: fica nas
+// sessões antigas, que não se reescrevem (decisão 64).
+export type KcalRule = 'watts' | 'watts_prefill' | 'strength_flat' | 'device' | 'device_x0.7' | 'met' | StrengthRule
 
 // Regra 2 revista: os watts vêm, por ordem, do dispositivo, da foto da
 // consola, do valor à mão, do favorito e, por fim, dos últimos watts
@@ -36,12 +39,15 @@ export interface KcalInput {
   deviceCalories: number | null
   sport?: OtherSport | null
   weightKg?: number | null
+  // Ginásio sem calorias do relógio: as kcal por minuto da pessoa (`gymPace`).
+  gymPace?: number | null
 }
 
 // As kcal que o treino soma ao plano, a regra usada e se é uma estimativa.
 // Na bicicleta contam os watts; sem a potência média, as calorias do relógio
 // por inteiro (a bicicleta de casa manda os watts ao relógio, que já os usa
-// na conta). No ginásio, as calorias do relógio nunca contam.
+// na conta). No ginásio, as calorias do relógio por inteiro e, sem elas, os
+// minutos ao ritmo da pessoa ou pelo peso (`rules/kcal-ginasio.ts`).
 export function exerciseKcal(w: KcalInput): { kcal: number; rule: KcalRule; estimated: boolean } {
   switch (w.type) {
     case 'bike': {
@@ -53,11 +59,12 @@ export function exerciseKcal(w: KcalInput): { kcal: number; rule: KcalRule; esti
       return { kcal, rule: prefill ? 'watts_prefill' : 'watts', estimated: prefill }
     }
     case 'strength':
-      return {
-        kcal: workoutKcal({ type: 'strength', minutes: w.minutes, watts: null, deviceCalories: null }),
-        rule: 'strength_flat',
-        estimated: false,
-      }
+      return strengthKcal({
+        minutes: w.minutes,
+        deviceCalories: w.deviceCalories,
+        pace: w.gymPace ?? null,
+        weightKg: w.weightKg ?? null,
+      })
     case 'other':
       if (w.deviceCalories != null) {
         return { kcal: Math.round(w.deviceCalories * 0.7), rule: 'device_x0.7', estimated: false }
@@ -95,7 +102,7 @@ export function kcalExplanation(w: {
     if (w.rule === 'watts_prefill') return `≈ com ${w.watts} W da última sessão: ${base}.`
     return device ?? `Pela potência: ${base}.`
   }
-  if (w.type === 'strength') return w.kcal > 0 ? '150 fixas por ginásio de 30 min ou mais.' : 'Menos de 30 min de ginásio não soma.'
+  if (w.type === 'strength') return strengthExplanation(w)
   if (w.rule === 'device_x0.7' && w.deviceCalories != null) {
     return `70 % das ${w.deviceCalories} kcal do relógio.`
   }

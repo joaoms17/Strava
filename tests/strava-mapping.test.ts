@@ -50,7 +50,7 @@ describe('mapActivityToWorkout', () => {
     expect(workout.strava_id).toBe(123)
   })
 
-  it('força usa o tempo total e 150 kcal a partir de 30 min', () => {
+  it('força usa o tempo total e as calorias do relógio por inteiro', () => {
     const workout = mapActivityToWorkout(
       {
         id: 124,
@@ -65,7 +65,7 @@ describe('mapActivityToWorkout', () => {
     expect(workout.type).toBe('strength')
     expect(workout.minutes).toBe(40)
     expect(workout.watts).toBeNull()
-    expect(workout.kcal_est).toBe(150)
+    expect(workout.kcal_est).toBe(500)
   })
 
   it('outros usam as calorias do Strava x 0,7', () => {
