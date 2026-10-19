@@ -6,7 +6,7 @@ import { geminiModels } from '../_lib/rules/gemini.js'
 import {
   PROMPT_REVIEW,
   PROMPT_REVIEW_NEUTRAL,
-  PROMPT_MEAL_PHOTO_V2,
+  PROMPT_MEAL_PHOTO_V3,
   PROMPT_MEAL_TEXT_V2,
   PROMPT_MEAL_CORRECT,
   PROMPT_MEAL_PHOTO_ADD,
@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     [
       PROMPT_REVIEW,
       PROMPT_REVIEW_NEUTRAL,
-      PROMPT_MEAL_PHOTO_V2,
+      PROMPT_MEAL_PHOTO_V3,
       PROMPT_MEAL_TEXT_V2,
       PROMPT_MEAL_CORRECT,
       PROMPT_MEAL_PHOTO_ADD,

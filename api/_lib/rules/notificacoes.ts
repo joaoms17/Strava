@@ -4,6 +4,7 @@
 // servidor: o telemóvel usa este ficheiro diretamente.
 import { SLOT_LABEL, type Slot } from './momentos.js'
 import { isDayComplete } from './day-close.js'
+import { orderHintText } from './pedido.js'
 
 // Cada uma liga-se à parte em Definições › Notificações (por telemóvel).
 export const PUSH_KINDS = ['refeicao', 'jantar', 'semana'] as const
@@ -54,19 +55,26 @@ export interface PushNotice {
   tag: string // a mesma substitui a anterior no iPhone
 }
 
-// «Almoço analisado · 640 kcal», ao acabar a análise em segundo plano.
+// «Almoço analisado · 640 kcal», ao acabar a análise em segundo plano. Um
+// pedido de entrega para 2 por dividir (`orderPeople`, de orderSplitHint)
+// diz logo «Pedido para 2 · divide em Porção ½ ou partilha a meias».
 export function mealAnalysedNotice(meal: {
   id: string
   date: string
   slot: string | null
   kcal: number | null
   status: string
+  orderPeople?: number | null
 }): PushNotice {
   const slot = meal.slot && meal.slot in SLOT_LABEL ? (meal.slot as Slot) : null
   const what = slot ? `${SLOT_LABEL[slot]} ${slot === 'ceia' ? 'analisada' : 'analisado'}` : 'Refeição analisada'
   return {
     title: `${what} · ${Math.round(Number(meal.kcal ?? 0))} kcal`,
-    body: meal.status === 'por_rever' ? 'Vê se as porções estão certas.' : 'Toca para ver ou corrigir.',
+    body: meal.orderPeople
+      ? `${orderHintText(meal.orderPeople)}.`
+      : meal.status === 'por_rever'
+        ? 'Vê se as porções estão certas.'
+        : 'Toca para ver ou corrigir.',
     url: `/hoje/${meal.date}?folha=refeicao&id=${meal.id}`,
     tag: `refeicao-${meal.id}`,
   }

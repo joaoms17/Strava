@@ -11,6 +11,7 @@ import {
   type PushKind,
   type PushNotice,
 } from './rules/notificacoes.js'
+import { orderSplitHint } from './rules/pedido.js'
 
 // Notificações (Web Push, com a app no ecrã principal do iPhone). As chaves
 // VAPID vêm das env vars VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY ou, sem elas,
@@ -153,6 +154,7 @@ export async function notifyMealAnalysed(admin: SupabaseClient, meal: Record<str
       slot: (meal.slot as string | null) ?? null,
       kcal: (meal.kcal as number | null) ?? null,
       status: meal.status as string,
+      orderPeople: orderSplitHint({ ...meal, status: meal.status as string }),
     }),
   )
 }

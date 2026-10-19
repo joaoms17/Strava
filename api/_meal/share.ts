@@ -216,6 +216,7 @@ export async function share(req: VercelRequest, res: VercelResponse) {
     const toName = await personName(admin, to_user_id)
     const fromName = await personName(admin, user.id)
     const copies: string[] = []
+    const copiedFrom: string[] = []
     const changes: FactorChange[] = []
     const meals: Record<string, unknown>[] = []
     let already = 0
@@ -229,6 +230,7 @@ export async function share(req: VercelRequest, res: VercelResponse) {
         continue
       }
       copies.push(copied.id)
+      copiedFrom.push(source.id as string)
       // A parte de quem partilha (uma vez só: se a porção mudou entretanto, fica).
       const updated = split != null ? await rescaleRow(db, source, factors.own, { once: true }) : null
       if (updated) {
@@ -237,6 +239,10 @@ export async function share(req: VercelRequest, res: VercelResponse) {
         kcalDelta += Number(updated.kcal) - Number(source.kcal)
       }
     }
+    // Partilhar diz como comeram: o «Pedido para 2» destas refeições sai
+    // (rules/pedido.ts). Sem a migração 20261018220000 a coluna não existe e o
+    // erro não interessa.
+    if (copiedFrom.length) await db.from('meals').update({ order_people: null }).in('id', copiedFrom).not('order_people', 'is', null)
     res.status(200).json({
       ok: true,
       to: toName,

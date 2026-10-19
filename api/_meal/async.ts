@@ -430,6 +430,9 @@ export const update = post(async ({ db, userId, body, res }) => {
     if (meal.status !== 'a_analisar' && note && note !== meal.analysis_note && !items && meal.items?.length) {
       items = (await correctItems(adminClient(), userId, meal.items, note)).items
       patch.analysis_note = note
+      // A nota pode dizer como dividiram o pedido: sai o «Pedido para 2», para
+      // a porção não ser cortada duas vezes (só com a migração 20261018220000).
+      if (meal.order_people != null) patch.order_people = null
     }
   }
 

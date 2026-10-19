@@ -38,6 +38,22 @@ export const MealAnalysisSchema = z.object({
 
 export type MealAnalysis = z.infer<typeof MealAnalysisSchema>
 
+// A primeira análise das fotos (meal-photo v3) devolve também o pedido de
+// entrega, quando uma das imagens é a captura do resumo (Glovo, Uber Eats,
+// Bolt Food, um talão): a app, o restaurante e quantas pessoas serve. Só
+// aqui: o texto, o «Juntar foto» e as correções continuam com o schema de cima.
+export const OrderSchema = z.object({
+  app: z.string().nullable(),
+  restaurant: z.string().nullable(),
+  people: z.number().int().nullable(),
+})
+
+export const MealPhotoAnalysisSchema = MealAnalysisSchema.extend({
+  order: OrderSchema.nullable(),
+})
+
+export type MealPhotoAnalysis = z.infer<typeof MealPhotoAnalysisSchema>
+
 // «Sobrou comida?»: a parte comida de cada item (0 a 1, por índice), se a
 // foto do depois é o mesmo prato e se ficou vazio. Sem limites no schema (os
 // structured outputs não os aceitam): a fração arruma-se em rules/sobras.ts.

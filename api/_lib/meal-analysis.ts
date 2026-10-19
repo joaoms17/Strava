@@ -1,11 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MODELS, NO_THINKING, REQUEST_TEXT, REQUEST_VISION, aiProvider, structuredCall } from './anthropic.js'
 import { AiError, describeAiError, errorForStorage } from './rules/resposta-ia.js'
-import { MealAnalysisSchema, type MealAnalysis } from './schemas.js'
+import { MealAnalysisSchema, MealPhotoAnalysisSchema, type MealAnalysis, type MealPhotoAnalysis } from './schemas.js'
 import {
   PROMPT_MEAL_CORRECT,
   PROMPT_MEAL_PHOTO_ADD,
-  PROMPT_MEAL_PHOTO_V2,
+  PROMPT_MEAL_PHOTO_V3,
   PROMPT_MEAL_TEXT_V2,
   promptVersion,
   readPrompt,
@@ -18,6 +18,7 @@ import { VISION_KINDS, aiLimitsFor, dailyVisionCapReached, monthlyCapReached } f
 import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
 import { LEFTOVERS_ADD_HINT, mergeAfterLeftovers } from './rules/sobras.js'
+import { dedupeOrderLines, dropNonFood, orderPeople, pendingSplit, type Order } from './rules/pedido.js'
 
 // Análise de refeições em segundo plano (Fase 2): a refeição já existe com
 // estado 'a_analisar'; aqui lê-se a foto e/ou o texto, e o resultado grava-se
@@ -40,6 +41,10 @@ export interface MealRow {
   deleted_at: string | null
   model_reserve?: boolean // migração 20261018150002
   leftover_photo_path?: string | null // migração 20261018200000 («Sobrou comida?»)
+  portion_factor?: number | null
+  share_with?: string[] | null // migração 20261018160000
+  share_split?: number | null // migração 20261018210000
+  order_people?: number | null // migração 20261018220000 (pedido de entrega para 2 ou mais)
 }
 
 const ANALYSIS_BUDGET_MS = 50_000
@@ -183,6 +188,7 @@ async function runModel(
   meal: ModelInput,
 ): Promise<{
   analysis: MealAnalysis
+  order: Order | null
   refs: Record<string, string>
   model: string
   prompt: string
@@ -216,28 +222,39 @@ async function runModel(
     momento: meal.slot,
     alimentos: forPrompt,
   })
-  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V2
+  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V3
 
   if (photos.length > 0) {
     const images = await photoContent(admin, photos.slice(0, 4))
-    const { output: analysis, cost, model, reserve } = await structuredCall(
-      admin,
-      { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION },
-      {
-        model: MODELS.vision,
-        max_tokens: 4096,
-        thinking: NO_THINKING,
-        system: readPrompt(photoPrompt),
-        messages: [{ role: 'user', content: [...images, { type: 'text', text: payload }] }],
-      },
-      MealAnalysisSchema,
-    )
+    const meta = { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION }
+    const params = {
+      model: MODELS.vision,
+      max_tokens: 4096,
+      thinking: NO_THINKING,
+      system: readPrompt(photoPrompt),
+      messages: [{ role: 'user' as const, content: [...images, { type: 'text' as const, text: payload }] }],
+    }
+    // A primeira análise lê também o pedido de entrega (captura do resumo do
+    // Glovo, Uber Eats…), num schema só das fotos; o juntar fica como estava.
+    let call: { output: MealPhotoAnalysis; cost: number; model: string; reserve: boolean }
+    if (adding) {
+      const added = await structuredCall(admin, meta, params, MealAnalysisSchema)
+      call = { ...added, output: { ...added.output, order: null } }
+    } else {
+      call = await structuredCall(admin, meta, params, MealPhotoAnalysisSchema)
+    }
+    const { order, ...output } = call.output
+    // Taxas, gorjeta, saco, talheres ou totais nunca contam, mesmo que a IA os
+    // deixe passar; e a mesma linha de duas capturas sobrepostas conta uma vez.
+    let items = dropNonFood(output.items)
+    if (order && images.length > 1) items = dedupeOrderLines(items)
+    const analysis: MealAnalysis = { ...output, items }
     // A juntar, «nada de novo» é uma resposta válida: ficam os itens que havia.
     if (analysis.items.length === 0 && !adding) {
       throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
     }
     // A reserva das fotos é o modelo do texto, que acerta menos nas porções.
-    return { analysis, refs, model, prompt: promptVersion(photoPrompt), cost, reserve }
+    return { analysis, order, refs, model: call.model, prompt: promptVersion(photoPrompt), cost: call.cost, reserve: call.reserve }
   }
 
   const { output: analysis, cost, model } = await structuredCall(
@@ -253,7 +270,7 @@ async function runModel(
     MealAnalysisSchema,
   )
   if (analysis.items.length === 0) throw new AiError('Não percebi o que comeste. Escreve de outra forma.', 'análise sem itens')
-  return { analysis, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost, reserve: false }
+  return { analysis, order: null, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost, reserve: false }
 }
 
 // Analisar sem gravar (a «Nova favorita» escrita ou com foto): o mesmo
@@ -285,9 +302,13 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
   if (!claimedAt) return null
   const startedAt = Date.now()
   try {
-    const { analysis, refs, model, prompt, cost, reserve } = await runModel(admin, meal)
+    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal)
     const analysed = toMealItems(analysis.items, refs)
     const adding = addingToItems(meal)
+    // Um pedido de entrega para 2 ou mais em que a pessoa não disse como o
+    // dividiu fica por rever, com a dica «Pedido para 2» (rules/pedido.ts). A
+    // juntar fotos, fica o que a primeira análise disse.
+    const people = pendingSplit(orderPeople(adding ? meal.order_people : order?.people), meal)
     // Já descontado o que sobrou: só entra o que é novo (rules/sobras.ts).
     const items = !adding ? analysed : meal.leftover_photo_path ? mergeAfterLeftovers(meal.items, analysed) : mergeAdded(meal.items, analysed)
     const tags = meal.tags ?? []
@@ -295,26 +316,38 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
 
     const written = await guardedWrite(items, meal.note, claimedAt, {
       write: async (finalItems, noteUsed) => {
-        const status = analysedStatus(finalItems, analysis.meal_confidence)
-        let query = admin
-          .from('meals')
-          .update({
-            items: finalItems,
-            ...mealTotals(finalItems),
-            status,
-            is_estimate: mealIsEstimate(inputType, tags.includes('jantar_fora'), finalItems),
-            confidence: analysis.meal_confidence === 'alta' ? 0.9 : analysis.meal_confidence === 'media' ? 0.6 : 0.3,
-            raw_text: meal.raw_text ?? analysis.title,
-            analysis_note: noteUsed,
-            analysis_error: null,
-            model,
-            prompt_version: prompt,
-            cost_usd: cost,
-          })
-          .eq('id', meal.id)
-          .eq('analysis_started_at', claimedAt)
-        query = noteUsed == null ? query.is('note', null) : query.eq('note', noteUsed)
-        const { data } = await query.select()
+        // Uma nota que chegou a meio já foi aplicada pela correção e pode dizer
+        // como dividiram («comemos a meias»): aí não há dica, para não cortar duas vezes.
+        const split = noteUsed === (meal.note ?? null) ? people : null
+        const status = split != null ? 'por_rever' : analysedStatus(finalItems, analysis.meal_confidence)
+        const patch: Record<string, unknown> = {
+          items: finalItems,
+          ...mealTotals(finalItems),
+          status,
+          // Um pedido é comida de restaurante, como «jantar fora».
+          is_estimate: mealIsEstimate(inputType, tags.includes('jantar_fora') || order != null, finalItems),
+          confidence: analysis.meal_confidence === 'alta' ? 0.9 : analysis.meal_confidence === 'media' ? 0.6 : 0.3,
+          raw_text: meal.raw_text ?? analysis.title,
+          analysis_note: noteUsed,
+          analysis_error: null,
+          model,
+          prompt_version: prompt,
+          cost_usd: cost,
+        }
+        // Para quantas pessoas é o pedido (migração 20261018220000), na
+        // primeira análise: uma análise nova limpa o que a de antes disse.
+        if (!adding && (split != null || 'order_people' in meal)) patch.order_people = split
+        const run = (values: Record<string, unknown>) => {
+          let query = admin.from('meals').update(values).eq('id', meal.id).eq('analysis_started_at', claimedAt)
+          query = noteUsed == null ? query.is('note', null) : query.eq('note', noteUsed)
+          return query.select()
+        }
+        let { data, error } = await run(patch)
+        // Sem a migração não há `order_people`: grava na mesma, sem a dica.
+        if (error && 'order_people' in patch && /order_people/.test(error.message)) {
+          delete patch.order_people
+          ;({ data } = await run(patch))
+        }
         return (data?.[0] as Record<string, unknown> | undefined) ?? null
       },
       reread: async () => {
