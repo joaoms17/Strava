@@ -78,6 +78,17 @@ describe('agrupar fotos da galeria', () => {
     expect(groups.map((g) => g.length)).toEqual([1, 1, 1])
     expect(groups[0]![0]!.at).not.toBeNull()
   })
+
+  it('as capturas de ecrã sem hora escolhidas juntas são o mesmo pedido (até 4)', () => {
+    const shot = (id: string) => ({ id, at: null, screenshot: true })
+    const groups = groupPhotos([shot('s1'), at(null), at('2026-09-27T12:05:00Z'), shot('s2')])
+    expect(groups.map((g) => g.map((p) => p.id))).toEqual([['2026-09-27T12:05:00Z'], ['s1', 's2'], ['sem']])
+    const many = groupPhotos(['a', 'b', 'c', 'd', 'e'].map(shot))
+    expect(many.map((g) => g.length)).toEqual([4, 1])
+    // Uma captura com hora junta-se pela hora, como as outras fotos.
+    const timed = groupPhotos([{ id: 't', at: new Date('2026-09-27T12:10:00Z'), screenshot: true }, at('2026-09-27T12:05:00Z')])
+    expect(timed.map((g) => g.length)).toEqual([2])
+  })
 })
 
 describe('foto repetida', () => {

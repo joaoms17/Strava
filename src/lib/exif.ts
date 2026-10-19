@@ -89,3 +89,37 @@ export async function exifDateTimeOf(file: Blob): Promise<ExifDateTime | null> {
     return null
   }
 }
+
+// O tamanho da imagem pelo cabeçalho (PNG ou JPEG), sem a descodificar: a
+// Galeria reconhece assim as capturas de ecrã (ao alto, 2,2 : 1) entre 12
+// fotos sem gastar memória. Sem cabeçalho conhecido (HEIC…), null.
+export function readImageSize(buffer: ArrayBuffer): { width: number; height: number } | null {
+  const view = new DataView(buffer)
+  // PNG: assinatura de 8 bytes e o IHDR logo a seguir (largura e altura).
+  if (view.byteLength >= 24 && view.getUint32(0) === 0x89504e47 && view.getUint32(12) === 0x49484452) {
+    return { width: view.getUint32(16), height: view.getUint32(20) }
+  }
+  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null
+  let offset = 2
+  while (offset + 9 <= view.byteLength) {
+    const marker = view.getUint16(offset)
+    if ((marker & 0xff00) !== 0xff00) return null
+    // SOF0…SOF15 (sem DHT, JPG e DAC): altura e largura do quadro.
+    if (marker >= 0xffc0 && marker <= 0xffcf && marker !== 0xffc4 && marker !== 0xffc8 && marker !== 0xffcc) {
+      return { width: view.getUint16(offset + 7), height: view.getUint16(offset + 5) }
+    }
+    if (marker === 0xffda) return null
+    offset += 2 + view.getUint16(offset + 2)
+  }
+  return null
+}
+
+// A hora e o tamanho com uma só leitura do início do ficheiro.
+export async function photoHeaderOf(file: Blob): Promise<{ exif: ExifDateTime | null; size: { width: number; height: number } | null }> {
+  try {
+    const buffer = await file.slice(0, 256 * 1024).arrayBuffer()
+    return { exif: readExifDateTime(buffer), size: readImageSize(buffer) }
+  } catch {
+    return { exif: null, size: null }
+  }
+}

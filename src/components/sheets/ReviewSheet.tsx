@@ -15,6 +15,7 @@ import { diffText } from '../../lib/meal-diff'
 import { portionLabel } from '../../../api/_lib/rules/favoritos'
 import { factorOf, portionRow, sameFactor } from '../../../api/_lib/rules/porcoes'
 import { sharedFrom } from '../../../api/_lib/rules/partilha'
+import { orderSplitHint } from '../../../api/_lib/rules/pedido'
 import { SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
 import type { Meal, MealItem } from '../../lib/types'
 
@@ -164,10 +165,19 @@ export default function ReviewSheet() {
   // aparece também, escolhida.
   const factor = factorOf(meal.portion_factor)
   const row = portionRow(factor)
+  // Um pedido de entrega para 2 ainda por dividir: a porção diz para quantos é.
+  const order = orderSplitHint(meal)
+  const portionLabelText = from
+    ? 'A tua porção'
+    : order === 2
+      ? 'Pedido para 2 · ½ se foi a meias'
+      : order
+        ? `Pedido para ${order} · a tua porção`
+        : 'Porção'
   const when = `${SLOT_LABEL[meal.slot ?? slotOf(new Date(meal.logged_at))]} · ${timeOf(meal.logged_at)}`
   const portions = (
     <div className="space-y-1.5">
-      <p className="text-[13px] text-dim">{from ? 'A tua porção' : 'Porção'} · toca e fica confirmada</p>
+      <p className="text-[13px] text-dim">{portionLabelText} · toca e fica confirmada</p>
       <div
         className={`grid gap-2 ${row.length > 4 ? 'grid-cols-5' : 'grid-cols-4'}`}
         role="group"

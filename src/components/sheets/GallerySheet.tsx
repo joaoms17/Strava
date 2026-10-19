@@ -7,7 +7,11 @@ import { BusyButton } from '../../lib/busy'
 import { useReadyProfile } from '../../lib/profile'
 import { clearPendingGallery, peekPendingGallery } from '../../lib/capture'
 import { enqueueCapture } from '../../lib/capture-queue'
-import { exifDateTimeOf } from '../../lib/exif'
+import { photoHeaderOf } from '../../lib/exif'
+import { screenshotLike } from '../../lib/image'
+import { usePeople } from '../../lib/people'
+import { useAccounts } from '../../lib/accounts'
+import { AlsoFor } from '../Porcao'
 import { nutritionalDay } from '../../lib/day'
 import { fmtDayShort, timeOf } from '../../lib/format'
 import { groupPhotos, photoInstant } from '../../../api/_lib/rules/captura'
@@ -19,6 +23,7 @@ interface Photo {
   file: File
   url: string
   at: Date | null
+  screenshot: boolean // captura de ecrã (o resumo de um pedido): as sem hora juntam-se
 }
 
 interface GroupState {
@@ -26,6 +31,9 @@ interface GroupState {
   tags: string[]
   date: string | null
   slot: Slot | null
+  // «Também para …» e como comeram, como no ＋ (o pedido de entrega dos dois).
+  shareWith: string[]
+  split: number | null
 }
 
 // Fotos tiradas mais cedo: cada uma cai na refeição, hora e dia certos (EXIF).
@@ -42,6 +50,9 @@ export default function GallerySheet() {
   const [groupsState, setGroupsState] = useState<Record<string, GroupState>>({})
   // Os grupos já na fila: tentar outra vez depois de uma falha não os repete.
   const queued = useRef(new Set<string>())
+  const people = usePeople()
+  const { accounts, currentId } = useAccounts()
+  const me = accounts.find((a) => a.user_id === currentId)?.name ?? 'Eu'
 
   useEffect(() => {
     const pending = peekPendingGallery()
@@ -57,12 +68,13 @@ export default function GallerySheet() {
       const result: Photo[] = []
       // Uma de cada vez: só se lê o início de cada ficheiro (EXIF).
       for (const file of pending.files.slice(0, 12)) {
-        const exif = await exifDateTimeOf(file)
+        const { exif, size } = await photoHeaderOf(file)
         result.push({
           id: crypto.randomUUID(),
           file,
           url: URL.createObjectURL(file),
           at: photoInstant({ exif, lastModified: file.lastModified || null, now }),
+          screenshot: screenshotLike(size?.width ?? 0, size?.height ?? 0, file.type),
         })
       }
       if (alive) setPhotos(result)
@@ -87,7 +99,7 @@ export default function GallerySheet() {
   }, [photos, split])
 
   const stateOf = (key: string): GroupState =>
-    groupsState[key] ?? { note: '', tags: [], date: fallbackDate, slot: fallbackSlot }
+    groupsState[key] ?? { note: '', tags: [], date: fallbackDate, slot: fallbackSlot, shareWith: [], split: null }
   const patch = (key: string, value: Partial<GroupState>) =>
     setGroupsState((prev) => ({ ...prev, [key]: { ...stateOf(key), ...value } }))
 
@@ -104,6 +116,7 @@ export default function GallerySheet() {
         if (queued.current.has(key)) continue
         const state = stateOf(key)
         const at = group[0]!.at
+        const shareWith = people.filter((p) => state.shareWith.includes(p.user_id)).map((p) => p.user_id)
         await enqueueCapture({
           files: group.map((p) => p.file),
           text: null,
@@ -112,6 +125,8 @@ export default function GallerySheet() {
           taken_at: at ? at.toISOString() : null,
           date: at ? null : state.date,
           slot: at ? slotOf(at) : state.slot,
+          share_with: shareWith,
+          share_split: shareWith.length === 1 ? state.split : null,
         })
         queued.current.add(key)
       }
@@ -181,12 +196,47 @@ export default function GallerySheet() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-[15px] font-semibold">Quando foi?</p>
+                  <p className="text-[15px] font-semibold">
+                    Quando foi?
+                    {/* As capturas de ecrã sem hora vêm juntas (o mesmo pedido). */}
+                    {group.length > 1 && (
+                      <button
+                        onClick={() => setSplit((prev) => new Set(prev).add(key))}
+                        className="ml-3 text-[13px] font-normal text-eat"
+                      >
+                        Separar
+                      </button>
+                    )}
+                  </p>
                   <DayChips today={today} value={state.date} onChange={(date) => patch(key, { date })} />
                   <SlotChips value={state.slot} onChange={(slot) => patch(key, { slot: slot as Slot })} />
                 </div>
               )}
-              <TagChips value={state.tags} onToggle={(tag) => patch(key, { tags: toggle(state.tags, tag) })} />
+              <TagChips
+                value={state.tags}
+                onToggle={(tag) =>
+                  // «Comi metade» e uma divisão ao partilhar cortavam o prato duas vezes.
+                  patch(key, {
+                    tags: toggle(state.tags, tag),
+                    ...(tag === 'comi_metade' && !state.tags.includes(tag) ? { split: null } : {}),
+                  })
+                }
+              />
+              {people.length > 0 && (
+                <AlsoFor
+                  people={people}
+                  me={me}
+                  shareWith={state.shareWith}
+                  split={state.split}
+                  onShareWith={(shareWith) => patch(key, { shareWith })}
+                  onSplit={(value) =>
+                    patch(key, {
+                      split: value,
+                      ...(value != null ? { tags: state.tags.filter((tag) => tag !== 'comi_metade') } : {}),
+                    })
+                  }
+                />
+              )}
               <input
                 value={state.note}
                 onChange={(e) => patch(key, { note: e.target.value })}

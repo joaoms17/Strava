@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { BusyButton } from '../lib/busy'
-import { chip } from './ui/Chips'
+import { chip, toggle } from './ui/Chips'
+import type { Person } from '../lib/people'
 import { portionLabel } from '../../api/_lib/rules/favoritos'
 import { HALF_SPLIT, OTHER_SPLITS, portionRow, sameFactor, splitLabel } from '../../api/_lib/rules/porcoes'
 
@@ -178,6 +179,48 @@ export function SplitChips({
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// «Também para …» ao registar (no ＋ e nas fotos da galeria): um chip por
+// cada outra pessoa da casa e, com uma só, como comeram (SplitChips). Quem
+// chama guarda a escolha e tira o «Comi metade» quando se escolhe uma
+// divisão, para o prato não ser cortado duas vezes.
+export function AlsoFor({
+  people,
+  me,
+  shareWith,
+  split,
+  onShareWith,
+  onSplit,
+  className = '',
+}: {
+  people: readonly Person[]
+  me: string
+  shareWith: readonly string[]
+  split: number | null
+  onShareWith: (ids: string[]) => void
+  onSplit: (split: number | null) => void
+  className?: string
+}) {
+  const sharingWith = people.filter((p) => shareWith.includes(p.user_id))
+  return (
+    <div className={`space-y-2 ${className}`}>
+      <div className="flex flex-wrap gap-2">
+        {people.map((p) => (
+          <button
+            key={p.user_id}
+            aria-pressed={shareWith.includes(p.user_id)}
+            onClick={() => onShareWith(toggle([...shareWith], p.user_id))}
+            className={chip(shareWith.includes(p.user_id))}
+          >
+            Também para {p.name}
+          </button>
+        ))}
+      </div>
+      {/* Com uma pessoa: como comeram (a divisão aplica-se no fim da análise). */}
+      {sharingWith.length === 1 && <SplitChips me={me} other={sharingWith[0]!.name} value={split} onChange={onSplit} />}
     </div>
   )
 }

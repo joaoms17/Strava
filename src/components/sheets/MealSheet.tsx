@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import WhenPicker from '../ui/WhenPicker'
 import { whenLabel, type When } from '../../lib/when'
@@ -34,6 +34,7 @@ import { favoriteName, patternKey, similarCount, SIMILAR_MIN_COUNT } from '../..
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
 import { SLOTS, SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
 import { canChangePortion, factorOf, joinNames, sameFactor, slotScope, slotScopeLabel, splitText } from '../../../api/_lib/rules/porcoes'
+import { orderSplitHint } from '../../../api/_lib/rules/pedido'
 import type { Meal, MealItem, Slot } from '../../lib/types'
 
 const MAIN_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
@@ -72,6 +73,12 @@ export default function MealSheet() {
   // a folha mostra «A analisar…» e pode fechar-se.
   const [reanalysing, setReanalysing] = useState(false)
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+  // A escolha de como comeram, à vista quando se abre (pela dica «Pedido para 2»
+  // fica por baixo dos alimentos).
+  const chooser = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (mode === 'share') chooser.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }, [mode])
 
   async function load() {
     if (!id) return
@@ -192,6 +199,12 @@ export default function MealSheet() {
   const copyPeople = people.filter((p) => copiesIn(p).length > 0)
   const copyCount = copyPeople.reduce((n, p) => n + copiesIn(p).length, 0)
   const others = inSlot.filter((mealId) => mealId !== current.id)
+  // Pedido de entrega para 2 que a pessoa ainda não dividiu: a dica por cima
+  // da porção, com «A meias» à mão (a escolha de partilhar abre-se daqui).
+  const sharedNow = shared.length > 0 || people.some((p) => p.shared)
+  const orderPeople = sharedNow ? null : orderSplitHint(current)
+  const shareCandidates = people.filter((p) => !p.from && !p.shared && !shared.includes(p.user_id) && !shareWith.includes(p.user_id))
+  const halfWith = orderPeople === 2 && shareCandidates.length === 1 ? shareCandidates[0]! : null
   const scopeToggle =
     slotMeals.length > 1 ? (
       <ScopeToggle on={allSlot} onChange={setAllSlot}>
@@ -604,6 +617,25 @@ export default function MealSheet() {
             </div>
             {mode === 'view' && !dirty && !reanalysing && !splitPending && canChangePortion(current) && (
               <div className="space-y-2">
+                {orderPeople != null && (
+                  <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-2">
+                    <p className="text-[15px]">
+                      <span className="font-semibold">Pedido para {orderPeople}</span> ·{' '}
+                      {orderPeople === 2 ? 'divide em ½' : 'escolhe a tua porção'}
+                    </p>
+                    {halfWith && (
+                      <button
+                        onClick={() => {
+                          setSharing(halfWith)
+                          setMode('share')
+                        }}
+                        className="min-h-11 text-[15px] text-eat"
+                      >
+                        ou partilha a meias ›
+                      </button>
+                    )}
+                  </div>
+                )}
                 {(scopeToggle || copyPeople.length > 0) && (
                   <div className="flex flex-wrap gap-2">
                     {scopeToggle}
@@ -662,16 +694,18 @@ export default function MealSheet() {
                 )}
 
                 {mode === 'share' && sharing && (
-                  <ShareChooser
-                    me={me}
-                    other={sharing.name}
-                    scope={scopeToggle}
-                    onPick={(split) => shareTo(sharing, split)}
-                    onCancel={() => {
-                      setSharing(null)
-                      setMode('view')
-                    }}
-                  />
+                  <div ref={chooser} className="scroll-mb-4">
+                    <ShareChooser
+                      me={me}
+                      other={sharing.name}
+                      scope={scopeToggle}
+                      onPick={(split) => shareTo(sharing, split)}
+                      onCancel={() => {
+                        setSharing(null)
+                        setMode('view')
+                      }}
+                    />
+                  </div>
                 )}
                 {mode === 'correct' ? (
                   <div className="space-y-2">
