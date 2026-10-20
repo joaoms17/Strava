@@ -9,6 +9,7 @@ import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { duplicatePhotoWindow } from '../_lib/rules/captura.js'
 import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
+import { analyseRequest } from '../_lib/rules/analise.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
 import { notifyMealAnalysed } from '../_lib/push.js'
@@ -257,8 +258,14 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   const input = parse(AnalyseSchema, body)
   const meal = await ownMeal(db, input.meal_id)
   if (meal.deleted_at) throw new HttpError(404, 'Refeição apagada.')
+  // A outra tentativa pedida pelo telemóvel sozinho, com a refeição que já
+  // não está a analisar (erro, sem análise, analisada): fica como está.
+  const { skip, reset } = analyseRequest(input, meal.status as string)
+  if (skip) {
+    res.status(200).json({ meal })
+    return
+  }
   const admin = adminClient()
-  const reset = input.reset === true || meal.status === 'sem_analise' || meal.status === 'erro'
   if (!input.force && (await aiLimitReached(admin, userId, (meal.photo_paths ?? []).length > 0))) {
     // Uma foto junta a uma refeição com itens não a tira das contas: fica
     // por rever com os itens que tinha e o aviso de que a foto não foi lida.

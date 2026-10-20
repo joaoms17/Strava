@@ -207,3 +207,17 @@ export function autoRetryDue(meal: AnalysisProgress & { id: string }, now: numbe
   if (same.tries >= PHONE_TRIES_PER_ATTEMPT) return false
   return now - same.at >= retryDelayMs(same.tries)
 }
+
+// O que fazer com um pedido de outra tentativa (`meal/analyse`). «Tentar de
+// novo» e «Reanalisar foto» (`reset`), e uma refeição sem análise ou com erro,
+// repõem as tentativas. A tentativa que o telemóvel pede sozinho (`auto`) vem
+// de uma vista que pode estar atrasada: só vale para uma análise ainda em
+// 'a_analisar' e nunca repõe nada (um erro que se repetiria, a 3.ª tentativa
+// gasta ou o limite da IA ficam como estão, à espera do toque da pessoa).
+export function analyseRequest(
+  input: { reset?: boolean; auto?: boolean },
+  status: string,
+): { skip: boolean; reset: boolean } {
+  if (input.auto) return { skip: status !== 'a_analisar', reset: false }
+  return { skip: false, reset: input.reset === true || status === 'sem_analise' || status === 'erro' }
+}

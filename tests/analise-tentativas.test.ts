@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AUTO_RETRY_WINDOW_MS,
   PHONE_TRIES_PER_ATTEMPT,
+  analyseRequest,
   analysisStalled,
   analysisStuck,
   attemptKey,
@@ -85,5 +86,23 @@ describe('outra tentativa pedida pelo telemóvel', () => {
     const fresh = { ...released, analysis_attempts: 0, analysis_error: null }
     expect(autoRetryDue(fresh, at(10), online)).toBe(false)
     expect(autoRetryDue(fresh, at(26), online)).toBe(true)
+  })
+})
+
+describe('pedido de outra tentativa (meal/analyse)', () => {
+  it('a do telemóvel sozinho só vale para uma análise ainda a correr e nunca repõe as tentativas', () => {
+    expect(analyseRequest({ auto: true }, 'a_analisar')).toEqual({ skip: false, reset: false })
+    // Vista atrasada: entretanto a análise passou a erro, ficou sem análise ou acabou.
+    for (const status of ['erro', 'sem_analise', 'por_rever', 'ok']) {
+      expect(analyseRequest({ auto: true }, status)).toEqual({ skip: true, reset: false })
+    }
+    expect(analyseRequest({ auto: true, reset: true }, 'a_analisar')).toEqual({ skip: false, reset: false })
+  })
+
+  it('«Tentar outra vez» e uma refeição com erro ou sem análise repõem as tentativas', () => {
+    expect(analyseRequest({ reset: true }, 'a_analisar')).toEqual({ skip: false, reset: true })
+    expect(analyseRequest({}, 'erro')).toEqual({ skip: false, reset: true })
+    expect(analyseRequest({}, 'sem_analise')).toEqual({ skip: false, reset: true })
+    expect(analyseRequest({}, 'a_analisar')).toEqual({ skip: false, reset: false })
   })
 })
