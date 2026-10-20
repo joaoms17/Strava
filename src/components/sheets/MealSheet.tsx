@@ -20,6 +20,7 @@ import AiCheck from '../AiCheck'
 import AvisarAnalise from '../AvisarAnalise'
 import { LeftoversButton, LeftoversNote } from '../Sobras'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
+import { retryContext, retryIfDue, useAutoRetrying } from '../../lib/analise-auto'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
 import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
@@ -72,6 +73,8 @@ export default function MealSheet() {
   // «Tentar outra vez» e «Analisar mesmo assim» correm por trás (como no Hoje):
   // a folha mostra «A analisar…» e pode fechar-se.
   const [reanalysing, setReanalysing] = useState(false)
+  // A outra tentativa que o telemóvel pede sozinho (como no Hoje).
+  const autoRetrying = useAutoRetrying()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   // A escolha de como comeram, à vista quando se abre (pela dica «Pedido para 2»
   // fica por baixo dos alimentos).
@@ -159,6 +162,12 @@ export default function MealSheet() {
     return () => clearInterval(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysing, splitPending, id])
+  // Parada (o servidor soltou-a depois de a IA demorar): pede outra tentativa
+  // sozinha, uma de cada vez com o Hoje (lib/analise-auto.ts).
+  // Uma apagada (aberta pelas apagadas) não se pede: o servidor recusa-a.
+  useEffect(() => {
+    if (meal?.status === 'a_analisar' && meal.deleted_at == null) retryIfDue(meal)
+  }, [meal])
 
   if (meal === undefined) {
     return (
@@ -178,7 +187,8 @@ export default function MealSheet() {
   const current = meal
   const mealSlot = current.slot ?? slotOf(new Date(current.logged_at))
   const analysed = current.status === 'ok' || current.status === 'por_rever'
-  const stuck = analysisStuck(current, Date.now())
+  const retryingNow = reanalysing || autoRetrying.has(current.id)
+  const stuck = !retryingNow && analysisStuck(current, Date.now(), retryContext(current.id))
   const failed = current.status === 'erro' || stuck
   const dirty = JSON.stringify(items) !== JSON.stringify(current.items)
   const totals = mealTotals(items)
@@ -517,7 +527,7 @@ export default function MealSheet() {
         )}
         {current.note && <p className="text-[15px]">Nota: {current.note}</p>}
 
-        {(reanalysing || (current.status === 'a_analisar' && !stuck)) && (
+        {(retryingNow || (current.status === 'a_analisar' && !stuck)) && (
           <div className="space-y-3">
             <p className="animate-pulse text-[17px]">A analisar…</p>
             <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
@@ -534,11 +544,11 @@ export default function MealSheet() {
           </div>
         )}
 
-        {!reanalysing && (failed || current.status === 'sem_analise') && current.deleted_at == null && (
+        {!retryingNow && (failed || current.status === 'sem_analise') && current.deleted_at == null && (
           <div className="space-y-3">
             {failed ? (
               <ErrorReason
-                stored={stuck ? null : current.analysis_error}
+                stored={current.analysis_error}
                 fallback={stuck ? 'A análise parou a meio.' : 'Não consegui analisar esta refeição.'}
               />
             ) : (
@@ -654,8 +664,8 @@ export default function MealSheet() {
             {current.model_reserve && current.deleted_at == null && !reanalysing && (
               <div className="space-y-2 rounded-xl bg-surface2 px-3 py-2">
                 <p className="text-[14px] text-dim">
-                  Hoje a IA principal já não estava disponível; esta foto foi lida por outra que acerta menos nas
-                  porções. Confirma as quantidades ou analisa outra vez mais logo.
+                  A IA principal não respondeu a tempo ou chegou ao limite de hoje; esta foto foi lida por outra que
+                  acerta menos nas porções. Confirma as quantidades ou analisa outra vez mais logo.
                 </p>
                 <button onClick={() => void analyse({ reset: true }, 'A analisar outra vez…')} className="text-[15px] text-eat">
                   Analisar outra vez

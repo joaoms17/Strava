@@ -38,12 +38,16 @@ export function anthropic(): Anthropic {
 }
 
 // Opções por pedido. Sem repetições automáticas do SDK: cada função tem 60 s
-// no total, e as repetições escondidas multiplicavam o tempo e o custo.
+// no total, e as repetições escondidas multiplicavam o tempo e o custo. Com o
+// Gemini, o `timeout` é o da chamada inteira: o modelo principal deixa uma
+// fatia à reserva nas fotos (30 s + 15 s; no texto o principal fica com os 25 s; rules/tempo-ia.ts).
 export const REQUEST_TEXT = { maxRetries: 0, timeout: 25_000 }
 export const REQUEST_VISION = { maxRetries: 0, timeout: 45_000 }
 
 // O Sonnet 5 pensa de forma adaptativa quando o parâmetro é omitido; para
-// extrair JSON não compensa o tempo nem o custo.
+// extrair JSON não compensa o tempo nem o custo. Com o Gemini, o mesmo pedido
+// vai com pouco raciocínio (thinkingLevel 'low' no Gemini 3, thinkingBudget 0
+// no 2.5; rules/gemini.ts).
 export const NO_THINKING = { type: 'disabled' } as const
 
 // Só se tenta outra vez se ainda houver tempo para uma segunda chamada.

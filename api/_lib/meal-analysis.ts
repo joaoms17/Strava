@@ -19,6 +19,7 @@ import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
 import { LEFTOVERS_ADD_HINT, mergeAfterLeftovers } from './rules/sobras.js'
 import { dedupeOrderLines, dropNonFood, orderPeople, pendingSplit, unlinkMultiples, type Order } from './rules/pedido.js'
+import { ANALYSIS_FUNCTION_BUDGET_MS, ANALYSIS_WRITE_MARGIN_MS, requestWithin, type AiRequest } from './rules/tempo-ia.js'
 
 // Análise de refeições em segundo plano (Fase 2): a refeição já existe com
 // estado 'a_analisar'; aqui lê-se a foto e/ou o texto, e o resultado grava-se
@@ -47,8 +48,6 @@ export interface MealRow {
   order_people?: number | null // migração 20261018220000 (pedido de entrega para 2 ou mais)
   source_meal_id?: string | null // cópia partilhada por outra pessoa
 }
-
-const ANALYSIS_BUDGET_MS = 50_000
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
 
@@ -135,6 +134,7 @@ export async function correctItems(
   userId: string,
   items: MealItem[],
   correction: string,
+  request: AiRequest = REQUEST_TEXT,
 ): Promise<{ items: MealItem[]; title: string; confidence: MealAnalysis['meal_confidence'] }> {
   const { refs, forPrompt } = await foodLibrary(admin, userId)
   const byFood = new Map(Object.entries(refs).map(([ref, id]) => [id, ref]))
@@ -154,7 +154,7 @@ export async function correctItems(
   })
   const { output: parsed } = await structuredCall(
     admin,
-    { userId, kind: 'meal_correct', request: REQUEST_TEXT },
+    { userId, kind: 'meal_correct', request },
     {
       model: MODELS.text,
       max_tokens: 4096,
@@ -184,9 +184,19 @@ export function addingToItems(meal: Pick<MealRow, 'items' | 'photo_paths'>): boo
 type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot' | 'logged_at' | 'photo_paths' | 'items'> &
   Partial<Pick<MealRow, 'leftover_photo_path'>>
 
+// O teto da chamada dentro do que falta à função (`deadline`, em ms desde
+// 1970); sem deadline, o de sempre.
+function within(request: AiRequest, deadline: number | undefined): AiRequest {
+  if (deadline == null) return request
+  const fitted = requestWithin(request, deadline - Date.now(), ANALYSIS_WRITE_MARGIN_MS)
+  if (!fitted) throw new AiError('A IA demorou demasiado a responder.', 'sem tempo para outra chamada nesta função', true)
+  return fitted
+}
+
 async function runModel(
   admin: SupabaseClient,
   meal: ModelInput,
+  deadline?: number,
 ): Promise<{
   analysis: MealAnalysis
   order: Order | null
@@ -227,7 +237,8 @@ async function runModel(
 
   if (photos.length > 0) {
     const images = await photoContent(admin, photos.slice(0, 4))
-    const meta = { userId: meal.user_id, kind: 'meal_photo', request: REQUEST_VISION }
+    // O tempo de descarregar as fotos já conta.
+    const meta = { userId: meal.user_id, kind: 'meal_photo', request: within(REQUEST_VISION, deadline) }
     const params = {
       model: MODELS.vision,
       max_tokens: 4096,
@@ -261,7 +272,7 @@ async function runModel(
 
   const { output: analysis, cost, model } = await structuredCall(
     admin,
-    { userId: meal.user_id, kind: 'meal_text', request: REQUEST_TEXT },
+    { userId: meal.user_id, kind: 'meal_text', request: within(REQUEST_TEXT, deadline) },
     {
       model: MODELS.text,
       max_tokens: 4096,
@@ -299,12 +310,16 @@ export async function estimateItems(
 
 // Analisa uma refeição já reivindicada (claim_meal_analysis) e grava o
 // resultado. Devolve a linha gravada, ou null se outra tentativa mandou.
-export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Promise<Record<string, unknown> | null> {
+// `deadline`: até quando a análise pode correr dentro da função (52 s).
+export async function analyseClaimed(
+  admin: SupabaseClient,
+  meal: MealRow,
+  deadline = Date.now() + ANALYSIS_FUNCTION_BUDGET_MS,
+): Promise<Record<string, unknown> | null> {
   const claimedAt = meal.analysis_started_at
   if (!claimedAt) return null
-  const startedAt = Date.now()
   try {
-    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal)
+    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline)
     const analysed = toMealItems(analysis.items, refs)
     const adding = addingToItems(meal)
     // Um pedido de entrega para 2 ou mais em que a pessoa não disse como o
@@ -371,9 +386,11 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
           deleted: data.deleted_at != null,
         }
       },
+      // A nota mudou a meio: corrige só se a correção ainda couber na função.
       correct: async (current, note) => {
-        if (Date.now() - startedAt > ANALYSIS_BUDGET_MS) return current
-        return (await correctItems(admin, meal.user_id, current, note)).items
+        const request = requestWithin(REQUEST_TEXT, deadline - Date.now(), ANALYSIS_WRITE_MARGIN_MS)
+        if (!request) return current
+        return (await correctItems(admin, meal.user_id, current, note, request)).items
       },
     })
     // Foto lida pelo modelo de reserva: a folha da refeição diz porquê. À
@@ -412,7 +429,8 @@ export async function analyseClaimed(admin: SupabaseClient, meal: MealRow): Prom
 
 // Reivindica e analisa (usado em segundo plano pelo capture e pelo analyse).
 // Um erro passageiro rápido (sobrecarga, formato) tenta outra vez na mesma
-// função, enquanto houver tempo para uma segunda chamada.
+// função, enquanto houver tempo para uma segunda chamada; a segunda fica com
+// o tempo que sobra dos 52 s (rules/tempo-ia.ts), não com outros 45 s.
 const SECOND_TRY_BEFORE_MS = 15_000
 
 export async function claimAndAnalyse(
@@ -421,6 +439,7 @@ export async function claimAndAnalyse(
   reset = false,
 ): Promise<Record<string, unknown> | null> {
   const startedAt = Date.now()
+  const deadline = startedAt + ANALYSIS_FUNCTION_BUDGET_MS
   for (let round = 0; round < 2; round++) {
     const { data, error } = await admin.rpc('claim_meal_analysis', {
       p_meal_id: mealId,
@@ -429,7 +448,7 @@ export async function claimAndAnalyse(
     if (error) throw new Error(error.message)
     const claimed = (Array.isArray(data) ? data[0] : data) as MealRow | undefined
     if (!claimed) return null
-    const result = await analyseClaimed(admin, claimed)
+    const result = await analyseClaimed(admin, claimed, deadline)
     if (result || Date.now() - startedAt > SECOND_TRY_BEFORE_MS) return result
   }
   return null

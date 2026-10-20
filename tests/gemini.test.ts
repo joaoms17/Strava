@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { geminiError, geminiModels, geminiRequest, readGeminiResponse, toGeminiSchema } from '../api/_lib/rules/gemini'
+import {
+  geminiError,
+  geminiModels,
+  geminiRequest,
+  geminiThinking,
+  geminiTimeout,
+  maxOutputTokens,
+  readGeminiResponse,
+  thinkingRejected,
+  toGeminiSchema,
+  withoutThinking,
+} from '../api/_lib/rules/gemini'
 import { AiError, outputSchema, parseStructured } from '../api/_lib/rules/resposta-ia'
 import { MealAnalysisSchema, WorkoutShotSchema } from '../api/_lib/schemas'
 import { aiProvider } from '../api/_lib/anthropic'
@@ -110,5 +121,72 @@ describe('chaves «AQ.»', () => {
     expect(e.message).toMatch(/AQ\..*AIza/)
     expect(e).toMatchObject({ transient: false, fallback: false })
     expect(geminiError(401, { error: { status: 'UNAUTHENTICATED', message: 'x' } }).message).toMatch(/não é válida/)
+  })
+})
+
+// Pouco raciocínio quando a chamada pede para não pensar (NO_THINKING): o
+// Gemini 3 pensava no nível 'high' e uma foto chegava aos 45 s.
+describe('raciocínio', () => {
+  it('Gemini 3 (e os «-latest»): thinkingLevel low; 2.5 Flash e Flash-Lite: thinkingBudget 0', () => {
+    expect(geminiThinking('gemini-3.8-flash')).toEqual({ thinkingLevel: 'low' })
+    expect(geminiThinking('gemini-3-flash-preview')).toEqual({ thinkingLevel: 'low' })
+    expect(geminiThinking('gemini-3.5-flash-lite')).toEqual({ thinkingLevel: 'low' })
+    expect(geminiThinking('gemini-3-pro-preview')).toEqual({ thinkingLevel: 'low' })
+    expect(geminiThinking('gemini-flash-latest')).toEqual({ thinkingLevel: 'low' })
+    expect(geminiThinking('gemini-flash-lite-latest')).toEqual({ thinkingLevel: 'low' })
+    expect(geminiThinking('models/gemini-2.5-flash')).toEqual({ thinkingBudget: 0 })
+    expect(geminiThinking('gemini-2.5-flash-lite-preview-09-2025')).toEqual({ thinkingBudget: 0 })
+    expect(geminiThinking('gemini-2.5-pro')).toEqual({ thinkingBudget: 128 })
+  })
+
+  it('modelos sem raciocínio (2.0, 1.5, Gemma): sem thinkingConfig', () => {
+    expect(geminiThinking('gemini-2.0-flash')).toBeNull()
+    expect(geminiThinking('gemini-1.5-flash')).toBeNull()
+    expect(geminiThinking('gemma-3-27b-it')).toBeNull()
+  })
+
+  it('só as chamadas com NO_THINKING levam thinkingConfig, e com um teto de saída curto', () => {
+    const messages = [{ role: 'user', content: 'x' }]
+    const none = geminiRequest({ messages, max_tokens: 4096, thinking: { type: 'disabled' } }, outputSchema(MealAnalysisSchema), 'gemini-flash-latest') as any
+    expect(none.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' })
+    expect(none.generationConfig.maxOutputTokens).toBe(8_192)
+    const free = geminiRequest({ messages, max_tokens: 6000 }, outputSchema(MealAnalysisSchema), 'gemini-flash-lite-latest') as any
+    expect(free.generationConfig.thinkingConfig).toBeUndefined()
+    expect(free.generationConfig.maxOutputTokens).toBe(32_768)
+    // Sem modelo (como antes): sem thinkingConfig.
+    expect((geminiRequest({ messages, thinking: { type: 'disabled' } }, {}) as any).generationConfig.thinkingConfig).toBeUndefined()
+  })
+
+  it('o teto de saída: o max_tokens do pedido + 4096 de folga, entre 5120 e 32768', () => {
+    const off = { type: 'disabled' }
+    expect(maxOutputTokens({ thinking: off, max_tokens: 50 })).toBe(5_120)
+    expect(maxOutputTokens({ thinking: off, max_tokens: 8000 })).toBe(12_096)
+    expect(maxOutputTokens({ thinking: off, max_tokens: 40_000 })).toBe(32_768)
+    expect(maxOutputTokens({ max_tokens: 1500 })).toBe(32_768)
+  })
+
+  it('um 400 por causa do raciocínio repete-se sem ele; outros 400 não', () => {
+    expect(thinkingRejected(400, { error: { message: 'Thinking level is not supported for this model.' } })).toBe(true)
+    expect(thinkingRejected(400, { error: { message: 'Budget 0 is invalid. This model only works in thinking mode.' } })).toBe(true)
+    expect(thinkingRejected(400, { error: { message: 'API key not valid.' } })).toBe(false)
+    expect(thinkingRejected(500, { error: { message: 'thinking' } })).toBe(false)
+    const body = { contents: [], generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } }
+    expect(withoutThinking(body)).toEqual({ contents: [], generationConfig: { maxOutputTokens: 32_768 } })
+    expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' })
+  })
+
+  it('tempo esgotado e resposta cortada passam à reserva', () => {
+    expect(geminiTimeout('gemini-flash-latest', 30_000)).toMatchObject({
+      message: 'A IA demorou demasiado a responder.',
+      detail: 'gemini-flash-latest: timeout 30000 ms',
+      transient: true,
+      fallback: true,
+    })
+    try {
+      readGeminiResponse({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [] } }] })
+      expect.unreachable()
+    } catch (err) {
+      expect(err).toMatchObject({ transient: true, fallback: true })
+    }
   })
 })
