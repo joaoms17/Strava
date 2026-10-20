@@ -164,8 +164,9 @@ export default function MealSheet() {
   }, [analysing, splitPending, id])
   // Parada (o servidor soltou-a depois de a IA demorar): pede outra tentativa
   // sozinha, uma de cada vez com o Hoje (lib/analise-auto.ts).
+  // Uma apagada (aberta pelas apagadas) não se pede: o servidor recusa-a.
   useEffect(() => {
-    if (meal?.status === 'a_analisar') retryIfDue(meal)
+    if (meal?.status === 'a_analisar' && meal.deleted_at == null) retryIfDue(meal)
   }, [meal])
 
   if (meal === undefined) {
