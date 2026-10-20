@@ -72,9 +72,56 @@ interface ClaudeLikeBlock {
 export interface ClaudeLikeParams {
   system?: unknown
   messages: { role: string; content: string | ClaudeLikeBlock[] | unknown }[]
+  max_tokens?: number
+  thinking?: unknown
 }
 
-export function geminiRequest(params: ClaudeLikeParams, jsonSchema: Json): Json {
+// Raciocínio: as chamadas que pedem para não pensar (NO_THINKING, o JSON
+// das fotos, dos prints, do menu…) vão com o mínimo útil de cada família.
+// Sem isto o Gemini 3 pensa no nível por omissão ('high'), e numa foto com
+// um prompt longo isso levava dezenas de segundos (o jantar das 19:18 esgotou
+// os 45 s). As outras chamadas ficam como estavam (o modelo decide).
+export function wantsNoThinking(params: Pick<ClaudeLikeParams, 'thinking'>): boolean {
+  return (params.thinking as { type?: unknown } | null | undefined)?.type === 'disabled'
+}
+
+// O thinkingConfig de pouco raciocínio para um modelo, ou null quando não leva:
+// - Gemini 3 (e os «-latest» e nomes sem versão, que hoje respondem como
+//   gemini-3.x): thinkingLevel 'low'. Lê as fotos e as capturas quase como o
+//   nível por omissão; 'minimal' pensa menos ainda mas pode perder porções e
+//   linhas pequenas, e o 3 Pro não o aceita.
+// - Gemini 2.5 Flash e Flash-Lite: thinkingBudget 0 (desligado). O 2.5 Pro
+//   não desliga: 128, o mínimo.
+// - Anteriores (2.0, 1.5) e modelos que não são Gemini (Gemma): sem nada.
+// Se a Google recusar o campo para um modelo (400), a chamada repete-se sem
+// ele (thinkingRejected), sem falhar a análise.
+export function geminiThinking(model: string): Json | null {
+  const name = model.trim().toLowerCase().replace(/^models\//, '')
+  if (!name.startsWith('gemini-')) return null
+  const version = /^gemini-(\d+)(?:\.(\d+))?/.exec(name)
+  if (!version) return { thinkingLevel: 'low' }
+  const major = Number(version[1])
+  const minor = Number(version[2] ?? 0)
+  if (major >= 3) return { thinkingLevel: 'low' }
+  if (major === 2 && minor >= 5) return { thinkingBudget: name.includes('-pro') ? 128 : 0 }
+  return null
+}
+
+// Teto de saída. Sem raciocínio, a resposta é só o JSON: o max_tokens do
+// pedido (o mesmo do Claude, que já chega para a resposta) mais folga para o
+// pouco que o nível 'low' pensa. Assim uma resposta que degenera não come o
+// tempo todo (acaba em MAX_TOKENS, que já é erro e passa à reserva). Com
+// raciocínio, o teto largo de sempre, porque o que o modelo pensa também conta.
+export const OUTPUT_CAP_WITH_THINKING = 32_768
+export const LOW_THINKING_HEADROOM = 4_096
+export function maxOutputTokens(params: Pick<ClaudeLikeParams, 'thinking' | 'max_tokens'>): number {
+  if (!wantsNoThinking(params)) return OUTPUT_CAP_WITH_THINKING
+  const answer = Math.max(params.max_tokens ?? 4_096, 1_024)
+  return Math.min(answer + LOW_THINKING_HEADROOM, OUTPUT_CAP_WITH_THINKING)
+}
+
+// `model`: o modelo a que o pedido vai (o thinkingConfig depende dele).
+export function geminiRequest(params: ClaudeLikeParams, jsonSchema: Json, model?: string): Json {
   const contents = params.messages.map((message) => {
     const blocks: ClaudeLikeBlock[] =
       typeof message.content === 'string'
@@ -94,17 +141,41 @@ export function geminiRequest(params: ClaudeLikeParams, jsonSchema: Json): Json 
     return { role: message.role === 'assistant' ? 'model' : 'user', parts }
   })
   const system = typeof params.system === 'string' ? params.system : null
+  const thinking = model && wantsNoThinking(params) ? geminiThinking(model) : null
   return {
     ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
     contents,
     // Sem temperature: nos Gemini 3 a Google recomenda o valor por omissão.
-    // O teto de saída é largo porque o raciocínio do modelo também conta.
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: toGeminiSchema(jsonSchema),
-      maxOutputTokens: 32_768,
+      maxOutputTokens: maxOutputTokens(params),
+      ...(thinking ? { thinkingConfig: thinking } : {}),
     },
   }
+}
+
+// A Google recusou o raciocínio pedido (um modelo que não aceita
+// thinkingLevel, ou que só funciona a pensar): repete-se sem ele.
+export function thinkingRejected(status: number, body: unknown): boolean {
+  if (status !== 400) return false
+  const message = ((body ?? {}) as { error?: { message?: unknown } }).error?.message
+  return typeof message === 'string' && /thinking/i.test(message)
+}
+
+export function withoutThinking(body: Json): Json {
+  const config = { ...((body.generationConfig ?? {}) as Json) }
+  delete config.thinkingConfig
+  return { ...body, generationConfig: config }
+}
+
+export function hasThinking(body: Json): boolean {
+  return ((body.generationConfig ?? {}) as Json).thinkingConfig != null
+}
+
+// Tempo esgotado num modelo: passa à reserva com o tempo que sobra.
+export function geminiTimeout(model: string, timeoutMs: number): AiError & { fallback: boolean } {
+  return Object.assign(new AiError('A IA demorou demasiado a responder.', `${model}: timeout ${timeoutMs} ms`, true), { fallback: true })
 }
 
 export interface GeminiResult {
@@ -134,7 +205,10 @@ export function readGeminiResponse(body: unknown): GeminiResult {
     .filter((p) => !p.thought && typeof p.text === 'string')
     .map((p) => p.text)
     .join('')
-  if (finish === 'MAX_TOKENS') throw new AiError('A resposta da IA ficou cortada.', `finishReason: MAX_TOKENS`, true)
+  // Uma resposta que não acaba (o modelo a repetir-se): a reserva pode responder.
+  if (finish === 'MAX_TOKENS') {
+    throw Object.assign(new AiError('A resposta da IA ficou cortada.', `finishReason: MAX_TOKENS`, true), { fallback: true })
+  }
   if (['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST', 'SPII', 'IMAGE_SAFETY'].includes(finish)) {
     throw new AiError('A IA recusou analisar isto.', `finishReason: ${finish}`)
   }
@@ -143,7 +217,8 @@ export function readGeminiResponse(body: unknown): GeminiResult {
 }
 
 // Erro HTTP do Gemini → frase para a app. `fallback`: vale tentar o modelo
-// de reserva (limite esgotado, modelo inexistente, sobrecarga).
+// de reserva (limite esgotado, modelo inexistente, sobrecarga; e, fora
+// daqui, o tempo esgotado e a resposta cortada).
 export function geminiError(status: number, body: unknown): AiError & { fallback: boolean } {
   const e = ((body ?? {}) as { error?: { message?: string; status?: string; details?: { reason?: string }[] } }).error
   const message = e?.message ?? `HTTP ${status}`
