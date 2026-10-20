@@ -127,6 +127,8 @@ describe('geminiCall com a reserva', () => {
     expect(result.reserve).toBe(false)
     expect(calls.map((c) => c.model)).toEqual(['gemini-flash-latest', 'gemini-flash-latest'])
     expect(calls[1]!.body.generationConfig.thinkingConfig).toBeUndefined()
+    // A pensar no nível por omissão, com o teto largo (senão cortava a resposta).
+    expect(calls[1]!.body.generationConfig.maxOutputTokens).toBe(32_768)
   })
 
   it('um erro que se repetiria (chave inválida) não passa à reserva', async () => {

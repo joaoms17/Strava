@@ -171,7 +171,7 @@ describe('raciocínio', () => {
     expect(thinkingRejected(400, { error: { message: 'API key not valid.' } })).toBe(false)
     expect(thinkingRejected(500, { error: { message: 'thinking' } })).toBe(false)
     const body = { contents: [], generationConfig: { maxOutputTokens: 8192, thinkingConfig: { thinkingLevel: 'low' } } }
-    expect(withoutThinking(body)).toEqual({ contents: [], generationConfig: { maxOutputTokens: 8192 } })
+    expect(withoutThinking(body)).toEqual({ contents: [], generationConfig: { maxOutputTokens: 32_768 } })
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingLevel: 'low' })
   })
 

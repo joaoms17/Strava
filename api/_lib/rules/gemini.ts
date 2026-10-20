@@ -163,10 +163,13 @@ export function thinkingRejected(status: number, body: unknown): boolean {
   return typeof message === 'string' && /thinking/i.test(message)
 }
 
+// Sem o thinkingConfig o modelo volta a pensar no nível por omissão, e o que
+// pensa conta para o teto de saída: volta o teto largo de sempre (com o curto,
+// a resposta ficava cortada).
 export function withoutThinking(body: Json): Json {
   const config = { ...((body.generationConfig ?? {}) as Json) }
   delete config.thinkingConfig
-  return { ...body, generationConfig: config }
+  return { ...body, generationConfig: { ...config, maxOutputTokens: OUTPUT_CAP_WITH_THINKING } }
 }
 
 export function hasThinking(body: Json): boolean {
