@@ -40,7 +40,7 @@ export function anthropic(): Anthropic {
 // Opções por pedido. Sem repetições automáticas do SDK: cada função tem 60 s
 // no total, e as repetições escondidas multiplicavam o tempo e o custo. Com o
 // Gemini, o `timeout` é o da chamada inteira: o modelo principal deixa uma
-// fatia à reserva (30 s + 15 s nas fotos, 15 s + 10 s no texto; rules/tempo-ia.ts).
+// fatia à reserva nas fotos (30 s + 15 s; no texto o principal fica com os 25 s; rules/tempo-ia.ts).
 export const REQUEST_TEXT = { maxRetries: 0, timeout: 25_000 }
 export const REQUEST_VISION = { maxRetries: 0, timeout: 45_000 }
 

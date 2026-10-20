@@ -11,13 +11,15 @@ export interface AiRequest {
 
 // Abaixo disto não vale a pena chamar a IA (nem a reserva).
 export const MIN_ATTEMPT_MS = 8_000
-// A fatia da reserva: 15 s, ou 40 % do total quando o total é curto (texto:
-// 15 s para o principal, 10 s para a reserva).
+// A fatia da reserva: 15 s, só nas chamadas longas (as fotos, 45 s: 30 s
+// para o principal). Num teto curto (o texto, 25 s) o principal fica com o
+// tempo todo, como antes: partido ao meio, nenhum dos dois chegava a
+// responder; a reserva corre só depois de uma falha rápida.
 export const RESERVE_SLICE_MS = 15_000
-const RESERVE_SHARE = 0.4
+export const RESERVE_SLICE_FROM_MS = 40_000
 
 export function reserveSliceMs(totalMs: number): number {
-  return Math.min(RESERVE_SLICE_MS, Math.floor(totalMs * RESERVE_SHARE))
+  return totalMs >= RESERVE_SLICE_FROM_MS ? RESERVE_SLICE_MS : 0
 }
 
 // Quanto pode demorar o modelo `index` (0 = principal) de `count`, com

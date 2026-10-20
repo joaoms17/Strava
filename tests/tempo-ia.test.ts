@@ -14,12 +14,14 @@ import { AiError, outputSchema } from '../api/_lib/rules/resposta-ia'
 import { MealAnalysisSchema } from '../api/_lib/schemas'
 
 describe('o tempo dividido com a reserva', () => {
-  it('fotos: 30 s para o principal e 15 s para a reserva; texto: 15 s + 10 s', () => {
+  it('fotos: 30 s para o principal e 15 s para a reserva; texto: o principal com o tempo todo', () => {
     expect(reserveSliceMs(REQUEST_VISION.timeout)).toBe(15_000)
     expect(attemptBudgetMs(REQUEST_VISION.timeout, 0, 0, 2)).toBe(30_000)
     expect(attemptBudgetMs(REQUEST_VISION.timeout, 30_050, 1, 2)).toBe(14_950)
-    expect(attemptBudgetMs(REQUEST_TEXT.timeout, 0, 0, 2)).toBe(15_000)
-    expect(attemptBudgetMs(REQUEST_TEXT.timeout, 15_000, 1, 2)).toBe(10_000)
+    expect(reserveSliceMs(REQUEST_TEXT.timeout)).toBe(0)
+    expect(attemptBudgetMs(REQUEST_TEXT.timeout, 0, 0, 2)).toBe(25_000)
+    expect(attemptBudgetMs(REQUEST_TEXT.timeout, 25_000, 1, 2)).toBeNull()
+    expect(attemptBudgetMs(REQUEST_TEXT.timeout, 1_500, 1, 2)).toBe(23_500) // 429 do principal em 1,5 s
   })
 
   it('um modelo só, ou a reserva depois de uma falha rápida: o tempo todo que sobra', () => {
@@ -30,7 +32,7 @@ describe('o tempo dividido com a reserva', () => {
   it('sem tempo útil a reserva não corre', () => {
     expect(attemptBudgetMs(45_000, 40_000, 1, 2)).toBeNull()
     expect(attemptBudgetMs(45_000, 45_000, 1, 2)).toBeNull()
-    expect(attemptBudgetMs(12_000, 0, 0, 2)).toBe(MIN_ATTEMPT_MS)
+    expect(attemptBudgetMs(12_000, 0, 0, 2)).toBe(12_000)
   })
 
   it('a chamada encolhe para caber na função; abaixo de 8 s não se chama', () => {
