@@ -48,6 +48,7 @@ const MealIdSchema = z.object({ meal_id: z.string().uuid() })
 const AnalyseSchema = MealIdSchema.extend({
   reset: z.boolean().optional(), // «Tentar de novo» e «Reanalisar foto»
   force: z.boolean().optional(), // «Analisar esta mesmo assim» (acima do limite)
+  auto: z.boolean().optional(), // a outra tentativa que o telemóvel pede sozinho
 })
 
 // Juntar fotos a uma refeição que já existe (não carregou, erro ou faltava a
@@ -134,18 +135,18 @@ export function inBackground(task: Promise<unknown>) {
 
 // No fim da análise, a refeição segue para quem se escolheu em «Também para
 // …» e o telemóvel avisa («Almoço analisado · 640 kcal») se a pessoa o quiser.
+async function afterAnalysis(admin: SupabaseClient, meal: Record<string, unknown> | null, notify: boolean) {
+  // Uma partilha que falhe não tira o aviso.
+  // Numa divisão («A meias»), o aviso diz as kcal da parte de quem registou.
+  const shared = await shareAfterAnalysis(admin, meal).catch((err) => {
+    console.error('Partilhar falhou:', err)
+    return meal
+  })
+  if (notify) await notifyMealAnalysed(admin, shared ?? meal)
+}
+
 function analyseInBackground(admin: SupabaseClient, mealId: string) {
-  inBackground(
-    claimAndAnalyse(admin, mealId).then(async (meal) => {
-      // Uma partilha que falhe não tira o aviso.
-      // Numa divisão («A meias»), o aviso diz as kcal da parte de quem registou.
-      const shared = await shareAfterAnalysis(admin, meal).catch((err) => {
-        console.error('Partilhar falhou:', err)
-        return meal
-      })
-      await notifyMealAnalysed(admin, shared ?? meal)
-    }),
-  )
+  inBackground(claimAndAnalyse(admin, mealId).then((meal) => afterAnalysis(admin, meal, true)))
 }
 
 export async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
@@ -270,8 +271,10 @@ export const analyse = post(async ({ db, userId, body, res }) => {
     return
   }
   const result = await claimAndAnalyse(admin, meal.id, reset)
-  // «Também para …» que ficou à espera (limite da IA, erro): segue agora.
-  if (result) inBackground(shareAfterAnalysis(admin, result))
+  // «Também para …» que ficou à espera (limite da IA, erro): segue agora. A
+  // outra tentativa que o telemóvel pediu sozinho acaba como a da captura,
+  // com o aviso «Refeição analisada» (a pessoa pode já ter saído da app).
+  if (result) inBackground(afterAnalysis(admin, result, input.auto === true && !reset))
   res.status(200).json({ meal: result ?? (await ownMeal(db, input.meal_id)) })
 })
 

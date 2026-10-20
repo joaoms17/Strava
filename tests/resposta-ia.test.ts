@@ -124,13 +124,14 @@ describe('análise parada', () => {
     expect(analysisStalled({ ...base, analysis_started_at: null, analysis_attempts: 0 }, at('12:00:30'))).toBe(true)
   })
 
-  it('«Tentar» aparece depois da 3.ª tentativa, ou passados 2 min e meio parada', () => {
-    const third = { ...base, analysis_started_at: '2026-09-29T12:05:00Z', analysis_attempts: 3 }
-    expect(analysisStuck(third, at('12:06:00'))).toBe(false)
-    expect(analysisStuck(third, at('12:06:40'))).toBe(true)
-    const first = { ...base, analysis_started_at: '2026-09-29T12:00:00Z', analysis_attempts: 1 }
-    expect(analysisStuck(first, at('12:02:00'))).toBe(false)
-    expect(analysisStuck(first, at('12:02:40'))).toBe(true)
-    expect(analysisStuck({ ...first, status: 'erro' }, at('13:00:00'))).toBe(false)
+  it('«Tentar» aparece depois da 3.ª tentativa; antes disso o telemóvel tenta sozinho (tests/analise-tentativas)', () => {
+    const online = { online: true }
+    const third = { ...base, id: 'm', analysis_started_at: '2026-09-29T12:05:00Z', analysis_attempts: 3 }
+    expect(analysisStuck(third, at('12:06:00'), online)).toBe(false)
+    expect(analysisStuck(third, at('12:06:40'), online)).toBe(true)
+    const first = { ...base, id: 'm', analysis_started_at: '2026-09-29T12:00:00Z', analysis_attempts: 1 }
+    expect(analysisStuck(first, at('12:02:00'), online)).toBe(false)
+    expect(analysisStuck(first, at('12:02:40'), online)).toBe(false)
+    expect(analysisStuck({ ...first, status: 'erro' }, at('13:00:00'), online)).toBe(false)
   })
 })

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
@@ -15,6 +15,7 @@ import AvisarAnalise from '../components/AvisarAnalise'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
+import { retryContext, retryIfDue, useAutoRetrying } from '../lib/analise-auto'
 import { workoutTitle } from '../lib/workout-actions'
 import { RETRY_TEXT, discardCapture, restoreCapture, retryCapture, useCaptures, type CaptureEntry } from '../lib/capture-queue'
 import { BusyButton, runBusy } from '../lib/busy'
@@ -30,7 +31,7 @@ import { storedExerciseKcal } from '../../api/_lib/rules/targets'
 import { strengthReason } from '../../api/_lib/rules/kcal-ginasio'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from '../../api/_lib/rules/manutencao'
 import { SLOT_LABEL, SLOT_TIME, lisbonClock, slotOf } from '../../api/_lib/rules/momentos'
-import { analysisStalled, analysisStuck } from '../../api/_lib/rules/analise'
+import { analysisStuck } from '../../api/_lib/rules/analise'
 import { fmtSleep, hasSleep, poorNight, sleepDetail, type NightSleep } from '../../api/_lib/rules/sono'
 import { splitStoredError } from '../../api/_lib/rules/resposta-ia'
 import { isTransientFailure } from '../../api/_lib/rules/falhas'
@@ -134,9 +135,11 @@ export default function Hoje() {
   const [planOpen, setPlanOpen] = useState(false)
   const [showDeleted, setShowDeleted] = useState(false)
   const captures = useCaptures()
-  const retried = useRef(new Set<string>())
   // Refeições com «Tentar outra vez» em curso (mostram «A analisar…» já).
-  const [retrying, setRetrying] = useState<Set<string>>(new Set())
+  const [tapped, setRetrying] = useState<Set<string>>(new Set())
+  // E as que o telemóvel está a tentar outra vez sozinho (lib/analise-auto.ts).
+  const autoRetrying = useAutoRetrying()
+  const retrying = useMemo(() => new Set([...tapped, ...autoRetrying]), [tapped, autoRetrying])
   // Sobe a cada pergunta pelo estado das fotos a analisar (sem recarregar o dia).
   const [pollTick, setPollTick] = useState(0)
   // Só a resposta do último pedido conta: ao mudar de dia depressa, a de um
@@ -269,13 +272,16 @@ export default function Hoje() {
 
   // Fotos a analisar: pergunta só pelo estado delas de 3 em 3 s (de 15 em 15 s
   // depois de 2 min) e recarrega o dia quando alguma muda; as que pararam de
-  // vez (com «Tentar») já não se perguntam. Pede outra tentativa quando uma
-  // análise parou a meio. Uma divisão do «Também para …» («A meias») aplica-se
-  // logo a seguir à análise: até a partilha acabar (`share_with` fica vazio),
-  // pergunta também por essas, para as kcal da tua parte aparecerem sem reabrir.
+  // vez (com «Tentar») já não se perguntam. Uma análise que parou (o servidor
+  // soltou-a depois de a IA demorar, ou a função morreu) pede outra tentativa
+  // sozinha, também a de ontem e ao abrir a app mais tarde (até 12 h; regras
+  // em rules/analise.ts, pedidos em lib/analise-auto.ts). Uma divisão do
+  // «Também para …» («A meias») aplica-se logo a seguir à análise: até a
+  // partilha acabar (`share_with` fica vazio), pergunta também por essas, para
+  // as kcal da tua parte aparecerem sem reabrir.
   useEffect(() => {
     const now = Date.now()
-    const analysing = (data?.meals ?? []).filter((m) => m.status === 'a_analisar')
+    const analysing = [...(data?.meals ?? []), ...(data?.yesterday.uncounted ?? [])].filter((m) => m.status === 'a_analisar')
     const splitting = (data?.meals ?? []).filter(
       (m) =>
         (m.status === 'ok' || m.status === 'por_rever') &&
@@ -284,7 +290,8 @@ export default function Hoje() {
         now - Date.parse(m.analysis_started_at ?? m.created_at) < 5 * 60_000,
     )
     if (analysing.length === 0 && splitting.length === 0) return
-    const watched = [...analysing.filter((m) => !analysisStuck(m, now)), ...splitting]
+    for (const meal of analysing) retryIfDue(meal, now)
+    const watched = [...analysing.filter((m) => !analysisStuck(m, now, retryContext(m.id))), ...splitting]
     const oldest = Math.min(...watched.map((m) => Date.parse(m.created_at)))
     // `share_with` só se pede quando a refeição o trouxe (sem a migração não há).
     const columns: string = `id,status,analysis_started_at,analysis_attempts${splitting.length ? ',share_with' : ''}`
@@ -292,7 +299,9 @@ export default function Hoje() {
     const timer =
       watched.length > 0
         ? setTimeout(async () => {
-            if (document.hidden) return
+            // Em segundo plano não pergunta, mas a volta continua (antes
+            // parava aqui de vez, e só voltar à app a recomeçava).
+            if (document.hidden) return setPollTick((t) => t + 1)
             const { data: rows, error } = await supabase
               .from('meals')
               .select(columns)
@@ -317,18 +326,13 @@ export default function Hoje() {
             else setPollTick((t) => t + 1)
           }, now - oldest > 120_000 ? 15_000 : 3_000)
         : null
-    for (const meal of analysing) {
-      const key = `${meal.id}:${meal.analysis_started_at ?? '-'}:${meal.analysis_attempts}`
-      if (analysisStalled(meal, now) && meal.analysis_attempts < 3 && !retried.current.has(key)) {
-        retried.current.add(key)
-        void postApi('/api/meal/analyse', { meal_id: meal.id })
-          .then(() => load())
-          .catch(() => undefined)
-      }
-    }
+    // A rede voltou: a análise parada sem rede (com «Tentar») pede-se já.
+    const onOnline = () => setPollTick((t) => t + 1)
+    window.addEventListener('online', onOnline)
     return () => {
       alive = false
       if (timer) clearTimeout(timer)
+      window.removeEventListener('online', onOnline)
     }
   }, [data, load, pollTick])
 
@@ -351,9 +355,10 @@ export default function Hoje() {
   const carbsIn = counted.reduce((acc, m) => acc + Number(m.carbs), 0)
   const fatIn = counted.reduce((acc, m) => acc + Number(m.fat), 0)
   const nowMs = Date.now()
-  const errorMeals = data.meals.filter(
-    (m) => !retrying.has(m.id) && (m.status === 'erro' || analysisStuck(m, nowMs)),
-  )
+  // Parada de vez: sem tentativa automática (3.ª tentativa, mais de 12 h, sem
+  // rede ou pedidos do telemóvel que não chegam ao servidor).
+  const stuckNow = (m: Meal) => analysisStuck(m, nowMs, retryContext(m.id))
+  const errorMeals = data.meals.filter((m) => !retrying.has(m.id) && (m.status === 'erro' || stuckNow(m)))
   const limitMeals = data.meals.filter((m) => m.status === 'sem_analise')
   const reviewMeals = data.meals.filter((m) => m.status === 'por_rever')
   // Uma captura sem dia escolhido fica no dia nutricional da hora da foto (ou
@@ -362,7 +367,7 @@ export default function Hoje() {
     (c) => (c.date ?? nutritionalDay(new Date(c.taken_at ?? c.created_at), profile.nutrition_day_cutoff_hour)) === date,
   )
   const stillCounting =
-    data.meals.filter((m) => m.status === 'a_analisar' && !analysisStuck(m, nowMs)).length +
+    data.meals.filter((m) => m.status === 'a_analisar' && !stuckNow(m)).length +
     localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
   // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa. Um dia passado
@@ -623,7 +628,7 @@ export default function Hoje() {
   }
   // A primeira foto a analisar oferece o aviso de quando acabar.
   const firstPending = data.meals.find(
-    (m) => !retrying.has(m.id) && m.status === 'a_analisar' && !analysisStuck(m, Date.now()),
+    (m) => !retrying.has(m.id) && m.status === 'a_analisar' && !stuckNow(m),
   )?.id
   for (const meal of data.meals) {
     const slot = meal.slot ?? slotOf(new Date(meal.logged_at))
@@ -634,7 +639,7 @@ export default function Hoje() {
     const title = fromFavorite ? meal.raw_text! : SLOT_LABEL[slot]
     const analysed = meal.status === 'ok' || meal.status === 'por_rever'
     const isRetrying = retrying.has(meal.id)
-    const stuck = !isRetrying && analysisStuck(meal, Date.now())
+    const stuck = !isRetrying && stuckNow(meal)
     const failed = !isRetrying && (meal.status === 'erro' || stuck)
     const pending = isRetrying || (meal.status === 'a_analisar' && !stuck)
     // Partilhada por outra pessoa da casa: diz de quem é e, por rever, leva
@@ -647,7 +652,7 @@ export default function Hoje() {
       : meal.status === 'erro'
         ? (splitStoredError(meal.analysis_error).message ?? 'Não consegui analisar')
         : stuck
-          ? 'Parou a meio'
+          ? (splitStoredError(meal.analysis_error).message ?? 'Parou a meio')
           : meal.status === 'a_analisar'
             ? 'A analisar…'
             : meal.status === 'sem_analise'
@@ -1308,9 +1313,8 @@ function NextStepCard({
           <div className="-mt-2">
             <p className="text-[17px] font-medium">A refeição das {timeOf(errorMeal.logged_at)} ficou sem números.</p>
             <p className="text-[14px] text-dim">
-              {errorMeal.status === 'erro'
-                ? (splitStoredError(errorMeal.analysis_error).message ?? 'A análise falhou.')
-                : 'A análise parou a meio.'}
+              {splitStoredError(errorMeal.analysis_error).message ??
+                (errorMeal.status === 'erro' ? 'A análise falhou.' : 'A análise parou a meio.')}
             </p>
           </div>
           <button onClick={() => errorMeals.forEach((m) => onRetry(m.id))} className={`${STEP_EAT} w-full`}>
@@ -1413,7 +1417,7 @@ function NextStepCard({
           <div className="divide-y divide-line/60">
             {yesterdayUncounted.map((meal) => {
               const analysing =
-                retrying.has(meal.id) || (meal.status === 'a_analisar' && !analysisStuck(meal, Date.now()))
+                retrying.has(meal.id) || (meal.status === 'a_analisar' && !analysisStuck(meal, Date.now(), retryContext(meal.id)))
               return (
                 <div key={meal.id} className="flex min-h-12 items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-[15px]">
