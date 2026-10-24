@@ -42,6 +42,7 @@ import { weeklyRateAsOf } from '../../api/_lib/rules/weight'
 import { belowFloor, countedDays, leftOutDates, weekAverages, type BalanceDay } from '../../api/_lib/rules/balanco'
 import type { Meal, Workout } from '../lib/types'
 import BalancoMes from '../components/BalancoMes'
+import { previousMonth } from '../../api/_lib/rules/mes'
 import ContaGordura from '../components/ContaGordura'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
@@ -309,6 +310,12 @@ export default function Balanco() {
         {toggle}
         <ContaGordura today={today} />
         <BalancoMes today={today} />
+        <button
+          onClick={() => sheet.open('mes', { mes: today.slice(8, 10) <= '03' ? previousMonth(today) : today.slice(0, 7) })}
+          className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[15px] font-semibold"
+        >
+          O teu mês (imagem)
+        </button>
       </div>
     )
   }

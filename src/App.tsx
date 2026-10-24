@@ -41,6 +41,8 @@ import TemplateSheet from './components/sheets/TemplateSheet'
 import DizerTreinoSheet from './components/sheets/DizerTreinoSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
 import MedidasSheet, { ComoMedirSheet } from './components/sheets/MedidasSheet'
+import ProjecaoSheet from './components/sheets/ProjecaoSheet'
+import MesSheet from './components/sheets/MesSheet'
 import Hoje from './screens/Hoje'
 import Favoritos from './screens/Favoritos'
 import Definicoes from './screens/Definicoes'
@@ -218,6 +220,8 @@ function Sheets() {
   if (sheet.name === 'como-medir') return <ComoMedirSheet />
   if (sheet.name === 'meu-treino') return <TemplateSheet key={sheet.params.get('id') ?? 'novo'} />
   if (sheet.name === 'dizer-treino') return <DizerTreinoSheet />
+  if (sheet.name === 'projecao') return <ProjecaoSheet />
+  if (sheet.name === 'mes') return <MesSheet key={sheet.params.get('mes') ?? ''} />
   if (sheet.name === 'pergunta') {
     return (
       <Suspense fallback={null}>
