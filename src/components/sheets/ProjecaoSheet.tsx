@@ -108,7 +108,7 @@ export default function ProjecaoSheet() {
                 s === 'treino'
                   ? `+1 treino/semana (${fmtInt(b.workoutKcal!)} kcal)`
                   : s === 'fds'
-                    ? `Fins de semana como a semana (−${fmtInt(b.weekend! - b.weekday!)} kcal)`
+                    ? `Fins de semana como a semana (−${fmtInt(b.weekend! - b.weekday!)} kcal nesses dias)`
                     : SCENARIO_LABEL[s]
               return (
                 <button key={s} aria-pressed={chosen.includes(s)} onClick={() => toggle(s)} className={chip(chosen.includes(s))}>
