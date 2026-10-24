@@ -3,25 +3,20 @@ import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, Responsiv
 import { fmt1, fmtDayMonth, fmtInt } from '../../lib/format'
 import { mondayOf } from '../../../api/_lib/rules/manutencao'
 import { bestDeficitWeek, mondaysUpTo, weeklyBalance, weeklyReading, type WeekBalance } from '../../../api/_lib/rules/balanco-graficos'
-import { dateTicks, dayNum, niceScale } from '../../../api/_lib/rules/graficos'
+import { niceScale } from '../../../api/_lib/rules/graficos'
 import type { Mark } from '../../../api/_lib/rules/leituras'
 import type { BalancoLongo } from '../../lib/balanco'
 import { LONG_WEEKS } from '../../lib/balanco'
-import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, axisInt, tooltipBase, useChartColors } from '../charts/kit'
+import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, axisInt, categoryTicks, tooltipBase, useChartColors } from '../charts/kit'
 
 const Y_WIDTH = 44
 const MARGIN = { top: 18, right: 10, bottom: 0, left: 0 }
 
-function weekTicks(mondays: string[]): string[] {
-  if (mondays.length <= 4) return mondays
-  const { ticks } = dateTicks(mondays[0]!, mondays[mondays.length - 1]!, 4)
-  return [...new Set(ticks.map((t) => mondays.reduce((best, m) => (Math.abs(dayNum(m) - dayNum(t)) < Math.abs(dayNum(best) - dayNum(t)) ? m : best))))]
-}
-
 // Balanço › «Semana a semana»: as últimas 12 semanas, o défice médio por dia
 // (barras, dos dias completos) e, por cima, o peso médio de cada semana — a
 // prova de que o esforço funciona. Dois gráficos alinhados (o mesmo eixo das
-// semanas), em vez de dois eixos no mesmo gráfico.
+// semanas), em vez de dois eixos no mesmo gráfico, cada um com a sua unidade
+// escrita; uma semana sem dias completos tem «–» em vez de barra.
 export default function SemanaASemana({ data, today, waterDay }: { data: BalancoLongo; today: string; waterDay?: (d: string) => boolean }) {
   const colors = useChartColors()
   const model = useMemo(() => {
@@ -31,19 +26,24 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
     const firstIdx = all.findIndex((w) => w.deficit != null || w.kg != null)
     const weeks = firstIdx < 0 ? [] : all.slice(firstIdx)
     const best = bestDeficitWeek(weeks)
-    const marks: Mark[] = best ? [{ id: 'melhor', date: best.monday, value: best.deficit!, label: 'melhor semana', priority: 3, prefer: 'above' }] : []
+    const marks: Mark[] = best ? [{ id: 'melhor', date: best.monday, value: best.deficit!, label: `${fmtInt(best.deficit!)} · melhor semana`, priority: 3, prefer: 'above' }] : []
     const kgs = weeks.filter((w) => w.kg != null).map((w) => w.kg!)
     const defs = weeks.filter((w) => w.deficit != null).map((w) => w.deficit!)
     const kgScale = niceScale(Math.min(...kgs), Math.max(...kgs), 3, 2)
     const defMax = Math.max(100, ...defs)
     const defScale = niceScale(Math.min(0, ...defs), defMax, 4)
+    // Sem barra à vista: «–» numa semana sem dias completos, «0» num défice de zero.
+    const empty: Mark[] = weeks
+      .filter((w) => w.deficit == null || w.deficit === 0)
+      .map((w) => ({ id: `vazia-${w.monday}`, date: w.monday, value: 0, label: w.deficit == null ? '–' : '0', priority: 1, prefer: 'above' as const }))
     return {
       weeks,
       marks,
+      empty,
       reading: weeklyReading(weeks),
       kgScale,
       defScale: { ...defScale, domain: [defScale.domain[0], Math.max(defScale.domain[1], Math.ceil(defMax * 1.18))] as [number, number] },
-      ticks: weekTicks(weeks.map((w) => w.monday)),
+      axis: categoryTicks(weeks.map((w) => w.monday), weeks.length >= 8 ? 4 : 5),
       current: mondayOf(today),
       enough: weeks.filter((w) => w.deficit != null).length >= 2,
       hasKg: kgs.length >= 2,
@@ -76,6 +76,7 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
             <Key shape="line" color={colors.weight} label="peso médio da semana" />
             <Key shape="bar" color={colors.burn} label="défice médio por dia" />
             {model.weeks.some((w) => w.deficit != null && w.deficit < 0) && <Key shape="bar" color={colors.attn} label="acima do gasto" />}
+            {model.weeks.some((w) => w.deficit == null) && <span>– semana sem dias completos</span>}
             {model.weeks.some((w) => w.water) && <Key shape="ring" color={colors.weight} label="semana de água (o peso sobe sem ser gordura)" />}
           </Legend>
         )
@@ -113,11 +114,13 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
       {!model.enough ? (
         <EmptyChart text="Com 2 semanas de dias completos aparece aqui o défice de cada semana, ao lado do peso médio." height={140} />
       ) : (
-        <div className="space-y-1">
+        <div className="space-y-2">
           {model.hasKg && (
+            <div className="border-b border-line/70 pb-2">
+              <p className="pl-1 text-[12px] text-dim">peso médio (kg)</p>
             <div style={{ height: 104 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={model.weeks} margin={{ ...MARGIN, top: 10 }}>
+                <ComposedChart data={model.weeks} margin={{ ...MARGIN, top: 10, bottom: 8 }}>
                   <CartesianGrid stroke={colors.grid} vertical={false} />
                   <XAxis dataKey="monday" tick={false} height={2} axisLine={false} tickLine={false} />
                   <YAxis
@@ -156,12 +159,14 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
+            </div>
           )}
+          <p className="pl-1 text-[12px] text-dim">défice por dia (kcal)</p>
           <div style={{ height: 150 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={model.weeks} margin={MARGIN} barCategoryGap="24%">
                 <CartesianGrid stroke={colors.grid} vertical={false} />
-                <XAxis dataKey="monday" ticks={model.ticks} interval={0} tickFormatter={(d: string) => fmtDayMonth(d)} tick={TICK(colors)} axisLine={{ stroke: colors.grid }} tickLine={false} />
+                <XAxis dataKey="monday" ticks={model.axis.ticks} interval={0} tickFormatter={model.axis.format} tick={TICK(colors)} axisLine={{ stroke: colors.grid }} tickLine={false} />
                 <YAxis domain={model.defScale.domain} ticks={model.defScale.ticks} tickFormatter={axisInt} tick={TICK(colors)} axisLine={false} tickLine={false} width={Y_WIDTH} />
                 <Tooltip {...tooltipBase(colors)} content={({ active, payload }) => (active && payload?.[0] ? tip(payload[0].payload as WeekBalance) : null)} />
                 <ReferenceLine y={0} stroke={colors.dim} strokeWidth={1} />
@@ -170,6 +175,8 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
                     <Cell key={w.monday} fill={w.deficit != null && w.deficit < 0 ? colors.attn : colors.burn} fillOpacity={w.monday === model.current ? 0.45 : 1} />
                   ))}
                 </Bar>
+                {/* Semanas sem barra: «–» (sem dias completos) ou «0», para não ficarem em branco. */}
+                <Marks marks={model.empty} color={colors.dim} colors={colors} x={(d) => d} dots={false} topRoom={0} />
                 <Marks marks={model.marks} color={colors.ink} colors={colors} x={(d) => d} avoid={model.weeks.filter((w) => w.deficit != null).map((w) => ({ date: w.monday, value: w.deficit! }))} />
               </ComposedChart>
             </ResponsiveContainer>

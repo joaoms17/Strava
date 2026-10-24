@@ -15,7 +15,7 @@ import { scopedKey } from '../lib/scoped'
 import { useBalancoLongo, useProteinBySlot } from '../lib/balanco'
 import { weekAgo } from '../lib/projecao'
 import { daysEarlier, moveNote, project, projectionLine } from '../../api/_lib/rules/projecao'
-import { weekAction } from '../../api/_lib/rules/balanco-graficos'
+import { weekAction, weekFacts } from '../../api/_lib/rules/balanco-graficos'
 import SemanaChart from '../components/balanco/SemanaChart'
 import SemanaASemana from '../components/balanco/SemanaASemana'
 import ParaEstaSemana from '../components/balanco/ParaEstaSemana'
@@ -43,6 +43,11 @@ import { previousMonth } from '../../api/_lib/rules/mes'
 import ContaGordura from '../components/ContaGordura'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
+
+// O lugar de um cartão que ainda vem a caminho, com a altura final (sem saltos).
+function CardSkeleton({ height }: { height: number }) {
+  return <div className="animate-pulse rounded-[18px] border border-line bg-surface" style={{ height }} aria-hidden />
+}
 
 interface WeekData {
   monday: string // a semana destes dados (ao mudar de semana, os antigos não ficam por baixo)
@@ -107,7 +112,7 @@ export default function Balanco() {
   const sunday = shiftDate(monday, 6)
   // O que não muda com a semana vista: lido uma vez para a página.
   const { data: longo, failed: longoFailed } = useBalancoLongo(profile, today, version)
-  const protein = useProteinBySlot(sunday < today ? shiftDate(sunday, 1) : today, version)
+  const { rows: protein, failed: proteinFailed } = useProteinBySlot(sunday < today ? shiftDate(sunday, 1) : today, version)
   const openDay = (date: string) => navigate(date === today ? '/hoje' : `/hoje/${date}`)
   // Só a resposta do último pedido conta (‹ › seguidos).
   const loads = useRef(0)
@@ -332,7 +337,7 @@ export default function Balanco() {
       <div className="space-y-4 pt-1">
         {toggle}
         <ContaGordura today={today} />
-        {longo && <CalendarioMes data={longo} today={today} onOpenDay={openDay} />}
+        {longo ? <CalendarioMes data={longo} today={today} onOpenDay={openDay} /> : !longoFailed && <CardSkeleton height={520} />}
         <BalancoMes today={today} days={longo?.days ?? (longoFailed ? [] : null)} />
         <button
           onClick={() => sheet.open('mes', { mes: today.slice(8, 10) <= '03' ? previousMonth(today) : today.slice(0, 7) })}
@@ -385,6 +390,7 @@ export default function Balanco() {
       ? baseSuggestion(exp.tdeeFrozen, exp.avgTraining, profile.base_kcal, profile.sex)
       : null
   const gapNote = persistentGap(data.weeklyGaps)
+  const facts = weekFacts(counted.length, averages?.eaten ?? null, sessions)
   // «Para esta semana»: uma ação, com a projeção (e a de há uma semana), a
   // proteína por refeição, os dias de fora e as pesagens.
   const action = (() => {
@@ -481,6 +487,7 @@ export default function Balanco() {
             ) : (
               <p className="text-[17px] text-dim">A semana começou agora. A média aparece amanhã.</p>
             )}
+            {facts && <p className="text-[14px] text-dim tabular-nums">{facts}</p>}
             {coherent === 'bate_certo' && (
               <p>
                 <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-burn px-3 text-[15px] font-semibold text-burn">
@@ -531,12 +538,15 @@ export default function Balanco() {
 
           <SemanaChart days={data.days} today={today} avg7={data.avg7} learning={exp.learning} onOpenDay={openDay} />
 
-          {thisWeek && action ? <ParaEstaSemana action={action} onOpenDay={openDay} /> : reviewCard}
+          {/* Na semana em curso, «Para esta semana» (o espaço fica reservado
+              enquanto chega, para nada mudar debaixo do dedo); o resumo
+              guardado só quando não deu para a calcular. */}
+          {!thisWeek ? reviewCard : action ? <ParaEstaSemana action={action} onOpenDay={openDay} /> : longoFailed || proteinFailed ? reviewCard : <CardSkeleton height={150} />}
 
           {/* Os 14 dias até ao fim da semana vista (numa semana passada, os de então). */}
           <ProteinaRefeicao rows={protein} perMeal={profile.protein_per_meal_g} />
 
-          {longo && <SemanaASemana data={longo} today={today} waterDay={longo.projection.input.waterDay} />}
+          {longo ? <SemanaASemana data={longo} today={today} waterDay={longo.projection.input.waterDay} /> : !longoFailed && <CardSkeleton height={430} />}
 
           <button
             onClick={() =>

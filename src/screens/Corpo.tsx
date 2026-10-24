@@ -43,8 +43,18 @@ export default function Corpo() {
     )
   }
 
+  // O período que os dados lidos cobrem de facto: enquanto o «Tudo» chega
+  // (ou se falhou, sem rede), os gráficos são os dos últimos 3 meses — nunca
+  // «o mais baixo de sempre» tirado de 5 meses.
+  const shown: Period = data.scope === 'tudo' || period !== 'Tudo' ? period : '3M'
+  const offlineTudo = error && period === 'Tudo' && data.scope !== 'tudo'
+  // Cada secção começa no seu primeiro registo (o relógio pode ter histórico
+  // de antes da primeira pesagem).
   const first = data.firstWeighings[0]?.date ?? data.measurements[0]?.date ?? null
-  const from = periodFrom(period, today, first)
+  const from = periodFrom(shown, today, first)
+  const earliest = (dates: (string | undefined)[]) => dates.filter((d): d is string => d != null).sort()[0] ?? null
+  const trainingFrom = periodFrom(shown, today, earliest([data.workouts[0]?.date, data.health.find((h) => (h.ctl ?? 0) > 0)?.date]))
+  const watchFrom = periodFrom(shown, today, data.health[0]?.date ?? null)
   const target = Number(profile.target_weight_kg) > 0 ? Number(profile.target_weight_kg) : null
   const scale = profile.scale_has_bodyfat
     ? data.weights
@@ -61,6 +71,7 @@ export default function Corpo() {
     ...(hasWatch ? [{ id: 'recuperacao', label: 'Recuperação' }] : []),
   ]
   const dimmed = loading
+  const hasCharts = data.weights.length >= 2 || data.measurements.length > 0 || hasTraining || hasWatch
 
   return (
     <div className="space-y-4 pt-1">
@@ -69,16 +80,19 @@ export default function Corpo() {
       <Ancoras
         sections={sections}
         track={['peso', 'medidas', 'evolucao', ...(hasTraining ? ['treino'] : []), ...(hasWatch ? ['recuperacao'] : [])]}
-        period={period}
+        alias={{ evolucao: 'medidas' }}
+        period={hasCharts ? period : null}
         onPeriod={(p) => {
           setPeriod(p)
           savePeriod(p)
         }}
       />
 
+      {offlineTudo && <p className="text-[14px] text-dim">Sem rede: a mostrar os últimos 3 meses.</p>}
+
       <div className={`space-y-6 transition-opacity ${dimmed ? 'opacity-60' : ''}`} aria-busy={dimmed}>
         <Block id="peso" title="Peso">
-          <PesoChart data={data} period={period} from={from} today={today} targetKg={target} calm={profile.calm_mode} />
+          <PesoChart data={data} period={shown} from={from} today={today} targetKg={target} calm={profile.calm_mode} />
           {profile.sex === 'f' && <Ciclo today={today} />}
         </Block>
 
@@ -93,13 +107,13 @@ export default function Corpo() {
 
         {hasTraining && (
           <Block id="treino" title="Treino">
-            <TreinoCharts data={data} period={period} from={from} today={today} />
+            <TreinoCharts data={data} period={shown} from={trainingFrom} today={today} />
           </Block>
         )}
 
         {hasWatch && (
           <Block id="recuperacao" title="Recuperação">
-            <Recuperacao data={data} period={period} from={from} today={today} />
+            <Recuperacao data={data} period={shown} from={watchFrom} today={today} />
           </Block>
         )}
       </div>

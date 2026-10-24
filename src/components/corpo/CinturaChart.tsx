@@ -8,13 +8,14 @@ import type { BodyMeasurement } from '../../lib/types'
 import { sameWaistSite, targetBodyFatPct, targetWaist, wrongWaistSite } from '../../../api/_lib/rules/composicao'
 import { dayNum, fromDayNum, lowest, niceScale } from '../../../api/_lib/rules/graficos'
 import { waistMarks, waistReading } from '../../../api/_lib/rules/leituras'
-import { ChartCard, Key, Legend, Marks, RefLabel, TICK, TipBox, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
+import { ChartCard, Key, Legend, Marks, TICK, TipBox, padBelowTarget, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
 
 const HEIGHT = 190
 
 // Corpo › Medidas › Cintura: as medições (no mesmo sítio da última) do
 // período, o alvo tracejado (a cintura da %G alvo) e a mais baixa marcada.
-// Com menos de 2 medições no período, as 2 últimas.
+// Com menos de 2 medições no período, as 2 últimas. Um alvo longe dos dados
+// (mais de uma marca do eixo abaixo) não estica o eixo: fica um «alvo 87 ↓» no fundo.
 export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurement[]; from: string; today: string }) {
   const colors = useChartColors()
   const sheet = useSheet()
@@ -33,8 +34,11 @@ export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurem
         : null
     const targetCm = target != null && Number.isFinite(target) ? Math.round(target) : null
     const values = shown.map((p) => p.value)
-    const showTarget = targetCm != null && Math.min(...values) - targetCm < 15
-    const scale = niceScale(Math.min(...values, showTarget ? targetCm! : Infinity), Math.max(...values), 4, 4)
+    const dataScale = niceScale(Math.min(...values), Math.max(...values), 4, 4)
+    const showTarget = targetCm != null && dataScale.domain[0] - targetCm <= dataScale.step
+    const scale = showTarget
+      ? padBelowTarget(niceScale(Math.min(...values, targetCm!), Math.max(...values), 4, 4), targetCm)
+      : dataScale
     const start = shown[0]!.date < from ? shown[0]!.date : from
     return {
       points: shown.map((p) => ({ x: dayNum(p.date), cm: p.value })),
@@ -54,7 +58,17 @@ export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurem
     <ChartCard
       kicker="Cintura"
       reading={model.reading}
-      aside={model.targetCm != null && <p className="text-[14px] text-dim">Alvo cerca de {model.targetCm} cm (a cintura da tua %G alvo).</p>}
+      aside={
+        <div className="flex items-end gap-3">
+          <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
+            {fmt1(Number(model.lastValue))}
+            <span className="text-[17px] font-semibold">{'\u00a0'}cm</span>
+          </p>
+          <p className="min-w-0 text-[14px] leading-snug text-dim">
+            agora{model.targetCm != null && <> · alvo ~{model.targetCm}&nbsp;cm (a cintura da tua %G alvo)</>}
+          </p>
+        </div>
+      }
       legend={
         <Legend>
           <Key shape="line" color={colors.weight} label="cintura medida" />
@@ -100,8 +114,19 @@ export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurem
             />
             {model.showTarget && <ReferenceLine y={model.targetCm!} stroke={colors.dim} strokeDasharray="3 4" strokeWidth={1.5} />}
             <Line dataKey="cm" stroke={colors.weight} strokeWidth={2.5} isAnimationActive={false} dot={{ r: 4, fill: colors.weight, stroke: colors.surface, strokeWidth: 2 }} activeDot={{ r: 6, fill: colors.weight, stroke: colors.surface, strokeWidth: 2 }} />
-            {model.showTarget && <RefLabel y={model.targetCm!} text={`alvo ${model.targetCm}`} colors={colors} side="left" />}
-            <Marks marks={model.marks} color={colors.weight} colors={colors} x={(d) => dayNum(d)} />
+            <Marks
+              marks={model.marks}
+              color={colors.weight}
+              colors={colors}
+              x={(d) => dayNum(d)}
+              refs={
+                model.targetCm == null
+                  ? []
+                  : model.showTarget
+                    ? [{ y: model.targetCm, text: `alvo ${model.targetCm}`, side: 'left' }]
+                    : [{ y: model.targetCm, text: `alvo ${model.targetCm} ↓`, bottom: true }]
+              }
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

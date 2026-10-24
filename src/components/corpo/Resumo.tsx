@@ -62,11 +62,14 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
     targetKg: Number(profile.target_weight_kg) > 0 ? Number(profile.target_weight_kg) : null,
     waterDay: data.projection.input.waterDay,
   })
+  // Cada número diz de quando conta, quando não é da primeira pesagem (a
+  // primeira cintura no mesmo sítio pode ser semanas depois).
+  const from = (date: string | null) => (since && date && date !== since.since ? ` · desde ${fmtDayMonth(date)}` : '')
   const tiles = since
     ? [
         since.kg != null ? { value: `${signed1(since.kg)} kg`, label: 'peso médio', good: since.kgGood } : null,
-        since.cm != null ? { value: `${signed1(since.cm)} cm`, label: 'cintura', good: since.cmGood } : null,
-        since.fat != null ? { value: `${signed1(since.fat)}`, label: 'pontos de %G', good: since.fatGood } : null,
+        since.cm != null ? { value: `${signed1(since.cm)} cm`, label: `cintura${from(since.cmSince)}`, good: since.cmGood } : null,
+        since.fat != null ? { value: `${signed1(since.fat)}`, label: `pontos de %G${from(since.fatSince)}`, good: since.fatGood } : null,
       ].filter((t): t is { value: string; label: string; good: boolean } => t != null)
     : []
 

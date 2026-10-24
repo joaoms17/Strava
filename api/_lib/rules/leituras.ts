@@ -113,6 +113,23 @@ export function compareWindows(
 
 export const FEW_DATA = 'Ainda poucos dados: volta daqui a 1 semana'
 
+// Sem os últimos 30 dias (o relógio deixou de mandar), mas com 7 dias ou
+// mais no período: a média do período, dita como tal.
+export const MIN_PERIOD_VALUES = 7
+
+export function periodMean(rows: DatedValue[], from: string, to: string): number | null {
+  const v = rows.filter((r) => r.date >= from && r.date <= to && Number.isFinite(r.value)).map((r) => r.value)
+  return v.length >= MIN_PERIOD_VALUES ? meanOf(v) : null
+}
+
+export function staleReading(kind: 'steps' | 'sleep' | 'rhr' | 'hrv', mean: number): string {
+  const tail = 'no período; sem dados nos últimos 30 dias'
+  if (kind === 'steps') return `Média de ${int(roundTo(mean, 100))} passos por dia ${tail}`
+  if (kind === 'sleep') return `Dormias ${fmtSleep(Math.round(mean))} por noite ${tail}`
+  if (kind === 'rhr') return `Média de ${Math.round(mean)} bpm ${tail}`
+  return `Média de ${Math.round(mean)} ms ${tail}`
+}
+
 export function stepsReading(c: Comparison | null): string {
   if (!c) return FEW_DATA
   const base = `Média de ${int(roundTo(c.now, 100))} passos por dia`
@@ -123,7 +140,7 @@ export function stepsReading(c: Comparison | null): string {
 
 export function sleepReading(c: Comparison | null): string {
   if (!c) return FEW_DATA
-  const base = `Dormes ${fmtSleep(roundTo(c.now, 5))} por noite`
+  const base = `Dormes ${fmtSleep(Math.round(c.now))} por noite`
   if (c.diff == null) return base
   if (Math.abs(c.diff) < 10) return `${base}, ${c.like}`
   return `${base}, ${c.diff > 0 ? 'mais' : 'menos'} ${roundTo(Math.abs(c.diff), 5)} min ${c.than}`
@@ -169,12 +186,14 @@ export interface WeightChange {
 // O peso médio (7 dias) do início do período ao mais recente. Nas mulheres
 // com o ciclo marcado, as pesagens da semana de água não são ponta da conta
 // (o peso sobe com água, não com gordura).
-export function weightChange(trend: DatedValue[], from: string, waterDay?: (d: string) => boolean): WeightChange | null {
+// `startAt`: no «Tudo», o começo de sempre (startWeight), o mesmo número do
+// resumo «Desde o início».
+export function weightChange(trend: DatedValue[], from: string, waterDay?: (d: string) => boolean, startAt?: DatedValue | null): WeightChange | null {
   const pts = trend.filter((p) => p.date >= from).sort((a, b) => a.date.localeCompare(b.date))
   const clean = waterDay ? pts.filter((p) => !waterDay(p.date)) : pts
   const use = clean.length >= 2 ? clean : pts
   if (use.length < 2) return null
-  const start = use[0]!
+  const start = startAt ?? use[0]!
   const end = use[use.length - 1]!
   const days = daysBetween(start.date, end.date)
   if (days < 7) return null
@@ -205,20 +224,22 @@ export interface Mark {
 
 // Os marcos da linha do peso médio: o começo (ou o início de tudo), o mais
 // baixo (quando não é nem o começo nem o último) e o último.
-export function weightMarks(trend: DatedValue[], opts: { firstEver: boolean; lowestEver: boolean }): Mark[] {
+// Os rótulos dizem sempre «valor · papel» («95,2 · início», «87,1 · mais
+// baixo»). `start`: o começo de sempre (no «Tudo»), em vez do 1.º ponto.
+export function weightMarks(trend: DatedValue[], opts: { firstEver: boolean; lowestEver: boolean; start?: DatedValue | null }): Mark[] {
   if (trend.length === 0) return []
-  const first = trend[0]!
+  const first = opts.start ?? trend[0]!
   const last = trend[trend.length - 1]!
   const marks: Mark[] = []
   if (trend.length >= 2) {
-    marks.push({ id: 'inicio', date: first.date, value: first.value, label: opts.firstEver ? `início ${dec1(first.value)}` : dec1(first.value), priority: 2, prefer: 'above' })
+    marks.push({ id: 'inicio', date: first.date, value: first.value, label: opts.firstEver ? `${dec1(first.value)} · início` : dec1(first.value), priority: 2, prefer: 'above' })
   }
   const low = lowest(trend)
   const lowText = opts.lowestEver ? 'mais baixo de sempre' : 'mais baixo'
   // O último a menos de 0,2 kg do mais baixo conta como o mais baixo (um rótulo só).
   const lastIsLow = low != null && last.value - low.value < 0.2 && trend.length >= 10 && first.value - last.value >= 0.3
-  if (low && !lastIsLow && low.date !== first.date && low.date !== last.date && first.value - low.value >= 0.3) {
-    marks.push({ id: 'baixo', date: low.date, value: low.value, label: `${lowText} ${dec1(low.value)}`, priority: 3, prefer: 'below' })
+  if (low && !lastIsLow && low.date > first.date && low.date !== last.date && first.value - low.value >= 0.3) {
+    marks.push({ id: 'baixo', date: low.date, value: low.value, label: `${dec1(low.value)} · ${lowText}`, priority: 3, prefer: 'below' })
   }
   marks.push({ id: 'ultimo', date: last.date, value: last.value, label: lastIsLow ? `${dec1(last.value)} · ${lowText}` : dec1(last.value), priority: 4, prefer: 'above', strong: true })
   return marks
@@ -267,6 +288,13 @@ export function projectionPath(start: DatedValue, eta: GoalEta, target: number, 
   return { points, reachesInView: dayNum(eta.date) <= dayNum(horizonEnd), end: { date: last.date, value: last.mid } }
 }
 
+// Onde a linha tracejada começa: hoje, no peso da reta da projeção (o mesmo
+// «agora» do cartão da Projeção, sem a semana de água), não no último ponto
+// do peso médio.
+export function projectionStart(asOf: string, currentKg: number): DatedValue {
+  return { date: asOf, value: currentKg }
+}
+
 // Quantos dias de projeção cabem à direita: até 75 % do período (pelo menos
 // 4 semanas), para os dados não ficarem espremidos à esquerda.
 export function projectionHorizon(periodStart: string, today: string): string {
@@ -295,7 +323,7 @@ export function waistMarks(points: DatedValue[]): Mark[] {
   const low = lowest(points)
   const marks: Mark[] = []
   if (low && low.date !== last.date && points.length >= 3) {
-    marks.push({ id: 'baixa', date: low.date, value: low.value, label: `a mais baixa ${dec1(low.value)}`, priority: 3, prefer: 'below' })
+    marks.push({ id: 'baixa', date: low.date, value: low.value, label: `${dec1(low.value)} · a mais baixa`, priority: 3, prefer: 'below' })
   }
   marks.push({ id: 'ultima', date: last.date, value: last.value, label: dec1(last.value), priority: 4, prefer: 'above', strong: true })
   return marks
@@ -384,7 +412,7 @@ export function formMarks(points: FormPoint[]): Mark[] {
   const last = points[points.length - 1]!
   const marks: Mark[] = []
   if (peak.date !== last.date && peak.value - last.ctl >= 1) {
-    marks.push({ id: 'pico', date: peak.date, value: peak.value, label: `mais alta ${Math.round(peak.value)}`, priority: 3, prefer: 'above' })
+    marks.push({ id: 'pico', date: peak.date, value: peak.value, label: `${Math.round(peak.value)} · a mais alta`, priority: 3, prefer: 'above' })
   }
   marks.push({ id: 'hoje', date: last.date, value: last.ctl, label: peak.date === last.date && points.length >= 14 ? `${Math.round(last.ctl)} · a mais alta` : String(Math.round(last.ctl)), priority: 4, prefer: 'above', strong: true })
   return marks
@@ -397,13 +425,14 @@ export function bestDayMark(points: DatedValue[], kind: 'max' | 'min', label: st
   if (points.length < 7) return null
   const p = kind === 'max' ? highest(points) : lowest(points)
   if (!p) return null
-  return { id: 'melhor', date: p.date, value: p.value, label: `${label} ${Math.round(p.value)}${unit ? `\u00a0${unit}` : ''}`, priority: 3, prefer: kind === 'max' ? 'above' : 'below' }
+  return { id: 'melhor', date: p.date, value: p.value, label: `${Math.round(p.value)}${unit ? `\u00a0${unit}` : ''} · ${label}`, priority: 3, prefer: kind === 'max' ? 'above' : 'below' }
 }
 
 // --- «Desde o início» ------------------------------------------------------
 
 export interface SinceStart {
   since: string // a primeira pesagem
+  start: DatedValue | null // o começo do peso: a média da 1.ª semana, no último dia dela
   kg: number | null
   kgGood: boolean
   cm: number | null
@@ -412,6 +441,21 @@ export interface SinceStart {
   fat: number | null // pontos de %G
   fatSince: string | null
   fatGood: boolean
+}
+
+// O começo de sempre do peso: a média das pesagens da primeira semana (sem
+// as da semana de água, se houver outras), no último dia dessa semana — é
+// aí que a linha do peso médio (7 dias) passa por esse valor. O resumo
+// «Desde o início» e o gráfico em «Tudo» usam este mesmo número.
+export function startWeight(firstWeighings: DatedValue[], waterDay?: (d: string) => boolean): { since: string; start: DatedValue } | null {
+  const first = [...firstWeighings].sort((a, b) => a.date.localeCompare(b.date))
+  const head = first[0]
+  if (!head) return null
+  const week = first.filter((w) => daysBetween(head.date, w.date) < 7)
+  const dry = waterDay ? week.filter((w) => !waterDay(w.date)) : week
+  const use = dry.length ? dry : week
+  const value = Math.round(meanOf(use.map((w) => w.value))! * 100) / 100
+  return { since: head.date, start: { date: use[use.length - 1]!.date, value } }
 }
 
 // Do primeiro registo a agora: o peso médio da primeira semana de pesagens
@@ -426,15 +470,13 @@ export function sinceStart(input: {
   targetKg: number | null
   waterDay?: (d: string) => boolean
 }): SinceStart | null {
-  const first = [...input.firstWeighings].sort((a, b) => a.date.localeCompare(b.date))
-  const head = first[0]
-  if (!head) return null
-  const week = first.filter((w) => daysBetween(head.date, w.date) < 7)
-  const startKg = meanOf(week.map((w) => w.value))!
+  const sw = startWeight(input.firstWeighings, input.waterDay)
+  if (!sw) return null
+  const startKg = sw.start.value
   const clean = input.waterDay ? input.trend.filter((p) => !input.waterDay!(p.date)) : input.trend
   const end = (clean.length ? clean : input.trend).reduce<DatedValue | null>((a, p) => (a == null || p.date > a.date ? p : a), null)
   let kg: number | null = null
-  if (end && daysBetween(head.date, end.date) >= 7) kg = Math.round((end.value - startKg) * 10) / 10
+  if (end && daysBetween(sw.since, end.date) >= 7) kg = Math.round((end.value - startKg) * 10) / 10
   const goalDown = input.targetKg == null || input.targetKg < startKg
   const kgGood = kg != null && Math.abs(kg) >= 0.2 && (goalDown ? kg < 0 : kg > 0)
 
@@ -447,7 +489,8 @@ export function sinceStart(input: {
   const w = pair(input.waist)
   const f = pair(input.fat)
   return {
-    since: head.date,
+    since: sw.since,
+    start: sw.start,
     kg,
     kgGood,
     cm: w?.change ?? null,
@@ -458,4 +501,3 @@ export function sinceStart(input: {
     fatGood: f != null && f.change <= -0.5,
   }
 }
-

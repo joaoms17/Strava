@@ -1,10 +1,10 @@
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { fmtDayShort, fmtInt } from '../../lib/format'
 import { shiftDate } from '../../lib/day'
 import { monthBounds, monthName } from '../../../api/_lib/rules/mes'
 import { monthCalendar, type CalCell, type CalResult } from '../../../api/_lib/rules/balanco-graficos'
 import type { BalancoLongo } from '../../lib/balanco'
-import { ChartCard, Key, Legend, useChartColors } from '../charts/kit'
+import { ChartCard, HatchDef, Key, Legend, useChartColors } from '../charts/kit'
 
 const LETTERS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
 
@@ -18,9 +18,12 @@ const RESULT_TEXT: Record<CalResult, string> = {
 }
 
 // Balanço › Mês: o calendário dos dias no alvo (decisão 289: dia completo
-// com o comido até 100 kcal acima do alvo do dia). Cada dia tem a cor e um
-// sinal (✓ no alvo, + acima, – de fora), para a cor não ser a única pista.
+// com o comido até 100 kcal acima do alvo do dia). Cada dia tem a cor (no
+// alvo o verde de «a melhorar», acima o âmbar com riscas, como no gráfico da
+// Semana) e um sinal (✓ no alvo, + acima, – de fora), para a cor não ser a
+// única pista. Hoje tem um contorno fino; o dia tocado, um anel afastado.
 // Tocar num dia mostra os números; ‹ › mudam de mês dentro do que foi lido.
+// As semanas só com dias futuros não aparecem.
 export default function CalendarioMes({ data, today, onOpenDay }: { data: BalancoLongo; today: string; onOpenDay: (date: string) => void }) {
   const colors = useChartColors()
   const hatch = `cal-${useId().replace(/:/g, '')}`
@@ -33,22 +36,27 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
   const canPrev = `${prev}-01` >= data.from
   const canNext = next <= today.slice(0, 7)
   const cell = cal.weeks.flat().find((c) => c?.date === picked) ?? null
+  const weeks = cal.weeks.filter((w) => w.some((c) => c != null && c.result !== 'futuro'))
+  const detail = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (picked) detail.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [picked])
 
   const style = (c: CalCell) => {
     switch (c.result) {
       case 'no_alvo':
-        return { background: colors.eat, color: colors.surface, border: `1px solid ${colors.eat}` }
+        return { background: colors.ok, color: colors.onOk, border: `1px solid ${colors.ok}` }
       case 'acima':
-        return { background: 'transparent', color: colors.ink, border: `1.5px solid ${colors.attn}` }
+        return { background: 'transparent', color: colors.ink, border: `1px solid ${colors.attn}` }
       case 'fora':
         return { background: 'transparent', color: colors.dim, border: `1.5px dashed ${colors.dim}` }
       case 'hoje':
-        return { background: 'transparent', color: colors.ink, border: `2px solid ${colors.ink}` }
+        return { background: 'transparent', color: colors.ink, border: `1px solid ${colors.ink}` }
       default:
-        return { background: colors.surface2, color: colors.dim, border: `1px solid ${colors.surface2}` }
+        return { background: colors.surface2, color: colors.dim, border: `1px solid ${colors.grid}` }
     }
   }
-  const sign: Partial<Record<CalResult, string>> = { no_alvo: '✓', acima: '+', fora: '–' }
+  const sign: Partial<Record<CalResult, string>> = { no_alvo: '✓', acima: '+', fora: '–', hoje: 'hoje' }
 
   return (
     <ChartCard
@@ -67,40 +75,38 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
       }
       legend={
         <Legend>
-          <Key shape="bar" color={colors.eat} label="✓ no alvo" />
+          <Key shape="bar" color={colors.ok} label="✓ no alvo" />
           <Key shape="hatch" color={colors.attn} label="+ acima" />
           <Key shape="outline" color={colors.dim} label="– de fora" />
-          <Key shape="bar" color={colors.surface2} label="sem registos" />
+          <Key shape="bar" color={colors.surface2} border={colors.dim} label="sem registos" />
         </Legend>
       }
     >
       <svg width="0" height="0" className="absolute" aria-hidden>
         <defs>
-          <pattern id={hatch} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <rect width="6" height="6" fill={colors.attn} fillOpacity={0.18} />
-            <rect width="2" height="6" fill={colors.attn} fillOpacity={0.55} />
-          </pattern>
+          <HatchDef id={hatch} colors={colors} size={7} />
         </defs>
       </svg>
-      <div className="grid grid-cols-7 gap-1.5 text-center" role="grid" aria-label={`Calendário de ${monthName(month)}`}>
+      {/* Uma lista de botões com o dia e o resultado no nome (sem papéis de
+          grelha: sem linhas, o VoiceOver perdia-se). */}
+      <div className="grid grid-cols-7 gap-1.5 text-center" aria-label={`Calendário de ${monthName(month)}`}>
         {LETTERS.map((l, i) => (
-          <span key={i} className="text-[12px] text-dim" role="columnheader">
+          <span key={i} className="text-[12px] text-dim" aria-hidden>
             {l}
           </span>
         ))}
-        {cal.weeks.flat().map((c, i) =>
+        {weeks.flat().map((c, i) =>
           c == null ? (
             <span key={`v${i}`} />
           ) : (
             <button
               key={c.date}
-              role="gridcell"
               disabled={c.result === 'futuro'}
               onClick={() => setPicked(picked === c.date ? null : c.date)}
               aria-pressed={picked === c.date}
               aria-label={`${fmtDayShort(c.date)}: ${RESULT_TEXT[c.result]}`}
               className={`relative flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg text-[14px] leading-none tabular-nums disabled:opacity-40 ${
-                picked === c.date ? 'ring-2 ring-ink ring-offset-2 ring-offset-surface' : ''
+                picked === c.date ? 'ring-[2.5px] ring-ink ring-offset-2 ring-offset-surface' : ''
               }`}
               style={style(c)}
             >
@@ -109,13 +115,21 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
                   <rect width="100%" height="100%" fill={`url(#${hatch})`} />
                 </svg>
               )}
-              <span className="relative font-semibold">{c.day}</span>
-              {sign[c.result] && <span className="relative text-[10px]">{sign[c.result]}</span>}
+              {/* Nas riscas, o número numa pílula da cor do cartão (lê-se sempre). */}
+              <span className={`relative font-semibold ${c.result === 'acima' ? 'rounded-md bg-surface px-1 py-px' : ''}`}>{c.day}</span>
+              {sign[c.result] && (
+                <span
+                  className={`relative leading-none font-bold ${c.result === 'hoje' ? 'text-[10px] font-semibold' : 'text-[13px]'} ${c.result === 'acima' ? 'mt-0.5 rounded-md bg-surface px-1' : ''}`}
+                  aria-hidden
+                >
+                  {sign[c.result]}
+                </span>
+              )}
             </button>
           ),
         )}
       </div>
-      <div className="mt-2 min-h-[52px] rounded-xl bg-surface2/60 px-3 py-2" aria-live="polite">
+      <div ref={detail} className="mt-2 min-h-[52px] scroll-mb-24 rounded-xl bg-surface2/60 px-3 py-2" aria-live="polite">
         {cell ? (
           <div className="flex items-center justify-between gap-2">
             <div>
@@ -124,7 +138,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
               </p>
               {cell.kcalIn != null && (
                 <p className="text-[15px] tabular-nums">
-                  Comeste <span className="font-semibold">{fmtInt(cell.kcalIn)}</span>
+                  Comeste <span className="font-semibold">{fmtInt(cell.kcalIn)} kcal</span>
                   {cell.kcalTarget != null && <> · alvo {fmtInt(cell.kcalTarget)}</>}
                 </p>
               )}

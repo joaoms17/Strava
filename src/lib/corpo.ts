@@ -72,7 +72,9 @@ export async function loadCorpo(profile: Profile, today: string, scope: 'recente
     }),
     supabase.from('days').select('date,kcal_in,kcal_target,is_complete,flags,tdee_est').gte('date', shiftDate(today, -40)).lte('date', today).order('date'),
   ])
-  if (first.error) throw new Error(first.error.message)
+  // Um erro em qualquer pedido é um erro (não «sem medições» nem «faltam dias completos»).
+  const failed = first.error ?? measurements.error ?? days.error
+  if (failed) throw new Error(failed.message)
   const cleanWeights = weights.map((w) => ({ date: w.date, kg: Number(w.kg), body_fat_pct: w.body_fat_pct != null ? Number(w.body_fat_pct) : null }))
   const rows = (measurements.data ?? []) as BodyMeasurement[]
   const recent40 = shiftDate(today, -40)

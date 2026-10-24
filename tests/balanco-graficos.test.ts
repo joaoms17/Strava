@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   bestDeficitWeek,
   dayResult,
+  dayVerdict,
+  isOnTarget,
   mondaysUpTo,
   monthCalendar,
+  showMeanLine,
   weekAction,
   weekDaysReading,
+  weekFacts,
   weeklyBalance,
   weeklyReading,
   type ActionInput,
@@ -40,6 +44,33 @@ describe('o dia contra o alvo', () => {
     const days = [day(1500), day(2050, { date: '2026-10-13' }), day(2400, { date: '2026-10-12' }), day(900, { date: '2026-10-15', complete: false })]
     expect(weekDaysReading(days, TODAY)).toBe('2 de 3 dias completos no alvo · 1 acima')
     expect(weekDaysReading([], TODAY)).toBe('Ainda sem dias completos nesta semana')
+  })
+
+  it('um dia, um veredicto: a frase conta os mesmos dias que as barras pintam de «no alvo»', () => {
+    const days = [day(1500), day(2050, { date: '2026-10-13' }), day(2200, { date: '2026-10-12' }), day(1200, { date: '2026-10-16' })]
+    const results = days.map((d) => dayResult(d, TODAY))
+    expect(results).toEqual(['abaixo', 'no_alvo', 'acima', 'abaixo'])
+    const on = results.filter(isOnTarget).length
+    expect(weekDaysReading(days, TODAY)).toBe(`${on} de 4 dias completos no alvo · 1 acima`)
+    expect(on).toBe(3)
+  })
+
+  it('o toque diz o veredicto com a diferença', () => {
+    expect(dayVerdict('abaixo', 1550, 2000)).toBe('no alvo · 450 kcal abaixo')
+    expect(dayVerdict('acima', 2320, 2000)).toBe('acima do alvo · +320 kcal')
+    expect(dayVerdict('no_alvo', 2050, 2000)).toBe('no alvo')
+  })
+
+  it('a linha da média só quando se afasta do alvo', () => {
+    expect(showMeanLine(1420, [1400, 1400, 1450, 1400, 0])).toBe(false)
+    expect(showMeanLine(2004, [2300, 2300, 2400])).toBe(true)
+    expect(showMeanLine(null, [2000])).toBe(false)
+  })
+
+  it('a linha de factos da semana', () => {
+    expect(weekFacts(5, 2012, 4)).toBe('5 dias completos · média 2\u202f010 kcal · 4 treinos')
+    expect(weekFacts(1, 1400, 0)).toBe('1 dia completo · média 1\u202f400 kcal')
+    expect(weekFacts(0, null, 0)).toBeNull()
   })
 })
 
@@ -100,7 +131,9 @@ describe('semana a semana', () => {
   it('défice médio dos dias completos e o peso médio de cada semana', () => {
     expect(mondays[3]).toBe('2026-10-12')
     const weeks = weeklyBalance(days, weights, mondays, TODAY)
-    expect(weeks[0]).toEqual({ monday: mondays[0], deficit: 500, days: 5, kg: 90, water: false })
+    expect(weeks[0]).toMatchObject({ monday: mondays[0], deficit: 500, days: 5, kg: 90, water: false })
+    // O comido e o gasto são as médias dos mesmos dias do défice.
+    expect(weeks[0]!.out! - weeks[0]!.eaten!).toBe(500)
     // A semana de hoje só conta até ontem.
     expect(weeks[3]!.days).toBe(4)
   })
@@ -152,8 +185,15 @@ describe('Para esta semana', () => {
     const a = weekAction({ ...base, note: { days: 9, text: 'atrasou 9 dias: mais 380 kcal/dia ao fim de semana', cause: 'fds' }, weekend: 2300, fdsDaysEarlier: 12 })
     expect(a.kind).toBe('fim_de_semana')
     expect(a.detail).toBe(
-      'Desde a semana passada, a data atrasou 9 dias: mais 380 kcal/dia ao fim de semana. Comes mais 400 kcal por dia ao sábado e ao domingo do que durante a semana. Assim, chegas aos 82 kg 12 dias mais cedo.',
+      'Desde a semana passada, a data atrasou 9 dias: mais 380 kcal/dia ao fim de semana. Comes mais 400 kcal por dia ao sábado e ao domingo do que durante a semana. Se comeres como durante a semana, chegas aos 82 kg 12 dias mais cedo.',
     )
+  })
+
+  it('a nota diz «fim de semana» mas o fim de semana não come mais: título neutro', () => {
+    const a = weekAction({ ...base, note: { days: 9, text: 'atrasou 9 dias: mais 380 kcal/dia ao fim de semana', cause: 'fds' }, weekend: base.weekday! - 40, fdsDaysEarlier: 3 })
+    expect(a.kind).toBe('fim_de_semana')
+    expect(a.title).toBe('Ao fim de semana, come perto do alvo do dia')
+    expect(a.detail).toBe('Desde a semana passada, a data atrasou 9 dias: mais 380 kcal/dia ao fim de semana.')
   })
 
   it('a projeção atrasou durante a semana', () => {

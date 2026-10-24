@@ -84,9 +84,11 @@ export function useBalancoLongo(profile: Profile, today: string, version: number
 export type ProteinRow = { slot: Slot; avg: number; days: number }
 
 // A proteína de cada refeição nos 14 dias antes de `until` (a mesma do
-// cartão «Proteína por refeição» e de «Para esta semana»).
-export function useProteinBySlot(until: string, version: number): ProteinRow[] | null {
-  const [rows, setRows] = useState<ProteinRow[] | null>(null)
+// cartão «Proteína por refeição» e de «Para esta semana»). Num erro as
+// linhas ficam por ler (null) e `failed` diz-o: «Para esta semana» não
+// pode tomar um erro por «a proteína está bem».
+export function useProteinBySlot(until: string, version: number): { rows: ProteinRow[] | null; failed: boolean } {
+  const [state, setState] = useState<{ rows: ProteinRow[] | null; failed: boolean }>({ rows: null, failed: false })
   useEffect(() => {
     let alive = true
     void supabase
@@ -94,12 +96,14 @@ export function useProteinBySlot(until: string, version: number): ProteinRow[] |
       .select('date,slot,protein')
       .gte('date', shiftDate(until, -14))
       .lt('date', until)
-      .then(({ data }) => {
-        if (alive) setRows(proteinBySlot((data ?? []) as { date: string; slot: Slot | null; protein: number | null }[]))
+      .then(({ data, error }) => {
+        if (!alive) return
+        if (error) setState((s) => ({ rows: s.rows, failed: true }))
+        else setState({ rows: proteinBySlot((data ?? []) as { date: string; slot: Slot | null; protein: number | null }[]), failed: false })
       })
     return () => {
       alive = false
     }
   }, [until, version])
-  return rows
+  return state
 }

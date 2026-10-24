@@ -1,9 +1,9 @@
 import { useId } from 'react'
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { fmtDayShort, fmtInt, weekdayLetter } from '../../lib/format'
-import { dayResult, weekDaysReading, type DayResult, type WeekDay } from '../../../api/_lib/rules/balanco-graficos'
+import { dayResult, dayVerdict, showMeanLine, weekDaysReading, type DayResult, type WeekDay } from '../../../api/_lib/rules/balanco-graficos'
 import { niceScale } from '../../../api/_lib/rules/graficos'
-import { ChartCard, Key, Legend, TICK, axisInt, useChartColors, useSelection, type ChartColors } from '../charts/kit'
+import { BELOW_FILL_OPACITY, ChartCard, HatchDef, Key, Legend, Marks, TICK, axisInt, useChartColors, useSelection, type ChartColors } from '../charts/kit'
 
 export type ChartDay = WeekDay & { out: number }
 
@@ -11,12 +11,13 @@ const HEIGHT = 200
 const Y_WIDTH = 44
 const MARGIN = { top: 16, right: 8, bottom: 0, left: 0 }
 
+// O nome de cada resultado para o VoiceOver (o toque diz a diferença em kcal).
 const RESULT_TEXT: Record<DayResult, string> = {
   no_alvo: 'no alvo',
   acima: 'acima do alvo',
-  abaixo: 'abaixo do alvo',
+  abaixo: 'no alvo (bem abaixo)',
   fora: 'ficou de fora (incompleto)',
-  hoje: 'hoje, até agora',
+  hoje: 'hoje, ainda a meio',
   vazio: 'sem registos',
   futuro: '',
 }
@@ -24,22 +25,24 @@ const RESULT_TEXT: Record<DayResult, string> = {
 function barStyle(result: DayResult, colors: ChartColors, hatch: string) {
   switch (result) {
     case 'acima':
-      return { fill: `url(#${hatch})`, stroke: colors.attn, strokeWidth: 1.5, strokeDasharray: undefined, fillOpacity: 1 }
+      return { fill: `url(#${hatch})`, stroke: 'none', strokeWidth: 0, strokeDasharray: undefined, fillOpacity: 1 }
     case 'abaixo':
-      return { fill: colors.eat, stroke: 'none', strokeWidth: 0, strokeDasharray: undefined, fillOpacity: 0.45 }
+      return { fill: colors.ok, stroke: colors.ok, strokeWidth: 1.5, strokeDasharray: undefined, fillOpacity: BELOW_FILL_OPACITY }
     case 'fora':
       return { fill: colors.surface2, stroke: colors.dim, strokeWidth: 1.2, strokeDasharray: '3 2', fillOpacity: 1 }
     case 'hoje':
-      return { fill: colors.eat, stroke: colors.eat, strokeWidth: 1.2, strokeDasharray: '3 2', fillOpacity: 0.3 }
+      return { fill: colors.dim, stroke: colors.dim, strokeWidth: 1.2, strokeDasharray: '3 2', fillOpacity: 0.25 }
     default:
-      return { fill: colors.eat, stroke: 'none', strokeWidth: 0, strokeDasharray: undefined, fillOpacity: 1 }
+      return { fill: colors.ok, stroke: 'none', strokeWidth: 0, strokeDasharray: undefined, fillOpacity: 1 }
   }
 }
 
 // Balanço › Semana: o que se comeu em cada dia (a cor diz o resultado contra
-// o alvo desse dia: ±100 kcal no alvo, acima âmbar tracejado, abaixo mais
-// claro), o alvo de cada dia (um traço), o gasto (linha fina) e a média dos
-// últimos 7 dias completos (tracejada). Tocar num dia mostra os números dele.
+// o alvo desse dia, decisão 289: no alvo verde, bem abaixo verde claro — que
+// também conta como no alvo —, acima âmbar com riscas), o alvo de cada dia
+// (um traço), o gasto (linha fina) e a média dos últimos 7 dias completos
+// (tracejada, com nome; sem linha quando fica colada ao alvo). Tocar num dia
+// mostra os números dele.
 export default function SemanaChart({
   days,
   today,
@@ -71,6 +74,7 @@ export default function SemanaChart({
   const results = new Set(rows.map((r) => r.result))
   const selected = rows.find((r) => r.date === sel.selected) ?? null
   const reading = weekDaysReading(days, today)
+  const meanLine = showMeanLine(avg7, rows.map((r) => r.plan ?? 0))
 
   return (
     <ChartCard
@@ -79,13 +83,19 @@ export default function SemanaChart({
       reading={reading}
       legend={
         <Legend>
-          <Key shape="bar" color={colors.eat} label="no alvo (±100)" />
+          <Key shape="bar" color={colors.ok} label="no alvo (até +100)" />
+          {results.has('abaixo') && <Key shape="below" color={colors.ok} label="bem abaixo (conta como no alvo)" />}
           {results.has('acima') && <Key shape="hatch" color={colors.attn} label="acima" />}
-          {results.has('abaixo') && <Key shape="bar" color={colors.eat} label="abaixo" faint />}
           {results.has('fora') && <Key shape="outline" color={colors.dim} label="fora (incompleto)" />}
+          {results.has('hoje') && <Key shape="outline" color={colors.dim} label="hoje (a meio)" />}
           <Key shape="line" color={colors.ink} label="alvo do dia" />
           <Key shape="line" color={colors.burn} label={`gasto${learning ? ' (a aprender)' : ''}`} />
-          {avg7 != null && <Key shape="dash" color={colors.dim} label={`média 7 dias (${fmtInt(avg7)})`} />}
+          {avg7 != null &&
+            (meanLine ? (
+              <Key shape="dash" color={colors.dim} label={`comeste em média (7 dias): ${fmtInt(avg7)} kcal`} />
+            ) : (
+              <span>comeste em média (7 dias): {fmtInt(avg7)} kcal</span>
+            ))}
         </Legend>
       }
     >
@@ -93,10 +103,7 @@ export default function SemanaChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={rows} margin={MARGIN} barCategoryGap="22%">
             <defs>
-              <pattern id={hatch} width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-                <rect width="5" height="5" fill={colors.attn} fillOpacity={0.35} />
-                <rect width="2.5" height="5" fill={colors.attn} />
-              </pattern>
+              <HatchDef id={hatch} colors={colors} />
             </defs>
             <CartesianGrid stroke={colors.grid} vertical={false} />
             {selected && <ReferenceArea x1={selected.date} x2={selected.date} fill={colors.surface2} fillOpacity={1} stroke="none" />}
@@ -132,7 +139,8 @@ export default function SemanaChart({
                 )
               }
             />
-            {avg7 != null && <ReferenceLine y={avg7} stroke={colors.dim} strokeWidth={1.5} strokeDasharray="3 4" />}
+            {meanLine && <ReferenceLine y={avg7!} stroke={colors.dim} strokeWidth={1.5} strokeDasharray="3 4" />}
+            {meanLine && <Marks marks={[]} color={colors.dim} colors={colors} x={(d) => d} refs={[{ y: avg7!, text: `média ${fmtInt(avg7!)}`, side: 'left' }]} />}
             <Line dataKey="out" stroke={colors.burn} strokeWidth={1.5} dot={{ r: 2.5, fill: colors.burn, stroke: 'none' }} activeDot={false} connectNulls isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
@@ -163,12 +171,12 @@ export default function SemanaChart({
         {selected ? (
           <div className="space-y-1">
             <p className="text-[14px] text-dim">
-              {fmtDayShort(selected.date)} · {RESULT_TEXT[selected.result]}
+              {fmtDayShort(selected.date)} · {dayVerdict(selected.result, selected.eaten, selected.plan)}
             </p>
             <p className="text-[15px] tabular-nums">
               {selected.eaten != null ? (
                 <>
-                  Comeste <span className="font-semibold">{fmtInt(selected.eaten)}</span>
+                  Comeste <span className="font-semibold">{fmtInt(selected.eaten)} kcal</span>
                 </>
               ) : (
                 'Sem refeições registadas'

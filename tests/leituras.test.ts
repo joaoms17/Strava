@@ -8,9 +8,13 @@ import {
   formReading,
   hrvReading,
   projectionHorizon,
+  periodMean,
   projectionPath,
+  projectionStart,
   restingHrReading,
   sinceStart,
+  staleReading,
+  startWeight,
   sleepReading,
   stepsReading,
   trainingReading,
@@ -22,6 +26,7 @@ import {
   weightReading,
 } from '../api/_lib/rules/leituras'
 import { shiftDate } from '../api/_lib/rules/nutritional-day'
+import { trend7 } from '../api/_lib/rules/weight'
 
 const TODAY = '2026-10-18'
 
@@ -74,7 +79,8 @@ describe('agora contra antes', () => {
     const more = compareWindows(series(91, (i) => (i < 30 ? 400 : 425)), TODAY, '3M', shiftDate(TODAY, -90))!
     expect(sleepReading(more)).toBe('Dormes 7 h 05 por noite, mais 25 min do que em agosto')
     const same = compareWindows(series(91, (i) => (i < 30 ? 420 : 424)), TODAY, '3M', shiftDate(TODAY, -90))!
-    expect(sleepReading(same)).toBe('Dormes 7 h 05 por noite, como em agosto')
+    // Os minutos certos (como a legenda e «esta noite»), sem arredondar a 5.
+    expect(sleepReading(same)).toBe('Dormes 7 h 04 por noite, como em agosto')
   })
 
   it('HRV: subir é bom, descer diz-se sem drama', () => {
@@ -134,8 +140,8 @@ describe('peso', () => {
     const t = [...series(30, (i) => 90 - i * 0.1, shiftDate(TODAY, -5)), ...series(5, () => 87.5)]
     const marks = weightMarks(t, { firstEver: true, lowestEver: false })
     expect(marks.map((m) => m.id)).toEqual(['inicio', 'baixo', 'ultimo'])
-    expect(marks[0]!.label).toBe('início 90,0')
-    expect(marks[1]!.label).toMatch(/^mais baixo 87,1$/)
+    expect(marks[0]!.label).toBe('90,0 · início')
+    expect(marks[1]!.label).toBe('87,1 · mais baixo')
   })
 
   it('o último quase igual ao mais baixo também conta como o mais baixo', () => {
@@ -246,7 +252,7 @@ describe('treino', () => {
 describe('recuperação', () => {
   it('HRV mais alta e FC mais baixa', () => {
     const pts = series(20, (i) => 50 + (i === 7 ? 12 : 0))
-    expect(bestDayMark(pts, 'max', 'mais alta', 'ms')!.label).toBe('mais alta 62\u00a0ms')
+    expect(bestDayMark(pts, 'max', 'mais alta', 'ms')!.label).toBe('62\u00a0ms · mais alta')
     expect(bestDayMark(pts.slice(0, 3), 'max', 'x', '')).toBeNull()
   })
 })
@@ -304,5 +310,52 @@ describe('desde o início', () => {
       waterDay: (d) => d > shiftDate(TODAY, -4),
     })!
     expect(s.kg).toBe(-2)
+  })
+})
+
+describe('o começo de sempre é um número só', () => {
+  const firstWeighings = [
+    { date: '2026-06-22', value: 95.2 },
+    { date: '2026-06-23', value: 94.8 },
+    { date: '2026-06-25', value: 95.0 },
+    { date: '2026-07-02', value: 94.0 }, // já é da 2.ª semana
+  ]
+
+  it('a média da 1.ª semana, no último dia dela (onde passa o peso médio)', () => {
+    expect(startWeight(firstWeighings)).toEqual({ since: '2026-06-22', start: { date: '2026-06-25', value: 95 } })
+  })
+
+  it('a semana de água fica de fora também no começo (se houver outras pesagens)', () => {
+    expect(startWeight(firstWeighings, (d) => d === '2026-06-22')!.start).toEqual({ date: '2026-06-25', value: 94.9 })
+    expect(startWeight(firstWeighings.slice(0, 1), () => true)!.start.value).toBe(95.2)
+  })
+
+  it('o «Tudo» do gráfico e o «Desde o início» dão o mesmo kg', () => {
+    const weights = [...firstWeighings, ...series(108, (i) => 94 - i * 0.06)]
+    const trendAll = trend7(weights)
+    const recent = trendAll.filter((p) => p.date >= shiftDate(TODAY, -150))
+    const since = sinceStart({ firstWeighings, trend: recent, waist: [], fat: [], targetKg: 82 })!
+    const sw = startWeight(firstWeighings)!
+    const tudo = weightChange(trendAll, '2026-06-22', undefined, sw.start)!
+    expect(tudo.kg).toBe(since.kg)
+    expect(weightMarks(trendAll, { firstEver: true, lowestEver: true, start: sw.start })[0]!.label).toBe('95,0 · início')
+  })
+})
+
+describe('a projeção começa no «agora» do cartão', () => {
+  it('hoje, no peso da reta da projeção', () => {
+    const eta = { kind: 'date' as const, date: shiftDate(TODAY, 70), early: shiftDate(TODAY, 60), late: shiftDate(TODAY, 84) }
+    const path = projectionPath(projectionStart(TODAY, 87.62), eta, 82, shiftDate(TODAY, 90))!
+    expect(path.points[0]).toMatchObject({ date: TODAY, mid: 87.62 })
+  })
+})
+
+describe('relógio parado nos últimos 30 dias', () => {
+  it('a frase diz a média do período, não «poucos dados»', () => {
+    const rows = series(40, () => 9200, shiftDate(TODAY, -31))
+    expect(compareWindows(rows, TODAY, '3M', shiftDate(TODAY, -90))).toBeNull()
+    expect(periodMean(rows, shiftDate(TODAY, -90), TODAY)).toBe(9200)
+    expect(staleReading('steps', 9200)).toBe('Média de 9\u202f200 passos por dia no período; sem dados nos últimos 30 dias')
+    expect(periodMean(rows.slice(0, 5), shiftDate(TODAY, -90), TODAY)).toBeNull()
   })
 })

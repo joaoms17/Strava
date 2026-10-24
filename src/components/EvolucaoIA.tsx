@@ -233,8 +233,9 @@ export default function EvolucaoIA({ today }: { today: string }) {
                 {busy ? 'A analisar…' : 'Analisar outra vez'}
               </button>
             ) : (
-              <button disabled={busy} onClick={() => void analyse()} className={primary}>
-                {busy ? 'A analisar…' : 'Atualizar a análise'}
+              // O mesmo «Atualizar» discreto de quando está fechada.
+              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-dim">
+                {busy ? 'A analisar…' : 'Atualizar'}
               </button>
             ))}
           {open && (

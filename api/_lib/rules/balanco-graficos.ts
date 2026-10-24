@@ -17,8 +17,10 @@ const round10 = (n: number) => Math.round(n / 10) * 10
 
 // --- A semana, dia a dia -------------------------------------------------
 
-// ±100 kcal do alvo é «no alvo»; acima disso, «acima»; abaixo, «abaixo»
-// (mais clara: comeu menos do que o alvo).
+// Decisão 289: um dia completo está «no alvo» quando o comido fica até 100
+// kcal acima do alvo do dia. Dentro disso, a cor separa os ±100 («no_alvo»)
+// dos dias bem abaixo («abaixo», mais claros), mas os dois contam como no
+// alvo, na frase, na legenda e no calendário do Mês: um dia, um veredicto.
 export const DAY_BAND_KCAL = ON_TARGET_TOLERANCE_KCAL
 
 export type DayResult = 'no_alvo' | 'acima' | 'abaixo' | 'fora' | 'hoje' | 'vazio' | 'futuro'
@@ -42,15 +44,63 @@ export function dayResult(d: WeekDay, today: string): DayResult {
   return 'no_alvo'
 }
 
+// «no alvo» e «bem abaixo» são o mesmo veredicto (decisão 289).
+export const isOnTarget = (r: DayResult): boolean => r === 'no_alvo' || r === 'abaixo'
+
 // «4 de 6 dias completos no alvo · 1 acima» (no alvo = até 100 kcal acima do
-// alvo do dia, como em «O teu mês»).
+// alvo do dia, como em «O teu mês»), contado com o mesmo dayResult das barras.
 export function weekDaysReading(days: WeekDay[], today: string): string {
-  const done = days.filter((d) => d.date < today && d.complete && d.meals > 0)
+  const done = days.map((d) => dayResult(d, today)).filter((r) => r === 'no_alvo' || r === 'abaixo' || r === 'acima')
   if (done.length === 0) return 'Ainda sem dias completos nesta semana'
-  const on = done.filter((d) => d.eaten <= d.plan + DAY_BAND_KCAL).length
+  const on = done.filter(isOnTarget).length
   const above = done.length - on
   const head = `${on} de ${done.length} ${done.length === 1 ? 'dia completo' : 'dias completos'} no alvo`
   return above > 0 ? `${head} · ${above} acima` : head
+}
+
+// O que o toque num dia diz: «no alvo · 450 kcal abaixo», «acima · +320 kcal».
+export function dayVerdict(r: DayResult, eaten: number | null, plan: number | null): string {
+  const diff = eaten != null && plan != null ? Math.round(eaten - plan) : null
+  switch (r) {
+    case 'no_alvo':
+      return 'no alvo'
+    case 'abaixo':
+      return diff != null ? `no alvo · ${int(round10(-diff))} kcal abaixo` : 'no alvo (abaixo)'
+    case 'acima':
+      return diff != null ? `acima do alvo · +${int(round10(diff))} kcal` : 'acima do alvo'
+    case 'fora':
+      return 'ficou de fora (incompleto)'
+    case 'hoje':
+      return 'hoje, ainda a meio'
+    case 'vazio':
+      return 'sem registos'
+    default:
+      return ''
+  }
+}
+
+// A linha da média dos 7 dias só quando diz alguma coisa: a menos de 80 kcal
+// da mediana dos alvos da semana ficava colada ao traço do alvo (o número
+// fica na legenda).
+export const MEAN_LINE_MIN_GAP_KCAL = 80
+
+export function showMeanLine(avg: number | null, plans: number[]): boolean {
+  if (avg == null) return false
+  const sorted = plans.filter((p) => p > 0).sort((a, b) => a - b)
+  if (!sorted.length) return true
+  const mid = sorted.length % 2 ? sorted[(sorted.length - 1) / 2]! : (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2
+  return Math.abs(avg - mid) >= MEAN_LINE_MIN_GAP_KCAL
+}
+
+// A linha de factos debaixo da frase da semana: «5 dias completos · média
+// 2 010 kcal · 4 treinos».
+export function weekFacts(completeDays: number, avgEaten: number | null, sessions: number): string | null {
+  const parts: string[] = []
+  if (completeDays > 0) parts.push(`${completeDays} ${completeDays === 1 ? 'dia completo' : 'dias completos'}`)
+  if (avgEaten != null && completeDays > 0) parts.push(`média ${int(round10(avgEaten))} kcal`)
+  // Sem treinos não se diz nada (a Joana não treina e não é falha).
+  if (sessions > 0) parts.push(`${sessions} ${sessions === 1 ? 'treino' : 'treinos'}`)
+  return parts.length ? parts.join(' · ') : null
 }
 
 // --- O mês em calendário -------------------------------------------------
@@ -129,6 +179,8 @@ export interface BalanceDayRow {
 export interface WeekBalance {
   monday: string
   deficit: number | null // kcal/dia (gasto − comido), média dos dias completos
+  eaten: number | null // kcal/dia comidas, média dos mesmos dias
+  out: number | null // kcal/dia gastas, média dos mesmos dias
   days: number // dias completos que contam
   kg: number | null // média das pesagens dessa semana
   water: boolean // semana de água do ciclo (o peso sobe sem ser gordura)
@@ -162,6 +214,8 @@ export function weeklyBalance(
     return {
       monday,
       deficit: used.length ? round10(meanOf(used.map((d) => Number(d.kcal_out_est) - Number(d.kcal_in)))!) : null,
+      eaten: used.length ? Math.round(meanOf(used.map((d) => Number(d.kcal_in)))!) : null,
+      out: used.length ? Math.round(meanOf(used.map((d) => Number(d.kcal_out_est)))!) : null,
       days: used.length,
       kg: kg != null ? Math.round(kg * 10) / 10 : null,
       water: waterDay != null && ws.some((w) => waterDay(w.date)),
@@ -217,6 +271,7 @@ export interface WeekAction {
 export const LEFT_OUT_MIN = 2
 export const WEEKEND_GAP_KCAL = 250
 export const WEEKEND_MIN_DAYS = 5
+export const FDS_MIN_GAP_KCAL = 50
 export const PROTEIN_GAP_G = 8
 export const MIN_WEIGHINGS_7 = 3
 const MAIN_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
@@ -250,15 +305,19 @@ export function weekAction(input: ActionInput): WeekAction {
   }
   const gap = input.weekday != null && input.weekend != null ? input.weekend - input.weekday : null
   const kgText = input.targetKg != null ? `${dec1(input.targetKg).replace(/,0$/, '')} kg` : 'o peso alvo'
+  // O fim de semana só é «a causa» quando se come mesmo mais nele (≥ 50
+  // kcal/dia, o mesmo limiar do cenário «E se…»); sem isso, o título é
+  // neutro e não diz «come como durante a semana».
+  const weekendHigher = gap != null && gap >= FDS_MIN_GAP_KCAL
   const weekendAction = (lead: string | null): WeekAction => {
     const earlier =
-      input.fdsDaysEarlier != null && input.fdsDaysEarlier >= 1
-        ? ` Assim, chegas aos ${kgText} ${input.fdsDaysEarlier} ${input.fdsDaysEarlier === 1 ? 'dia' : 'dias'} mais cedo.`
+      weekendHigher && input.fdsDaysEarlier != null && input.fdsDaysEarlier >= 1
+        ? ` Se comeres como durante a semana, chegas aos ${kgText} ${input.fdsDaysEarlier} ${input.fdsDaysEarlier === 1 ? 'dia' : 'dias'} mais cedo.`
         : ''
-    const why = gap != null && gap > 0 ? `Comes mais ${int(round10(gap))} kcal por dia ao sábado e ao domingo do que durante a semana.` : ''
+    const why = weekendHigher ? `Comes mais ${int(round10(gap!))} kcal por dia ao sábado e ao domingo do que durante a semana.` : ''
     return {
       kind: 'fim_de_semana',
-      title: 'Ao fim de semana, come como durante a semana',
+      title: weekendHigher ? 'Ao fim de semana, come como durante a semana' : 'Ao fim de semana, come perto do alvo do dia',
       detail: [lead, why].filter(Boolean).join(' ') + earlier,
     }
   }

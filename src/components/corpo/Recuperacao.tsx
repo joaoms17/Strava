@@ -6,19 +6,22 @@ import type { CorpoData } from '../../lib/corpo'
 import { fmtSleep, sleepLabel } from '../../../api/_lib/rules/sono'
 import { cleanWellness } from '../../../api/_lib/rules/plano'
 import { mondayOf } from '../../../api/_lib/rules/manutencao'
-import { dateTicks, dayNum, niceScale, weekMeans, type DatedValue, type Period } from '../../../api/_lib/rules/graficos'
+import { niceScale, weekMeans, type DatedValue, type Period } from '../../../api/_lib/rules/graficos'
 import {
   FEW_DATA,
   bestDayMark,
   compareWindows,
   hrvReading,
+  periodMean,
   restingHrReading,
+  staleReading,
   sleepReading,
   stepsReading,
   vsAverage,
+  type Comparison,
   type Mark,
 } from '../../../api/_lib/rules/leituras'
-import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, axisInt, tooltipBase, useChartColors } from '../charts/kit'
+import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, axisInt, categoryTicks, tooltipBase, useChartColors } from '../charts/kit'
 
 // Mais de 4 meses dia a dia ficava ilegível (3 meses nas barras): no «Tudo»
 // longo, a média de cada semana.
@@ -38,20 +41,11 @@ interface Row {
 
 type Key = 'steps' | 'sleep' | 'rhr' | 'hrv'
 
-const MONTHS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-
-// As marcas do eixo das datas, nas categorias que existem (o dia 1 dos meses
-// mostra só o mês).
-function categoryTicks(dates: string[]): { ticks: string[]; format: (d: string) => string } {
-  if (dates.length < 2) return { ticks: dates, format: fmtDayMonth }
-  const { ticks, kind } = dateTicks(dates[0]!, dates[dates.length - 1]!, 5)
-  const near = ticks.map((t) => dates.reduce((best, d) => (Math.abs(dayNum(d) - dayNum(t)) < Math.abs(dayNum(best) - dayNum(t)) ? d : best)))
-  return { ticks: [...new Set(near)], format: kind === 'month' ? (d) => MONTHS[Number(shiftDate(d, 3).slice(5, 7)) - 1]! : fmtDayMonth }
-}
-
 // Corpo › Recuperação: passos, sono, FC em repouso e HRV, cada um com a sua
-// frase (os últimos 30 dias contra antes), a média tracejada, hoje contra a
-// média e o melhor dia (HRV mais alta, FC mais baixa). Só o que o relógio mandou.
+// frase (os últimos 30 dias contra antes), a média dos últimos 30 dias
+// tracejada só por cima desses 30 dias, hoje contra essa média e o melhor dia
+// (HRV mais alta, FC mais baixa). Só o que o relógio mandou. Sem os últimos
+// 30 dias (o relógio parou), a frase diz a média do período.
 export default function Recuperacao({ data, period, from, today }: { data: CorpoData; period: Period; from: string; today: string }) {
   const colors = useChartColors()
   const model = useMemo(() => {
@@ -133,7 +127,22 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
         }}
       />
     )
-    const ref = opts.avg != null && <ReferenceLine y={opts.avg} stroke={colors.dim} strokeDasharray="3 4" strokeWidth={1.5} ifOverflow="extendDomain" />
+    // A média dos últimos 30 dias, desenhada só nesses 30 dias (não parece a do período).
+    const cats = points.map((p) => p.date)
+    const avgFrom = cats.find((d) => d >= (wk ? mondayOf(shiftDate(today, -29)) : shiftDate(today, -29))) ?? cats[0]
+    const avgTo = cats[cats.length - 1]
+    const ref = opts.avg != null && avgFrom != null && avgTo != null && (
+      <ReferenceLine
+        segment={[
+          { x: avgFrom, y: opts.avg },
+          { x: avgTo, y: opts.avg },
+        ]}
+        stroke={colors.dim}
+        strokeDasharray="3 4"
+        strokeWidth={1.5}
+        ifOverflow="extendDomain"
+      />
+    )
     const margin = { top: 20, right: 6, bottom: 0, left: 0 }
     if (opts.bars) {
       chart = (
@@ -197,6 +206,13 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
   const maxOf = (key: Key) => Math.max(0, ...inWindow(key).map((p) => p.value))
   const minOf = (key: Key) => Math.min(...inWindow(key).map((p) => p.value))
   const cmp = (key: Key, excludeToday = false) => compareWindows(model.series(key), today, period, from, { excludeToday })
+  // A frase de cada um: a comparação; sem os últimos 30 dias, a média do
+  // período (com 7 dias ou mais); só depois «poucos dados».
+  const say = (key: Key, c: Comparison | null, read: (c: Comparison | null) => string) => {
+    if (c) return read(c)
+    const mean = periodMean(inWindow(key), from, today)
+    return mean != null ? staleReading(key, mean) : FEW_DATA
+  }
 
   const steps = cmp('steps', true)
   const sleep = cmp('sleep')
@@ -210,10 +226,10 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
     card({
       key: 'steps',
       kicker: 'Passos',
-      reading: stepsReading(steps),
+      reading: say('steps', steps, stepsReading),
       aside: todayRow?.steps != null ? `Hoje: ${fmtInt(todayRow.steps)} até agora (o dia ainda vai a meio).` : null,
       avg: steps?.now ?? null,
-      avgText: steps ? `média de 30 dias (${fmtInt(Math.round(steps.now / 100) * 100)})` : null,
+      avgText: steps ? `média dos últimos 30 dias (${fmtInt(Math.round(steps.now / 100) * 100)})` : null,
       color: colors.health,
       bars: true,
       tickFormat: axisInt,
@@ -224,10 +240,10 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
     card({
       key: 'sleep',
       kicker: 'Horas de sono',
-      reading: sleepReading(sleep),
-      aside: todayRow?.sleep != null && sleep ? `Esta noite: ${fmtSleep(todayRow.sleep)}, ${vsAverage(todayRow.sleep, sleep.now, 'min', 10)}.` : null,
+      reading: say('sleep', sleep, sleepReading),
+      aside: todayRow?.sleep != null && sleep ? `Esta noite: ${fmtSleep(todayRow.sleep)}, ${vsAverage(todayRow.sleep, Math.round(sleep.now), 'min', 10)}.` : null,
       avg: sleep?.now ?? null,
-      avgText: sleep ? `média de 30 dias (${fmtSleep(Math.round(sleep.now / 5) * 5)})` : null,
+      avgText: sleep ? `média dos últimos 30 dias (${fmtSleep(Math.round(sleep.now))})` : null,
       color: colors.health,
       bars: false,
       tickFormat: (v) => `${Math.round(v / 60)} h`,
@@ -241,10 +257,10 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
     card({
       key: 'rhr',
       kicker: 'FC em repouso',
-      reading: restingHrReading(rhr),
+      reading: say('rhr', rhr, restingHrReading),
       aside: `${todayRow?.rhr != null && rhr ? `Hoje: ${todayRow.rhr} bpm, ${vsAverage(todayRow.rhr, rhr.now, 'bpm', 1)}. ` : ''}Se desce, o coração está mais em forma.`,
       avg: rhr?.now ?? null,
-      avgText: rhr ? `média de 30 dias (${Math.round(rhr.now)} bpm)` : null,
+      avgText: rhr ? `média dos últimos 30 dias (${Math.round(rhr.now)} bpm)` : null,
       color: colors.health,
       bars: false,
       tickFormat: (v) => String(v),
@@ -255,10 +271,10 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
     card({
       key: 'hrv',
       kicker: 'HRV durante o sono',
-      reading: hrvReading(hrv),
+      reading: say('hrv', hrv, hrvReading),
       aside: `${todayRow?.hrv != null && hrv ? `Hoje: ${todayRow.hrv} ms, ${vsAverage(todayRow.hrv, hrv.now, 'ms', 2)}. ` : ''}Mais alta costuma querer dizer mais recuperado.`,
       avg: hrv?.now ?? null,
-      avgText: hrv ? `média de 30 dias (${Math.round(hrv.now)} ms)` : null,
+      avgText: hrv ? `média dos últimos 30 dias (${Math.round(hrv.now)} ms)` : null,
       color: colors.health,
       bars: false,
       tickFormat: (v) => String(v),

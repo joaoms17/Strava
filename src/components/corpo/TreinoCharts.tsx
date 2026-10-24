@@ -5,9 +5,9 @@ import { shiftDate } from '../../lib/day'
 import type { CorpoData } from '../../lib/corpo'
 import { fitnessSeries, preferIcuForm, weeklyStats } from '../../../api/_lib/rules/plano'
 import { mondayOf } from '../../../api/_lib/rules/manutencao'
-import { dateTicks, dayNum, fromDayNum, niceScale, type Period } from '../../../api/_lib/rules/graficos'
+import { dayNum, fromDayNum, niceScale, type Period } from '../../../api/_lib/rules/graficos'
 import { bestFormMonth, bestWeek, formMarks, formReading, trainingReading, type Mark } from '../../../api/_lib/rules/leituras'
-import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
+import { BAND_OPACITY, ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, categoryTicks, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
 
 const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
@@ -16,14 +16,6 @@ function mondaysFrom(from: string, today: string): string[] {
   const list: string[] = []
   for (let m = mondayOf(from); m <= today; m = shiftDate(m, 7)) list.push(m)
   return list
-}
-
-// As marcas do eixo das semanas: as segundas mais perto das datas redondas.
-function weekTicks(mondays: string[]): string[] {
-  if (mondays.length <= 4) return mondays
-  const { ticks } = dateTicks(mondays[0]!, mondays[mondays.length - 1]!, 4)
-  const picked = ticks.map((t) => mondays.reduce((best, m) => (Math.abs(dayNum(m) - dayNum(t)) < Math.abs(dayNum(best) - dayNum(t)) ? m : best)))
-  return [...new Set(picked)]
 }
 
 // Corpo › Treino: minutos por semana (bicicleta e ginásio, a melhor semana
@@ -38,7 +30,7 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
     const current = mondayOf(today)
     const weeks = stats.filter((w) => w.monday >= mondayOf(from))
     const best = bestWeek(weeks.filter((w) => w.monday < current))
-    const bestMarks: Mark[] = best ? [{ id: 'melhor', date: best.monday, value: best.bike + best.gym, label: `melhor: ${best.bike + best.gym} min`, priority: 3, prefer: 'above' }] : []
+    const bestMarks: Mark[] = best ? [{ id: 'melhor', date: best.monday, value: best.bike + best.gym, label: `${best.bike + best.gym} min · melhor semana`, priority: 3, prefer: 'above' }] : []
     const reading = trainingReading(stats, current, period, from, today)
     const yMax = Math.max(60, ...weeks.map((w) => w.bike + w.gym))
     const yScale = niceScale(0, yMax, 4)
@@ -58,7 +50,7 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
     return {
       weeks,
       current,
-      ticks: weekTicks(weeks.map((w) => w.monday)),
+      axis: categoryTicks(weeks.map((w) => w.monday), 4),
       bestMarks,
       reading,
       yScale: { ...yScale, domain: [0, yTop] as [number, number] },
@@ -124,7 +116,7 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={model.weeks} margin={{ top: 20, right: 6, bottom: 0, left: 0 }} barCategoryGap="22%">
                 <CartesianGrid stroke={colors.grid} vertical={false} />
-                <XAxis dataKey="monday" ticks={model.ticks} interval={0} tickFormatter={(d: string) => fmtDayMonth(d)} tick={TICK(colors)} axisLine={{ stroke: colors.grid }} tickLine={false} />
+                <XAxis dataKey="monday" ticks={model.axis.ticks} interval={0} tickFormatter={model.axis.format} tick={TICK(colors)} axisLine={{ stroke: colors.grid }} tickLine={false} />
                 <YAxis domain={model.yScale.domain} ticks={model.yScale.ticks} tick={TICK(colors)} axisLine={false} tickLine={false} width={34} />
                 <Tooltip
                   {...tooltipBase(colors)}
@@ -169,7 +161,7 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
             <Legend>
               <Key shape="line" color={colors.bike} label="forma (42 dias)" />
               <Key shape="line" color={colors.dim} label="fadiga (7 dias)" />
-              {model.month && <Key shape="bar" color={colors.surface2} label="melhor mês" />}
+              {model.month && <Key shape="band" color={colors.dim} label="melhor mês" />}
             </Legend>
           }
           note={
@@ -187,8 +179,8 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                   <ReferenceArea
                     x1={dayNum(model.month.from)}
                     x2={dayNum(model.month.to)}
-                    fill={colors.surface2}
-                    fillOpacity={0.9}
+                    fill={colors.dim}
+                    fillOpacity={BAND_OPACITY}
                     stroke="none"
                     label={{
                       value: `${MONTHS_LONG[Number(model.month.month.slice(5, 7)) - 1]} +${Math.round(model.month.gain)}`,

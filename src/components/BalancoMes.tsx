@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Bar as RBar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { useDataVersion } from '../lib/events'
 import { shiftDate } from '../lib/day'
-import { fmt1, fmtDayMonth, fmtInt, fmtKcal } from '../lib/format'
+import { fmtDayMonth, fmtInt, fmtKcal } from '../lib/format'
 import type { LongDay } from '../lib/balanco'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { intakeLinks, type IntakeLink } from '../../api/_lib/rules/extras'
 import { niceScale } from '../../api/_lib/rules/graficos'
+import { fmtSleep } from '../../api/_lib/rules/sono'
+import { weeklyBalance } from '../../api/_lib/rules/balanco-graficos'
 import { int } from '../../api/_lib/rules/leituras'
 import type { MealItem } from '../lib/types'
 import { ChartCard, Key, Legend, TICK, TipBox, axisInt, tooltipBase, useChartColors } from './charts/kit'
@@ -33,10 +34,12 @@ function normalize(name: string): string {
 // Balanço › Mês: as últimas 5 semanas (comeu contra gasto, só dias
 // completos), o gasto medido ao longo do tempo, passos e sono (e o que se
 // comeu depois de noites más ou com poucos passos), e os 10 alimentos que
-// mais se repetem. Os dias vêm do Balanço (lidos uma vez para a página).
+// mais se repetem. Os dias vêm do Balanço (lidos uma vez para a página); o
+// comido e o gasto de cada semana são os de «Semana a semana»
+// (rules/balanco-graficos.ts › weeklyBalance: os mesmos dias completos até
+// ontem), para a mesma semana não ter dois défices.
 export default function BalancoMes({ today, days: given }: { today: string; days: LongDay[] | null }) {
   const colors = useChartColors()
-  const version = useDataVersion()
   const [weeks, setWeeks] = useState<Week[] | null>(null)
   const [foods, setFoods] = useState<{ name: string; count: number; kcal: number }[]>([])
   const [links, setLinks] = useState<ReturnType<typeof intakeLinks> | null>(null)
@@ -49,18 +52,18 @@ export default function BalancoMes({ today, days: given }: { today: string; days
       supabase.from('health_daily').select('*').gte('date', first).lte('date', today),
       supabase.from('meals_counted').select('items').gte('date', shiftDate(today, -30)).lte('date', today),
     ])
+    const mondays = Array.from({ length: 5 }, (_, i) => shiftDate(first, i * 7))
+    const balance = weeklyBalance(days, [], mondays, today)
     const list: Week[] = []
-    for (let i = 0; i < 5; i++) {
-      const monday = shiftDate(first, i * 7)
+    for (const [i, monday] of mondays.entries()) {
       const sunday = shiftDate(monday, 6)
       const inWeek = (days ?? []).filter((d) => d.date >= monday && d.date <= sunday)
-      const complete = inWeek.filter((d) => d.is_complete && !((d.flags as string[] | null) ?? []).includes('faltou_algo'))
       const h = (health ?? []).filter((x) => x.date >= monday && x.date <= sunday)
       const tdees = inWeek.filter((d) => d.tdee_est != null).map((d) => Number(d.tdee_est))
       list.push({
         monday,
-        eaten: mean(complete.map((d) => Number(d.kcal_in))),
-        out: mean(complete.filter((d) => d.kcal_out_est != null).map((d) => Number(d.kcal_out_est))),
+        eaten: balance[i]!.eaten,
+        out: balance[i]!.out,
         tdee: tdees.length ? tdees[tdees.length - 1]! : null,
         steps: mean(h.filter((x) => x.steps != null).map((x) => Number(x.steps))),
         sleep: mean(h.filter((x) => x.sleep_minutes != null).map((x) => Number(x.sleep_minutes))),
@@ -96,9 +99,10 @@ export default function BalancoMes({ today, days: given }: { today: string; days
     )
   }, [today, given])
 
+  // `given` muda quando os dados mudam (a versão já está nele): um pedido só.
   useEffect(() => {
     void load()
-  }, [load, version])
+  }, [load])
 
   if (!weeks) return <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
   const both = weeks.filter((w) => w.eaten != null && w.out != null)
@@ -179,15 +183,18 @@ export default function BalancoMes({ today, days: given }: { today: string; days
 
       {withSteps.length > 0 && (
         <section className="space-y-1 rounded-[18px] border border-line bg-surface p-4 text-[15px]">
-          <p className="label">Passos e sono</p>
+          <div className="flex items-baseline justify-between">
+            <p className="label">Passos e sono</p>
+            <p className="text-[13px] text-dim">média de cada semana</p>
+          </div>
           {withSteps.map((w) => (
-            <p key={w.monday} className="flex justify-between tabular-nums">
-              <span className="text-dim">semana de {fmtDayMonth(w.monday)}</span>
-              <span>
+            <p key={w.monday} className="flex justify-between gap-3 tabular-nums">
+              <span className="shrink-0 text-dim">{fmtDayMonth(w.monday)}</span>
+              <span className="text-right">
                 {w.steps != null ? `${fmtInt(w.steps)} passos` : ''}
                 {w.steps != null && w.sleep != null ? ' · ' : ''}
-                {w.sleep != null ? `${fmt1(w.sleep / 60)} h de sono` : ''}
-                {w.sleepScore != null ? ` (${Math.round(w.sleepScore)})` : ''}
+                {w.sleep != null ? `${fmtSleep(Math.round(w.sleep))} de sono` : ''}
+                {w.sleepScore != null ? ` · nota ${Math.round(w.sleepScore)}` : ''}
               </span>
             </p>
           ))}
