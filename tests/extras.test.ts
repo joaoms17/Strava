@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { intakeLinks, litersText, proteinBySlot, shoppingList, shoppingText, waterGoalMl } from '../api/_lib/rules/extras'
+import { intakeLinks, proteinBySlot, shoppingList, shoppingText } from '../api/_lib/rules/extras'
 
 const item = (name: string, grams: number) => ({
   name,
@@ -23,15 +23,6 @@ describe('proteinBySlot', () => {
     ])
     expect(r.find((x) => x.slot === 'pequeno_almoco')).toEqual({ slot: 'pequeno_almoco', avg: 18, days: 2 })
     expect(r.find((x) => x.slot === 'jantar')).toEqual({ slot: 'jantar', avg: 45, days: 1 })
-  })
-})
-
-describe('waterGoalMl', () => {
-  it('35 ml/kg a copos de 250, entre 1,5 e 4 L', () => {
-    expect(waterGoalMl(84)).toBe(3000)
-    expect(waterGoalMl(63)).toBe(2250)
-    expect(waterGoalMl(30)).toBe(1500)
-    expect(waterGoalMl(null)).toBe(2000)
   })
 })
 
@@ -71,17 +62,5 @@ describe('comer depois de noites más e com poucos passos', () => {
     const health = dates.map((date, i) => ({ date, sleep_minutes: i < 3 ? 330 : 450 }))
     expect(intakeLinks(days, health).sleep).toBeNull()
     expect(intakeLinks(days, []).steps).toBeNull()
-  })
-})
-
-describe('litros da água', () => {
-  it('sem zeros a mais, e o 0 aparece', () => {
-    expect(litersText(0)).toBe('0')
-    expect(litersText(250)).toBe('0,25')
-    expect(litersText(1250)).toBe('1,25')
-    expect(litersText(1500)).toBe('1,5')
-    expect(litersText(2000)).toBe('2')
-    expect(litersText(3000)).toBe('3')
-    expect(litersText(10000)).toBe('10')
   })
 })

@@ -1,6 +1,6 @@
 // «Pergunta à app»: as ações que a IA pode propor, numa lista fechada. O
 // servidor valida-as aqui com Zod (só ids que foram no contexto, dias dos
-// últimos 28, nunca no futuro, porções e copos dentro dos limites) e o
+// últimos 28, nunca no futuro, porções dentro dos limites) e o
 // telemóvel volta a validá-las antes de as mostrar. O servidor nunca as
 // executa: cada uma aparece num cartão «Fazer» / «Não» e corre pelos
 // caminhos de sempre da app (RLS, Anular). Também a conversa guardada no
@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { shiftDate } from './nutritional-day.js'
 import { SLOTS, SLOT_LABEL, type Slot } from './momentos.js'
 import { PORTION_FACTORS } from './favoritos.js'
-import { GLASS_ML, MAX_ITEM_GRAMS, mergeShopping, shoppingList, type ShoppingItem } from './extras.js'
+import { MAX_ITEM_GRAMS, mergeShopping, shoppingList, type ShoppingItem } from './extras.js'
 import type { MealItem } from './meal-totals.js'
 
 export const ASK_ACTION_TYPES = [
@@ -18,7 +18,6 @@ export const ASK_ACTION_TYPES = [
   'repeat_meal',
   'add_shopping_items',
   'mark_day',
-  'add_water',
   'share_meal',
 ] as const
 export type AskActionType = (typeof ASK_ACTION_TYPES)[number]
@@ -29,7 +28,6 @@ export type DayFlag = (typeof DAY_FLAGS)[number]
 export const ASK_MAX_ACTIONS = 3
 // As ações só mexem nos últimos 28 dias (os que vão no contexto).
 export const ASK_WINDOW_DAYS = 28
-export const MAX_GLASSES = 12
 export const MAX_SHOPPING_ITEMS = 30
 export const MAX_SHOPPING_TIMES = 14
 export const MAX_QUESTION_CHARS = 500
@@ -69,7 +67,6 @@ export const AskActionSchema = z.discriminatedUnion('type', [
     items: z.array(SHOPPING_ITEM).min(1).max(MAX_SHOPPING_ITEMS),
   }),
   z.object({ type: z.literal('mark_day'), date: DATE, flag: z.enum(DAY_FLAGS) }),
-  z.object({ type: z.literal('add_water'), date: DATE, glasses: z.number().int().min(1).max(MAX_GLASSES) }),
   z.object({
     type: z.literal('share_meal'),
     meal_id: z.string().uuid(),
@@ -94,7 +91,6 @@ export const AskAiSchema = z.object({
       date: nullable(z.string()),
       slot: nullable(SLOT),
       portion: nullable(z.number()),
-      glasses: nullable(z.number()),
       flag: nullable(z.enum(DAY_FLAGS)),
       items: z.array(z.object({ name: z.string(), grams: nullable(z.number()) })),
       favorites: z.array(z.object({ favorite_id: z.string(), times: z.number() })),
@@ -198,8 +194,6 @@ function candidate(raw: Record<string, unknown>, refs: AskRefs): unknown {
     case 'mark_day':
       // O dia tem de vir dito (marcar o dia errado mexe no gasto).
       return { type: 'mark_day', date: actionDate(raw.date, today, false), flag: raw.flag }
-    case 'add_water':
-      return { type: 'add_water', date: actionDate(raw.date, today, true), glasses: raw.glasses }
     case 'share_meal': {
       const meal = refOf(refs.meals, raw.meal_id)
       const person = refOf(refs.people, raw.person_id)
@@ -310,8 +304,6 @@ export function actionLabel(action: AskAction, today: string): string {
       const day = dayWord(action.date, today)
       return `Marcar ${day} como ${action.flag === 'dia_fechado' ? '«Sim, foi tudo»' : '«Não, faltou algo»'}`
     }
-    case 'add_water':
-      return `Juntar ${action.glasses} ${action.glasses === 1 ? 'copo' : 'copos'} de água · ${dayWord(action.date, today)} (${action.glasses * GLASS_ML}${NBSP}ml)`
     case 'share_meal':
       return `Partilhar «${action.name}» com ${action.person_name}`
   }

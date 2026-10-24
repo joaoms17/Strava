@@ -24,7 +24,7 @@ const M_ONTEM = '6f1c2a10-1a2b-4c3d-8e4f-0000000000b3'
 const dow = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay()
 
 // 28 dias completos (dias úteis 1 800, fins de semana 2 600, gasto 2 300),
-// menos a quinta 15, incompleta; hoje só com a água.
+// menos a quinta 15, incompleta; hoje sem nada fechado.
 function days(): AskDay[] {
   const rows: AskDay[] = []
   for (let back = ASK_DAYS; back >= 1; back--) {
@@ -38,13 +38,12 @@ function days(): AskDay[] {
       kcal_out_est: 2300,
       is_complete: date !== '2026-10-15',
       flags: date === '2026-10-15' ? ['dia_incompleto'] : date === '2026-10-11' ? ['dia_fechado'] : [],
-      water_ml: date === '2026-10-17' ? 1500 : null,
       tdee_est: date >= '2026-10-01' ? 2310 : null,
       tdee_raw: date === '2026-10-17' ? 2250 : null,
       formula_base: 1950,
     })
   }
-  rows.push({ date: TODAY, water_ml: 750, flags: [] })
+  rows.push({ date: TODAY, flags: [] })
   return rows
 }
 
@@ -131,7 +130,7 @@ function input(extra: Partial<AskInput> = {}): AskInput {
 }
 
 describe('contexto da «Pergunta à app»', () => {
-  it('hoje: o plano com o treino (as duas partes contam como uma), o que falta e a água', () => {
+  it('hoje: o plano com o treino (as duas partes contam como uma), e o que falta', () => {
     expect(todayStatus(input())).toEqual({
       plano_kcal: 2220,
       comeu_kcal: 860,
@@ -142,8 +141,6 @@ describe('contexto da «Pergunta à app»', () => {
       falta_proteina_g: 95,
       refeicoes_contadas: 2,
       fotos_por_contar: 1,
-      agua_ml: 750,
-      agua_meta_ml: 3000,
       semana_de_pausa: false,
     })
   })
@@ -208,7 +205,7 @@ describe('contexto da «Pergunta à app»', () => {
     expect(rows[rows.length - 1]!.dia).toBe('2026-10-17')
     expect(rows.find((r) => r.dia === '2026-10-15')).toMatchObject({ ds: 'qui', refeicoes: 1, comeu_kcal: 600, completo: false, resposta: null })
     expect(rows.find((r) => r.dia === '2026-10-11')).toMatchObject({ resposta: 'sim_foi_tudo', peso_kg: 88.4 })
-    expect(rows.find((r) => r.dia === '2026-10-17')).toMatchObject({ agua_ml: 1500, gasto_kcal: 2300 })
+    expect(rows.find((r) => r.dia === '2026-10-17')).toMatchObject({ gasto_kcal: 2300 })
   })
 
   it('gasto: o medido, o só pelo peso e a fórmula; sem medido, a aprender', () => {
@@ -268,7 +265,6 @@ describe('contexto da «Pergunta à app»', () => {
           favorite_id: null,
           person_id: null,
           portion: null,
-          glasses: null,
           flag: null,
           items: [],
           favorites: [],

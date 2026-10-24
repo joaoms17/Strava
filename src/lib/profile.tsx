@@ -52,13 +52,12 @@ export function ProfileProvider({ children, token }: { children: ReactNode; toke
   const [offline, setOffline] = useState(false)
 
   const reload = useCallback(async () => {
-    const [{ data, error, status: httpStatus }, migration, sleep, water] = await Promise.all([
+    const [{ data, error, status: httpStatus }, migration, sleep] = await Promise.all([
       supabase.from('profile').select('*').maybeSingle(),
       supabase.from('favorites').select('id', { count: 'exact', head: true }),
-      // Migrações 9 e 12 (colunas novas): sem elas o sono e a água ficavam
+      // Migração 9 (coluna nova): sem ela o sono ficava
       // vazios sem aviso. Sem head: o Postgres só diz o erro com corpo.
       supabase.from('health_daily').select('sleep_score').limit(1),
-      supabase.from('days').select('water_ml').limit(1),
     ])
     // Sem rede (ou sem sessão renovada): o último perfil deste telemóvel.
     const fromCache = async () => {
@@ -104,7 +103,6 @@ export function ProfileProvider({ children, token }: { children: ReactNode; toke
       ...(!('trend_method' in data) ? ['20261003000000_fase6.sql'] : []),
       ...(!('integration_status' in data) ? ['20261004000000_fase7.sql'] : []),
       ...(missingColumn(sleep.error) ? ['20261005000000_sono.sql'] : []),
-      ...(missingColumn(water.error) ? ['20261015000000_agua.sql'] : []),
     ]
     if (missing.length) {
       setProfile(data as Profile)

@@ -158,17 +158,12 @@ export interface FoodDay {
   kcal_target: number | null
   kcal_out_est?: number | null
   is_complete: boolean
-  water_ml?: number | null
 }
 export function foodWeeks(days: FoodDay[], today: string) {
   return [3, 2, 1, 0].map((k) => {
     const end = shiftDate(today, -7 * k - 1)
     const start = shiftDate(end, -6)
     const week = days.filter((d) => d.is_complete && d.date >= start && d.date <= end)
-    // A água conta em todos os dias em que foi registada (completos ou não).
-    const water = mean(
-      days.filter((d) => d.date >= start && d.date <= end && Number(d.water_ml ?? 0) > 0).map((d) => Number(d.water_ml)),
-    )
     const avg = (key: keyof FoodDay) => {
       const m = mean(week.map((d) => d[key]).filter((v): v is number => typeof v === 'number').map(Number))
       return m == null ? null : Math.round(m)
@@ -181,7 +176,6 @@ export function foodWeeks(days: FoodDay[], today: string) {
       alvo_kcal: avg('kcal_target'),
       proteina_g: avg('protein'),
       gasto_estimado_kcal: avg('kcal_out_est'),
-      agua_ml: water == null ? null : Math.round(water),
     }
   })
 }
