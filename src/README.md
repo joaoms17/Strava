@@ -5,17 +5,19 @@ Redesenho em curso (docs/redesenho-2026-09.md). Fases 1 e 2:
 ```
 /screens
   Hoje.tsx            quanto ainda podes comer, proteína, dieta, próximo passo, linha do dia, faixa da semana
-  Balanco.tsx         a semana numa frase e num gráfico (Comer contra o plano), detalhes recolhidos
+  Balanco.tsx         a semana numa frase com o selo, o gráfico dia a dia (tocar num dia), «Para esta semana», Semana a semana; Mês com o calendário dos dias no alvo
   Treino.tsx          «Já fiz», sugestão seguinte, plano de 4 semanas (até à Fase 5), histórico, progressão
-  Corpo.tsx           peso médio, ritmo semanal, gráfico 1M · 3M · Tudo
+  Corpo.tsx           resumo (desde o início, projeção), peso, medidas, evolução, treino, recuperação; um período 1M · 3M · Tudo e a barra das secções
   Favoritos.tsx       refeições favoritas (1 toque) e biblioteca de alimentos
   Definicoes.tsx      pessoas, perfil, bicicleta, ligações, notificações, balança, aparência, exportar
   Avancado.tsx        custos da IA, mínimo semanal, exercícios seguros, calendário
   Arquivo.tsx         capítulos, linha do tempo e resumos antigos (só leitura)
 /components
   sheets/             folhas por URL: (+), Peso, Refeição, Galeria, Escrever, Nota, Código de barras, Rever
+  charts/             o kit dos gráficos: cartão com a frase-título, eixos, dica, legenda, marcos sem sobreposição
+  corpo/, balanco/    os gráficos e cartões do Corpo e do Balanço
   ui/                 folha inferior, Quando (dia e refeição), barras, faixa da semana, botão de foto
-/lib                  supabase, perfil, tema, avisos com Anular, espera com bloqueio (busy), folhas, fila de capturas e rascunho do Registar (IndexedDB), EXIF, fotos, formatação PT-PT
+/lib                  supabase, perfil, dados do Corpo e do Balanço lidos uma vez (corpo.ts, balanco.ts), tema, avisos com Anular, espera com bloqueio (busy), folhas, fila de capturas e rascunho do Registar (IndexedDB), EXIF, fotos, formatação PT-PT
 ```
 
 As regras de negócio vivem em `/api/_lib/rules` (funções puras testadas) e o cliente importa-as de lá. Sem segredos no cliente. Interface em PT-PT, tema Sistema/Escuro/Claro, uso a uma mão.

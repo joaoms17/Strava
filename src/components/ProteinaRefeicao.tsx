@@ -1,31 +1,10 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { useDataVersion } from '../lib/events'
-import { shiftDate } from '../lib/day'
-import { proteinBySlot } from '../../api/_lib/rules/extras'
-import { SLOTS, SLOT_LABEL, type Slot } from '../../api/_lib/rules/momentos'
+import { SLOTS, SLOT_LABEL } from '../../api/_lib/rules/momentos'
+import type { ProteinRow } from '../lib/balanco'
 
 // Balanço › Semana › «Proteína por refeição»: média dos últimos 14 dias em
 // cada refeição, contra a proteína por refeição do perfil; destaca onde falta.
-export default function ProteinaRefeicao({ today, perMeal }: { today: string; perMeal: number }) {
-  const version = useDataVersion()
-  const [rows, setRows] = useState<{ slot: Slot; avg: number; days: number }[] | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    void supabase
-      .from('meals_counted')
-      .select('date,slot,protein')
-      .gte('date', shiftDate(today, -14))
-      .lt('date', today)
-      .then(({ data }) => {
-        if (alive) setRows(proteinBySlot((data ?? []) as { date: string; slot: Slot | null; protein: number | null }[]))
-      })
-    return () => {
-      alive = false
-    }
-  }, [today, version])
-
+// As linhas vêm do Balanço (lidas uma vez, também para «Para esta semana»).
+export default function ProteinaRefeicao({ rows, perMeal }: { rows: ProteinRow[] | null; perMeal: number }) {
   if (!rows || rows.length === 0) return null
   const ordered = SLOTS.map((s) => rows.find((r) => r.slot === s)).filter((r): r is NonNullable<typeof r> => r != null)
   const main = ordered.filter((r) => r.slot !== 'ceia' && r.slot !== 'lanche')

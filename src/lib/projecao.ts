@@ -14,7 +14,7 @@ export interface ProjectionData {
   targetWaistCm: number | null
 }
 
-function waterDayFor(profile: Profile): ((d: string) => boolean) | undefined {
+export function waterDayFor(profile: Profile): ((d: string) => boolean) | undefined {
   if (profile.sex !== 'f') return undefined
   const starts = cleanStarts(profile.goals?.ciclo)
   if (!starts.length) return undefined
@@ -36,6 +36,46 @@ function waistTarget(profile: Profile, rows: BodyMeasurement[]): number | null {
   return t != null && Number.isFinite(t) ? Math.round(t) : null
 }
 
+// As linhas já lidas (do Supabase, só as da pessoa) que a projeção usa.
+export interface ProjectionRows {
+  weights: { date: string; kg: number | string }[]
+  days: { date: string; kcal_in: number | null; kcal_target?: number | null; is_complete: boolean | null; flags: string[] | null; tdee_est: number | null }[]
+  workouts: { date: string; minutes: number | null; kcal_est: number | null }[]
+  measurements: BodyMeasurement[]
+}
+
+// Os dados da projeção a partir das linhas (o Corpo lê-as uma vez para a
+// página toda e passa-as aqui; sem pedidos a mais).
+export function projectionFrom(profile: Profile, asOf: string, rows: ProjectionRows): ProjectionData {
+  const measured = rows.measurements.filter((r) => r.waist_cm != null && !wrongWaistSite(r, profile.sex))
+  const targetWaistCm = waistTarget(profile, measured)
+  const target = Number(profile.target_weight_kg)
+  return {
+    targetWaistCm,
+    input: {
+      asOf,
+      weights: rows.weights.map((x) => ({ date: x.date, value: Number(x.kg) })),
+      days: rows.days.map((x) => ({
+        date: x.date,
+        kcal_in: Number(x.kcal_in ?? 0),
+        is_complete: x.is_complete === true,
+        flags: x.flags ?? [],
+        tdee_est: x.tdee_est != null ? Number(x.tdee_est) : null,
+        kcal_target: Number(x.kcal_target ?? 0),
+      })) as ProjInput['days'],
+      workouts: rows.workouts.map((x) => ({
+        date: x.date,
+        kcal: x.kcal_est != null ? Number(x.kcal_est) : null,
+        minutes: x.minutes != null ? Number(x.minutes) : null,
+      })),
+      waist: measured.map((r) => ({ date: r.date, value: Number(r.waist_cm) })),
+      targetKg: Number.isFinite(target) && target > 0 ? target : null,
+      targetWaistCm,
+      waterDay: waterDayFor(profile),
+    },
+  }
+}
+
 // De `from` a `to`: pesagens, dias, treinos e medições.
 async function loadRange(profile: Profile, from: string, to: string, asOf: string): Promise<ProjectionData> {
   const [w, d, wk, m] = await Promise.all([
@@ -45,33 +85,12 @@ async function loadRange(profile: Profile, from: string, to: string, asOf: strin
     supabase.from('body_measurements').select('*').order('date'),
   ])
   if (w.error || d.error) throw new Error(w.error?.message ?? d.error?.message)
-  const rows = ((m.data ?? []) as BodyMeasurement[]).filter((r) => r.waist_cm != null && !wrongWaistSite(r, profile.sex))
-  const targetWaistCm = waistTarget(profile, rows)
-  const target = Number(profile.target_weight_kg)
-  return {
-    targetWaistCm,
-    input: {
-      asOf,
-      weights: (w.data ?? []).map((x) => ({ date: x.date as string, value: Number(x.kg) })),
-      days: (d.data ?? []).map((x) => ({
-        date: x.date as string,
-        kcal_in: Number(x.kcal_in ?? 0),
-        is_complete: x.is_complete === true,
-        flags: (x.flags as string[] | null) ?? [],
-        tdee_est: x.tdee_est != null ? Number(x.tdee_est) : null,
-        kcal_target: Number(x.kcal_target ?? 0),
-      })) as ProjInput['days'],
-      workouts: (wk.data ?? []).map((x) => ({
-        date: x.date as string,
-        kcal: x.kcal_est != null ? Number(x.kcal_est) : null,
-        minutes: x.minutes != null ? Number(x.minutes) : null,
-      })),
-      waist: rows.map((r) => ({ date: r.date, value: Number(r.waist_cm) })),
-      targetKg: Number.isFinite(target) && target > 0 ? target : null,
-      targetWaistCm,
-      waterDay: waterDayFor(profile),
-    },
-  }
+  return projectionFrom(profile, asOf, {
+    weights: (w.data ?? []) as ProjectionRows['weights'],
+    days: (d.data ?? []) as ProjectionRows['days'],
+    workouts: (wk.data ?? []) as ProjectionRows['workouts'],
+    measurements: (m.data ?? []) as BodyMeasurement[],
+  })
 }
 
 export async function loadProjection(profile: Profile, today: string): Promise<ProjectionData> {

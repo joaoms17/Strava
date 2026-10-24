@@ -1,16 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useSearch } from 'wouter'
-import {
-  Bar as RBar,
-  CartesianGrid,
-  Cell,
-  ComposedChart,
-  Line,
-  ReferenceLine,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useProfile, useReadyProfile } from '../lib/profile'
 import { useToast } from '../lib/toast'
@@ -20,9 +9,17 @@ import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { shareWeekReport } from '../lib/week-report'
 import ProteinaRefeicao from '../components/ProteinaRefeicao'
 import { useDataVersion } from '../lib/events'
-import { useThemeColors } from '../lib/colors'
 import { nutritionalDay, shiftDate } from '../lib/day'
-import { NBSP, fmt1, fmtInt, fmtKcal, fmtRange, weekdayLetter, weekdayShort } from '../lib/format'
+import { NBSP, fmt1, fmtInt, fmtKcal, fmtRange, weekdayShort } from '../lib/format'
+import { scopedKey } from '../lib/scoped'
+import { useBalancoLongo, useProteinBySlot } from '../lib/balanco'
+import { weekAgo } from '../lib/projecao'
+import { daysEarlier, moveNote, project, projectionLine } from '../../api/_lib/rules/projecao'
+import { weekAction } from '../../api/_lib/rules/balanco-graficos'
+import SemanaChart from '../components/balanco/SemanaChart'
+import SemanaASemana from '../components/balanco/SemanaASemana'
+import ParaEstaSemana from '../components/balanco/ParaEstaSemana'
+import CalendarioMes from '../components/balanco/CalendarioMes'
 import { isDayComplete } from '../../api/_lib/rules/day-close'
 import { waterWeekDuring } from '../../api/_lib/rules/ciclo'
 import { mondayOf, isMaintenanceWeek, maintenanceTarget } from '../../api/_lib/rules/manutencao'
@@ -64,12 +61,30 @@ interface WeekData {
   avg7: number | null
 }
 
-// «Estou a comer menos do que gasto, e o peso confirma?» — uma frase e um gráfico.
+// Semana ou Mês: a escolha fica neste telemóvel, para cada pessoa.
+const VIEW_KEY = 'regresso.balanco.vista'
+function savedView(): 'semana' | 'mes' {
+  try {
+    return localStorage.getItem(scopedKey(VIEW_KEY)) === 'mes' ? 'mes' : 'semana'
+  } catch {
+    return 'semana'
+  }
+}
+function saveView(view: 'semana' | 'mes') {
+  try {
+    localStorage.setItem(scopedKey(VIEW_KEY), view)
+  } catch {
+    // sem armazenamento: fica só nesta visita
+  }
+}
+
+// «Estou a comer menos do que gasto, e o peso confirma?» — a frase com o
+// selo, o gráfico da semana (tocar num dia mostra os números), uma ação para
+// esta semana, a proteína por refeição e as últimas 12 semanas lado a lado.
 export default function Balanco() {
   const profile = useReadyProfile()
   const [, navigate] = useLocation()
   const version = useDataVersion()
-  const colors = useThemeColors()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   // Aberto pela notificação «Resumo da semana pronto»: ?semana=<segunda>.
   const asked = new URLSearchParams(useSearch()).get('semana')
@@ -80,12 +95,20 @@ export default function Balanco() {
   }, [askedMonday])
   const [data, setData] = useState<WeekData | null>(null)
   const [details, setDetails] = useState(false)
-  const [view, setView] = useState<'semana' | 'mes'>('semana')
+  const [view, setViewState] = useState<'semana' | 'mes'>(() => (askedMonday ? 'semana' : savedView()))
+  const setView = (v: 'semana' | 'mes') => {
+    setViewState(v)
+    saveView(v)
+  }
   const [birthYear, setBirthYear] = useState('')
   const { update } = useProfile()
   const toast = useToast()
   const sheet = useSheet()
   const sunday = shiftDate(monday, 6)
+  // O que não muda com a semana vista: lido uma vez para a página.
+  const { data: longo, failed: longoFailed } = useBalancoLongo(profile, today, version)
+  const protein = useProteinBySlot(sunday < today ? shiftDate(sunday, 1) : today, version)
+  const openDay = (date: string) => navigate(date === today ? '/hoje' : `/hoje/${date}`)
   // Só a resposta do último pedido conta (‹ › seguidos).
   const loads = useRef(0)
 
@@ -309,7 +332,8 @@ export default function Balanco() {
       <div className="space-y-4 pt-1">
         {toggle}
         <ContaGordura today={today} />
-        <BalancoMes today={today} />
+        {longo && <CalendarioMes data={longo} today={today} onOpenDay={openDay} />}
+        <BalancoMes today={today} days={longo?.days ?? (longoFailed ? [] : null)} />
         <button
           onClick={() => sheet.open('mes', { mes: today.slice(8, 10) <= '03' ? previousMonth(today) : today.slice(0, 7) })}
           className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[15px] font-semibold"
@@ -361,16 +385,27 @@ export default function Balanco() {
       ? baseSuggestion(exp.tdeeFrozen, exp.avgTraining, profile.base_kcal, profile.sex)
       : null
   const gapNote = persistentGap(data.weeklyGaps)
-  const chart = data.days.map((d) => ({
-    date: d.date,
-    label: weekdayLetter(d.date),
-    eaten: d.meals > 0 ? Math.round(d.eaten) : null,
-    out: d.date <= today ? d.out : null,
-    plan: d.plan,
-    today: d.date === today,
-  }))
-  const avg7 = data.avg7
-  const openDay = (date: string) => navigate(date === today ? '/hoje' : `/hoje/${date}`)
+  // «Para esta semana»: uma ação, com a projeção (e a de há uma semana), a
+  // proteína por refeição, os dias de fora e as pesagens.
+  const action = (() => {
+    if (!thisWeek || !longo || !protein) return null
+    const input = longo.projection.input
+    const p = project(input)
+    const basis = p.status !== 'insuficiente' ? p.basis : null
+    const since = shiftDate(today, -6)
+    return weekAction({
+      leftOut: leftOutList,
+      note: moveNote(p, weekAgo(longo.projection)),
+      weekday: basis?.weekday ?? null,
+      weekend: basis?.weekend ?? null,
+      fdsDaysEarlier: daysEarlier(input, 'fds'),
+      targetKg: input.targetKg,
+      protein,
+      perMeal: profile.protein_per_meal_g,
+      weighings7: new Set(longo.weights.filter((w) => w.date >= since).map((w) => w.date)).size,
+      projection: projectionLine(p, input.targetKg, null, today),
+    })
+  })()
   const reviewLines = (text: string) =>
     text.split('\n').map((line, i) => (
       <p key={i} className="text-[15px]">
@@ -446,9 +481,14 @@ export default function Balanco() {
             ) : (
               <p className="text-[17px] text-dim">A semana começou agora. A média aparece amanhã.</p>
             )}
-            {coherent && (
-              <p className={`text-[16px] ${coherent === 'bate_certo' ? 'text-burn' : 'text-dim'}`}>{COHERENCE_TEXT[coherent]}</p>
+            {coherent === 'bate_certo' && (
+              <p>
+                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-burn px-3 text-[15px] font-semibold text-burn">
+                  <span aria-hidden>✓</span> {COHERENCE_TEXT.bate_certo.replace(/\.$/, '')}
+                </span>
+              </p>
             )}
+            {coherent === 'ainda_nao' && <p className="text-[16px] text-dim">{COHERENCE_TEXT.ainda_nao}</p>}
             {waterWeek && rate != null && (
               <p className="text-[14px] text-dim">Semana de água do ciclo: o peso pode subir sem ser gordura.</p>
             )}
@@ -489,115 +529,14 @@ export default function Balanco() {
             </p>
           )}
 
-          <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
-            <div className="h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={chart} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
-                  <CartesianGrid stroke={colors.line} vertical={false} />
-                  {/* Tocar no dia abre-o no Hoje, também nos dias sem barra (os que faltam registar). */}
-                  <XAxis
-                    dataKey="label"
-                    axisLine={{ stroke: colors.line }}
-                    tickLine={false}
-                    tick={(props: {
-                      x?: number | string
-                      y?: number | string
-                      index?: number
-                      payload?: { value?: string; index?: number }
-                    }) => {
-                      const d = chart[props.payload?.index ?? props.index ?? -1]
-                      const x = Number(props.x ?? 0)
-                      const y = Number(props.y ?? 0)
-                      const open = d && d.date <= today ? () => openDay(d.date) : undefined
-                      return (
-                        <g onClick={open} style={open ? { cursor: 'pointer' } : undefined}>
-                          <rect x={x - 18} y={y - 6} width={36} height={28} fill="transparent" />
-                          <text x={x} y={y} dy="0.71em" textAnchor="middle" fill={colors.dim} fontSize={13}>
-                            {props.payload?.value}
-                          </text>
-                        </g>
-                      )
-                    }}
-                  />
-                  <YAxis
-                    tick={{ fill: colors.dim, fontSize: 12 }}
-                    tickFormatter={(v: number) => fmtInt(v)}
-                    axisLine={false}
-                    tickLine={false}
-                    width={48}
-                  />
-                  <RBar
-                    dataKey="eaten"
-                    radius={[4, 4, 0, 0]}
-                    onClick={(entry: unknown) => {
-                      const date = (entry as { payload?: { date?: string } }).payload?.date
-                      if (date) openDay(date)
-                    }}
-                    cursor="pointer"
-                    isAnimationActive={false}
-                  >
-                    {chart.map((d) => (
-                      <Cell key={d.date} fill={colors.eat} fillOpacity={d.today ? 0.45 : 1} />
-                    ))}
-                  </RBar>
-                  {/* O alvo de cada dia: um traço curto em cima da barra, sem ligar os dias. */}
-                  <Line
-                    dataKey="plan"
-                    stroke="none"
-                    dot={(props: { cx?: number; cy?: number; index?: number }) =>
-                      props.cx == null || props.cy == null ? (
-                        <g key={props.index} />
-                      ) : (
-                        <line
-                          key={props.index}
-                          x1={props.cx - 14}
-                          x2={props.cx + 14}
-                          y1={props.cy}
-                          y2={props.cy}
-                          stroke={colors.ink}
-                          strokeWidth={2.5}
-                          strokeLinecap="round"
-                        />
-                      )
-                    }
-                    activeDot={false}
-                    isAnimationActive={false}
-                  />
-                  {avg7 != null && (
-                    <ReferenceLine y={avg7} stroke={colors.eat} strokeWidth={1.5} strokeDasharray="2 3" ifOverflow="extendDomain" />
-                  )}
-                  <Line
-                    dataKey="out"
-                    stroke={colors.burn}
-                    strokeWidth={2.5}
-                    dot={{ r: 3, fill: colors.burn, stroke: 'none' }}
-                    activeDot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-dim">
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2.5 w-2.5 rounded-sm bg-eat" /> o que comeste
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-0.5 w-4 bg-burn" /> gasto{exp.learning ? ' (a aprender)' : ''}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block w-4 border-t-[2.5px] border-ink" /> alvo do dia
-              </span>
-              {avg7 != null && (
-                <span className="flex items-center gap-1.5">
-                  <span className="inline-block w-4 border-t-2 border-dotted border-eat" /> média 7 dias ({fmtInt(avg7)})
-                </span>
-              )}
-            </div>
-          </section>
+          <SemanaChart days={data.days} today={today} avg7={data.avg7} learning={exp.learning} onOpenDay={openDay} />
+
+          {thisWeek && action ? <ParaEstaSemana action={action} onOpenDay={openDay} /> : reviewCard}
 
           {/* Os 14 dias até ao fim da semana vista (numa semana passada, os de então). */}
-          <ProteinaRefeicao today={sunday < today ? shiftDate(sunday, 1) : today} perMeal={profile.protein_per_meal_g} />
+          <ProteinaRefeicao rows={protein} perMeal={profile.protein_per_meal_g} />
+
+          {longo && <SemanaASemana data={longo} today={today} waterDay={longo.projection.input.waterDay} />}
 
           <button
             onClick={() =>
@@ -623,8 +562,6 @@ export default function Balanco() {
           >
             Partilhar a semana (imagem)
           </button>
-
-          {reviewCard}
 
           <button onClick={() => setDetails(!details)} className="text-[15px] text-dim">
             {details ? 'Esconder detalhes' : 'Ver detalhes ›'}

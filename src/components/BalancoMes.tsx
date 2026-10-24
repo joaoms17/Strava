@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Bar as RBar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Bar as RBar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { supabase } from '../lib/supabase'
-import { useThemeColors } from '../lib/colors'
 import { useDataVersion } from '../lib/events'
 import { shiftDate } from '../lib/day'
 import { fmt1, fmtDayMonth, fmtInt, fmtKcal } from '../lib/format'
+import type { LongDay } from '../lib/balanco'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { intakeLinks, type IntakeLink } from '../../api/_lib/rules/extras'
+import { niceScale } from '../../api/_lib/rules/graficos'
+import { int } from '../../api/_lib/rules/leituras'
 import type { MealItem } from '../lib/types'
+import { ChartCard, Key, Legend, TICK, TipBox, axisInt, tooltipBase, useChartColors } from './charts/kit'
 
 interface Week {
   monday: string
@@ -30,23 +33,19 @@ function normalize(name: string): string {
 // Balanço › Mês: as últimas 5 semanas (comeu contra gasto, só dias
 // completos), o gasto medido ao longo do tempo, passos e sono (e o que se
 // comeu depois de noites más ou com poucos passos), e os 10 alimentos que
-// mais se repetem.
-export default function BalancoMes({ today }: { today: string }) {
-  const colors = useThemeColors()
+// mais se repetem. Os dias vêm do Balanço (lidos uma vez para a página).
+export default function BalancoMes({ today, days: given }: { today: string; days: LongDay[] | null }) {
+  const colors = useChartColors()
   const version = useDataVersion()
   const [weeks, setWeeks] = useState<Week[] | null>(null)
   const [foods, setFoods] = useState<{ name: string; count: number; kcal: number }[]>([])
   const [links, setLinks] = useState<ReturnType<typeof intakeLinks> | null>(null)
 
   const load = useCallback(async () => {
+    if (!given) return
     const first = shiftDate(mondayOf(today), -28)
-    const [{ data: days }, { data: health }, { data: meals }] = await Promise.all([
-      supabase
-        .from('days')
-        .select('date,kcal_in,kcal_out_est,is_complete,tdee_est,flags')
-        .gte('date', first)
-        .lte('date', today)
-        .order('date'),
+    const days = given.filter((d) => d.date >= first && d.date <= today)
+    const [{ data: health }, { data: meals }] = await Promise.all([
       supabase.from('health_daily').select('*').gte('date', first).lte('date', today),
       supabase.from('meals_counted').select('items').gte('date', shiftDate(today, -30)).lte('date', today),
     ])
@@ -95,13 +94,22 @@ export default function BalancoMes({ today }: { today: string }) {
         .slice(0, 10)
         .map((f) => ({ ...f, kcal: f.kcal / f.count })),
     )
-  }, [today])
+  }, [today, given])
 
   useEffect(() => {
     void load()
   }, [load, version])
 
   if (!weeks) return <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
+  const both = weeks.filter((w) => w.eaten != null && w.out != null)
+  const gap = both.length ? both.reduce((a, w) => a + w.eaten! - w.out!, 0) / both.length : null
+  const reading =
+    gap == null
+      ? 'Ainda sem semanas com dias completos'
+      : Math.abs(gap) < 50
+        ? `Em ${both.length} semanas comeste cerca do que gastaste`
+        : `Em ${both.length} semanas comeste em média ${int(Math.round(Math.abs(gap) / 10) * 10)} kcal por dia ${gap < 0 ? 'menos' : 'mais'} do que gastaste`
+  const scale = niceScale(0, Math.max(1000, ...weeks.flatMap((w) => [w.eaten ?? 0, w.out ?? 0, w.tdee ?? 0])), 4)
   const chart = weeks.map((w) => ({
     label: fmtDayMonth(w.monday),
     eaten: w.eaten != null ? Math.round(w.eaten) : null,
@@ -125,32 +133,48 @@ export default function BalancoMes({ today }: { today: string }) {
           Com alguns dias completos, aqui aparecem as tuas semanas lado a lado.
         </p>
       ) : (
-        <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
-          <p className="label">Por semana (dias completos)</p>
-          <div className="h-52">
+        <ChartCard
+          kicker="Por semana (dias completos)"
+          reading={reading}
+          legend={
+            <Legend>
+              <Key shape="bar" color={colors.eat} label="comeste (média)" />
+              <Key shape="line" color={colors.burn} label="gasto (média)" />
+              <Key shape="dash" color={colors.dim} label="gasto medido pelo peso" />
+            </Legend>
+          }
+        >
+          <div style={{ height: 200 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chart} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
-                <CartesianGrid stroke={colors.line} vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: colors.dim, fontSize: 12 }} axisLine={{ stroke: colors.line }} tickLine={false} />
-                <YAxis tick={{ fill: colors.dim, fontSize: 12 }} tickFormatter={(v: number) => fmtInt(v)} axisLine={false} tickLine={false} width={48} />
-                <RBar dataKey="eaten" fill={colors.eat} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                <Line dataKey="out" stroke={colors.burn} strokeWidth={2.5} dot={{ r: 3, fill: colors.burn, stroke: 'none' }} connectNulls isAnimationActive={false} />
-                <Line dataKey="tdee" stroke={colors.dim} strokeDasharray="4 4" strokeWidth={2} dot={false} connectNulls isAnimationActive={false} />
+              <ComposedChart data={chart} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barCategoryGap="28%">
+                <CartesianGrid stroke={colors.grid} vertical={false} />
+                <XAxis dataKey="label" tick={TICK(colors)} axisLine={{ stroke: colors.grid }} tickLine={false} />
+                <YAxis domain={scale.domain} ticks={scale.ticks} tick={TICK(colors)} tickFormatter={axisInt} axisLine={false} tickLine={false} width={44} />
+                <Tooltip
+                  {...tooltipBase(colors)}
+                  content={({ active, payload }) => {
+                    const w = payload?.[0]?.payload as (typeof chart)[number] | undefined
+                    if (!active || !w) return null
+                    return (
+                      <TipBox
+                        title={`Semana de ${w.label}`}
+                        rows={[
+                          { label: 'comeste', value: w.eaten != null ? fmtInt(w.eaten) : '—' },
+                          { label: 'gasto', value: w.out != null ? fmtInt(w.out) : '—', color: colors.burn },
+                          { label: 'gasto medido', value: w.tdee != null ? fmtInt(w.tdee) : '—', color: colors.dim, dash: true },
+                        ]}
+                        colors={colors}
+                      />
+                    )
+                  }}
+                />
+                <RBar dataKey="eaten" fill={colors.eat} radius={[4, 4, 0, 0]} maxBarSize={30} isAnimationActive={false} />
+                <Line dataKey="out" stroke={colors.burn} strokeWidth={1.5} dot={{ r: 2.5, fill: colors.burn, stroke: 'none' }} connectNulls isAnimationActive={false} />
+                <Line dataKey="tdee" stroke={colors.dim} strokeDasharray="3 4" strokeWidth={1.5} dot={false} connectNulls isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-dim">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-sm bg-eat" /> comeste (média)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0.5 w-4 bg-burn" /> gasto (média)
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-dim" /> gasto medido pelo peso
-            </span>
-          </div>
-        </section>
+        </ChartCard>
       )}
 
       {withSteps.length > 0 && (
