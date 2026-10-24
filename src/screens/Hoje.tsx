@@ -10,7 +10,6 @@ import { signedUrls } from '../lib/photos'
 import { loadActiveDiet } from '../lib/diets'
 import DietToday from '../components/DietToday'
 import Sequencia from '../components/Sequencia'
-import Agua from '../components/Agua'
 import AvisarAnalise from '../components/AvisarAnalise'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
 import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
@@ -1039,8 +1038,6 @@ export default function Hoje() {
         />
       )}
 
-      {/* A água logo a seguir ao próximo passo: «+ copo» é o toque que mais se repete. */}
-      {date <= today && <Agua key={date} date={date} />}
 
       {empty && watchOnly.length > 0 && (
         <div className="-mx-2 divide-y divide-line/60">

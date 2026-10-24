@@ -130,17 +130,6 @@ describe('análise da evolução', () => {
     expect(weightSummary(narrow, today)!.media_7_dias.ha_90_dias).toBe(89)
   })
 
-  it('comida: a água média nos dias em que foi registada, completos ou não', () => {
-    const days = [
-      { date: '2026-10-04', kcal_in: 1800, protein: 130, kcal_target: 1700, is_complete: true, water_ml: 2000 },
-      { date: '2026-10-03', kcal_in: 400, protein: 20, kcal_target: 1700, is_complete: false, water_ml: 1500 },
-      { date: '2026-10-02', kcal_in: 1700, protein: 120, kcal_target: 1700, is_complete: true, water_ml: 0 },
-    ]
-    const weeks = foodWeeks(days, '2026-10-05')
-    expect(weeks[3]).toMatchObject({ dias_completos: 2, agua_ml: 1750 })
-    expect(weeks[2]!.agua_ml).toBeNull()
-  })
-
   it('medidas: gordura com a fórmula do sexo, e o «desde» só com a cintura no mesmo sítio', () => {
     const rows = [
       { date: '2026-08-01', neck_cm: 32, waist_cm: 81, hips_cm: 99, weight_used_kg: 62, readings: null },

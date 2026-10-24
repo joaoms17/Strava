@@ -83,7 +83,7 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         .order('date'),
       db
         .from('days')
-        .select('date,kcal_in,protein,kcal_target,kcal_out_est,is_complete,flags,water_ml')
+        .select('date,kcal_in,protein,kcal_target,kcal_out_est,is_complete,flags')
         .gte('date', shiftDate(today, -29))
         .lte('date', today),
       db

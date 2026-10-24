@@ -107,13 +107,13 @@ describe('ações da «Pergunta à app»', () => {
     expect(replyWithActions('Registo o frango? Toca em «Fazer».', none.actions, none.dropped)).toMatch(
       /^Registo o frango\? Toca em «Fazer»\.\n\nNão consegui preparar isto/,
     )
-    const some = sortActions([ai({ type: 'add_water', glasses: 2 }), ai({ type: 'mark_day', flag: 'dia_fechado' })], refs)
+    const some = sortActions([ai({ type: 'mark_day', flag: 'dia_fechado' }), ai({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' })], refs)
     expect(some.dropped).toBe(1)
-    expect(replyWithActions('Junto 2 copos e marco o dia.', some.actions, some.dropped)).toMatch(/Uma das coisas não ficou pronta/)
+    expect(replyWithActions('Marco os dois dias.', some.actions, some.dropped)).toMatch(/Uma das coisas não ficou pronta/)
     // Tudo certo (e as repetidas não contam como falhadas): a resposta fica igual.
-    const ok = sortActions([ai({ type: 'add_water', glasses: 2 }), ai({ type: 'add_water', glasses: 2 })], refs)
+    const ok = sortActions([ai({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }), ai({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' })], refs)
     expect(ok.dropped).toBe(0)
-    expect(replyWithActions('Junto 2 copos.', ok.actions, ok.dropped)).toBe('Junto 2 copos.')
+    expect(replyWithActions('Marco ontem.', ok.actions, ok.dropped)).toBe('Marco ontem.')
     expect(replyWithActions('', ok.actions, 0)).toBe('Posso fazer isto:')
     expect(replyWithActions('', [], 0)).toBe('')
   })
@@ -123,11 +123,13 @@ describe('ações da «Pergunta à app»', () => {
       [
         ai({ type: 'delete_meal', meal_id: 'r1' }),
         ai({ type: 'sql', items: [{ name: 'drop table meals', grams: null }] }),
-        ai({ type: 'add_water', glasses: 2, user_id: 'outra pessoa' }),
+        ai({ type: 'add_water', date: TODAY, glasses: 2 }),
+        ai({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado', user_id: 'outra pessoa' }),
       ],
       refs,
     )
-    expect(out).toEqual([{ type: 'add_water', date: TODAY, glasses: 2 }])
+    // A água saiu da app (decisão 286): já não é uma ação.
+    expect(out).toEqual([{ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }])
   })
 
   it('dias só dos últimos 28 e nunca no futuro', () => {
@@ -138,7 +140,7 @@ describe('ações da «Pergunta à app»', () => {
     expect(inActionWindow('ontem', TODAY)).toBe(false)
     const out = cleanActions(
       [
-        ai({ type: 'add_water', date: '2026-10-19', glasses: 1 }),
+        ai({ type: 'mark_day', date: '2026-10-19', flag: 'dia_fechado' }),
         ai({ type: 'repeat_meal', meal_id: 'r1', date: '2026-08-01' }),
         ai({ type: 'log_favorite', favorite_id: 'f1', date: '17/10' }),
       ],
@@ -159,19 +161,16 @@ describe('ações da «Pergunta à app»', () => {
     expect(out).toEqual([{ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }])
   })
 
-  it('porções e copos dentro dos limites', () => {
+  it('porções dentro dos limites', () => {
     const out = cleanActions(
       [
         ai({ type: 'log_favorite', favorite_id: 'f1', portion: 3 }),
         ai({ type: 'log_favorite', favorite_id: 'f1', portion: 0.75 }),
-        ai({ type: 'add_water', glasses: 0 }),
-        ai({ type: 'add_water', glasses: 13 }),
-        ai({ type: 'add_water', glasses: 1.5 }),
-        ai({ type: 'add_water', glasses: 12 }),
+        ai({ type: 'log_favorite', favorite_id: 'f1', portion: 2 }),
       ],
       refs,
     )
-    expect(out).toEqual([{ type: 'add_water', date: TODAY, glasses: 12 }])
+    expect(out.map((a) => a.type === 'log_favorite' && a.portion)).toEqual([2])
   })
 
   it('compras: os alimentos das favoritas × vezes, mais o que a IA escreveu, sem repetir', () => {
@@ -221,24 +220,25 @@ describe('ações da «Pergunta à app»', () => {
   it('cada ação uma vez e no máximo 3', () => {
     const out = cleanActions(
       [
-        ai({ type: 'add_water', glasses: 2 }),
-        ai({ type: 'add_water', glasses: 2 }),
-        ai({ type: 'add_water', glasses: 1 }),
-        ai({ type: 'mark_day', date: '2026-10-17', flag: 'faltou_algo' }),
+        ai({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }),
+        ai({ type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }),
+        ai({ type: 'mark_day', date: '2026-10-16', flag: 'dia_fechado' }),
+        ai({ type: 'mark_day', date: '2026-10-15', flag: 'faltou_algo' }),
         ai({ type: 'log_favorite', favorite_id: 'f1' }),
       ],
       refs,
     )
     expect(out).toHaveLength(ASK_MAX_ACTIONS)
-    expect(out.map((a) => a.type)).toEqual(['add_water', 'add_water', 'mark_day'])
+    expect(out.map((a) => a.type)).toEqual(['mark_day', 'mark_day', 'mark_day'])
     expect(cleanActions('nada', refs)).toEqual([])
   })
 
   it('o telemóvel volta a validar: forma certa e dia dentro da janela de hoje', () => {
-    const water = { type: 'add_water', date: TODAY, glasses: 2 }
-    expect(checkAction(water, TODAY)).toEqual(water)
-    expect(checkAction({ ...water, date: '2026-10-19' }, TODAY)).toBeNull()
-    expect(checkAction({ ...water, glasses: 40 }, TODAY)).toBeNull()
+    const mark = { type: 'mark_day', date: TODAY, flag: 'dia_fechado' }
+    expect(checkAction(mark, TODAY)).toEqual(mark)
+    expect(checkAction({ ...mark, date: '2026-10-19' }, TODAY)).toBeNull()
+    expect(checkAction({ ...mark, flag: 'talvez' }, TODAY)).toBeNull()
+    expect(checkAction({ type: 'add_water', date: TODAY, glasses: 2 }, TODAY)).toBeNull()
     expect(checkAction({ type: 'log_favorite', favorite_id: 'f1', name: 'X', kcal: 100, date: TODAY, slot: null, portion: 1 }, TODAY)).toBeNull()
     expect(checkAction({ type: 'apagar_tudo' }, TODAY)).toBeNull()
     expect(checkAction(null, TODAY)).toBeNull()
@@ -246,7 +246,7 @@ describe('ações da «Pergunta à app»', () => {
 
   it('o texto do cartão sai dos dados validados', () => {
     // O número e a unidade não se separam no fim da linha.
-    expect(actionLabel({ type: 'add_water', date: TODAY, glasses: 2 }, TODAY)).toContain('500\u00a0ml')
+    expect(actionLabel({ type: 'add_shopping_items', items: [{ name: 'Frango', grams: 600 }] }, TODAY)).toContain('600\u00a0g')
     const label = (...args: Parameters<typeof actionLabel>) => actionLabel(...args).replace(/\u00a0/g, ' ')
     expect(
       label({ type: 'log_favorite', favorite_id: FAV, name: 'Frango com arroz', kcal: 310, date: TODAY, slot: 'jantar', portion: 0.5 }, TODAY),
@@ -258,7 +258,6 @@ describe('ações da «Pergunta à app»', () => {
     expect(label({ type: 'mark_day', date: '2026-10-14', flag: 'faltou_algo' }, TODAY)).toBe(
       'Marcar qua 14 out como «Não, faltou algo»',
     )
-    expect(label({ type: 'add_water', date: TODAY, glasses: 2 }, TODAY)).toBe('Juntar 2 copos de água · hoje (500 ml)')
     expect(
       label(
         {
@@ -300,11 +299,11 @@ describe('ações da «Pergunta à app»', () => {
 
 describe('conversa da «Pergunta à app»', () => {
   const turns: AskTurn[] = [
-    { from: 'me', text: 'bebi mais 2 copos' },
+    { from: 'me', text: 'ontem foi tudo' },
     {
       from: 'app',
-      text: 'Junto 2 copos a hoje?',
-      actions: [{ action: { type: 'add_water', date: TODAY, glasses: 2 }, state: 'feito' }],
+      text: 'Marco ontem?',
+      actions: [{ action: { type: 'mark_day', date: '2026-10-17', flag: 'dia_fechado' }, state: 'feito' }],
     },
   ]
 
@@ -316,8 +315,8 @@ describe('conversa da «Pergunta à app»', () => {
 
   it('ao servidor vão só as últimas, com o que aconteceu às ações', () => {
     expect(turnsForServer(turns, TODAY)).toEqual([
-      { from: 'me', text: 'bebi mais 2 copos' },
-      { from: 'app', text: 'Junto 2 copos a hoje?\n[Propus: Juntar 2 copos de água · hoje (500 ml) (feito)]' },
+      { from: 'me', text: 'ontem foi tudo' },
+      { from: 'app', text: 'Marco ontem?\n[Propus: Marcar ontem como «Sim, foi tudo» (feito)]' },
     ])
     const many = Array.from({ length: 10 }, (_, i) => ({ from: 'me' as const, text: String(i) }))
     expect(turnsForServer(many, TODAY)).toHaveLength(ASK_TURNS_SENT)
@@ -329,13 +328,16 @@ describe('conversa da «Pergunta à app»', () => {
     const stored = JSON.stringify([
       ...turns,
       { from: 'sistema', text: 'x' },
-      { from: 'app', text: 'Antiga', actions: [{ action: { type: 'add_water', date: '2026-09-01', glasses: 2 }, state: 'por_fazer' }] },
-      { from: 'app', text: 'Estado estranho', actions: [{ action: { type: 'add_water', date: TODAY, glasses: 1 }, state: 'falhou' }] },
+      { from: 'app', text: 'Antiga', actions: [{ action: { type: 'mark_day', date: '2026-09-01', flag: 'dia_fechado' }, state: 'por_fazer' }] },
+      // Uma conversa antiga com água (que saiu da app): a ação sai, o texto fica.
+      { from: 'app', text: 'Água', actions: [{ action: { type: 'add_water', date: TODAY, glasses: 2 }, state: 'feito' }] },
+      { from: 'app', text: 'Estado estranho', actions: [{ action: { type: 'mark_day', date: TODAY, flag: 'faltou_algo' }, state: 'falhou' }] },
     ])
     const parsed = parseTurns(stored, TODAY)
-    expect(parsed.map((t) => t.text)).toEqual(['bebi mais 2 copos', 'Junto 2 copos a hoje?', 'Antiga', 'Estado estranho'])
+    expect(parsed.map((t) => t.text)).toEqual(['ontem foi tudo', 'Marco ontem?', 'Antiga', 'Água', 'Estado estranho'])
     // A ação de um dia fora da janela sai; um estado desconhecido fica «não».
     expect(parsed[2]!.actions).toBeUndefined()
-    expect(parsed[3]!.actions?.[0]?.state).toBe('nao')
+    expect(parsed[3]!.actions).toBeUndefined()
+    expect(parsed[4]!.actions?.[0]?.state).toBe('nao')
   })
 })

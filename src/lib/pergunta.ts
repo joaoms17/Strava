@@ -1,7 +1,6 @@
 import { postApi } from './api'
 import { readScoped, writeScoped } from './scoped'
 import { addShoppingItems, readShoppingExtra, setShoppingExtra } from './compras'
-import { addWaterGlasses, restoreWater } from './water'
 import { markDay, restoreDayFlags } from './day-flag'
 import { logFavorite, repeatMeal } from './meal-actions'
 import { emitDataChanged } from './events'
@@ -100,27 +99,6 @@ export async function runAskAction(
         },
       ])
       return true
-    }
-    case 'add_water': {
-      try {
-        const before = await addWaterGlasses(action.date, action.glasses)
-        toast(`+${action.glasses} ${action.glasses === 1 ? 'copo' : 'copos'} de água · ${dayWord(action.date, today)}`, [
-          {
-            label: 'Anular',
-            run: async () => {
-              try {
-                await restoreWater(action.date, before)
-              } catch (err) {
-                toast(errorText(err))
-              }
-            },
-          },
-        ])
-        return true
-      } catch (err) {
-        toast(errorText(err))
-        return false
-      }
     }
     case 'share_meal': {
       try {

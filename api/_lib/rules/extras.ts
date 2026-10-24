@@ -1,4 +1,4 @@
-// Proteína por refeição, água, lista de compras e o que se come depois de
+// Proteína por refeição, lista de compras e o que se come depois de
 // noites más ou com poucos passos: regras puras (o telemóvel usa-as
 // diretamente). Sem supabase nem node.
 import type { MealItem } from './meal-totals.js'
@@ -21,21 +21,6 @@ export function proteinBySlot(
     const values = [...days.values()]
     return { slot, avg: Math.round(values.reduce((a, b) => a + b, 0) / values.length), days: values.length }
   })
-}
-
-// --- Água -----------------------------------------------------------------
-export const GLASS_ML = 250
-
-// Meta diária: 35 ml por kg, a copos de 250 ml, entre 1,5 e 4 L (2 L sem peso).
-export function waterGoalMl(weightKg: number | null): number {
-  if (weightKg == null || !(weightKg > 0)) return 2000
-  return Math.min(4000, Math.max(1500, Math.round((35 * weightKg) / GLASS_ML) * GLASS_ML))
-}
-
-// Litros no cartão, sem zeros a mais: 0 → «0», 1250 → «1,25», 1500 → «1,5»,
-// 2000 → «2», 10000 → «10» (antes o 0 ficava em branco: « de 3 L»).
-export function litersText(ml: number): string {
-  return (Math.max(0, ml) / 1000).toFixed(2).replace(/\.?0+$/, '').replace('.', ',')
 }
 
 // --- Lista de compras -----------------------------------------------------

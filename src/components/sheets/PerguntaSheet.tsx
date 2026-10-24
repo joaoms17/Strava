@@ -22,7 +22,6 @@ const BUSY_TEXT: Record<AskAction['type'], string> = {
   repeat_meal: 'A registar…',
   add_shopping_items: 'A juntar…',
   mark_day: 'A guardar…',
-  add_water: 'A guardar…',
   share_meal: 'A partilhar…',
 }
 
@@ -33,7 +32,6 @@ function suggestions(sex: 'm' | 'f'): string[] {
     'O que janto para chegar à proteína?',
     sex === 'f' ? 'Como correu esta semana?' : 'Porque é que não desci esta semana?',
     'Estou pior ao fim de semana?',
-    'Bebi mais 2 copos',
     'Ontem foi tudo, marca o dia',
   ]
 }

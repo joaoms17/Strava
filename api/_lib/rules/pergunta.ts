@@ -1,13 +1,13 @@
 // «Pergunta à app»: o contexto que vai para a IA, só da pessoa com sessão e
 // só com números que a app já calcula (o plano de hoje como no Hoje, os dias
-// completos da regra 5, o gasto medido, a fase da água, a semana de água do
-// ciclo). Compacto: os últimos 28 dias numa linha cada, as semanas resumidas,
+// completos da regra 5, o gasto medido, a fase da água do início da dieta, a
+// semana de água do ciclo). Compacto: os últimos 28 dias numa linha cada, as semanas resumidas,
 // as refeições dos últimos 7 dias por momento e as favoritas, com
 // referências curtas (f1, r1, p1) no lugar dos ids. Sem supabase nem node.
 import { shiftDate } from './nutritional-day.js'
 import { SLOTS, slotOf, type Slot } from './momentos.js'
 import { mealName, proteinPicks } from './favoritos.js'
-import { waterGoalMl, type ShoppingItem } from './extras.js'
+import type { ShoppingItem } from './extras.js'
 import { trend7, weeklyRateAsOf, type DatedValue } from './weight.js'
 import { inWaterPhase, isMaintenanceWeek, maintenanceTarget, mondayOf } from './manutencao.js'
 import { cleanStarts, cycleInfo, cycleOptions, waterWeekDuring } from './ciclo.js'
@@ -51,7 +51,6 @@ export interface AskDay {
   kcal_out_est?: Num
   is_complete?: boolean | null
   flags?: string[] | null
-  water_ml?: Num
   tdee_est?: Num
   tdee_raw?: Num
   formula_base?: Num
@@ -174,7 +173,6 @@ export function todayStatus(input: Pick<AskInput, 'today' | 'profile' | 'days' |
     .sort((a, b) => b.date.localeCompare(a.date))[0]
   const plan = maintenance ? maintenanceTarget(n(latestTdee?.tdee_est)) : Number(profile.base_kcal) + exercise
   const proteinGoal = n(profile.protein_g)
-  const weight = weightSeries(input.weights, today).pop()?.value ?? null
   return {
     plano_kcal: Math.round(plan),
     comeu_kcal: Math.round(eaten),
@@ -186,8 +184,6 @@ export function todayStatus(input: Pick<AskInput, 'today' | 'profile' | 'days' |
     falta_proteina_g: proteinGoal != null ? Math.max(0, Math.round(proteinGoal - protein)) : null,
     refeicoes_contadas: meals.length,
     fotos_por_contar: input.uncountedToday,
-    agua_ml: n(input.days.find((d) => d.date === today)?.water_ml) ?? 0,
-    agua_meta_ml: waterGoalMl(weight),
     semana_de_pausa: maintenance,
   }
 }
@@ -211,7 +207,6 @@ export function daySummaries(days: AskDay[], weights: AskInput['weights'], mealS
       completo: d.is_complete === true,
       resposta: answerOf(d.flags),
       pausa: d.flags?.includes('manutencao') === true,
-      agua_ml: n(d.water_ml) || null,
       peso_kg: weighed.get(d.date) ?? null,
     }))
 }
