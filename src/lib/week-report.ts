@@ -15,19 +15,19 @@ export interface WeekReport {
   completeDays: number // dias completos (os que contam nas médias) nesta semana
 }
 
-const W = 1080
-const H = 1350
-const INK = '#141414'
-const DIM = '#6b6660'
-const BG = '#f1eee8'
-const CARD = '#ffffff'
-const ACCENT = '#d9480f'
-const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+export const W = 1080
+export const H = 1350
+export const INK = '#141414'
+export const DIM = '#6b6660'
+export const BG = '#f1eee8'
+export const CARD = '#ffffff'
+export const ACCENT = '#d9480f'
+export const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
-const fmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
-const fmt1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1).replace('.', ',')
+export const fmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
+export const fmt1 = (n: number) => (Math.round(n * 10) / 10).toFixed(1).replace('.', ',')
 
-function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = []
   let line = ''
   for (const word of text.split(' ')) {
@@ -101,13 +101,20 @@ export function drawWeekReport(r: WeekReport): HTMLCanvasElement {
 
 // Partilha (folha do iPhone) ou, sem isso, descarrega o PNG.
 export async function shareWeekReport(r: WeekReport): Promise<'shared' | 'downloaded' | 'cancelled'> {
-  const canvas = drawWeekReport(r)
+  return shareCanvas(drawWeekReport(r), `semana-${r.range.replace(/\s+/g, '-')}.png`, `A minha semana · ${r.range}`)
+}
+
+export async function shareCanvas(
+  canvas: HTMLCanvasElement,
+  name: string,
+  title: string,
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   if (!blob) throw new Error('Não consegui criar a imagem.')
-  const file = new File([blob], `semana-${r.range.replace(/\s+/g, '-')}.png`, { type: 'image/png' })
+  const file = new File([blob], name, { type: 'image/png' })
   if (navigator.canShare?.({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: `A minha semana · ${r.range}` })
+      await navigator.share({ files: [file], title })
       return 'shared'
     } catch (err) {
       if ((err as Error).name === 'AbortError') return 'cancelled'

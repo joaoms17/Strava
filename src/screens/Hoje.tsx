@@ -54,6 +54,7 @@ import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
 import { proteinPicks } from '../../api/_lib/rules/favoritos'
 import { sharedFrom } from '../../api/_lib/rules/partilha'
 import { orderSplitHint } from '../../api/_lib/rules/pedido'
+import MesPronto from '../components/MesPronto'
 
 interface DayData {
   date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
@@ -957,6 +958,8 @@ export default function Hoje() {
           </div>
         </div>
       )}
+
+      {isToday && !data.offline && <MesPronto today={today} />}
 
       {firstCards.map((card) => (
         <div key={card} className="space-y-3 rounded-2xl border border-line p-4">

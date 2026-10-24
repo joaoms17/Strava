@@ -30,6 +30,7 @@ import type { WeightRow } from '../lib/types'
 import CompositionCards from '../components/CompositionCards'
 import Evolucao from '../components/Evolucao'
 import { segment } from '../components/ui/Chips'
+import Projecao from '../components/Projecao'
 
 type Range = '1M' | '3M' | 'Tudo'
 const RANGE_DAYS: Record<Range, number | null> = { '1M': 30, '3M': 91, Tudo: null }
@@ -280,6 +281,7 @@ export default function Corpo() {
           <p className="text-[13px] text-dim">O peso varia ±1 kg de um dia para o outro com água e sal.</p>
         </section>
       )}
+      <Projecao today={today} />
       <CompositionCards />
       {profile.sex === 'f' && <Ciclo today={today} />}
       <Evolucao />
