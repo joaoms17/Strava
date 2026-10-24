@@ -83,7 +83,7 @@ function ActionCard({
 }
 
 // Hoje e Balanço › «Pergunta à app»: perguntas sobre os teus números e
-// pedidos («bebi mais 2 copos»). A resposta vem só dos teus dados; o que a
+// pedidos («ontem foi tudo, marca o dia»). A resposta vem só dos teus dados; o que a
 // app propõe fazer aparece num cartão e só acontece com «Fazer».
 export default function PerguntaSheet() {
   const sheet = useSheet()
