@@ -1,7 +1,7 @@
 import { postApi } from './api'
 import { readScoped, writeScoped } from './scoped'
 import { addShoppingItems, readShoppingExtra, setShoppingExtra } from './compras'
-import { markDay, restoreDayFlags } from './day-flag'
+import { answerDay } from './day-flag'
 import { logFavorite, repeatMeal } from './meal-actions'
 import { emitDataChanged } from './events'
 import type { ToastAction } from './toast'
@@ -55,7 +55,6 @@ export async function askApp(question: string, turns: AskTurn[], today: string):
 }
 
 const errorText = (err: unknown) => (err instanceof Error ? err.message : 'Não consegui gravar. Tenta outra vez.')
-const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 // «Fazer»: cada tipo pelo caminho que a app já usa, com o mesmo aviso (e o
 // mesmo Anular). Devolve se ficou feito.
@@ -83,23 +82,8 @@ export async function runAskAction(
       ])
       return true
     }
-    case 'mark_day': {
-      const before = await markDay(action.date, action.flag, today)
-      if (!before) {
-        toast('Não consegui gravar. Tenta outra vez.')
-        return false
-      }
-      const day = capital(dayWord(action.date, today))
-      toast(action.flag === 'dia_fechado' ? `${day} fica completo.` : `${day} fica fora das contas do gasto.`, [
-        {
-          label: 'Anular',
-          run: async () => {
-            if (!(await restoreDayFlags(action.date, before, today))) toast('Não consegui anular. Tenta outra vez.')
-          },
-        },
-      ])
-      return true
-    }
+    case 'mark_day':
+      return answerDay(action.date, action.flag, today, toast)
     case 'share_meal': {
       try {
         const result = await postApi<{ ok: boolean; to: string; already?: boolean }>('/api/meal/share', {

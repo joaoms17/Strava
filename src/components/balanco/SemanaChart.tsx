@@ -2,10 +2,11 @@ import { useId } from 'react'
 import { Bar, CartesianGrid, Cell, ComposedChart, LabelList, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { fmtDayShort, fmtInt, weekdayLetter } from '../../lib/format'
 import { dayResult, dayVerdict, showMeanLine, weekDaysReading, type DayResult, type WeekDay } from '../../../api/_lib/rules/balanco-graficos'
+import { MissingNote } from '../DiaResposta'
 import { niceScale } from '../../../api/_lib/rules/graficos'
 import { AlertBadge, BELOW_FILL_OPACITY, ChartCard, HatchDef, Key, Legend, Marks, TICK, axisInt, useChartColors, useSelection, type ChartColors } from '../charts/kit'
 
-export type ChartDay = WeekDay & { out: number }
+export type ChartDay = WeekDay & { out: number; missing?: boolean }
 
 const HEIGHT = 200
 const Y_WIDTH = 44
@@ -72,6 +73,7 @@ export default function SemanaChart({
       out: d.date <= today ? Math.round(d.out) : null,
       result,
       alert: result === 'acima_gasto' ? '!' : null,
+      missing: d.missing === true && d.date < today,
     }
   })
   const values = rows.flatMap((r) => [r.eaten ?? 0, r.plan ?? 0, r.out ?? 0])
@@ -196,6 +198,11 @@ export default function SemanaChart({
               {selected.plan != null && <> · alvo {fmtInt(selected.plan)}</>}
               {selected.out != null && <> · gasto {fmtInt(selected.out)}</>}
             </p>
+            {selected.missing && (
+              <div className="border-t border-line pt-2">
+                <MissingNote date={selected.date} today={today} compact />
+              </div>
+            )}
             <button onClick={() => onOpenDay(selected.date)} className="min-h-9 text-[15px] font-semibold text-eat">
               Abrir o dia ›
             </button>

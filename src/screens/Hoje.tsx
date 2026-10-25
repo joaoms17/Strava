@@ -19,7 +19,7 @@ import { workoutTitle } from '../lib/workout-actions'
 import { RETRY_TEXT, discardCapture, restoreCapture, retryCapture, useCaptures, type CaptureEntry } from '../lib/capture-queue'
 import { BusyButton, runBusy } from '../lib/busy'
 import { recomputeFrom } from '../lib/recompute'
-import { answerDay, type DayAnswer } from '../lib/day-flag'
+import { DayAnswerButtons, MissingNote } from '../components/DiaResposta'
 import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
 import { kcalOut, paceFromDiff, round10 } from '../../api/_lib/rules/gasto'
 import { isDayComplete } from '../../api/_lib/rules/day-close'
@@ -506,22 +506,6 @@ export default function Hoje() {
     toast('Foto descartada', [{ label: 'Anular', run: () => restoreCapture(capture) }])
   }
 
-  async function answerYesterday(flag: DayAnswer) {
-    if (!(await answerDay(shiftDate(today, -1), flag, today))) {
-      toast('Não consegui gravar. Tenta outra vez.')
-      return
-    }
-    toast(flag === 'dia_fechado' ? 'Ontem fica completo.' : 'Ontem fica fora das contas do gasto.')
-  }
-
-  async function answerPastDay(flag: DayAnswer) {
-    if (!(await answerDay(date, flag, today))) {
-      toast('Não consegui gravar. Tenta outra vez.')
-      return
-    }
-    toast(flag === 'dia_fechado' ? 'Este dia fica completo.' : 'Este dia fica fora das contas do gasto.')
-  }
-
   type Entry = { at: string; key: string; node: React.ReactNode }
   const entries: Entry[] = []
   // Sem sono desta noite (não dormiu com o relógio): diz qual foi a última.
@@ -946,18 +930,14 @@ export default function Hoje() {
         <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
           <p className="text-[17px]">
             Registaste {counted.length} {counted.length === 1 ? 'refeição' : 'refeições'} ({fmtKcal(kcalIn)}&nbsp;kcal). Foi
-            tudo neste dia?
+            tudo a {fmtDayShort(date)}?
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <BusyButton busy="A guardar…" onClick={() => answerPastDay('dia_fechado')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
-              Sim, foi tudo
-            </BusyButton>
-            <BusyButton busy="A guardar…" onClick={() => answerPastDay('faltou_algo')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
-              Não, faltou algo
-            </BusyButton>
-          </div>
+          <DayAnswerButtons date={date} today={today} />
         </div>
       )}
+
+      {/* Marcado «faltou algo» (às vezes um toque sem querer): diz-se e volta-se atrás. */}
+      {!isToday && !data.offline && data.flags.includes('faltou_algo') && <MissingNote date={date} today={today} />}
 
       {isToday && !data.offline && <MesPronto today={today} />}
 
@@ -1003,7 +983,7 @@ export default function Hoje() {
           favorites={proteinFavorites}
           gap={{ protein: Math.max(0, Math.round(profile.protein_g - proteinIn)), kcal: Math.round(left) }}
           onWeigh={() => sheet.open('peso')}
-          onYesterday={(flag) => void runBusy('A guardar…', () => answerYesterday(flag))}
+          today={today}
           onFavorite={(fav) => void runBusy('A registar…', () => logFavorite(fav, null, toast))}
           onDismiss={() => void dismiss(step)}
           errorMeals={errorMeals}
@@ -1242,7 +1222,7 @@ function NextStepCard({
   favorites,
   gap,
   onWeigh,
-  onYesterday,
+  today,
   onFavorite,
   onDismiss,
   errorMeals,
@@ -1266,7 +1246,7 @@ function NextStepCard({
   favorites: Favorite[]
   gap: { protein: number; kcal: number }
   onWeigh: () => void
-  onYesterday: (flag: DayAnswer) => void
+  today: string
   onFavorite: (favorite: Favorite) => void
   onDismiss: () => void
   errorMeals: Meal[]
@@ -1453,14 +1433,7 @@ function NextStepCard({
             Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'} ({fmtKcal(yesterdayKcal)}
             &nbsp;kcal). Foi tudo?
           </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => onYesterday('dia_fechado')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
-              Sim, foi tudo
-            </button>
-            <button onClick={() => onYesterday('faltou_algo')} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
-              Não, faltou algo
-            </button>
-          </div>
+          <DayAnswerButtons date={shiftDate(today, -1)} today={today} />
         </>
       )}
       {id === 'pouco' && (

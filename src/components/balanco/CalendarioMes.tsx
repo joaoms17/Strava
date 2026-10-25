@@ -4,6 +4,8 @@ import { shiftDate } from '../../lib/day'
 import { monthBounds, monthName } from '../../../api/_lib/rules/mes'
 import { dayVerdict, monthCalendar, type CalCell, type CalResult } from '../../../api/_lib/rules/balanco-graficos'
 import type { BalancoLongo } from '../../lib/balanco'
+import { missingFlag } from '../../../api/_lib/rules/dia-resposta'
+import { MissingNote } from '../DiaResposta'
 import { AlertBadge, ChartCard, HatchDef, Key, Legend, useChartColors } from '../charts/kit'
 
 const LETTERS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
@@ -38,6 +40,8 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
   const canPrev = `${prev}-01` >= data.from
   const canNext = next <= today.slice(0, 7)
   const cell = cal.weeks.flat().find((c) => c?.date === picked) ?? null
+  // Marcado «faltou algo»: o quadro do dia diz porquê e deixa voltar atrás.
+  const cellMissing = cell != null && cell.date < today && missingFlag(data.days.find((d) => d.date === cell.date)?.flags)
   const weeks = cal.weeks.filter((w) => w.some((c) => c != null && c.result !== 'futuro'))
   const detail = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -136,31 +140,38 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
       </div>
       <div ref={detail} className="mt-2 min-h-[52px] scroll-mb-24 rounded-xl bg-surface2/60 px-3 py-2" aria-live="polite">
         {cell ? (
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="text-[14px] text-dim">
-                {fmtDayShort(cell.date)} ·{' '}
-                {cell.result === 'acima_gasto' && <AlertBadge colors={colors} />}
-                <span className={cell.result === 'acima_gasto' ? 'font-semibold text-ink' : undefined}>
-                  {cell.result === 'acima_alvo' || cell.result === 'acima_gasto'
-                    ? dayVerdict(cell.result, cell.kcalIn, cell.kcalTarget, cell.kcalOut)
-                    : RESULT_TEXT[cell.result]}
-                </span>
-              </p>
-              {cell.kcalIn != null && (
-                <p className="text-[15px] tabular-nums">
-                  Comeste <span className="font-semibold">{fmtInt(cell.kcalIn)} kcal</span>
-                  {cell.kcalTarget != null && <> · alvo {fmtInt(cell.kcalTarget)}</>}
-                  {cell.kcalOut != null && <> · gasto {fmtInt(cell.kcalOut)}</>}
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[14px] text-dim">
+                  {fmtDayShort(cell.date)} ·{' '}
+                  {cell.result === 'acima_gasto' && <AlertBadge colors={colors} />}
+                  <span className={cell.result === 'acima_gasto' ? 'font-semibold text-ink' : undefined}>
+                    {cell.result === 'acima_alvo' || cell.result === 'acima_gasto'
+                      ? dayVerdict(cell.result, cell.kcalIn, cell.kcalTarget, cell.kcalOut)
+                      : RESULT_TEXT[cell.result]}
+                  </span>
                 </p>
+                {cell.kcalIn != null && (
+                  <p className="text-[15px] tabular-nums">
+                    Comeste <span className="font-semibold">{fmtInt(cell.kcalIn)} kcal</span>
+                    {cell.kcalTarget != null && <> · alvo {fmtInt(cell.kcalTarget)}</>}
+                    {cell.kcalOut != null && <> · gasto {fmtInt(cell.kcalOut)}</>}
+                  </p>
+                )}
+              </div>
+              {cell.result !== 'futuro' && (
+                <button onClick={() => onOpenDay(cell.date)} className="min-h-10 shrink-0 text-[15px] font-semibold text-eat">
+                  Abrir ›
+                </button>
               )}
             </div>
-            {cell.result !== 'futuro' && (
-              <button onClick={() => onOpenDay(cell.date)} className="min-h-10 shrink-0 text-[15px] font-semibold text-eat">
-                Abrir ›
-              </button>
+            {cellMissing && (
+              <div className="mt-2 border-t border-line pt-2">
+                <MissingNote date={cell.date} today={today} compact />
+              </div>
             )}
-          </div>
+          </>
         ) : (
           <p className="pt-1 text-[14px] text-dim">Toca num dia para veres o que comeste, o alvo e o gasto.</p>
         )}
