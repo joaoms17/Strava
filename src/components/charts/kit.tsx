@@ -22,12 +22,14 @@ export interface ChartColors {
   weight: string // Corpo (peso e cintura)
   eat: string
   burn: string // gasto
-  attn: string // acima do alvo
+  attn: string // acima do alvo (ainda abaixo do gasto)
+  danger: string // acima do gasto (decisão 301): o vermelho de --color-pain
   ok: string
   bike: string
   gym: string
   health: string // relógio
   onOk: string // o texto em cima do verde (o que tiver mais contraste)
+  onDanger: string // o texto em cima do vermelho
 }
 
 // Contraste WCAG entre duas cores #rrggbb.
@@ -59,11 +61,13 @@ export function chartColors(c: ThemeColors): ChartColors {
     eat: c.eat,
     burn: c.burn,
     attn: c.attn,
+    danger: c.pain,
     ok: c.ok,
     bike: c['chart-bike'],
     gym: c['chart-gym'],
     health: c['chart-health'],
     onOk: contrast(c.ok, c.ink) >= contrast(c.ok, c.bg) ? c.ink : c.bg,
+    onDanger: contrast(c.pain, c.ink) >= contrast(c.pain, c.bg) ? c.ink : c.bg,
   }
 }
 
@@ -75,6 +79,9 @@ export function chartColors(c: ThemeColors): ChartColors {
 // e com riscas (a textura é a 2.ª pista, além da cor). Validado com o
 // validador do dataviz: verde/âmbar ΔE 13 (deutan) no claro, 7,4 (protan) no
 // escuro — dentro do mínimo só com a 2.ª pista (riscas e ✓/+), que existe.
+// Acima do gasto (decisão 301) é o vermelho de --color-pain, cheio e sem
+// riscas, com «!» (por cima da barra, no dia do calendário e na legenda): a
+// diferença para o âmbar não depende só da cor.
 
 export const BELOW_FILL_OPACITY = 0.38
 
@@ -93,6 +100,20 @@ export function HatchDef({ id, colors, size = 5 }: { id: string; colors: ChartCo
       <rect width={size} height={size} fill={colors.attn} />
       <rect width={size * 0.36} height={size} fill={colors.surface} fillOpacity={0.45} />
     </pattern>
+  )
+}
+
+// O «!» de acima do gasto, em pílula vermelha (o texto ao lado fica na cor
+// do texto: o vermelho sobre o cinzento do quadro não chegava a 4,5:1).
+export function AlertBadge({ colors }: { colors: ChartColors }) {
+  return (
+    <span
+      aria-hidden
+      className="mr-1 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full align-[-3px] text-[13px] leading-none font-extrabold"
+      style={{ background: colors.danger, color: colors.onDanger }}
+    >
+      !
+    </span>
   )
 }
 
@@ -184,7 +205,7 @@ export function EmptyChart({ text, height }: { text: string; height: number }) {
 
 // --- Legenda (a marca igual à do gráfico, o texto na cor do texto) ---------
 
-export type KeyShape = 'bar' | 'line' | 'dash' | 'dot' | 'ring' | 'hatch' | 'outline' | 'band' | 'below'
+export type KeyShape = 'bar' | 'line' | 'dash' | 'dot' | 'ring' | 'hatch' | 'outline' | 'band' | 'below' | 'alert'
 
 export function Key({
   shape,
@@ -192,12 +213,14 @@ export function Key({
   label,
   faint = false,
   border,
+  glyph,
 }: {
   shape: KeyShape
   color: string
   label: string
   faint?: boolean
   border?: string // um contorno (a amostra quase da cor do cartão)
+  glyph?: string // a cor do «!» de 'alert'
 }) {
   const pid = useId()
   return (
@@ -219,6 +242,13 @@ export function Key({
               </pattern>
             </defs>
             <rect x="3" y="0" width="10" height="10" rx="2" fill={`url(#${pid})`} />
+          </>
+        )}
+        {shape === 'alert' && (
+          <>
+            <rect x="3" y="0" width="10" height="10" rx="2" fill={color} />
+            <rect x="7.1" y="1.6" width="1.8" height="4.4" rx="0.6" fill={glyph ?? 'var(--color-surface)'} />
+            <rect x="7.1" y="7" width="1.8" height="1.6" rx="0.6" fill={glyph ?? 'var(--color-surface)'} />
           </>
         )}
         {shape === 'outline' && <rect x="3.5" y="0.5" width="9" height="9" rx="2" fill="none" stroke={color} strokeWidth="1.2" strokeDasharray="2 1.5" />}

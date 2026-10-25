@@ -39,7 +39,7 @@ function waistTarget(profile: Profile, rows: BodyMeasurement[]): number | null {
 // As linhas já lidas (do Supabase, só as da pessoa) que a projeção usa.
 export interface ProjectionRows {
   weights: { date: string; kg: number | string }[]
-  days: { date: string; kcal_in: number | null; kcal_target?: number | null; is_complete: boolean | null; flags: string[] | null; tdee_est: number | null }[]
+  days: { date: string; kcal_in: number | null; kcal_target?: number | null; kcal_out_est?: number | null; is_complete: boolean | null; flags: string[] | null; tdee_est: number | null }[]
   workouts: { date: string; minutes: number | null; kcal_est: number | null }[]
   measurements: BodyMeasurement[]
 }
@@ -62,6 +62,8 @@ export function projectionFrom(profile: Profile, asOf: string, rows: ProjectionR
         flags: x.flags ?? [],
         tdee_est: x.tdee_est != null ? Number(x.tdee_est) : null,
         kcal_target: Number(x.kcal_target ?? 0),
+        // O gasto do dia: «O teu mês» separa os dias acima do gasto (decisão 301).
+        kcal_out_est: x.kcal_out_est != null ? Number(x.kcal_out_est) : null,
       })) as ProjInput['days'],
       workouts: rows.workouts.map((x) => ({
         date: x.date,
@@ -80,7 +82,7 @@ export function projectionFrom(profile: Profile, asOf: string, rows: ProjectionR
 async function loadRange(profile: Profile, from: string, to: string, asOf: string): Promise<ProjectionData> {
   const [w, d, wk, m] = await Promise.all([
     supabase.from('weights').select('date,kg').gte('date', from).lte('date', to).order('date'),
-    supabase.from('days').select('date,kcal_in,kcal_target,is_complete,flags,tdee_est').gte('date', from).lte('date', to).order('date'),
+    supabase.from('days').select('date,kcal_in,kcal_target,kcal_out_est,is_complete,flags,tdee_est').gte('date', from).lte('date', to).order('date'),
     supabase.from('workouts_active').select('date,minutes,kcal_est').gte('date', from).lte('date', to),
     supabase.from('body_measurements').select('*').order('date'),
   ])

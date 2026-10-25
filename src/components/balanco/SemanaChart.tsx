@@ -1,9 +1,9 @@
 import { useId } from 'react'
-import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
+import { Bar, CartesianGrid, Cell, ComposedChart, LabelList, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts'
 import { fmtDayShort, fmtInt, weekdayLetter } from '../../lib/format'
 import { dayResult, dayVerdict, showMeanLine, weekDaysReading, type DayResult, type WeekDay } from '../../../api/_lib/rules/balanco-graficos'
 import { niceScale } from '../../../api/_lib/rules/graficos'
-import { BELOW_FILL_OPACITY, ChartCard, HatchDef, Key, Legend, Marks, TICK, axisInt, useChartColors, useSelection, type ChartColors } from '../charts/kit'
+import { AlertBadge, BELOW_FILL_OPACITY, ChartCard, HatchDef, Key, Legend, Marks, TICK, axisInt, useChartColors, useSelection, type ChartColors } from '../charts/kit'
 
 export type ChartDay = WeekDay & { out: number }
 
@@ -14,7 +14,8 @@ const MARGIN = { top: 16, right: 8, bottom: 0, left: 0 }
 // O nome de cada resultado para o VoiceOver (o toque diz a diferença em kcal).
 const RESULT_TEXT: Record<DayResult, string> = {
   no_alvo: 'no alvo',
-  acima: 'acima do alvo',
+  acima_alvo: 'acima do alvo, ainda abaixo do gasto',
+  acima_gasto: 'acima do gasto',
   abaixo: 'no alvo (bem abaixo)',
   fora: 'ficou de fora (incompleto)',
   hoje: 'hoje, ainda a meio',
@@ -24,8 +25,10 @@ const RESULT_TEXT: Record<DayResult, string> = {
 
 function barStyle(result: DayResult, colors: ChartColors, hatch: string) {
   switch (result) {
-    case 'acima':
+    case 'acima_alvo':
       return { fill: `url(#${hatch})`, stroke: 'none', strokeWidth: 0, strokeDasharray: undefined, fillOpacity: 1 }
+    case 'acima_gasto':
+      return { fill: colors.danger, stroke: 'none', strokeWidth: 0, strokeDasharray: undefined, fillOpacity: 1 }
     case 'abaixo':
       return { fill: colors.ok, stroke: colors.ok, strokeWidth: 1.5, strokeDasharray: undefined, fillOpacity: BELOW_FILL_OPACITY }
     case 'fora':
@@ -39,7 +42,8 @@ function barStyle(result: DayResult, colors: ChartColors, hatch: string) {
 
 // Balanço › Semana: o que se comeu em cada dia (a cor diz o resultado contra
 // o alvo desse dia, decisão 289: no alvo verde, bem abaixo verde claro — que
-// também conta como no alvo —, acima âmbar com riscas), o alvo de cada dia
+// também conta como no alvo —, acima do alvo âmbar com riscas, acima do
+// gasto vermelho cheio com «!» por cima, decisão 301), o alvo de cada dia
 // (um traço), o gasto (linha fina) e a média dos últimos 7 dias completos
 // (tracejada, com nome; sem linha quando fica colada ao alvo). Tocar num dia
 // mostra os números dele.
@@ -67,6 +71,7 @@ export default function SemanaChart({
       plan: d.plan > 0 ? Math.round(d.plan) : null,
       out: d.date <= today ? Math.round(d.out) : null,
       result,
+      alert: result === 'acima_gasto' ? '!' : null,
     }
   })
   const values = rows.flatMap((r) => [r.eaten ?? 0, r.plan ?? 0, r.out ?? 0])
@@ -85,7 +90,8 @@ export default function SemanaChart({
         <Legend>
           <Key shape="bar" color={colors.ok} label="no alvo (até +100)" />
           {results.has('abaixo') && <Key shape="below" color={colors.ok} label="bem abaixo (conta como no alvo)" />}
-          {results.has('acima') && <Key shape="hatch" color={colors.attn} label="acima" />}
+          {results.has('acima_alvo') && <Key shape="hatch" color={colors.attn} label="acima do alvo (ainda abaixo do gasto)" />}
+          {results.has('acima_gasto') && <Key shape="alert" color={colors.danger} glyph={colors.onDanger} label="acima do gasto" />}
           {results.has('fora') && <Key shape="outline" color={colors.dim} label="fora (incompleto)" />}
           {results.has('hoje') && <Key shape="outline" color={colors.dim} label="hoje (a meio)" />}
           <Key shape="line" color={colors.ink} label="alvo do dia" />
@@ -124,6 +130,8 @@ export default function SemanaChart({
                 const st = barStyle(r.result, colors, hatch)
                 return <Cell key={r.date} fill={st.fill} fillOpacity={st.fillOpacity} stroke={st.stroke} strokeWidth={st.strokeWidth} strokeDasharray={st.strokeDasharray} />
               })}
+              {/* Acima do gasto: um «!» por cima da barra (a 2.ª pista, além da cor). */}
+              <LabelList dataKey="alert" position="top" offset={4} fill={colors.danger} fontSize={15} fontWeight={800} />
             </Bar>
             {/* O alvo de cada dia: um traço curto por cima da barra, sem ligar os dias. */}
             <Line
@@ -171,7 +179,11 @@ export default function SemanaChart({
         {selected ? (
           <div className="space-y-1">
             <p className="text-[14px] text-dim">
-              {fmtDayShort(selected.date)} · {dayVerdict(selected.result, selected.eaten, selected.plan)}
+              {fmtDayShort(selected.date)} ·{' '}
+              {selected.result === 'acima_gasto' && <AlertBadge colors={colors} />}
+              <span className={selected.result === 'acima_gasto' ? 'font-semibold text-ink' : undefined}>
+                {dayVerdict(selected.result, selected.eaten, selected.plan, selected.out)}
+              </span>
             </p>
             <p className="text-[15px] tabular-nums">
               {selected.eaten != null ? (

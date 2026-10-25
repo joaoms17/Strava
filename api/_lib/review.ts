@@ -5,6 +5,7 @@ import { PROMPT_REVIEW_NEUTRAL, readPrompt } from './prompts.js'
 import { shiftDate } from './rules/nutritional-day.js'
 import { cleanStarts, waterWeekDuring } from './rules/ciclo.js'
 import { mean } from './rules/sono.js'
+import { daysAgainstTarget } from './rules/balanco-graficos.js'
 import { REVIEW_WEIGHT_DAYS, dataFingerprint, reviewHeadline, weekHasData } from './rules/resumo.js'
 
 const ReviewSchema = z.object({ text: z.string() })
@@ -109,6 +110,11 @@ export async function generateWeeklyReview(
     // kg por semana (negativo: a descer); null sem uma pesagem a 4 dias ou menos do domingo.
     ritmo_do_peso_kg_semana: headline.ritmoKgSemana,
     dias_de_fora: { total: headline.diasDeFora.length, datas: headline.diasDeFora },
+    // Os dias completos contra o alvo, com os dois «acima» (decisão 301): o
+    // mesmo veredicto do gráfico da semana e do calendário do Mês.
+    dias_contra_o_alvo: daysAgainstTarget(
+      (days ?? []) as { kcal_in: number | null; kcal_target: number | null; kcal_out_est: number | null; is_complete: boolean; flags: string[] | null }[],
+    ),
     metas: profile
       ? { protein_g: profile.protein_g, base_kcal: profile.base_kcal, kcal_floor_week: profile.kcal_floor_week }
       : null,

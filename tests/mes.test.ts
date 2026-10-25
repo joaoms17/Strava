@@ -21,8 +21,8 @@ describe('o teu mês', () => {
     for (let i = -7; i < 31; i++) weights.push({ date: shiftDate('2026-10-01', i), value: 85 - (i + 7) * 0.05 })
     const days = Array.from({ length: 31 }, (_, i) => {
       const date = shiftDate('2026-10-01', i)
-      // dias 10 e 20 acima do alvo; 15 incompleto
-      return { date, kcal_in: i === 9 || i === 19 ? 2600 : 2000, kcal_target: 2050, is_complete: i !== 14, flags: [] }
+      // dias 10 e 20 acima do alvo (o 20 também acima do gasto); 15 incompleto
+      return { date, kcal_in: i === 9 || i === 19 ? 2600 : 2000, kcal_target: 2050, is_complete: i !== 14, flags: [], kcal_out_est: i === 19 ? 2500 : 2700 }
     })
     const s = monthSummary({
       month: '2026-10',
@@ -54,6 +54,7 @@ describe('o teu mês', () => {
     expect(s.workoutKcal).toBe(1100)
     expect(s.countedDays).toBe(30)
     expect(s.daysOnTarget).toBe(28)
+    expect(s.daysAboveSpent).toBe(1)
     expect(s.streak).toBe(11) // 21 a 31
     expect(s.topMeal).toEqual({ name: 'Iogurte grego + Aveia', count: 2 })
     expect(s.bestWeek?.label).toBe('semana de 5 out')

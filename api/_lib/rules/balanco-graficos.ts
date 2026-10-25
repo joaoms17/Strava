@@ -4,7 +4,7 @@
 // ação de «Para esta semana». Sem supabase nem node.
 import { shiftDate } from './nutritional-day.js'
 import { mondayOf } from './manutencao.js'
-import { ON_TARGET_TOLERANCE_KCAL, monthBounds, onTarget, type MonthDay } from './mes.js'
+import { ON_TARGET_TOLERANCE_KCAL, monthBounds, onTarget, overLevel, type MonthDay } from './mes.js'
 import { counted } from './projecao.js'
 import type { MoveNote } from './projecao.js'
 import { SLOT_LABEL, type Slot } from './momentos.js'
@@ -21,9 +21,12 @@ const round10 = (n: number) => Math.round(n / 10) * 10
 // kcal acima do alvo do dia. Dentro disso, a cor separa os ±100 («no_alvo»)
 // dos dias bem abaixo («abaixo», mais claros), mas os dois contam como no
 // alvo, na frase, na legenda e no calendário do Mês: um dia, um veredicto.
+// Acima, há dois níveis (decisão 301, `overLevel`): «acima do alvo» (ainda
+// abaixo do gasto, âmbar com riscas) e «acima do gasto» (o falhar grave,
+// vermelho cheio com «!»).
 export const DAY_BAND_KCAL = ON_TARGET_TOLERANCE_KCAL
 
-export type DayResult = 'no_alvo' | 'acima' | 'abaixo' | 'fora' | 'hoje' | 'vazio' | 'futuro'
+export type DayResult = 'no_alvo' | 'acima_alvo' | 'acima_gasto' | 'abaixo' | 'fora' | 'hoje' | 'vazio' | 'futuro'
 
 export interface WeekDay {
   date: string
@@ -31,48 +34,62 @@ export interface WeekDay {
   plan: number
   meals: number
   complete: boolean
+  out?: number | null // o gasto do dia (o da linha azul e do fecho do dia)
 }
+
+export const isAbove = (r: DayResult | CalResult): r is 'acima_alvo' | 'acima_gasto' => r === 'acima_alvo' || r === 'acima_gasto'
 
 export function dayResult(d: WeekDay, today: string): DayResult {
   if (d.date > today) return 'futuro'
   if (d.meals === 0) return d.date === today ? 'hoje' : 'vazio'
   if (d.date === today) return 'hoje'
   if (!d.complete) return 'fora'
-  const diff = d.eaten - d.plan
-  if (diff > DAY_BAND_KCAL) return 'acima'
-  if (diff < -DAY_BAND_KCAL) return 'abaixo'
+  const over = overLevel(d.eaten, d.plan, d.out)
+  if (over) return over
+  if (d.eaten - d.plan < -DAY_BAND_KCAL) return 'abaixo'
   return 'no_alvo'
 }
 
 // «no alvo» e «bem abaixo» são o mesmo veredicto (decisão 289).
 export const isOnTarget = (r: DayResult): boolean => r === 'no_alvo' || r === 'abaixo'
 
-// «4 de 6 dias completos no alvo · 1 acima» (no alvo = até 100 kcal acima do
-// alvo do dia, como em «O teu mês»), contado com o mesmo dayResult das barras.
+// «3 de 5 dias completos no alvo · 1 acima do alvo · 1 acima do gasto» (no
+// alvo = até 100 kcal acima do alvo do dia, como em «O teu mês»), contado com
+// o mesmo dayResult das barras.
 export function weekDaysReading(days: WeekDay[], today: string): string {
-  const done = days.map((d) => dayResult(d, today)).filter((r) => r === 'no_alvo' || r === 'abaixo' || r === 'acima')
+  const done = days.map((d) => dayResult(d, today)).filter((r) => isOnTarget(r) || isAbove(r))
   if (done.length === 0) return 'Ainda sem dias completos nesta semana'
   const on = done.filter(isOnTarget).length
-  const above = done.length - on
-  const head = `${on} de ${done.length} ${done.length === 1 ? 'dia completo' : 'dias completos'} no alvo`
-  return above > 0 ? `${head} · ${above} acima` : head
+  const mild = done.filter((r) => r === 'acima_alvo').length
+  const grave = done.filter((r) => r === 'acima_gasto').length
+  const parts = [`${on} de ${done.length} ${done.length === 1 ? 'dia completo' : 'dias completos'} no alvo`]
+  if (mild > 0) parts.push(`${mild} acima do alvo`)
+  if (grave > 0) parts.push(`${grave} acima do gasto`)
+  return parts.join(' · ')
 }
 
-// O que o toque num dia diz: «no alvo · 450 kcal abaixo», «acima · +320 kcal».
-export function dayVerdict(r: DayResult, eaten: number | null, plan: number | null): string {
+// O que o toque num dia diz: «no alvo · 450 kcal abaixo», «acima do alvo,
+// ainda abaixo do gasto · +320 kcal», «acima do gasto · +250 kcal do que
+// gastaste» (a diferença contra o gasto, não contra o alvo).
+export function dayVerdict(r: DayResult | CalResult, eaten: number | null, plan: number | null, out?: number | null): string {
   const diff = eaten != null && plan != null ? Math.round(eaten - plan) : null
   switch (r) {
     case 'no_alvo':
       return 'no alvo'
     case 'abaixo':
       return diff != null ? `no alvo · ${int(round10(-diff))} kcal abaixo` : 'no alvo (abaixo)'
-    case 'acima':
-      return diff != null ? `acima do alvo · +${int(round10(diff))} kcal` : 'acima do alvo'
+    case 'acima_alvo': {
+      const head = out != null && out > 0 ? 'acima do alvo, ainda abaixo do gasto' : 'acima do alvo'
+      return diff != null ? `${head} · +${int(round10(diff))} kcal` : head
+    }
+    case 'acima_gasto':
+      return eaten != null && out != null ? `acima do gasto · +${int(round10(eaten - out))} kcal do que gastaste` : 'acima do gasto'
     case 'fora':
       return 'ficou de fora (incompleto)'
     case 'hoje':
       return 'hoje, ainda a meio'
     case 'vazio':
+    case 'sem_registo':
       return 'sem registos'
     default:
       return ''
@@ -105,7 +122,7 @@ export function weekFacts(completeDays: number, avgEaten: number | null, session
 
 // --- O mês em calendário -------------------------------------------------
 
-export type CalResult = 'no_alvo' | 'acima' | 'fora' | 'sem_registo' | 'hoje' | 'futuro'
+export type CalResult = 'no_alvo' | 'acima_alvo' | 'acima_gasto' | 'fora' | 'sem_registo' | 'hoje' | 'futuro'
 
 export interface CalCell {
   date: string
@@ -113,12 +130,15 @@ export interface CalCell {
   result: CalResult
   kcalIn: number | null
   kcalTarget: number | null
+  kcalOut: number | null
 }
 
 export interface MonthCalendar {
   month: string
   weeks: (CalCell | null)[][] // segunda a domingo
   onTarget: number
+  aboveTarget: number // acima do alvo, ainda abaixo do gasto
+  aboveSpent: number // acima do gasto (decisão 301)
   countedDays: number
   streak: number
   reading: string
@@ -129,6 +149,8 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
   const byDate = new Map(days.map((d) => [d.date, d]))
   const cells: CalCell[] = []
   let on = 0
+  let mild = 0
+  let grave = 0
   let countedDays = 0
   let streak = 0
   let run = 0
@@ -139,10 +161,13 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
     else if (date === today) result = 'hoje'
     else if (d && counted(d)) {
       countedDays++
-      result = onTarget(d) ? 'no_alvo' : 'acima'
+      const out = d.kcal_out_est != null ? Number(d.kcal_out_est) : null
+      result = onTarget(d) ? 'no_alvo' : (overLevel(Number(d.kcal_in), Number(d.kcal_target), out) ?? 'acima_alvo')
     } else if (d && Number(d.kcal_in) > 0) result = 'fora'
     else result = 'sem_registo'
     if (result === 'no_alvo') on++
+    if (result === 'acima_alvo') mild++
+    if (result === 'acima_gasto') grave++
     // A sequência só conta dias que acabaram (hoje ainda não).
     run = result === 'no_alvo' ? run + 1 : date >= today ? run : 0
     streak = Math.max(streak, run)
@@ -152,6 +177,7 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
       result,
       kcalIn: d && Number(d.kcal_in) > 0 ? Math.round(Number(d.kcal_in)) : null,
       kcalTarget: d && Number(d.kcal_target) > 0 ? Math.round(Number(d.kcal_target)) : null,
+      kcalOut: d && d.kcal_out_est != null && Number(d.kcal_out_est) > 0 ? Math.round(Number(d.kcal_out_est)) : null,
     })
   }
   const lead = (new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7
@@ -159,11 +185,44 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
   while (grid.length % 7) grid.push(null)
   const weeks: (CalCell | null)[][] = []
   for (let i = 0; i < grid.length; i += 7) weeks.push(grid.slice(i, i + 7))
+  // A frase diz os dias acima do gasto (o falhar grave); os «acima do alvo»
+  // veem-se no calendário e na legenda (a frase não cabia com os dois e a
+  // sequência).
   const reading =
     countedDays === 0
       ? 'Ainda sem dias completos neste mês'
-      : `${on} de ${countedDays} ${countedDays === 1 ? 'dia completo' : 'dias completos'} no alvo${streak >= 2 ? ` · melhor sequência: ${streak} dias` : ''}`
-  return { month, weeks, onTarget: on, countedDays, streak, reading }
+      : `${on} de ${countedDays} ${countedDays === 1 ? 'dia completo' : 'dias completos'} no alvo${grave > 0 ? ` · ${grave} acima do gasto` : ''}${streak >= 2 ? ` · melhor sequência: ${streak} dias` : ''}`
+  return { month, weeks, onTarget: on, aboveTarget: mild, aboveSpent: grave, countedDays, streak, reading }
+}
+
+// Os dias completos de uma semana contra o alvo, para o resumo semanal (o
+// mesmo veredicto do gráfico e do calendário).
+export interface TargetRow {
+  kcal_in: number | null
+  kcal_target: number | null
+  kcal_out_est: number | null
+  is_complete: boolean
+  flags?: string[] | null
+}
+
+export function daysAgainstTarget(rows: TargetRow[]): { completos: number; no_alvo: number; acima_do_alvo: number; acima_do_gasto: number } {
+  const res = { completos: 0, no_alvo: 0, acima_do_alvo: 0, acima_do_gasto: 0 }
+  for (const r of rows) {
+    const d: MonthDay = {
+      date: '',
+      kcal_in: Number(r.kcal_in ?? 0),
+      kcal_target: Number(r.kcal_target ?? 0),
+      is_complete: r.is_complete === true,
+      flags: r.flags ?? [],
+      kcal_out_est: r.kcal_out_est,
+    }
+    if (!counted(d)) continue
+    res.completos++
+    if (onTarget(d)) res.no_alvo++
+    else if (overLevel(d.kcal_in, d.kcal_target, d.kcal_out_est != null ? Number(d.kcal_out_est) : null) === 'acima_gasto') res.acima_do_gasto++
+    else res.acima_do_alvo++
+  }
+  return res
 }
 
 // --- Semana a semana -----------------------------------------------------
@@ -259,7 +318,7 @@ export function bestDeficitWeek(weeks: WeekBalance[]): WeekBalance | null {
 
 // --- «Para esta semana»: uma ação só -------------------------------------
 
-export type ActionKind = 'fechar_dias' | 'semana' | 'fim_de_semana' | 'proteina' | 'pesar' | 'manter'
+export type ActionKind = 'acima_gasto' | 'fechar_dias' | 'semana' | 'fim_de_semana' | 'proteina' | 'pesar' | 'manter'
 
 export interface WeekAction {
   kind: ActionKind
@@ -276,7 +335,13 @@ export const PROTEIN_GAP_G = 8
 export const MIN_WEIGHINGS_7 = 3
 const MAIN_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
 
+export interface SpentDay {
+  date: string
+  over: number // kcal comidas a mais do que o gasto do dia
+}
+
 export interface ActionInput {
+  aboveSpent?: SpentDay[] // dias acabados desta semana acima do gasto (decisão 301)
   leftOut: string[] // dias acabados desta semana com refeições que não contam
   note: MoveNote | null // a projeção contra a da semana passada
   weekday: number | null // kcal/dia nos dias de semana (28 dias)
@@ -289,11 +354,23 @@ export interface ActionInput {
   projection: string | null // «A este ritmo: …»
 }
 
-// Pela ordem: os dados primeiro (dias de fora), o que atrasou a projeção,
-// o fim de semana, a proteína da refeição mais fraca, as pesagens; sem
-// nada disso, continuar.
+// Pela ordem: um dia acima do gasto (o falhar grave, decisão 301), os dados
+// (dias de fora), o que atrasou a projeção, o fim de semana, a proteína da
+// refeição mais fraca, as pesagens; sem nada disso, continuar.
 export function weekAction(input: ActionInput): WeekAction {
   const { leftOut } = input
+  const spent = input.aboveSpent ?? []
+  if (spent.length > 0) {
+    const list = spent.map((d) => `${weekdayShort(d.date)} ${Number(d.date.slice(8, 10))} (+${int(round10(d.over))} kcal)`)
+    const joined = list.length === 1 ? list[0]! : `${list.slice(0, -1).join(', ')} e ${list[list.length - 1]}`
+    const many = spent.length > 1
+    return {
+      kind: 'acima_gasto',
+      title: 'Fica abaixo do que gastas, todos os dias',
+      detail: `${joined}: ${many ? 'nesses dias' : 'nesse dia'} comeste mais do que gastaste, sem défice. Acima do alvo ainda se perde, só mais devagar; acima do gasto, não. Abre o dia e vê o que o fez subir.`,
+      date: spent[0]!.date,
+    }
+  }
   if (leftOut.length >= LEFT_OUT_MIN) {
     const list = leftOut.map((d) => `${weekdayShort(d)} ${Number(d.slice(8, 10))}`).join(', ')
     return {

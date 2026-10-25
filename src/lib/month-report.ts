@@ -54,6 +54,7 @@ export function drawMonthReport(s: MonthSummary): HTMLCanvasElement {
   let y = top + 3 * (tileH + 26) + 20
   const lines: [string, string][] = []
   if (s.topMeal) lines.push(['Mais repetida', `${s.topMeal.name} (${s.topMeal.count}×)`])
+  if (s.daysAboveSpent > 0) lines.push(['Acima do gasto', `${s.daysAboveSpent} ${s.daysAboveSpent === 1 ? 'dia' : 'dias'} (comeste mais do que gastaste)`])
   if (s.bestWeek) lines.push(['Melhor semana', `${s.bestWeek.label} · ${s.bestWeek.onTarget} dias no alvo`])
   for (const [label, text] of lines) {
     ctx.fillStyle = DIM

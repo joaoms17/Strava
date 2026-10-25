@@ -75,7 +75,7 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
           <Legend>
             <Key shape="line" color={colors.weight} label="peso médio da semana" />
             <Key shape="bar" color={colors.burn} label="défice médio por dia" />
-            {model.weeks.some((w) => w.deficit != null && w.deficit < 0) && <Key shape="bar" color={colors.attn} label="acima do gasto" />}
+            {model.weeks.some((w) => w.deficit != null && w.deficit < 0) && <Key shape="bar" color={colors.danger} label="acima do gasto" />}
             {model.weeks.some((w) => w.deficit == null) && <span>– semana sem dias completos</span>}
             {model.weeks.some((w) => w.water) && <Key shape="ring" color={colors.weight} label="semana de água (o peso sobe sem ser gordura)" />}
           </Legend>
@@ -172,7 +172,7 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
                 <ReferenceLine y={0} stroke={colors.dim} strokeWidth={1} />
                 <Bar dataKey="deficit" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false}>
                   {model.weeks.map((w) => (
-                    <Cell key={w.monday} fill={w.deficit != null && w.deficit < 0 ? colors.attn : colors.burn} fillOpacity={w.monday === model.current ? 0.45 : 1} />
+                    <Cell key={w.monday} fill={w.deficit != null && w.deficit < 0 ? colors.danger : colors.burn} fillOpacity={w.monday === model.current ? 0.45 : 1} />
                   ))}
                 </Bar>
                 {/* Semanas sem barra: «–» (sem dias completos) ou «0», para não ficarem em branco. */}

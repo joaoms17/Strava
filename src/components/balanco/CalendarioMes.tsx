@@ -2,15 +2,16 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { fmtDayShort, fmtInt } from '../../lib/format'
 import { shiftDate } from '../../lib/day'
 import { monthBounds, monthName } from '../../../api/_lib/rules/mes'
-import { monthCalendar, type CalCell, type CalResult } from '../../../api/_lib/rules/balanco-graficos'
+import { dayVerdict, monthCalendar, type CalCell, type CalResult } from '../../../api/_lib/rules/balanco-graficos'
 import type { BalancoLongo } from '../../lib/balanco'
-import { ChartCard, HatchDef, Key, Legend, useChartColors } from '../charts/kit'
+import { AlertBadge, ChartCard, HatchDef, Key, Legend, useChartColors } from '../charts/kit'
 
 const LETTERS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']
 
 const RESULT_TEXT: Record<CalResult, string> = {
   no_alvo: 'no alvo',
-  acima: 'acima do alvo',
+  acima_alvo: 'acima do alvo, ainda abaixo do gasto',
+  acima_gasto: 'acima do gasto',
   fora: 'ficou de fora (incompleto ou «faltou algo»)',
   sem_registo: 'sem registos',
   hoje: 'hoje, ainda a meio',
@@ -19,9 +20,10 @@ const RESULT_TEXT: Record<CalResult, string> = {
 
 // Balanço › Mês: o calendário dos dias no alvo (decisão 289: dia completo
 // com o comido até 100 kcal acima do alvo do dia). Cada dia tem a cor (no
-// alvo o verde de «a melhorar», acima o âmbar com riscas, como no gráfico da
-// Semana) e um sinal (✓ no alvo, + acima, – de fora), para a cor não ser a
-// única pista. Hoje tem um contorno fino; o dia tocado, um anel afastado.
+// alvo o verde de «a melhorar», acima do alvo o âmbar com riscas, acima do
+// gasto o vermelho cheio, como no gráfico da Semana) e um sinal (✓ no alvo,
+// + acima do alvo, ! acima do gasto, – de fora), para a cor não ser a única
+// pista (decisão 301). Hoje tem um contorno fino; o dia tocado, um anel afastado.
 // Tocar num dia mostra os números; ‹ › mudam de mês dentro do que foi lido.
 // As semanas só com dias futuros não aparecem.
 export default function CalendarioMes({ data, today, onOpenDay }: { data: BalancoLongo; today: string; onOpenDay: (date: string) => void }) {
@@ -46,8 +48,10 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
     switch (c.result) {
       case 'no_alvo':
         return { background: colors.ok, color: colors.onOk, border: `1px solid ${colors.ok}` }
-      case 'acima':
+      case 'acima_alvo':
         return { background: 'transparent', color: colors.ink, border: `1px solid ${colors.attn}` }
+      case 'acima_gasto':
+        return { background: colors.danger, color: colors.onDanger, border: `1px solid ${colors.danger}` }
       case 'fora':
         return { background: 'transparent', color: colors.dim, border: `1.5px dashed ${colors.dim}` }
       case 'hoje':
@@ -56,7 +60,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
         return { background: colors.surface2, color: colors.dim, border: `1px solid ${colors.grid}` }
     }
   }
-  const sign: Partial<Record<CalResult, string>> = { no_alvo: '✓', acima: '+', fora: '–', hoje: 'hoje' }
+  const sign: Partial<Record<CalResult, string>> = { no_alvo: '✓', acima_alvo: '+', acima_gasto: '!', fora: '–', hoje: 'hoje' }
 
   return (
     <ChartCard
@@ -76,7 +80,8 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
       legend={
         <Legend>
           <Key shape="bar" color={colors.ok} label="✓ no alvo" />
-          <Key shape="hatch" color={colors.attn} label="+ acima" />
+          <Key shape="hatch" color={colors.attn} label="+ acima do alvo" />
+          <Key shape="alert" color={colors.danger} glyph={colors.onDanger} label="acima do gasto" />
           <Key shape="outline" color={colors.dim} label="– de fora" />
           <Key shape="bar" color={colors.surface2} border={colors.dim} label="sem registos" />
         </Legend>
@@ -110,16 +115,16 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
               }`}
               style={style(c)}
             >
-              {c.result === 'acima' && (
+              {c.result === 'acima_alvo' && (
                 <svg className="absolute inset-0 h-full w-full rounded-lg" aria-hidden>
                   <rect width="100%" height="100%" fill={`url(#${hatch})`} />
                 </svg>
               )}
               {/* Nas riscas, o número numa pílula da cor do cartão (lê-se sempre). */}
-              <span className={`relative font-semibold ${c.result === 'acima' ? 'rounded-md bg-surface px-1 py-px' : ''}`}>{c.day}</span>
+              <span className={`relative font-semibold ${c.result === 'acima_alvo' ? 'rounded-md bg-surface px-1 py-px' : ''}`}>{c.day}</span>
               {sign[c.result] && (
                 <span
-                  className={`relative leading-none font-bold ${c.result === 'hoje' ? 'text-[10px] font-semibold' : 'text-[13px]'} ${c.result === 'acima' ? 'mt-0.5 rounded-md bg-surface px-1' : ''}`}
+                  className={`relative leading-none font-bold ${c.result === 'hoje' ? 'text-[10px] font-semibold' : 'text-[13px]'} ${c.result === 'acima_alvo' ? 'mt-0.5 rounded-md bg-surface px-1' : ''} ${c.result === 'acima_gasto' ? 'text-[15px] font-extrabold' : ''}`}
                   aria-hidden
                 >
                   {sign[c.result]}
@@ -134,12 +139,19 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-[14px] text-dim">
-                {fmtDayShort(cell.date)} · {RESULT_TEXT[cell.result]}
+                {fmtDayShort(cell.date)} ·{' '}
+                {cell.result === 'acima_gasto' && <AlertBadge colors={colors} />}
+                <span className={cell.result === 'acima_gasto' ? 'font-semibold text-ink' : undefined}>
+                  {cell.result === 'acima_alvo' || cell.result === 'acima_gasto'
+                    ? dayVerdict(cell.result, cell.kcalIn, cell.kcalTarget, cell.kcalOut)
+                    : RESULT_TEXT[cell.result]}
+                </span>
               </p>
               {cell.kcalIn != null && (
                 <p className="text-[15px] tabular-nums">
                   Comeste <span className="font-semibold">{fmtInt(cell.kcalIn)} kcal</span>
                   {cell.kcalTarget != null && <> · alvo {fmtInt(cell.kcalTarget)}</>}
+                  {cell.kcalOut != null && <> · gasto {fmtInt(cell.kcalOut)}</>}
                 </p>
               )}
             </div>
@@ -150,7 +162,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
             )}
           </div>
         ) : (
-          <p className="pt-1 text-[14px] text-dim">Toca num dia para veres o que comeste e o alvo.</p>
+          <p className="pt-1 text-[14px] text-dim">Toca num dia para veres o que comeste, o alvo e o gasto.</p>
         )}
       </div>
     </ChartCard>
