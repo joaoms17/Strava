@@ -51,7 +51,7 @@ function CardSkeleton({ height }: { height: number }) {
 
 interface WeekData {
   monday: string // a semana destes dados (ao mudar de semana, os antigos não ficam por baixo)
-  days: (BalanceDay & { out: number })[]
+  days: (BalanceDay & { out: number; missing: boolean })[]
   workouts: Workout[]
   rate: number | null
   completeDays: number
@@ -237,6 +237,8 @@ export default function Balanco() {
         carbs: sum((m) => m.carbs),
         fat: sum((m) => m.fat),
         meals: ofDay.length,
+        // Marcado «faltou algo»: o dia tocado diz porquê e deixa voltar atrás.
+        missing: flags.includes('faltou_algo'),
         plan: maintenance ? maintenanceTarget(tdeeBefore(date)) : base + exercise,
         complete: isDayComplete({
           mealCount: ofDay.length,

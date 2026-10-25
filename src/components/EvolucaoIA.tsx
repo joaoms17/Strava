@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
 import { shiftDate } from '../lib/day'
-import { useToast } from '../lib/toast'
-import { answerDay, type DayAnswer } from '../lib/day-flag'
+import { useDataVersion } from '../lib/events'
+import { fmtDayShort } from '../lib/format'
+import { DayAnswerButtons } from './DiaResposta'
 import { AREA_LABEL, cleanAnalysis } from '../../api/_lib/rules/evolucao'
 
 type Review = {
@@ -32,7 +33,8 @@ export default function EvolucaoIA({ today }: { today: string }) {
   const [open, setOpen] = useState(false)
   // Dias já respondidos (aqui ou no Hoje) ou já completos: a pergunta deixa de aparecer.
   const [answered, setAnswered] = useState<Set<string>>(new Set())
-  const toast = useToast()
+  // Ao responder (ou anular) os dados mudam: volta-se a ver que dias faltam.
+  const version = useDataVersion()
 
   useEffect(() => {
     let alive = true
@@ -116,21 +118,7 @@ export default function EvolucaoIA({ today }: { today: string }) {
     return () => {
       alive = false
     }
-  }, [questionDates])
-
-  async function answer(date: string, flag: DayAnswer) {
-    setAnswered((prev) => new Set(prev).add(date))
-    if (!(await answerDay(date, flag, today))) {
-      setAnswered((prev) => {
-        const next = new Set(prev)
-        next.delete(date)
-        return next
-      })
-      toast('Não consegui gravar. Tenta outra vez.')
-      return
-    }
-    toast(flag === 'dia_fechado' ? 'Esse dia fica completo.' : 'Esse dia fica fora das contas do gasto.')
-  }
+  }, [questionDates, version])
 
   const questions = (analysis?.perguntas ?? []).filter((q) => !answered.has(q.data))
   const when = review
@@ -171,21 +159,13 @@ export default function EvolucaoIA({ today }: { today: string }) {
               <p className="label">A IA pergunta</p>
               {questions.map((q) => (
                 <div key={q.data} className="space-y-2 rounded-xl bg-surface2 p-3">
+                  <p className="text-[13px] font-semibold text-dim">{fmtDayShort(q.data)}</p>
                   <p className="text-[15px]">{q.pergunta}</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      onClick={() => void answer(q.data, 'dia_fechado')}
-                      className="min-h-12 rounded-xl border border-line text-[15px]"
-                    >
-                      Sim, foi tudo
-                    </button>
-                    <button
-                      onClick={() => void answer(q.data, 'faltou_algo')}
-                      className="min-h-12 rounded-xl border border-line text-[15px]"
-                    >
-                      Não, faltou algo
-                    </button>
-                  </div>
+                  <DayAnswerButtons
+                    date={q.data}
+                    today={today}
+                    onAnswered={() => setAnswered((prev) => new Set(prev).add(q.data))}
+                  />
                 </div>
               ))}
             </div>
