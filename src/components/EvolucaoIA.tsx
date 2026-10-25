@@ -27,6 +27,9 @@ export default function EvolucaoIA({ today }: { today: string }) {
   const [review, setReview] = useState<Review | null | undefined>(undefined)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Começa fechada: o título e 3 linhas; «Ler tudo» abre as áreas, o foco e
+  // o botão de atualizar. «A IA pergunta» fica sempre à vista.
+  const [open, setOpen] = useState(false)
   // Dias já respondidos (aqui ou no Hoje) ou já completos: a pergunta deixa de aparecer.
   const [answered, setAnswered] = useState<Set<string>>(new Set())
   const toast = useToast()
@@ -162,7 +165,7 @@ export default function EvolucaoIA({ today }: { today: string }) {
       ) : (
         <>
           {analysis.titulo && <p className="text-[19px] leading-snug font-semibold">{analysis.titulo}</p>}
-          {analysis.resumo && <p className="text-[15px]">{analysis.resumo}</p>}
+          {analysis.resumo && <p className={`text-[15px] ${open ? '' : 'line-clamp-3'}`}>{analysis.resumo}</p>}
           {questions.length > 0 && (
             <div className="space-y-2">
               <p className="label">A IA pergunta</p>
@@ -187,7 +190,19 @@ export default function EvolucaoIA({ today }: { today: string }) {
               ))}
             </div>
           )}
-          {analysis.areas.length > 0 && (
+          {!open && (
+            <div className="flex items-center justify-between gap-3">
+              <button onClick={() => setOpen(true)} aria-expanded={false} className="min-h-11 text-[15px] font-semibold text-eat">
+                Ler tudo ›
+              </button>
+              {review!.week_start !== today && (
+                <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-dim">
+                  {busy ? 'A analisar…' : 'Atualizar'}
+                </button>
+              )}
+            </div>
+          )}
+          {open && analysis.areas.length > 0 && (
             <ul className="divide-y divide-line/60">
               {analysis.areas.map((a) => (
                 <li key={a.area} className="space-y-0.5 py-2.5">
@@ -202,7 +217,7 @@ export default function EvolucaoIA({ today }: { today: string }) {
               ))}
             </ul>
           )}
-          {analysis.foco.length > 0 && (
+          {open && analysis.foco.length > 0 && (
             <div className="space-y-1.5">
               <p className="label">No que te focares</p>
               <ol className="list-decimal space-y-1 pl-5 text-[15px]">
@@ -212,13 +227,20 @@ export default function EvolucaoIA({ today }: { today: string }) {
               </ol>
             </div>
           )}
-          {review!.week_start === today ? (
-            <button disabled={busy} onClick={() => void analyse()} className="min-h-10 text-[14px] text-eat">
-              {busy ? 'A analisar…' : 'Analisar outra vez'}
-            </button>
-          ) : (
-            <button disabled={busy} onClick={() => void analyse()} className={primary}>
-              {busy ? 'A analisar…' : 'Atualizar a análise'}
+          {open &&
+            (review!.week_start === today ? (
+              <button disabled={busy} onClick={() => void analyse()} className="min-h-10 text-[14px] text-eat">
+                {busy ? 'A analisar…' : 'Analisar outra vez'}
+              </button>
+            ) : (
+              // O mesmo «Atualizar» discreto de quando está fechada.
+              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-dim">
+                {busy ? 'A analisar…' : 'Atualizar'}
+              </button>
+            ))}
+          {open && (
+            <button onClick={() => setOpen(false)} aria-expanded className="block min-h-10 text-[14px] text-dim">
+              Mostrar menos
             </button>
           )}
         </>

@@ -8,11 +8,12 @@ import { parseDecimal } from '../lib/format'
 import { loadProjection, weekNote, type ProjectionData } from '../lib/projecao'
 import { project, projectionLine, rangeText } from '../../api/_lib/rules/projecao'
 
-export function useProjectionData(today: string): ProjectionData | null | 'erro' {
+export function useProjectionData(today: string, enabled = true): ProjectionData | null | 'erro' {
   const profile = useReadyProfile()
   const version = useDataVersion()
   const [data, setData] = useState<ProjectionData | null | 'erro'>(null)
   useEffect(() => {
+    if (!enabled) return
     let alive = true
     loadProjection(profile, today)
       .then((d) => alive && setData(d))
@@ -20,7 +21,7 @@ export function useProjectionData(today: string): ProjectionData | null | 'erro'
     return () => {
       alive = false
     }
-  }, [profile, today, version])
+  }, [profile, today, version, enabled])
   return data
 }
 
@@ -60,10 +61,20 @@ export function TargetInput({ onDone }: { onDone?: () => void }) {
 }
 
 // Corpo › Projeção: a data a este ritmo, numa linha, e a mudança da semana.
-// O detalhe e o «E se…» abrem-se na folha.
-export default function Projecao({ today }: { today: string }) {
+// O detalhe e o «E se…» abrem-se na folha. No resumo do Corpo vem dentro do
+// cartão (`embedded`) com os dados já lidos pela página (`data`).
+export default function Projecao({
+  today,
+  data: given,
+  embedded = false,
+}: {
+  today: string
+  data?: ProjectionData
+  embedded?: boolean
+}) {
   const sheet = useSheet()
-  const data = useProjectionData(today)
+  const fetched = useProjectionData(today, given === undefined)
+  const data = given ?? fetched
   const result = useMemo(() => {
     if (!data || data === 'erro') return null
     const p = project(data.input)
@@ -75,7 +86,7 @@ export default function Projecao({ today }: { today: string }) {
   const { targetKg, targetWaistCm } = result.data.input
 
   return (
-    <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
+    <section className={embedded ? 'space-y-2' : 'space-y-2 rounded-[18px] border border-line bg-surface p-4'} aria-label="Projeção">
       <p className="label">Projeção</p>
       {p.status === 'insuficiente' ? (
         <>

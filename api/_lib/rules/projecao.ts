@@ -242,9 +242,12 @@ export function scenariosDelta(basis: Basis, chosen: Scenario[]): number {
 
 // --- Nota da semana -----------------------------------------------------
 
+export type MoveCause = 'fds' | 'semana' | 'gasto' | 'treino' | 'peso'
+
 export interface MoveNote {
   days: number // + atrasou, − adiantou
   text: string
+  cause: MoveCause | null // a causa que mais pesou (null sem nenhuma clara)
 }
 
 // Compara a data de hoje com a de há 7 dias (com os dados de então) e diz a
@@ -257,26 +260,26 @@ export function moveNote(now: Projection, before: Projection): MoveNote | null {
   const a = before.basis
   const b = now.basis
   // Efeito no balanço (kcal/dia, + = engorda mais / perde menos).
-  const drivers: { effect: number; text: (sign: number) => string }[] = []
+  const drivers: { cause: MoveCause; effect: number; text: (sign: number) => string }[] = []
   if (a.weekend != null && b.weekend != null) {
     const d = b.weekend - a.weekend
-    drivers.push({ effect: (d * 2) / 7, text: () => `${d > 0 ? 'mais' : 'menos'} ${Math.abs(Math.round(d / 10) * 10)} kcal/dia ao fim de semana` })
+    drivers.push({ cause: 'fds', effect: (d * 2) / 7, text: () => `${d > 0 ? 'mais' : 'menos'} ${Math.abs(Math.round(d / 10) * 10)} kcal/dia ao fim de semana` })
   }
   if (a.weekday != null && b.weekday != null) {
     const d = b.weekday - a.weekday
-    drivers.push({ effect: (d * 5) / 7, text: () => `${d > 0 ? 'mais' : 'menos'} ${Math.abs(Math.round(d / 10) * 10)} kcal/dia durante a semana` })
+    drivers.push({ cause: 'semana', effect: (d * 5) / 7, text: () => `${d > 0 ? 'mais' : 'menos'} ${Math.abs(Math.round(d / 10) * 10)} kcal/dia durante a semana` })
   }
   {
     const d = b.tdee - a.tdee
-    drivers.push({ effect: -d, text: () => `o gasto medido ${d > 0 ? 'subiu' : 'desceu'} ${Math.abs(Math.round(d / 10) * 10)} kcal/dia` })
+    drivers.push({ cause: 'gasto', effect: -d, text: () => `o gasto medido ${d > 0 ? 'subiu' : 'desceu'} ${Math.abs(Math.round(d / 10) * 10)} kcal/dia` })
   }
   {
     const d = b.workoutKcalDay - a.workoutKcalDay
-    drivers.push({ effect: -d, text: () => (d > 0 ? 'mais treino' : 'menos treino') + ` (${Math.abs(Math.round(d * 7 / 10) * 10)} kcal por semana)` })
+    drivers.push({ cause: 'treino', effect: -d, text: () => (d > 0 ? 'mais treino' : 'menos treino') + ` (${Math.abs(Math.round(d * 7 / 10) * 10)} kcal por semana)` })
   }
   {
     const d = (b.observedKgDay - a.observedKgDay) * KCAL_PER_KG / 2
-    drivers.push({ effect: d, text: () => (d > 0 ? 'o peso médio desceu menos do que as contas diziam' : 'o peso médio desceu mais do que as contas diziam') })
+    drivers.push({ cause: 'peso', effect: d, text: () => (d > 0 ? 'o peso médio desceu menos do que as contas diziam' : 'o peso médio desceu mais do que as contas diziam') })
   }
   // A causa que puxa no mesmo sentido da mudança (atrasou = efeito +).
   const losing = b.rateKgDay < 0 || a.rateKgDay < 0
@@ -285,7 +288,21 @@ export function moveNote(now: Projection, before: Projection): MoveNote | null {
     .filter((d) => Math.sign(d.effect) === wanted && Math.abs(d.effect) >= 20)
     .sort((x, y) => Math.abs(y.effect) - Math.abs(x.effect))[0]
   const head = `${days > 0 ? 'atrasou' : 'adiantou'} ${Math.abs(days)} dias`
-  return { days, text: best ? `${head}: ${best.text(wanted)}` : head }
+  return { days, text: best ? `${head}: ${best.text(wanted)}` : head, cause: best?.cause ?? null }
+}
+
+// Quantos dias mais cedo chega ao peso alvo com um cenário do «E se…»
+// (null quando não se aplica ou sem data nos dois casos).
+export function daysEarlier(input: ProjInput, s: Scenario): number | null {
+  const now = project(input)
+  if (now.status !== 'ok' || now.weight.kind !== 'date') return null
+  const delta = scenarioDelta(now.basis, s)
+  if (delta == null) return null
+  const then = project(input, delta)
+  if (then.status !== 'ok') return null
+  if (then.weight.kind === 'reached') return dayDiff(input.asOf, now.weight.date)
+  if (then.weight.kind !== 'date') return null
+  return dayDiff(then.weight.date, now.weight.date)
 }
 
 // --- Texto --------------------------------------------------------------

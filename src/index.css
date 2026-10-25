@@ -165,6 +165,18 @@
   );
 }
 
+/* Gráficos: o recharts torna o gráfico focável (setas do teclado mexem a
+   dica). Um toque não deixa contorno; o teclado sim. */
+.recharts-wrapper:focus,
+.recharts-wrapper *:focus {
+  outline: none;
+}
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 @keyframes sheet-in {
   from {
     transform: translateY(100%);
