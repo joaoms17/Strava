@@ -25,3 +25,4 @@ Uma alteração ao prompt é sempre um ficheiro novo (`v2`, `v3`, …), nunca um
 - `meal-photo-add.v2.md` — o «Juntar foto» da v1 e outra captura do mesmo pedido: só as linhas que ainda não estão em `itens_atuais` (a parte que se sobrepõe não volta), e a quantidade do pedido num item que estava estimado.
 - `ask.v2.md` — a «Pergunta à app» da v1 sem a água: o contexto já não leva a água do dia nem a meta, e sai a ação `add_water` (decisão 286).
 - `evolution.v4.md` — a Evolução da v3 sem a média de água por dia em `comida` (decisão 286).
+- `weekly-review.v5.md` — o resumo da v4 com os dias completos contra o alvo (`dias_contra_o_alvo`), com os dois «acima» separados: acima do alvo (ainda com défice) e acima do gasto (sem défice; decisão 301).

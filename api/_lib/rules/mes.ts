@@ -14,6 +14,7 @@ export interface MonthDay {
   kcal_target: number
   is_complete: boolean
   flags?: string[] | null
+  kcal_out_est?: number | null // o gasto do dia (o do fecho); sem ele, «acima» é só «acima do alvo»
 }
 
 export interface MonthWorkout {
@@ -36,6 +37,7 @@ export interface MonthSummary {
   minutes: number
   workoutKcal: number
   daysOnTarget: number
+  daysAboveSpent: number // dias completos acima do que se gastou (decisão 301)
   countedDays: number
   streak: number
   topMeal: { name: string; count: number } | null
@@ -80,6 +82,24 @@ function normalize(name: string): string {
 
 export function onTarget(d: MonthDay): boolean {
   return counted(d) && d.kcal_target > 0 && d.kcal_in <= d.kcal_target + ON_TARGET_TOLERANCE_KCAL
+}
+
+// Decisão 301: há dois «acima». Mais de 100 kcal acima do alvo mas sem passar
+// o gasto do dia é «acima do alvo» (ainda há défice: perde-se, mais devagar);
+// acima do alvo e também acima do gasto é «acima do gasto», o falhar grave
+// (nesse dia não houve défice). Sem gasto conhecido, fica «acima do alvo».
+// Dentro do alvo nunca é grave, mesmo acima do gasto (uma semana de
+// manutenção come o gasto de propósito).
+export type OverLevel = 'acima_alvo' | 'acima_gasto'
+
+export function overLevel(eaten: number, target: number, out: number | null | undefined): OverLevel | null {
+  if (eaten <= target + ON_TARGET_TOLERANCE_KCAL) return null
+  return out != null && out > 0 && eaten > out ? 'acima_gasto' : 'acima_alvo'
+}
+
+// Um dia completo (que conta) acima do gasto.
+export function aboveSpent(d: MonthDay): boolean {
+  return counted(d) && !onTarget(d) && overLevel(Number(d.kcal_in), Number(d.kcal_target), d.kcal_out_est != null ? Number(d.kcal_out_est) : null) === 'acima_gasto'
 }
 
 export function monthSummary(input: {
@@ -151,6 +171,7 @@ export function monthSummary(input: {
     minutes: Math.round(ws.reduce((a, w) => a + (w.minutes ?? 0), 0)),
     workoutKcal: Math.round(ws.reduce((a, w) => a + (w.kcal ?? 0), 0)),
     daysOnTarget: good.size,
+    daysAboveSpent: days.filter(aboveSpent).length,
     countedDays: days.filter((d) => counted(d)).length,
     streak,
     topMeal: top && top.count >= 2 ? top : null,

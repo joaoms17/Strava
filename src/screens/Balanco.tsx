@@ -15,7 +15,7 @@ import { scopedKey } from '../lib/scoped'
 import { useBalancoLongo, useProteinBySlot } from '../lib/balanco'
 import { weekAgo } from '../lib/projecao'
 import { daysEarlier, moveNote, project, projectionLine } from '../../api/_lib/rules/projecao'
-import { weekAction, weekFacts } from '../../api/_lib/rules/balanco-graficos'
+import { dayResult, weekAction, weekFacts } from '../../api/_lib/rules/balanco-graficos'
 import SemanaChart from '../components/balanco/SemanaChart'
 import SemanaASemana from '../components/balanco/SemanaASemana'
 import ParaEstaSemana from '../components/balanco/ParaEstaSemana'
@@ -400,6 +400,10 @@ export default function Balanco() {
     const basis = p.status !== 'insuficiente' ? p.basis : null
     const since = shiftDate(today, -6)
     return weekAction({
+      // Os dias acabados desta semana acima do gasto (o mesmo veredicto das barras).
+      aboveSpent: data.days
+        .filter((d) => d.date < today && dayResult(d, today) === 'acima_gasto')
+        .map((d) => ({ date: d.date, over: d.eaten - d.out })),
       leftOut: leftOutList,
       note: moveNote(p, weekAgo(longo.projection)),
       weekday: basis?.weekday ?? null,

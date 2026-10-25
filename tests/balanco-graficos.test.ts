@@ -3,6 +3,8 @@ import {
   bestDeficitWeek,
   dayResult,
   dayVerdict,
+  daysAgainstTarget,
+  isAbove,
   isOnTarget,
   mondaysUpTo,
   monthCalendar,
@@ -20,7 +22,7 @@ import { shiftDate } from '../api/_lib/rules/nutritional-day'
 const TODAY = '2026-10-18' // domingo
 
 describe('o dia contra o alvo', () => {
-  const day = (eaten: number, extra: Partial<{ date: string; meals: number; complete: boolean }> = {}) => ({
+  const day = (eaten: number, extra: Partial<{ date: string; meals: number; complete: boolean; out: number | null }> = {}) => ({
     date: '2026-10-14',
     eaten,
     plan: 2000,
@@ -31,7 +33,7 @@ describe('o dia contra o alvo', () => {
   it('±100 kcal é no alvo; acima e abaixo à parte', () => {
     expect(dayResult(day(2100), TODAY)).toBe('no_alvo')
     expect(dayResult(day(1900), TODAY)).toBe('no_alvo')
-    expect(dayResult(day(2101), TODAY)).toBe('acima')
+    expect(dayResult(day(2101), TODAY)).toBe('acima_alvo')
     expect(dayResult(day(1850), TODAY)).toBe('abaixo')
   })
   it('incompleto fica de fora; hoje e os dias por vir à parte', () => {
@@ -42,23 +44,49 @@ describe('o dia contra o alvo', () => {
   })
   it('a frase do gráfico usa «no alvo» do mês (até 100 acima)', () => {
     const days = [day(1500), day(2050, { date: '2026-10-13' }), day(2400, { date: '2026-10-12' }), day(900, { date: '2026-10-15', complete: false })]
-    expect(weekDaysReading(days, TODAY)).toBe('2 de 3 dias completos no alvo · 1 acima')
+    expect(weekDaysReading(days, TODAY)).toBe('2 de 3 dias completos no alvo · 1 acima do alvo')
     expect(weekDaysReading([], TODAY)).toBe('Ainda sem dias completos nesta semana')
   })
 
   it('um dia, um veredicto: a frase conta os mesmos dias que as barras pintam de «no alvo»', () => {
     const days = [day(1500), day(2050, { date: '2026-10-13' }), day(2200, { date: '2026-10-12' }), day(1200, { date: '2026-10-16' })]
     const results = days.map((d) => dayResult(d, TODAY))
-    expect(results).toEqual(['abaixo', 'no_alvo', 'acima', 'abaixo'])
+    expect(results).toEqual(['abaixo', 'no_alvo', 'acima_alvo', 'abaixo'])
     const on = results.filter(isOnTarget).length
-    expect(weekDaysReading(days, TODAY)).toBe(`${on} de 4 dias completos no alvo · 1 acima`)
+    expect(weekDaysReading(days, TODAY)).toBe(`${on} de 4 dias completos no alvo · 1 acima do alvo`)
     expect(on).toBe(3)
   })
 
   it('o toque diz o veredicto com a diferença', () => {
     expect(dayVerdict('abaixo', 1550, 2000)).toBe('no alvo · 450 kcal abaixo')
-    expect(dayVerdict('acima', 2320, 2000)).toBe('acima do alvo · +320 kcal')
+    expect(dayVerdict('acima_alvo', 2320, 2000)).toBe('acima do alvo · +320 kcal')
+    expect(dayVerdict('acima_alvo', 2320, 2000, 2600)).toBe('acima do alvo, ainda abaixo do gasto · +320 kcal')
+    expect(dayVerdict('acima_gasto', 2850, 2000, 2600)).toBe('acima do gasto · +250 kcal do que gastaste')
     expect(dayVerdict('no_alvo', 2050, 2000)).toBe('no alvo')
+  })
+
+  it('dois «acima»: do alvo (ainda com défice) e do gasto (o grave)', () => {
+    expect(dayResult(day(2400, { out: 2600 }), TODAY)).toBe('acima_alvo')
+    expect(dayResult(day(2600, { out: 2600 }), TODAY)).toBe('acima_alvo') // igual ao gasto ainda não passa
+    expect(dayResult(day(2601, { out: 2600 }), TODAY)).toBe('acima_gasto')
+    // Sem gasto conhecido, fica o «acima do alvo».
+    expect(dayResult(day(3000, { out: null }), TODAY)).toBe('acima_alvo')
+    expect(dayResult(day(3000, { out: 0 }), TODAY)).toBe('acima_alvo')
+    // Dentro do alvo nunca é grave (semana de manutenção: alvo = gasto).
+    expect(dayResult(day(2080, { out: 1900 }), TODAY)).toBe('no_alvo')
+    expect(isAbove('acima_gasto') && isAbove('acima_alvo') && !isAbove('no_alvo')).toBe(true)
+  })
+
+  it('a frase separa os dois «acima»', () => {
+    const days = [
+      day(1500, { out: 2500 }),
+      day(2050, { date: '2026-10-13', out: 2500 }),
+      day(2300, { date: '2026-10-12', out: 2500 }),
+      day(2800, { date: '2026-10-16', out: 2500 }),
+      day(1990, { date: '2026-10-17', out: 2500 }),
+    ]
+    expect(weekDaysReading(days, TODAY)).toBe('3 de 5 dias completos no alvo · 1 acima do alvo · 1 acima do gasto')
+    expect(weekDaysReading([days[3]!], TODAY)).toBe('0 de 1 dia completo no alvo · 1 acima do gasto')
   })
 
   it('a linha da média só quando se afasta do alvo', () => {
@@ -83,13 +111,14 @@ describe('calendário do mês', () => {
     { date: '2026-10-05', kcal_in: 1800, kcal_target: 2000, is_complete: true, flags: ['faltou_algo'] },
     { date: '2026-10-06', kcal_in: 1800, kcal_target: 2000, is_complete: true, flags: [] },
   ]
+  const calRows = rows
   const cal = monthCalendar('2026-10', rows, '2026-10-08')
 
   it('classifica cada dia (no alvo = completo e até 100 acima do alvo)', () => {
     const r = (d: number) => cal.weeks.flat().find((c) => c?.day === d)!.result
     expect(r(1)).toBe('no_alvo')
     expect(r(2)).toBe('no_alvo')
-    expect(r(3)).toBe('acima')
+    expect(r(3)).toBe('acima_alvo') // sem gasto conhecido
     expect(r(4)).toBe('fora')
     expect(r(5)).toBe('fora')
     expect(r(7)).toBe('sem_registo')
@@ -108,6 +137,34 @@ describe('calendário do mês', () => {
     expect(cal.countedDays).toBe(4)
     expect(cal.streak).toBe(2)
     expect(cal.reading).toBe('3 de 4 dias completos no alvo · melhor sequência: 2 dias')
+  })
+
+  it('acima do gasto à parte, com sinal próprio e na frase', () => {
+    const withOut = [
+      ...calRows.map((d) => ({ ...d, kcal_out_est: 2500 })),
+      { date: '2026-10-07', kcal_in: 2400, kcal_target: 2000, is_complete: true, flags: [], kcal_out_est: 2500 },
+    ]
+    const c = monthCalendar('2026-10', withOut, '2026-10-08')
+    const cell = (d: number) => c.weeks.flat().find((x) => x?.day === d)!
+    expect(cell(3).result).toBe('acima_gasto')
+    expect(cell(3).kcalOut).toBe(2500)
+    expect(cell(7).result).toBe('acima_alvo')
+    expect(c.aboveSpent).toBe(1)
+    expect(c.aboveTarget).toBe(1)
+    expect(c.reading).toBe('3 de 5 dias completos no alvo · 1 acima do gasto · melhor sequência: 2 dias')
+  })
+
+  it('o resumo semanal conta os mesmos dias', () => {
+    expect(
+      daysAgainstTarget([
+        { kcal_in: 1900, kcal_target: 2000, kcal_out_est: 2500, is_complete: true, flags: [] },
+        { kcal_in: 2300, kcal_target: 2000, kcal_out_est: 2500, is_complete: true, flags: [] },
+        { kcal_in: 2700, kcal_target: 2000, kcal_out_est: 2500, is_complete: true, flags: [] },
+        { kcal_in: 2700, kcal_target: 2000, kcal_out_est: null, is_complete: true, flags: [] },
+        { kcal_in: 3000, kcal_target: 2000, kcal_out_est: 2500, is_complete: true, flags: ['faltou_algo'] },
+        { kcal_in: 800, kcal_target: 2000, kcal_out_est: 2500, is_complete: false, flags: [] },
+      ]),
+    ).toEqual({ completos: 4, no_alvo: 1, acima_do_alvo: 2, acima_do_gasto: 1 })
   })
 
   it('sem dias completos', () => {
@@ -173,6 +230,23 @@ describe('Para esta semana', () => {
     weighings7: 6,
     projection: 'A este ritmo: 82 kg a 6 jan',
   }
+
+  it('um dia acima do gasto vem antes de tudo', () => {
+    const a = weekAction({
+      ...base,
+      leftOut: ['2026-10-14', '2026-10-16'],
+      aboveSpent: [
+        { date: '2026-10-13', over: 248 },
+        { date: '2026-10-17', over: 181 },
+      ],
+    })
+    expect(a.kind).toBe('acima_gasto')
+    expect(a.date).toBe('2026-10-13')
+    expect(a.detail).toMatch(/^ter 13 \(\+250 kcal\) e sáb 17 \(\+180 kcal\): nesses dias comeste mais do que gastaste/)
+    const one = weekAction({ ...base, aboveSpent: [{ date: '2026-10-13', over: 248 }] })
+    expect(one.detail).toMatch(/^ter 13 \(\+250 kcal\): nesse dia/)
+    expect(weekAction({ ...base, aboveSpent: [] }).kind).toBe('manter')
+  })
 
   it('dois ou mais dias de fora vêm primeiro', () => {
     const a = weekAction({ ...base, leftOut: ['2026-10-14', '2026-10-16'] })
