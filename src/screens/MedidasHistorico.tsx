@@ -8,7 +8,11 @@ import {
   FLAG_TEXT,
   ZONE_LABEL,
   ZONE_ORDER,
+  explainMeasurement,
   measurementComposition,
+  neckUses,
+  usualNeckLabel,
+  withReferenceNeck,
   wrongWaistSite,
   zoneDelta,
   zoneTrends,
@@ -18,6 +22,7 @@ import {
 } from '../../api/_lib/rules/composicao'
 import type { BodyMeasurement } from '../lib/types'
 import Sparkline from '../components/ui/Sparkline'
+import ExplicacaoGordura from '../components/corpo/ExplicacaoGordura'
 
 function delta(d: number | null): string {
   if (d == null) return ''
@@ -58,6 +63,9 @@ export default function MedidasHistorico() {
   // Da mais antiga para a mais recente, para as mudanças.
   const asc = [...rows].reverse()
   const trends = zoneTrends(asc)
+  // A %G com o pescoço que conta (decisão 303); as zonas mostram o medido.
+  const ref = withReferenceNeck(asc)
+  const uses = neckUses(asc)
   // «Cintura (umbigo) 80,0 cm (1,0 a menos)»: as medições antigas das mulheres
   // foram no umbigo e não se comparam com as novas.
   const zoneText = (m: BodyMeasurement, index: number, zone: Zone) => {
@@ -89,31 +97,40 @@ export default function MedidasHistorico() {
       )}
       {rows.map((m, i) => {
         const index = asc.length - 1 - i
-        const c = measurementComposition(height, m, profile.sex)
+        const c = measurementComposition(height, ref[index]!, profile.sex)
+        const usual = uses[index]?.useUsual ? uses[index]!.used : null
+        const why = explainMeasurement(asc, index, height, profile.sex)
         return (
-          <button
-            key={m.id}
-            onClick={() => sheet.open('medidas', { id: m.id })}
-            className="block w-full rounded-2xl border border-line bg-surface p-4 text-left"
-          >
-            <p className="num text-[22px] leading-tight">{fmtDayMonth(m.date)}</p>
-            <p className="text-[15px]">
-              {ZONE_ORDER.filter((z) => zoneValue(m, z) != null)
-                .map((z) => zoneText(m, index, z))
-                .join(' · ')}
-            </p>
-            {c && (
-              <p className="text-[14px] text-dim">
-                Gordura cerca de {fmt1(c.shown.fatKg)} kg ({c.shown.pct} %) · Massa magra {fmt1(c.shown.leanKg)} kg · peso{' '}
-                {fmt1(Number(m.weight_used_kg))} kg
+          <div key={m.id} className="rounded-2xl border border-line bg-surface">
+            <button onClick={() => sheet.open('medidas', { id: m.id })} className="block w-full p-4 pb-2 text-left" aria-label={`Corrigir a medição de ${fmtDayMonth(m.date)}`}>
+              <p className="num text-[22px] leading-tight">{fmtDayMonth(m.date)}</p>
+              <p className="text-[15px]">
+                {ZONE_ORDER.filter((z) => zoneValue(m, z) != null)
+                  .map((z) => zoneText(m, index, z))
+                  .join(' · ')}
               </p>
+              {c && (
+                <p className="text-[14px] text-dim">
+                  Gordura cerca de {fmt1(c.shown.fatKg)} kg ({fmt1(c.pct)} %) · Massa magra {fmt1(c.shown.leanKg)} kg · peso{' '}
+                  {fmt1(Number(m.weight_used_kg))} kg
+                  {usual != null && <> · {usualNeckLabel(usual)}</>}
+                </p>
+              )}
+              {m.flags
+                .filter((f) => !(f === 'pescoco_mudou' && why))
+                .map((f) => (
+                  <p key={f} className="text-[13px] text-attn">
+                    {FLAG_TEXT[f as MeasureFlag] ?? f}
+                  </p>
+                ))}
+            </button>
+            {why && (
+              <div className="border-t border-line px-4 pt-2 pb-3">
+                <ExplicacaoGordura explanation={why} row={m} compact />
+              </div>
             )}
-            {m.flags.map((f) => (
-              <p key={f} className="text-[13px] text-attn">
-                {FLAG_TEXT[f as MeasureFlag] ?? f}
-              </p>
-            ))}
-          </button>
+            {!why && <div className="pb-2" />}
+          </div>
         )
       })}
     </div>

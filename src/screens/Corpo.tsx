@@ -11,6 +11,7 @@ import Resumo from '../components/corpo/Resumo'
 import Ancoras, { BAR_OFFSET, type Section } from '../components/corpo/Ancoras'
 import PesoChart from '../components/corpo/PesoChart'
 import CinturaChart from '../components/corpo/CinturaChart'
+import GorduraChart from '../components/corpo/GorduraChart'
 import TreinoCharts from '../components/corpo/TreinoCharts'
 import Recuperacao from '../components/corpo/Recuperacao'
 
@@ -98,6 +99,7 @@ export default function Corpo() {
 
         <Block id="medidas" title="Medidas">
           <CinturaChart rows={data.measurements} from={from} today={today} />
+          <GorduraChart rows={data.measurements} from={from} today={today} />
           <CompositionCards rows={data.measurements} scale={scale} />
         </Block>
 

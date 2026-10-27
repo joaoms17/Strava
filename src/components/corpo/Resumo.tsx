@@ -5,7 +5,7 @@ import { fmt1, fmtDayMonth, fmtDayShort } from '../../lib/format'
 import type { CorpoData } from '../../lib/corpo'
 import { FAST_LOSS_KG_WEEK, MIN_WEIGHINGS_FOR_TREND, trend7, weeklyRate } from '../../../api/_lib/rules/weight'
 import { inWaterPhase } from '../../../api/_lib/rules/manutencao'
-import { composition, sameWaistSite } from '../../../api/_lib/rules/composicao'
+import { composition, sameWaistSite, withReferenceNeck } from '../../../api/_lib/rules/composicao'
 import { signed1, sinceStart } from '../../../api/_lib/rules/leituras'
 import Projecao from '../Projecao'
 
@@ -42,7 +42,7 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
   // «Desde o início»: a cintura e a %G só com medições no mesmo sítio da última.
   const height = Number(profile.height_cm ?? 183)
   const lastWaist = [...data.measurements].reverse().find((m) => m.waist_cm != null)
-  const comparable = lastWaist ? data.measurements.filter((m) => m.waist_cm != null && sameWaistSite(m, lastWaist)) : []
+  const comparable = lastWaist ? withReferenceNeck(data.measurements).filter((m) => m.waist_cm != null && sameWaistSite(m, lastWaist)) : []
   const fat = comparable
     .map((m) => {
       if (m.neck_cm == null) return null

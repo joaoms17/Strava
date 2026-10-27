@@ -5,7 +5,7 @@ import { supabase } from './supabase'
 import { shiftDate } from './day'
 import type { BodyMeasurement, Profile } from './types'
 import { cleanStarts, cycleInfo, cycleOptions } from '../../api/_lib/rules/ciclo'
-import { targetBodyFatPct, targetWaist, wrongWaistSite } from '../../api/_lib/rules/composicao'
+import { targetBodyFatPct, targetWaist, withReferenceNeck, wrongWaistSite } from '../../api/_lib/rules/composicao'
 import { moveNote, project, projectionLine, type ProjInput, type Projection } from '../../api/_lib/rules/projecao'
 import { monthBounds, monthSummary, type MonthSummary } from '../../api/_lib/rules/mes'
 
@@ -47,7 +47,8 @@ export interface ProjectionRows {
 // Os dados da projeção a partir das linhas (o Corpo lê-as uma vez para a
 // página toda e passa-as aqui; sem pedidos a mais).
 export function projectionFrom(profile: Profile, asOf: string, rows: ProjectionRows): ProjectionData {
-  const measured = rows.measurements.filter((r) => r.waist_cm != null && !wrongWaistSite(r, profile.sex))
+  // O pescoço que conta para a cintura alvo: o habitual quando a última leitura fugiu (decisão 303).
+  const measured = withReferenceNeck(rows.measurements).filter((r) => r.waist_cm != null && !wrongWaistSite(r, profile.sex))
   const targetWaistCm = waistTarget(profile, measured)
   const target = Number(profile.target_weight_kg)
   return {
