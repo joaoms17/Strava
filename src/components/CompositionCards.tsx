@@ -12,14 +12,19 @@ import {
   daysSinceMeasure,
   earlyDietWeeks,
   lossSentence,
+  neckUses,
   sameWaistSite,
   scaleFatAverage,
+  usualNeckLabel,
+  withReferenceNeck,
   wrongWaistSite,
 } from '../../api/_lib/rules/composicao'
 import { lossQuality } from '../../api/_lib/rules/gasto'
 import type { BodyMeasurement } from '../lib/types'
 import Icon from './ui/Icon'
 import FatScale from './FatScale'
+
+const fmtCm = (n: number) => (Number.isInteger(Math.round(n * 10) / 10) ? String(Math.round(n)) : fmt1(n))
 
 // Corpo › Medidas › Gordura e massa magra (Fase 4). Os pontos são só as
 // datas medidas: nunca se projeta a %G para o peso de cada dia. As medições
@@ -53,9 +58,13 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
     )
   }
 
-  const withComp = rows
-    .map((m) => ({
+  // A %G conta com o pescoço habitual quando a leitura fugiu e não foi confirmada (decisão 303).
+  const uses = neckUses(rows)
+  const withComp = withReferenceNeck(rows)
+    .map((m, i) => ({
       m,
+      usual: uses[i]?.useUsual ? uses[i]!.used : null,
+      measuredNeck: uses[i]?.measured ?? null,
       c:
         m.neck_cm != null && m.waist_cm != null
           ? composition(
@@ -70,7 +79,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
             )
           : null,
     }))
-    .filter((x) => x.c != null) as { m: BodyMeasurement; c: NonNullable<ReturnType<typeof composition>> }[]
+    .filter((x) => x.c != null) as { m: BodyMeasurement; usual: number | null; measuredNeck: number | null; c: NonNullable<ReturnType<typeof composition>> }[]
   const last = withComp[withComp.length - 1]
   // Só se compara com medições com a cintura no mesmo sítio (as antigas das
   // mulheres foram no umbigo: davam uma descida que não houve).
@@ -114,6 +123,12 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
           <p className="text-[14px] text-dim">massa magra (músculo, água, osso, órgãos)</p>
         </div>
       </div>
+      {last.usual != null && (
+        <p className="text-[14px] text-dim">
+          {usualNeckLabel(last.usual).replace(/^c/, 'C')}: o pescoço da última medição ({fmtCm(last.measuredNeck ?? last.usual)}&nbsp;cm) fugiu do
+          habitual. Se estiver certo, aceita-o no gráfico da %G ou no histórico.
+        </p>
+      )}
       {change && firstOne ? (
         <p className="text-[15px]">
           Desde {fmtDayMonth(firstOne.m.date)}: {merged ?? changeSentence(change)} ·{' '}

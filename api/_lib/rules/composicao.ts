@@ -327,7 +327,7 @@ export const FLAG_TEXT: Record<MeasureFlag, string> = {
   pausa_dieta: 'Estás na semana de pausa da dieta: a cintura pode estar um pouco maior.',
   depois_jantar_fora: 'Ontem jantaste fora: o sal e a comida podem inchar a cintura esta manhã.',
   plausibilidade: 'A gordura estimada está fora do habitual (5–45 %). Verifica as medidas.',
-  pescoco_mudou: 'O pescoço mudou mais de 1,5 cm desde a última vez. Confirma o sítio da fita.',
+  pescoco_mudou: 'O pescoço mudou mais de 1 cm em relação ao habitual. Confirma o sítio da fita.',
   cintura_mudou: 'A cintura mudou mais de 3 cm em 14 dias. Confirma a medida.',
 }
 
@@ -340,13 +340,15 @@ export function measureFlags(input: {
   date: string
   maintenance: boolean
   dinnerOutYesterday: boolean
+  // O pescoço fora do habitual (checkNeck); sem isto, mais de 1,5 cm contra a anterior.
+  neckOutlier?: boolean
 }): MeasureFlag[] {
   const flags: MeasureFlag[] = []
   if (input.maintenance) flags.push('pausa_dieta')
   if (input.dinnerOutYesterday) flags.push('depois_jantar_fora')
   if (input.pct != null && !isPlausible(input.pct)) flags.push('plausibilidade')
   const prev = input.previous
-  if (prev?.neck_cm != null && Math.abs(input.neck - prev.neck_cm) > 1.5) flags.push('pescoco_mudou')
+  if (input.neckOutlier ?? (prev?.neck_cm != null && Math.abs(input.neck - prev.neck_cm) > 1.5)) flags.push('pescoco_mudou')
   if (prev?.waist_cm != null) {
     const days = (Date.parse(`${input.date}T00:00:00Z`) - Date.parse(`${prev.date}T00:00:00Z`)) / 86_400_000
     if (days <= 14 && Math.abs(input.waist - prev.waist_cm) > 3) flags.push('cintura_mudou')
@@ -399,4 +401,281 @@ export function fatScaleRange(sex: string | null): [number, number] {
 export function fatCategory(pct: number, sex: string | null): { index: number; label: (typeof FAT_LABELS)[number] } {
   const index = fatCuts(sex).filter((cut) => pct >= cut).length
   return { index, label: FAT_LABELS[index]! }
+}
+
+// --- O pescoço habitual (decisão 303) -----------------------------------------
+//
+// O pescoço quase não muda (mesmo a emagrecer, uns milímetros por mês), mas
+// entra na fórmula com o peso da cintura: 2 cm a menos no pescoço anulam 2 cm
+// a menos na cintura. Uma leitura que foge mais de 1 cm do habitual (a
+// mediana das 3 anteriores; com menos, a anterior), sem uma mudança grande de
+// peso que a explique, é quase sempre a fita noutro sítio. Até a pessoa dizer
+// «Está certo», a %G em todo o lado (cartões, gráfico, cintura alvo,
+// projeção, mês) conta com o pescoço habitual, e diz que conta.
+// readings.neck_confirmed: true = «Está certo»; false = «Usar o pescoço
+// habitual»; sem ele = ainda por confirmar (conta o habitual).
+
+export const NECK_STABLE_CM = 1
+export const NECK_BASELINE_COUNT = 3
+// Uma mudança de peso que justifica o pescoço: 4 kg por cada cm.
+export const NECK_KG_PER_CM = 4
+
+export type NeckChoice = 'confirmado' | 'habitual'
+
+export function neckChoice(readings: unknown): NeckChoice | null {
+  const v = readings && typeof readings === 'object' ? (readings as Record<string, unknown>).neck_confirmed : undefined
+  return v === true ? 'confirmado' : v === false ? 'habitual' : null
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
+}
+
+// O pescoço habitual: a mediana das últimas 3 leituras (da mais antiga para
+// a mais recente); com menos de 3, a última.
+export function usualNeck(previousNecks: number[]): number | null {
+  const valid = previousNecks.filter((n) => Number.isFinite(n) && n > 0)
+  if (!valid.length) return null
+  if (valid.length < NECK_BASELINE_COUNT) return valid[valid.length - 1]!
+  return round1(median(valid.slice(-NECK_BASELINE_COUNT)))
+}
+
+export interface NeckCheck {
+  measured: number
+  usual: number | null
+  change: number | null // medido − habitual (cm)
+  basis: 'anterior' | 'habitual' // contra a anterior (menos de 3) ou a mediana
+  outlier: boolean
+}
+
+export function checkNeck(input: { neck: number; previousNecks: number[]; weightKg: number | null; previousWeightKg: number | null }): NeckCheck {
+  const usual = usualNeck(input.previousNecks)
+  const basis = input.previousNecks.filter((n) => Number.isFinite(n) && n > 0).length < NECK_BASELINE_COUNT ? 'anterior' : 'habitual'
+  if (usual == null) return { measured: input.neck, usual: null, change: null, basis, outlier: false }
+  const change = round1(input.neck - usual)
+  const big = Math.abs(change) > NECK_STABLE_CM + 1e-9
+  const weightMove = input.weightKg != null && input.previousWeightKg != null ? Math.abs(input.weightKg - input.previousWeightKg) : 0
+  const justified = weightMove >= NECK_KG_PER_CM * Math.abs(change)
+  return { measured: input.neck, usual, change, basis, outlier: big && !justified }
+}
+
+export interface NeckUse extends NeckCheck {
+  choice: NeckChoice | null
+  useUsual: boolean // a %G conta com o pescoço habitual
+  used: number // o pescoço que entra na conta
+}
+
+type WithWeight = MeasureRow & { weight_used_kg?: number | string | null }
+
+// O pescoço de cada medição (`rows` da mais antiga para a mais recente, todas):
+// o medido, o habitual e o que entra na %G. O habitual vem das leituras
+// medidas (não das substituídas): repetir 35 duas vezes já passa a ser o habitual.
+export function neckUses(rows: WithWeight[]): (NeckUse | null)[] {
+  const necks: number[] = []
+  let lastWeight: number | null = null
+  return rows.map((r) => {
+    const neck = zoneValue(r, 'neck')
+    if (neck == null) return null
+    const weight = r.weight_used_kg != null && Number(r.weight_used_kg) > 0 ? Number(r.weight_used_kg) : null
+    const check = checkNeck({ neck, previousNecks: necks, weightKg: weight, previousWeightKg: lastWeight })
+    necks.push(neck)
+    lastWeight = weight
+    const choice = neckChoice(r.readings)
+    const useUsual = check.outlier && check.usual != null && choice !== 'confirmado'
+    return { ...check, choice, useUsual, used: useUsual ? check.usual! : neck }
+  })
+}
+
+// As medições com o pescoço que conta para a %G (o habitual onde a leitura
+// foge e não foi confirmada). As zonas a mostrar usam as originais.
+export function withReferenceNeck<T extends WithWeight>(rows: T[]): T[] {
+  const uses = neckUses(rows)
+  return rows.map((r, i) => (uses[i]?.useUsual ? { ...r, neck_cm: uses[i]!.used } : r))
+}
+
+export function usualNeckLabel(cm: number): string {
+  return `calculado com o pescoço habitual (${fmtKg(cm)} cm)`
+}
+
+// «O pescoço mudou 2 cm desde a última vez. Medir outra vez?»
+export function neckQuestion(check: NeckCheck): string {
+  const cm = fmtKg(Math.abs(check.change ?? 0))
+  const head =
+    check.basis === 'anterior'
+      ? `O pescoço mudou ${cm} cm desde a última vez.`
+      : `O pescoço está ${cm} cm ${(check.change ?? 0) < 0 ? 'abaixo' : 'acima'} do habitual (${fmtKg(check.usual ?? 0)} cm).`
+  return `${head} Medir outra vez?`
+}
+
+// --- Porque mudou a %G (decisão 303) -----------------------------------------
+//
+// A mudança da %G entre duas medições, repartida pelas medidas da fórmula
+// (cintura, anca nas mulheres, pescoço). Cada parte é o efeito de mudar só
+// essa medida, com a fórmula verdadeira, na média de todas as ordens
+// possíveis (valor de Shapley): as partes somam exatamente a mudança total,
+// sem resto, mesmo com a fórmula em logaritmos.
+
+export type FormulaZone = 'waist' | 'hips' | 'neck'
+export interface FormulaCm {
+  neck: number
+  waist: number
+  hips?: number | null
+}
+
+export interface FatPart {
+  zone: FormulaZone
+  cm: number // mudança em cm
+  pp: number // pontos de %G
+}
+
+export interface FatChangeExplanation {
+  before: number
+  after: number
+  total: number // pontos de %G
+  parts: FatPart[] // só as medidas que mudaram
+  text: string
+}
+
+const MINUS = '−'
+function signedPp(n: number): string {
+  const r = round1(n)
+  return `${r < 0 ? MINUS : r > 0 ? '+' : ''}${Math.abs(r).toFixed(1).replace('.', ',')}`
+}
+export function pct1(n: number): string {
+  return round1(n).toFixed(1).replace('.', ',')
+}
+function ppText(n: number): string {
+  return `${signedPp(n)} pontos`
+}
+
+const ZONE_NOUN: Record<FormulaZone, string> = { waist: 'a cintura', hips: 'a anca', neck: 'o pescoço' }
+
+function moved(zone: FormulaZone, cm: number, also: boolean): string {
+  const noun = ZONE_NOUN[zone]
+  return `${noun}${also ? ' também' : ''} ${cm < 0 ? 'desceu' : 'subiu'} ${fmtKg(cm)} cm`
+}
+
+function capital(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+export function explainFatChange(
+  heightCm: number,
+  sex: string | null,
+  before: FormulaCm,
+  after: FormulaCm,
+  opts: { neckSuspect?: boolean } = {},
+): FatChangeExplanation | null {
+  const female = sex === 'f'
+  const zones: FormulaZone[] = female ? ['waist', 'hips', 'neck'] : ['waist', 'neck']
+  const value = (x: FormulaCm, z: FormulaZone) => (z === 'hips' ? (x.hips ?? null) : x[z])
+  for (const z of zones) if (value(before, z) == null || value(after, z) == null) return null
+  const f = (set: Set<FormulaZone>) => {
+    const pick = (z: FormulaZone) => value(set.has(z) ? after : before, z)!
+    return navyBodyFat(heightCm, pick('neck'), pick('waist'), female ? pick('hips') : null, sex)
+  }
+  const b = f(new Set())
+  const a = f(new Set(zones))
+  if (b == null || a == null) return null
+  const changed = zones.filter((z) => Math.abs(value(after, z)! - value(before, z)!) > 1e-9)
+  // Shapley: a média, em todas as ordens, do efeito de cada medida ao mudar.
+  const orders: FormulaZone[][] = []
+  const permute = (left: FormulaZone[], acc: FormulaZone[]) => {
+    if (!left.length) orders.push(acc)
+    left.forEach((z, i) => permute([...left.slice(0, i), ...left.slice(i + 1)], [...acc, z]))
+  }
+  permute(changed, [])
+  const sums = new Map<FormulaZone, number>(changed.map((z) => [z, 0]))
+  for (const order of orders) {
+    const set = new Set<FormulaZone>()
+    let prev = b
+    for (const z of order) {
+      set.add(z)
+      const next = f(set)
+      if (next == null) return null
+      sums.set(z, sums.get(z)! + (next - prev))
+      prev = next
+    }
+  }
+  const parts: FatPart[] = changed.map((z) => ({ zone: z, cm: round1(value(after, z)! - value(before, z)!), pp: sums.get(z)! / orders.length }))
+  const total = a - b
+  return { before: b, after: a, total, parts, text: changeText(parts, total, opts.neckSuspect === true) }
+}
+
+function changeText(parts: FatPart[], total: number, neckSuspect: boolean): string {
+  const same = Math.abs(round1(total)) === 0
+  let text: string
+  if (!parts.length) text = 'As medidas da fórmula ficaram iguais: a %G também.'
+  else if (parts.length === 1) {
+    const p = parts[0]!
+    text = `${capital(moved(p.zone, p.cm, false))}: ${same ? 'a %G ficou igual' : ppText(total)}.`
+  } else {
+    // Cintura, anca, pescoço; «mas» quando uma puxa ao contrário da anterior.
+    const rank: Record<FormulaZone, number> = { waist: 0, hips: 1, neck: 2 }
+    const sorted = [...parts].sort((x, y) => rank[x.zone] - rank[y.zone])
+    const pieces = sorted.map((p, i) => {
+      const prev = sorted[i - 1]
+      const against = prev != null && Math.sign(round1(prev.pp)) !== 0 && Math.sign(round1(p.pp)) === -Math.sign(round1(prev.pp))
+      const also = against && Math.sign(prev!.cm) === Math.sign(p.cm)
+      const head = moved(p.zone, p.cm, also)
+      const joint = i === 0 ? '' : against ? ', mas ' : i === sorted.length - 1 ? ' e ' : ', '
+      return `${joint}${head} (${ppText(p.pp)})`
+    })
+    text = `${capital(pieces.join(''))}: ${same ? 'ficou igual' : `no total, ${ppText(total)}`}.`
+  }
+  if (neckSuspect) text += ' O pescoço raramente muda tanto — confirma a medida.'
+  return text
+}
+
+// A explicação de uma medição contra a anterior comparável (com pescoço e
+// cintura no mesmo sítio, e anca nas mulheres). `rows` da mais antiga para a
+// mais recente, todas. A anterior entra com o pescoço que contou; a de agora
+// com o medido (é isso que a fita disse), e, se conta o habitual, uma nota
+// com a %G que fica.
+export interface MeasureExplanation {
+  previousDate: string
+  change: FatChangeExplanation
+  neck: NeckUse | null
+  usedPct: number | null // a %G que conta (com o pescoço habitual, se for o caso)
+  usualNote: string | null // «Com o pescoço habitual (37 cm), conta só a cintura: 18,6 % (−1,4 pontos).»
+  askConfirm: boolean // oferecer «Está certo» (o pescoço habitual está a contar)
+}
+
+export function explainMeasurement(rows: WithWeight[], index: number, heightCm: number, sex: string | null): MeasureExplanation | null {
+  const row = rows[index]
+  if (!row) return null
+  const uses = neckUses(rows)
+  const female = sex === 'f'
+  const cm = (r: WithWeight, used: boolean, i: number): FormulaCm | null => {
+    const neck = used ? (uses[i]?.used ?? null) : zoneValue(r, 'neck')
+    const waist = zoneValue(r, 'waist')
+    const hips = zoneValue(r, 'hips')
+    if (neck == null || waist == null || (female && hips == null)) return null
+    return { neck, waist, hips }
+  }
+  const now = cm(row, false, index)
+  if (!now) return null
+  let prevIndex = -1
+  for (let i = index - 1; i >= 0; i--) {
+    if (cm(rows[i]!, true, i) && sameWaistSite(rows[i]!, row)) {
+      prevIndex = i
+      break
+    }
+  }
+  if (prevIndex < 0) return null
+  const before = cm(rows[prevIndex]!, true, prevIndex)!
+  const neck = uses[index] ?? null
+  const change = explainFatChange(heightCm, sex, before, now, { neckSuspect: neck?.outlier === true && neck.choice == null })
+  if (!change) return null
+  let usedPct: number | null = change.after
+  let usualNote: string | null = null
+  if (neck?.useUsual) {
+    usedPct = navyBodyFat(heightCm, neck.used, now.waist, female ? (now.hips ?? null) : null, sex)
+    if (usedPct != null) {
+      usualNote = `Com o pescoço habitual (${fmtKg(neck.used)} cm), ${female ? 'contam a cintura e a anca' : 'conta só a cintura'}: ${pct1(usedPct)} % (${ppText(usedPct - change.before)}).`
+    }
+  }
+  return { previousDate: rows[prevIndex]!.date, change, neck, usedPct, usualNote, askConfirm: neck?.useUsual === true }
 }

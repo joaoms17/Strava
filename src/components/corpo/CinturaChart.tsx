@@ -5,7 +5,7 @@ import { useSheet } from '../../lib/sheet'
 import { useReadyProfile } from '../../lib/profile'
 import { fmt1, fmtDayMonth } from '../../lib/format'
 import type { BodyMeasurement } from '../../lib/types'
-import { sameWaistSite, targetBodyFatPct, targetWaist, wrongWaistSite } from '../../../api/_lib/rules/composicao'
+import { sameWaistSite, targetBodyFatPct, targetWaist, withReferenceNeck, wrongWaistSite } from '../../../api/_lib/rules/composicao'
 import { dayNum, fromDayNum, lowest, niceScale } from '../../../api/_lib/rules/graficos'
 import { waistMarks, waistReading } from '../../../api/_lib/rules/leituras'
 import { ChartCard, Key, Legend, Marks, TICK, TipBox, padBelowTarget, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
@@ -21,7 +21,8 @@ export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurem
   const sheet = useSheet()
   const profile = useReadyProfile()
   const model = useMemo(() => {
-    const withWaist = rows.filter((r) => r.waist_cm != null)
+    // O pescoço que conta (o habitual, numa leitura que fugiu e não foi confirmada).
+    const withWaist = withReferenceNeck(rows).filter((r) => r.waist_cm != null)
     const last = withWaist[withWaist.length - 1]
     if (!last) return null
     const same = withWaist.filter((r) => sameWaistSite(r, last)).map((r) => ({ date: r.date, value: Number(r.waist_cm) }))

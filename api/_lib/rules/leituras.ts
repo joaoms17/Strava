@@ -329,6 +329,36 @@ export function waistMarks(points: DatedValue[]): Mark[] {
   return marks
 }
 
+// --- %G ao longo do tempo (decisão 303) -----------------------------------
+
+// «−2,7 pontos desde 29 set»: a %G de cada medição do período (no mesmo
+// sítio da cintura); `allMin`, a mais baixa de todas.
+export function fatReading(points: DatedValue[], allMin: number | null, asOf: string): string {
+  if (points.length === 0) return 'Mede a cintura e o pescoço para veres a %G'
+  const last = points[points.length - 1]!
+  if (points.length === 1) return `${dec1(last.value)} % a ${fmtDayMon(last.date, asOf)}`
+  const first = points[0]!
+  const d = last.value - first.value
+  if (Math.abs(d) < 0.5) return `Igual desde ${fmtDayMon(first.date, asOf)} (${dec1(last.value)} %)`
+  const best = allMin != null && last.value <= allMin + 1e-9 && points.length >= 3 && d < 0 ? ' · a mais baixa de sempre' : ''
+  return `${signed1(d)} pontos desde ${fmtDayMon(first.date, asOf)}${best}`
+}
+
+// O começo, a mais baixa (quando não é nem o começo nem a última) e a última.
+export function fatMarks(points: DatedValue[]): Mark[] {
+  if (points.length === 0) return []
+  const first = points[0]!
+  const last = points[points.length - 1]!
+  const marks: Mark[] = []
+  if (points.length >= 2) marks.push({ id: 'inicio', date: first.date, value: first.value, label: `${dec1(first.value)} · início`, priority: 2, prefer: 'above' })
+  const low = lowest(points)
+  if (low && points.length >= 3 && low.date !== first.date && low.date !== last.date) {
+    marks.push({ id: 'baixa', date: low.date, value: low.value, label: `${dec1(low.value)} · a mais baixa`, priority: 3, prefer: 'below' })
+  }
+  marks.push({ id: 'ultima', date: last.date, value: last.value, label: dec1(last.value), priority: 4, prefer: 'above', strong: true })
+  return marks
+}
+
 // --- Treino --------------------------------------------------------------
 
 export interface WeekMinutes {

@@ -15,24 +15,32 @@ import {
   ZONE_LABEL,
   averageReadings,
   changeSentence,
+  checkNeck,
   checkZone,
   compareCompositions,
   composition,
   confirmationSentence,
+  explainMeasurement,
   measureFlags,
   measuredWaistSite,
   needsThirdReading,
+  neckChoice,
+  neckQuestion,
+  neckUses,
   referenceWeight,
   targetBodyFatPct,
   targetWaist,
+  usualNeckLabel,
   waistSiteFor,
   type MeasureFlag,
+  type NeckChoice,
   type WaistSite,
   type Zone,
 } from '../../../api/_lib/rules/composicao'
 import type { BodyMeasurement } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
+import ExplicacaoGordura from '../corpo/ExplicacaoGordura'
 
 const ALL_ZONES: Zone[] = ['neck', 'waist', 'hips', 'chest', 'arm', 'thigh', 'calf']
 // Nas mulheres a anca entra na fórmula: passa a essencial.
@@ -42,6 +50,8 @@ type Readings = Record<Zone, string[]>
 
 const emptyReadings = (): Readings =>
   Object.fromEntries(ALL_ZONES.map((z) => [z, ['', '', '']])) as Readings
+
+const fmtCm = (n: number) => (Number.isInteger(Math.round(n * 10) / 10) ? String(Math.round(n)) : fmt1(n))
 
 function parse(text: string): number | null {
   if (!text.trim()) return null
@@ -63,7 +73,12 @@ export default function MedidasSheet() {
   const [date, setDate] = useState(sheet.params.get('data') ?? today)
   const [loaded, setLoaded] = useState(false)
   const [existing, setExisting] = useState<BodyMeasurement | null>(null)
-  const [previous, setPrevious] = useState<BodyMeasurement | null>(null)
+  // As anteriores (da mais recente para a mais antiga): o pescoço habitual
+  // é a mediana das 3 últimas, e a anterior conta com o pescoço que contou.
+  const [previousRows, setPreviousRows] = useState<BodyMeasurement[]>([])
+  const previous = previousRows[0] ?? null
+  // «O pescoço mudou 2 cm…»: a pergunta antes de guardar (decisão 303).
+  const [neckAsk, setNeckAsk] = useState(false)
   const [weights, setWeights] = useState<{ date: string; kg: number }[]>([])
   const [dinnerOut, setDinnerOut] = useState(false)
   const [readings, setReadings] = useState<Readings>(emptyReadings)
@@ -104,12 +119,12 @@ export default function MedidasSheet() {
           .select('*')
           .lt('date', day)
           .order('date', { ascending: false })
-          .limit(1),
+          .limit(6),
         supabase.from('weights').select('date,kg').gte('date', shiftDate(day, -6)).lte('date', day),
         supabase.from('meals').select('tags').eq('date', shiftDate(day, -1)).is('deleted_at', null),
       ])
       setExisting(editing ?? ((same ?? null) as BodyMeasurement | null))
-      setPrevious(((before ?? [])[0] ?? null) as BodyMeasurement | null)
+      setPreviousRows((before ?? []) as BodyMeasurement[])
       setWeights(((w ?? []) as { date: string; kg: number }[]).map((x) => ({ date: x.date, kg: Number(x.kg) })))
       setDinnerOut((yMeals ?? []).some((m) => ((m.tags as string[] | null) ?? []).includes('jantar_fora')))
       setLoaded(true)
@@ -134,16 +149,34 @@ export default function MedidasSheet() {
       ? composition(height, { neck_cm: neck, waist_cm: waist, hips_cm: hips, weight_used_kg: weightUsed }, profile.sex)
       : null
   const canSave = neck != null && waist != null && weightUsed != null && (!needsHips || hips != null)
+  // O pescoço contra o habitual (as anteriores, da mais antiga para a mais recente).
+  const neckCheck =
+    neck != null
+      ? checkNeck({
+          neck,
+          previousNecks: [...previousRows].reverse().filter((r) => r.neck_cm != null).map((r) => Number(r.neck_cm)),
+          weightKg: weightUsed,
+          previousWeightKg: previous ? Number(previous.weight_used_kg) : null,
+        })
+      : null
+  // Ao corrigir, a escolha que já havia fica enquanto o pescoço for o mesmo.
+  const keptChoice: NeckChoice | null =
+    editId && existing && neck != null && existing.neck_cm != null && Number(existing.neck_cm) === neck ? neckChoice(existing.readings) : null
 
   function setReading(zone: Zone, index: number, text: string) {
     const next = { ...readings, [zone]: readings[zone].map((t, i) => (i === index ? text.replace(/[^\d,.]/g, '') : t)) }
     setReadings(next)
   }
 
-  async function save(replace = false) {
+  async function save(replace = false, choice: NeckChoice | null = keptChoice) {
     if (!canSave || neck == null || waist == null || weightUsed == null) return
     if (existing && !editId && !replace) {
       setConfirmReplace(true)
+      return
+    }
+    if (neckCheck?.outlier && choice == null) {
+      setConfirmReplace(false)
+      setNeckAsk(true)
       return
     }
     const {
@@ -174,6 +207,7 @@ export default function MedidasSheet() {
       date,
       maintenance,
       dinnerOutYesterday: dinnerOut,
+      neckOutlier: neckCheck?.outlier === true,
     })
     const row: Record<string, unknown> = {
       user_id: user.id,
@@ -189,6 +223,8 @@ export default function MedidasSheet() {
             .filter(([, list]) => list.length > 0),
         ),
         waist_site: site,
+        // «Está certo» (true) ou «Usar o pescoço habitual» (false); sem pergunta, nada.
+        ...(neckCheck?.outlier && choice != null ? { neck_confirmed: choice === 'confirmado' } : {}),
       },
     }
     for (const zone of ALL_ZONES) row[ZONE_COLUMN[zone]] = value(zone)
@@ -198,6 +234,7 @@ export default function MedidasSheet() {
       .select()
       .single()
     setConfirmReplace(false)
+    setNeckAsk(false)
     if (error) {
       toast('Não consegui gravar a medição. Tenta outra vez.')
       return
@@ -237,12 +274,19 @@ export default function MedidasSheet() {
   }
 
   if (saved) {
+    // A anterior e esta com o pescoço que conta (o habitual, se fugiu e não foi aceite).
+    const history = [...previousRows].reverse().filter((r) => r.date < saved.date)
+    const all = [...history, saved]
+    const uses = neckUses(all)
+    const neckOf = (i: number, r: BodyMeasurement) => uses[i]?.used ?? (r.neck_cm != null ? Number(r.neck_cm) : null)
+    const savedNeck = neckOf(all.length - 1, saved)
+    const usualUsed = uses[all.length - 1]?.useUsual ? savedNeck : null
     const c =
-      saved.neck_cm != null && saved.waist_cm != null
+      savedNeck != null && saved.waist_cm != null
         ? composition(
             height,
             {
-              neck_cm: Number(saved.neck_cm),
+              neck_cm: savedNeck,
               waist_cm: Number(saved.waist_cm),
               hips_cm: saved.hips_cm != null ? Number(saved.hips_cm) : null,
               weight_used_kg: Number(saved.weight_used_kg),
@@ -250,12 +294,13 @@ export default function MedidasSheet() {
             profile.sex,
           )
         : null
+    const prevNeck = previous && history.length ? neckOf(history.length - 1, history[history.length - 1]!) : null
     const before =
-      sameSiteBefore && previous?.neck_cm != null && previous.waist_cm != null
+      sameSiteBefore && previous && prevNeck != null && previous.waist_cm != null && previous.date < saved.date
         ? composition(
             height,
             {
-              neck_cm: Number(previous.neck_cm),
+              neck_cm: prevNeck,
               waist_cm: Number(previous.waist_cm),
               hips_cm: previous.hips_cm != null ? Number(previous.hips_cm) : null,
               weight_used_kg: Number(previous.weight_used_kg),
@@ -264,11 +309,12 @@ export default function MedidasSheet() {
           )
         : null
     const change = c && before ? compareCompositions(before, c) : null
+    const why = explainMeasurement(all, all.length - 1, height, profile.sex)
     const savedTarget =
-      saved.neck_cm != null && site === waistSiteFor(profile.sex)
+      savedNeck != null && site === waistSiteFor(profile.sex)
         ? targetWaist(
             height,
-            Number(saved.neck_cm),
+            savedNeck,
             targetBodyFatPct(profile.sex),
             profile.sex,
             saved.hips_cm != null ? Number(saved.hips_cm) : null,
@@ -298,6 +344,7 @@ export default function MedidasSheet() {
                   <p className="label">Gordura</p>
                   <p className="num text-[36px] leading-none font-extrabold text-body">{fmt1(c.shown.fatKg)} kg</p>
                   <p className="text-[14px] text-dim">cerca de {c.shown.pct} %</p>
+                  {usualUsed != null && <p className="text-[13px] leading-snug text-dim">{usualNeckLabel(usualUsed)}</p>}
                 </div>
                 <div>
                   <p className="label">Massa magra</p>
@@ -322,11 +369,17 @@ export default function MedidasSheet() {
               ) : (
                 <p className="text-[15px] text-dim">Na próxima medição mostro o que mudou.</p>
               )}
+              {why && (
+                <div className="rounded-xl border border-line px-3 py-2.5">
+                  <p className="label pb-1">Porque mudou a %G</p>
+                  <ExplicacaoGordura explanation={why} offerConfirm={false} />
+                </div>
+              )}
             </>
           ) : (
             <p className="text-[15px]">Guardado.</p>
           )}
-          {saved.flags.map((f) => (
+          {saved.flags.filter((f) => !(f === 'pescoco_mudou' && why)).map((f) => (
             <p key={f} className="rounded-xl bg-attn/15 px-3 py-2 text-[14px] text-attn">
               {FLAG_TEXT[f as MeasureFlag] ?? f}
             </p>
@@ -362,6 +415,7 @@ export default function MedidasSheet() {
           {Array.from({ length: count }, (_, i) => (
             <input
               key={i}
+              id={`medida-${zone}-${i}`}
               inputMode="decimal"
               enterKeyHint="next"
               value={readings[zone][i] ?? ''}
@@ -385,7 +439,33 @@ export default function MedidasSheet() {
       title={editId ? `Medidas · ${fmtDayMonth(date)}` : 'Medidas'}
       onClose={sheet.close}
       footer={
-        confirmReplace ? (
+        neckAsk && neckCheck?.outlier ? (
+          <div className="space-y-2" role="group" aria-label="O pescoço mudou">
+            <p className="text-[15px] font-semibold">{neckQuestion(neckCheck)}</p>
+            <p className="text-[14px] text-dim">
+              O pescoço quase não muda, e na fórmula {fmtCm(Math.abs(neckCheck.change ?? 0))} cm de pescoço pesam tanto como {fmtCm(Math.abs(neckCheck.change ?? 0))} cm de cintura. Mede outra vez, logo abaixo{' '}
+              {profile.sex === 'f' ? 'da laringe' : 'da maçã de Adão'}.
+            </p>
+            <button
+              onClick={() => {
+                setNeckAsk(false)
+                setReadings({ ...readings, neck: ['', '', ''] })
+                setTimeout(() => document.getElementById('medida-neck-0')?.focus(), 50)
+              }}
+              className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta"
+            >
+              Medir outra vez
+            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <BusyButton busy="A guardar…" onClick={() => save(true, 'confirmado')} className="min-h-12 rounded-xl border border-line px-2 text-[15px]">
+                Está certo
+              </BusyButton>
+              <BusyButton busy="A guardar…" onClick={() => save(true, 'habitual')} className="min-h-12 rounded-xl border border-line px-2 text-[15px] leading-tight">
+                Usar o pescoço habitual ({neckCheck.usual != null ? fmtCm(neckCheck.usual) : ''})
+              </BusyButton>
+            </div>
+          </div>
+        ) : confirmReplace ? (
           <div className="space-y-2">
             <p className="text-[15px]">Já mediste {date === today ? 'hoje' : 'nesse dia'}. Substituir a medição?</p>
             <div className="grid grid-cols-2 gap-2">

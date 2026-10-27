@@ -12,6 +12,8 @@ import {
   daysSinceMeasure,
   fatCategory,
   measurementComposition,
+  neckUses,
+  withReferenceNeck,
   sameWaistSite,
   scaleFatAverage,
   wrongWaistSite,
@@ -194,7 +196,10 @@ export function measurementSummary(
 ) {
   const last = rows[rows.length - 1]
   if (!last) return null
-  const withComp = rows.map((m) => ({ m, c: measurementComposition(heightCm, m, sex) }))
+  // A %G com o pescoço que conta (o habitual numa leitura que fugiu e não foi confirmada; decisão 303).
+  const uses = neckUses(rows)
+  const ref = withReferenceNeck(rows)
+  const withComp = rows.map((m, i) => ({ m, c: measurementComposition(heightCm, ref[i]!, sex), usual: uses[i]?.useUsual ? uses[i]!.used : null }))
   const counted = withComp.filter((x) => x.c != null)
   const latest = counted[counted.length - 1]
   const comparable = latest ? counted.filter((x) => sameWaistSite(x.m, latest.m)) : []
@@ -206,7 +211,7 @@ export function measurementSummary(
     ultimas: withComp
       .slice(-4)
       .reverse()
-      .map(({ m, c }) => ({
+      .map(({ m, c, usual }) => ({
         data: m.date,
         zonas_cm: Object.fromEntries(
           ZONE_ORDER.filter((z) => zoneValue(m, z) != null).map((z) => [ZONE_KEY[z], zoneValue(m, z)]),
@@ -217,6 +222,7 @@ export function measurementSummary(
         massa_magra_kg: c?.shown.leanKg ?? null,
         categoria: c ? fatCategory(c.pct, sex).label : null,
         ...(sex === 'f' && wrongWaistSite(m, sex) ? { cintura_no_umbigo: true } : {}),
+        ...(usual != null ? { gordura_com_pescoco_habitual_cm: usual } : {}),
       })),
     desde_a_primeira:
       change && first && newest
