@@ -53,12 +53,15 @@ export default function SemanaChart({
   today,
   avg7,
   learning,
+  note,
   onOpenDay,
 }: {
   days: ChartDay[]
   today: string
   avg7: number | null
   learning: boolean
+  // Uma linha quando o gasto medido está limitado ou a acompanhar (decisão 304).
+  note?: string | null
   onOpenDay: (date: string) => void
 }) {
   const colors = useChartColors()
@@ -88,6 +91,7 @@ export default function SemanaChart({
       id="semana-grafico"
       kicker="Comer contra o alvo, dia a dia"
       reading={reading}
+      note={note ?? undefined}
       legend={
         <Legend>
           <Key shape="bar" color={colors.ok} label="no alvo (até +100)" />

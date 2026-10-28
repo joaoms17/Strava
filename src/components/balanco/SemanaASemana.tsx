@@ -4,6 +4,7 @@ import { fmt1, fmtDayMonth, fmtInt } from '../../lib/format'
 import { mondayOf } from '../../../api/_lib/rules/manutencao'
 import { bestDeficitWeek, mondaysUpTo, weeklyBalance, weeklyReading, type WeekBalance } from '../../../api/_lib/rules/balanco-graficos'
 import { niceScale } from '../../../api/_lib/rules/graficos'
+import { measuredNoteFromDays } from '../../../api/_lib/rules/gasto'
 import type { Mark } from '../../../api/_lib/rules/leituras'
 import type { BalancoLongo } from '../../lib/balanco'
 import { LONG_WEEKS } from '../../lib/balanco'
@@ -47,6 +48,8 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
       current: mondayOf(today),
       enough: weeks.filter((w) => w.deficit != null).length >= 2,
       hasKg: kgs.length >= 2,
+      // O gasto das barras é o medido: uma linha quando ainda está limitado (decisão 304).
+      gastoNote: measuredNoteFromDays(data.days.filter((d) => d.date < today)),
     }
   }, [data, today, waterDay])
 
@@ -81,7 +84,12 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
           </Legend>
         )
       }
-      note="Só os dias completos contam para o défice (gasto − comido). A semana de hoje ainda vai a meio."
+      note={
+        <>
+          Só os dias completos contam para o défice (gasto − comido). A semana de hoje ainda vai a meio.
+          {model.gastoNote && <span className="block pt-1">{model.gastoNote}</span>}
+        </>
+      }
       table={
         model.enough && (
           <table className="mt-1 w-full tabular-nums">
