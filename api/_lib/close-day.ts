@@ -3,9 +3,17 @@ import { shiftDate } from './rules/nutritional-day.js'
 import { round1 } from './rules/meal-totals.js'
 import { kcalTarget, storedExerciseKcal, type WorkoutType } from './rules/targets.js'
 import { floorWarning, isDayComplete } from './rules/day-close.js'
-import { dayTdee, tdeeRaw, TDEE_WINDOW_DAYS } from './rules/adaptativo.js'
+import { adaptiveDay, TDEE_LOOKBACK_DAYS } from './rules/adaptativo.js'
 import { isMaintenanceWeek, maintenanceTarget, mondayOf } from './rules/manutencao.js'
-import { dailyBase, formulaBase, kcalOut, trustedTdee } from './rules/gasto.js'
+import {
+  dailyBase,
+  formulaBase,
+  kcalOut,
+  limitWeeklyBase,
+  measuredFlags,
+  trustedTdee,
+  withMeasuredFlags,
+} from './rules/gasto.js'
 
 // Fecho de um dia nutricional: kcal e macros das refeições contadas, kcal
 // guardadas dos treinos, meta (plano ou semana de pausa), dia completo,
@@ -33,7 +41,8 @@ export interface CloseDayProfile {
 // Gasto de um dia (Fase 6, só para mostrar): base sem treino + treino. A
 // base usa o gasto medido congelado antes da segunda-feira da semana e a
 // média das kcal de treino dos dias completos dessa janela; com menos de 10
-// dias completos, a fórmula.
+// dias completos, a fórmula. A base medida muda no máximo 100 kcal por
+// semana em relação à da semana anterior (decisão 304).
 async function dayExpenditure(
   admin: SupabaseClient,
   profile: CloseDayProfile,
@@ -43,7 +52,7 @@ async function dayExpenditure(
 ) {
   const userId = profile.user_id
   const monday = mondayOf(date)
-  const [{ data: frozen }, { data: window }, { count }, { data: lastTrend }] = await Promise.all([
+  const [{ data: frozen }, { data: window }, { count }, { data: lastTrend }, { data: lastBase }] = await Promise.all([
     admin
       .from('days')
       .select('tdee_est')
@@ -76,6 +85,14 @@ async function dayExpenditure(
           .order('date', { ascending: false })
           .limit(1)
       : Promise.resolve({ data: [{ weight_trend: weightTrend }] }),
+    admin
+      .from('days')
+      .select('daily_base_est')
+      .eq('user_id', userId)
+      .lt('date', monday)
+      .not('daily_base_est', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1),
   ])
   const trainings = (window ?? []).map((d) => Number(d.kcal_exercise ?? 0))
   const avgTraining = trainings.length ? trainings.reduce((a, b) => a + b, 0) / trainings.length : 0
@@ -87,13 +104,19 @@ async function dayExpenditure(
     date,
     fallback: Number(profile.expected_tdee ?? 2200),
   })
-  const base = dailyBase({
-    completeDays: count ?? 0,
-    tdeeFrozen: trustedTdee(frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null, formula + avgTraining),
-    avgTrainingKcal: avgTraining,
-    formula,
-  })
-  return { formula_base: formula, daily_base_est: base.base, kcal_out_est: kcalOut(base.base, kcalExercise) }
+  const base = limitWeeklyBase(
+    dailyBase({
+      completeDays: count ?? 0,
+      tdeeFrozen: trustedTdee(frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null, formula + avgTraining),
+      avgTrainingKcal: avgTraining,
+      formula,
+    }),
+    lastBase?.[0]?.daily_base_est != null ? Number(lastBase[0].daily_base_est) : null,
+  )
+  return {
+    values: { formula_base: formula, daily_base_est: base.base, kcal_out_est: kcalOut(base.base, kcalExercise) },
+    baseLimited: base.limited,
+  }
 }
 
 function round2(n: number): number {
@@ -126,53 +149,72 @@ export async function maintenanceAnchor(admin: SupabaseClient, profile: CloseDay
   return first
 }
 
-// Regra 4: sobre os últimos 28 dias completos até esta data; EMA sobre a
-// estimativa anterior, um passo por dia completo (`dayTdee`). Guarda também o
-// valor só pelo peso (`tdee_raw`), para o Balanço o mostrar. Corre depois do
-// upsert do dia.
-async function computeAdaptive(admin: SupabaseClient, userId: string, date: string, complete: boolean) {
-  const [{ data: completeDays }, { data: prevRows }] = await Promise.all([
+// Regra 4 (decisão 304): sobre os últimos 28 dias completos fora da fase de
+// água; EMA sobre a estimativa anterior, um passo por dia completo, no
+// máximo 100 kcal por semana e, até 6 semanas de dados, a ±15 % da fórmula
+// (`adaptiveDay`). Guarda também o valor só pelo peso (`tdee_raw`), para o
+// Balanço o mostrar, e as marcas do gasto (`gasto_teto`, `gasto_ritmo`…)
+// para as notas. Corre depois do upsert do dia.
+async function computeAdaptive(
+  admin: SupabaseClient,
+  profile: CloseDayProfile,
+  date: string,
+  complete: boolean,
+  anchor: string | null,
+  flags: string[],
+  baseLimited: boolean,
+) {
+  const userId = profile.user_id
+  const lastBefore = (cut: string) =>
+    admin
+      .from('days')
+      .select('tdee_est')
+      .eq('user_id', userId)
+      .lt('date', cut)
+      .not('tdee_est', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1)
+  const [{ data: completeDays }, { data: prevRows }, { data: weekRows }] = await Promise.all([
     admin
       .from('days')
       .select('date,kcal_in,weight_trend,kcal_exercise,formula_base')
       .eq('user_id', userId)
       .eq('is_complete', true)
+      .gte('date', shiftDate(date, -TDEE_LOOKBACK_DAYS))
       .lte('date', date)
-      .order('date', { ascending: false })
-      .limit(TDEE_WINDOW_DAYS),
-    admin
-      .from('days')
-      .select('tdee_est')
-      .eq('user_id', userId)
-      .lt('date', date)
-      .not('tdee_est', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1),
+      .order('date'),
+    lastBefore(date),
+    lastBefore(mondayOf(date)),
   ])
-  const rows = (completeDays ?? []).reverse()
-  const window = rows.map((d) => ({ date: d.date, kcal_in: Number(d.kcal_in), weight_trend: d.weight_trend }))
-  const raw = tdeeRaw(window)
-  // Referência para o limite: a fórmula mais recente da janela mais o treino médio.
-  const formula = [...rows].reverse().find((d) => d.formula_base != null)?.formula_base
-  const reference =
-    formula != null
-      ? Number(formula) + rows.reduce((a, d) => a + Number(d.kcal_exercise ?? 0), 0) / Math.max(1, rows.length)
-      : null
-  const previous = prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null
-  // Um dia incompleto fica com a estimativa anterior; um completo sem dados
-  // para medir (menos de 10 dias completos ou sem pesagens) fica sem ela.
-  const tdee = dayTdee({ complete, previous, raw, reference })
+  const rows = (completeDays ?? []).map((d) => ({
+    date: d.date as string,
+    kcal_in: Number(d.kcal_in),
+    weight_trend: d.weight_trend != null ? Number(d.weight_trend) : null,
+    kcal_exercise: d.kcal_exercise != null ? Number(d.kcal_exercise) : null,
+    formula_base: d.formula_base != null ? Number(d.formula_base) : null,
+  }))
+  const result = adaptiveDay({
+    date,
+    complete,
+    rows,
+    anchor,
+    maintenanceEnabled: profile.maintenance_enabled !== false,
+    previous: prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null,
+    weekStart: weekRows?.[0]?.tdee_est != null ? Number(weekRows[0].tdee_est) : null,
+  })
+  const raw = result.raw
   // Uma pesagem mal escrita pode dar um valor só pelo peso absurdo (fora de
   // numeric(6,1)): fica sem ele.
   const rawStored = raw != null && Math.abs(raw) < 100_000 ? raw : null
+  const nextFlags = withMeasuredFlags(flags, measuredFlags({ limit: result.limit, excluded: result.excluded, baseLimited }))
   const { error } = await admin
     .from('days')
-    .update({ tdee_est: tdee, tdee_raw: rawStored })
+    .update({ tdee_est: result.tdee, tdee_raw: rawStored, flags: nextFlags })
     .eq('user_id', userId)
     .eq('date', date)
   // Antes da migração 20261018140000 não há tdee_raw: a estimativa guarda-se na mesma.
   if (error) {
-    await admin.from('days').update({ tdee_est: tdee }).eq('user_id', userId).eq('date', date)
+    await admin.from('days').update({ tdee_est: result.tdee, flags: nextFlags }).eq('user_id', userId).eq('date', date)
   }
 }
 
@@ -315,14 +357,14 @@ export async function closeDay(
     dirty: false,
   }
   const upsert = (values: Record<string, unknown>) => admin.from('days').upsert(values, { onConflict: 'user_id,date' })
-  let { error } = await upsert({ ...row, ...expenditure, base_kcal: base })
+  let { error } = await upsert({ ...row, ...expenditure.values, base_kcal: base })
   // Antes da migração 20261018140000 não há base_kcal, e antes da 7 as
   // colunas do gasto: fecha o dia sem elas.
-  if (error && /base_kcal/.test(error.message)) ({ error } = await upsert({ ...row, ...expenditure }))
+  if (error && /base_kcal/.test(error.message)) ({ error } = await upsert({ ...row, ...expenditure.values }))
   if (error && /kcal_out_est|daily_base_est|formula_base/.test(error.message)) ({ error } = await upsert(row))
   if (error) throw new Error(`days upsert (${date}): ${error.message}`)
 
-  await computeAdaptive(admin, userId, date, complete)
+  await computeAdaptive(admin, profile, date, complete, anchor, row.flags, expenditure.baseLimited)
 
   return { date, kcal_in: kcalIn, is_complete: complete, chao, maintenance }
 }

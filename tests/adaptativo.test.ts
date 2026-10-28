@@ -77,29 +77,42 @@ describe('paceKgPerWeek', () => {
 describe('dayTdee', () => {
   const reference = 2400 // fórmula + treino médio
 
-  it('a primeira estimativa parte da referência, no máximo 30 kcal', () => {
-    expect(dayTdee({ complete: true, previous: null, raw: 2700, reference })).toBe(2430)
+  it('a primeira estimativa parte do valor pelo peso, mas a 100 da referência', () => {
+    expect(dayTdee({ complete: true, previous: null, raw: 2700, reference })).toEqual({ value: 2500, limit: 'ritmo' })
+    expect(dayTdee({ complete: true, previous: null, raw: 2450, reference })).toEqual({ value: 2450, limit: null })
   })
 
   it('um dia incompleto fica com o valor anterior', () => {
-    expect(dayTdee({ complete: false, previous: 2430, raw: 2700, reference })).toBe(2430)
-    expect(dayTdee({ complete: false, previous: null, raw: 2700, reference })).toBeNull()
+    expect(dayTdee({ complete: false, previous: 2430, raw: 2700, reference }).value).toBe(2430)
+    expect(dayTdee({ complete: false, previous: null, raw: 2700, reference }).value).toBeNull()
+  })
+
+  it('um dia da fase de água fica com o valor anterior', () => {
+    expect(dayTdee({ complete: true, excluded: true, previous: 2430, raw: 3200, reference })).toEqual({ value: 2430, limit: null })
   })
 
   it('uma semana de férias sem registos não dá 7 passos', () => {
     let tdee: number | null = 2430
-    for (let i = 0; i < 7; i++) tdee = dayTdee({ complete: false, previous: tdee, raw: 2700, reference })
+    for (let i = 0; i < 7; i++) tdee = dayTdee({ complete: false, previous: tdee, raw: 2700, reference, weekStart: 2430 }).value
     expect(tdee).toBe(2430)
-    tdee = dayTdee({ complete: true, previous: tdee, raw: 2700, reference })
+    tdee = dayTdee({ complete: true, previous: tdee, raw: 2700, reference, weekStart: 2430 }).value
     expect(tdee).toBe(2457) // 0,1 × (2 700 − 2 430)
   })
 
-  it('o valor medido fica a ±400 da referência', () => {
-    expect(dayTdee({ complete: true, previous: 3000, raw: 3300, reference })).toBe(2800)
-    expect(dayTdee({ complete: true, previous: 2400, raw: 1500, reference })).toBe(2370)
+  it('no máximo 100 kcal por semana', () => {
+    let tdee: number | null = 2400
+    for (let i = 0; i < 7; i++) tdee = dayTdee({ complete: true, previous: tdee, raw: 2790, reference, weekStart: 2400 }).value
+    expect(tdee).toBe(2500)
+    expect(dayTdee({ complete: true, previous: 2500, raw: 2790, reference, weekStart: 2400 }).limit).toBe('ritmo')
   })
 
-  it('sem dados para medir, um dia completo fica sem estimativa', () => {
-    expect(dayTdee({ complete: true, previous: 2430, raw: null, reference })).toBeNull()
+  it('o valor medido fica dentro dos limites (±400 da referência sem outros)', () => {
+    expect(dayTdee({ complete: true, previous: 3000, raw: 3300, reference, weekStart: 2800 })).toEqual({ value: 2800, limit: 'teto' })
+    expect(dayTdee({ complete: true, previous: 2400, raw: 1500, reference, weekStart: 2400 })).toEqual({ value: 2370, limit: 'piso' })
+  })
+
+  it('sem dados para medir, um dia completo fica com o valor anterior', () => {
+    expect(dayTdee({ complete: true, previous: 2430, raw: null, reference }).value).toBe(2430)
+    expect(dayTdee({ complete: true, previous: null, raw: null, reference }).value).toBeNull()
   })
 })

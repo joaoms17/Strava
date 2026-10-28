@@ -215,7 +215,11 @@ describe('contexto da «Pergunta à app»', () => {
       formula_kcal: 1950,
       a_aprender: false,
       dias_completos_28: 27,
+      nota: null,
     })
+    // Decisão 304: com o gasto medido limitado, a nota vai à IA.
+    const capped = days().map((d) => ({ ...d, flags: [...(d.flags ?? []), 'gasto_teto'] }))
+    expect(expenditureSummary(capped, TODAY).nota).toContain('+15 %')
     const learning = days().map((d) => ({ ...d, tdee_est: null, tdee_raw: null }))
     expect(expenditureSummary(learning, TODAY)).toMatchObject({ medido_kcal: null, a_aprender: true })
   })

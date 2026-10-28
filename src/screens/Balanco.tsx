@@ -542,7 +542,7 @@ export default function Balanco() {
             </p>
           )}
 
-          <SemanaChart days={data.days} today={today} avg7={data.avg7} learning={exp.learning} onOpenDay={openDay} />
+          <SemanaChart days={data.days} today={today} avg7={data.avg7} learning={exp.learning} note={exp.note} onOpenDay={openDay} />
 
           {/* Na semana em curso, «Para esta semana» (o espaço fica reservado
               enquanto chega, para nada mudar debaixo do dedo); o resumo
@@ -608,9 +608,10 @@ export default function Balanco() {
                       {exp.tdeeMeasured > exp.tdeeFrozen
                         ? ': no início, ou depois de uma pausa, o peso desce depressa com água.'
                         : ': a água e o sal às vezes escondem a descida do peso.'}{' '}
-                      O gasto muda devagar (no máximo 30 kcal por dia) e nunca a mais de 400 da fórmula.
+                      O gasto muda devagar (no máximo 100 kcal por semana) e não conta as 2 primeiras semanas da dieta nem as de depois de uma pausa.
                     </span>
                   )}
+                  {exp.note && <span className="block pt-1 text-[14px] text-dim">{exp.note}</span>}
                 </p>
               ) : (
                 <p className="text-dim">

@@ -64,6 +64,65 @@ export function trustedTdee(measured: number | null, reference: number): number 
   return Math.min(reference + MEASURED_MAX_GAP_KCAL, Math.max(reference - MEASURED_MAX_GAP_KCAL, measured))
 }
 
+// A base sem treino muda no máximo 100 kcal por semana (decisão 304): uma
+// semana rápida, ou a passagem da fórmula ao gasto medido, não a faz saltar.
+// `previousWeekBase` é a base guardada na semana anterior (na fórmula ou
+// medida); só se limita a base medida.
+export const BASE_MAX_WEEK_STEP_KCAL = 100
+
+export function limitWeeklyBase(
+  base: { base: number; learning: boolean },
+  previousWeekBase: number | null,
+): { base: number; learning: boolean; limited: boolean } {
+  if (base.learning || previousWeekBase == null) return { ...base, limited: false }
+  const limited = Math.round(
+    Math.min(previousWeekBase + BASE_MAX_WEEK_STEP_KCAL, Math.max(previousWeekBase - BASE_MAX_WEEK_STEP_KCAL, base.base)),
+  )
+  return { base: limited, learning: false, limited: limited !== base.base }
+}
+
+// As marcas do gasto medido num dia fechado (em `days.flags`, sem migração):
+// limitado a +15 % ou −15 % da fórmula, a acompanhar o peso (100 kcal por
+// semana) ou na fase de água (esses dias não contam).
+export const MEASURED_FLAGS = ['gasto_teto', 'gasto_piso', 'gasto_ritmo', 'gasto_agua'] as const
+
+export function measuredFlags(input: {
+  limit: 'teto' | 'piso' | 'ritmo' | null
+  excluded: boolean
+  baseLimited: boolean
+}): string[] {
+  const out: string[] = []
+  if (input.limit === 'teto') out.push('gasto_teto')
+  if (input.limit === 'piso') out.push('gasto_piso')
+  if (input.limit === 'ritmo' || input.baseLimited) out.push('gasto_ritmo')
+  if (input.excluded) out.push('gasto_agua')
+  return out
+}
+
+export function withMeasuredFlags(flags: string[], measured: string[]): string[] {
+  return [...flags.filter((f) => !(MEASURED_FLAGS as readonly string[]).includes(f)), ...measured]
+}
+
+// Uma linha onde o gasto aparece (Balanço, Semana a semana, Projeção),
+// quando o gasto medido está limitado ou ainda a acompanhar.
+export function measuredNote(flags: string[] | null | undefined): string | null {
+  const f = flags ?? []
+  if (f.includes('gasto_teto')) return 'O gasto medido ainda reflete as primeiras semanas; está limitado a +15 % da fórmula.'
+  if (f.includes('gasto_piso')) return 'O gasto medido ainda tem poucas semanas; não desce mais de 15 % abaixo da fórmula.'
+  if (f.includes('gasto_ritmo')) return 'O gasto medido ainda está a acompanhar o peso: muda no máximo 100 kcal por semana.'
+  if (f.includes('gasto_agua'))
+    return 'As 2 primeiras semanas da dieta (ou depois de uma pausa) são sobretudo água: não contam para o gasto medido.'
+  return null
+}
+
+// A nota do dia fechado mais recente com gasto medido (ou na fase de água).
+export function measuredNoteFromDays(days: { tdee_est: number | null; flags?: string[] | null }[]): string | null {
+  const last = [...days]
+    .reverse()
+    .find((d) => d.tdee_est != null || (d.flags ?? []).some((f) => (MEASURED_FLAGS as readonly string[]).includes(f)))
+  return last ? measuredNote(last.flags) : null
+}
+
 export function kcalOut(base: number, exerciseKcal: number): number {
   return Math.round(base + exerciseKcal)
 }

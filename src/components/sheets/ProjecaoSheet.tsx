@@ -6,6 +6,7 @@ import { localCalendarDate } from '../../lib/day'
 import { fmt1, fmtInt } from '../../lib/format'
 import { TargetInput, useProjectionData } from '../Projecao'
 import { weekNote } from '../../lib/projecao'
+import { measuredNoteFromDays } from '../../../api/_lib/rules/gasto'
 import {
   SCENARIO_LABEL,
   fmtDayMon,
@@ -66,6 +67,8 @@ export default function ProjecaoSheet() {
     )
   } else {
     const b = base.basis
+    // O gasto da projeção é o medido mais recente: uma linha quando ainda está limitado (decisão 304).
+    const gastoNote = measuredNoteFromDays(data.input.days.filter((d) => d.date < data.input.asOf))
     const { targetKg, targetWaistCm } = data.input
     const p = sim?.p ?? base
     const changed = chosen.length > 0 && sim != null
@@ -128,6 +131,7 @@ export default function ProjecaoSheet() {
             </p>
           )}
           <p>Gasto medido {fmtInt(b.tdee)} kcal/dia</p>
+          {gastoNote && <p className="text-[13px] text-dim">{gastoNote}</p>}
           <p className="text-dim">
             pelas contas {perWeek(b.energyKgDay)} · pelo peso médio {perWeek(b.observedKgDay)}
           </p>

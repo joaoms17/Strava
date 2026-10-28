@@ -14,7 +14,7 @@ import { cleanStarts, cycleInfo, cycleOptions, waterWeekDuring } from './ciclo.j
 import { storedExerciseKcal, type WorkoutType } from './targets.js'
 import { mergeSessions } from './sessoes.js'
 import { daysToConfirm, type MealDayStats } from './evolucao.js'
-import { KCAL_PER_KG } from './gasto.js'
+import { KCAL_PER_KG, measuredNoteFromDays } from './gasto.js'
 import { shortRefs, type AskRefs } from './pergunta-acoes.js'
 import type { MealItem } from './meal-totals.js'
 import type { DietMeals } from './dieta.js'
@@ -275,8 +275,10 @@ export function weekendSplit(days: AskDay[], today: string) {
 }
 
 // O gasto que a app usa: o medido pelo peso (regra 4, ajusta devagar: no
-// máximo 30 kcal por dia e nunca a mais de 400 da fórmula), o só pelo peso
-// dos 28 dias e a fórmula. Sem medido, a app ainda está a aprender.
+// máximo 100 kcal por semana, sem as 2 primeiras semanas da dieta e, até 6
+// semanas de dados, a ±15 % da fórmula; decisão 304), o só pelo peso dos 28
+// dias, a fórmula e a nota quando está limitado. Sem medido, a app ainda
+// está a aprender.
 export function expenditureSummary(days: AskDay[], today: string) {
   const latest = (key: keyof AskDay) =>
     round(n([...days].filter((d) => d.date <= today && n(d[key] as Num) != null).sort((a, b) => b.date.localeCompare(a.date))[0]?.[key] as Num))
@@ -287,6 +289,12 @@ export function expenditureSummary(days: AskDay[], today: string) {
     formula_kcal: latest('formula_base'),
     a_aprender: measured == null,
     dias_completos_28: days.filter((d) => d.date >= shiftDate(today, -ASK_DAYS) && d.date < today && d.is_complete === true).length,
+    nota: measuredNoteFromDays(
+      [...days]
+        .filter((d) => d.date <= today)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map((d) => ({ tdee_est: n(d.tdee_est), flags: d.flags })),
+    ),
   }
 }
 
