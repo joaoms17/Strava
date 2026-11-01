@@ -38,6 +38,7 @@ import TreinoSheet from './components/sheets/TreinoSheet'
 import LogWorkoutSheet from './components/sheets/LogWorkoutSheet'
 import JaFizSheet from './components/sheets/JaFizSheet'
 import TemplateSheet from './components/sheets/TemplateSheet'
+import PlanoSheet from './components/sheets/PlanoSheet'
 import DizerTreinoSheet from './components/sheets/DizerTreinoSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
 import MedidasSheet, { ComoMedirSheet } from './components/sheets/MedidasSheet'
@@ -84,6 +85,7 @@ const Avancado = screen(() => import('./screens/Avancado'))
 const Arquivo = screen(() => import('./screens/Arquivo'))
 const MedidasHistorico = screen(() => import('./screens/MedidasHistorico'))
 const Ginasio = screen(() => import('./screens/Ginasio'))
+const PlanoTreino = screen(() => import('./screens/PlanoTreino'))
 // A «Pergunta à app» (e a validação das ações) só carrega quando se abre.
 const PerguntaSheet = screen(() => import('./components/sheets/PerguntaSheet'))
 
@@ -106,6 +108,7 @@ const PARENT: [RegExp, string][] = [
 const TITLES: [RegExp, string][] = [
   [/^\/balanco/, 'Balanço'],
   [/^\/treino\/ginasio/, 'Ginásio'],
+  [/^\/treino\/plano/, 'Plano de treino'],
   [/^\/treino/, 'Treino'],
   [/^\/corpo\/medidas/, 'Medidas'],
   [/^\/corpo/, 'Corpo'],
@@ -220,6 +223,7 @@ function Sheets() {
   if (sheet.name === 'como-medir') return <ComoMedirSheet />
   if (sheet.name === 'meu-treino') return <TemplateSheet key={sheet.params.get('id') ?? 'novo'} />
   if (sheet.name === 'dizer-treino') return <DizerTreinoSheet />
+  if (sheet.name === 'plano') return <PlanoSheet key={sheet.params.get('dia') ?? ''} />
   if (sheet.name === 'projecao') return <ProjecaoSheet />
   if (sheet.name === 'mes') return <MesSheet key={sheet.params.get('mes') ?? ''} />
   if (sheet.name === 'pergunta') {
@@ -341,6 +345,7 @@ function Shell() {
             <Route path="/balanco" component={Balanco} />
             <Route path="/treino" component={Treino} />
             <Route path="/treino/ginasio" component={Ginasio} />
+            <Route path="/treino/plano" component={PlanoTreino} />
             <Route path="/corpo" component={Corpo} />
             <Route path="/corpo/medidas" component={MedidasHistorico} />
             <Route path="/favoritos" component={Favoritos} />

@@ -16,6 +16,8 @@ import LoadChart from '../components/LoadChart'
 import { useAutoSync } from '../lib/intervals'
 import { useLocation } from 'wouter'
 import WorkoutLogOptions from '../components/WorkoutLogOptions'
+import PlanoTreinoCard from '../components/PlanoTreinoCard'
+import QualFoi from '../components/QualFoi'
 import PendingInfo from '../components/PendingInfo'
 import { mergeSessions, possibleDuplicates, zoneMinutes } from '../../api/_lib/rules/sessoes'
 
@@ -169,6 +171,8 @@ export default function Treino() {
         </button>
       ))}
 
+      <QualFoi today={today} />
+
       {week.length > 0 && (
         <div className="grid grid-cols-3 gap-2">
           {[
@@ -189,6 +193,8 @@ export default function Treino() {
       )}
 
       <WorkoutLogOptions />
+
+      <PlanoTreinoCard />
 
       <PendingInfo workouts={workouts} today={today} />
 
