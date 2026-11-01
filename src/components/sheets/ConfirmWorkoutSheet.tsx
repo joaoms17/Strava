@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { QualFoiQuestion } from '../QualFoi'
+import { usePlanoTreino } from '../../lib/plano-treino'
+import { askWhichWorkout } from '../../../api/_lib/rules/plano-treino'
 import { useLocation } from 'wouter'
 import { supabase } from '../../lib/supabase'
 import { postApi } from '../../lib/api'
@@ -730,6 +733,7 @@ function WorkoutDetail({ id }: { id: string }) {
   const [day, setDay] = useState('')
   const [time, setTime] = useState('')
   const [templates, setTemplates] = useState<Favorite[]>([])
+  const plan = usePlanoTreino()
 
   const load = useCallback(async () => {
     const [{ data }, { data: imports }, { data: favs }] = await Promise.all([
@@ -777,6 +781,7 @@ function WorkoutDetail({ id }: { id: string }) {
   }
 
   const w = workout
+  const asked = plan != null && askWhichWorkout([w], today).length > 0
   const kindChanged = kind !== kindOf(w)
   const whenChanged = day !== w.date || time !== clock(w)
   const dirty =
@@ -875,7 +880,15 @@ function WorkoutDetail({ id }: { id: string }) {
           </p>
         </div>
 
-        {!w.deleted_at && templates.length > 0 && (
+        {/* Com plano de treino, um treino automático sem resposta pergunta «Qual foi?» com os dias do plano (decisão 306). */}
+        {asked && (
+          <div className="space-y-2">
+            <p className="label">Qual foi?</p>
+            <QualFoiQuestion workout={w} onDone={() => void load()} />
+          </div>
+        )}
+
+        {!asked && !w.deleted_at && templates.length > 0 && (
           <div className="space-y-2">
             <p className="label">{w.favorite_id ? 'Treino' : 'Qual dos teus treinos foi?'}</p>
             <div className="flex flex-wrap gap-2">

@@ -27,6 +27,7 @@ export type SheetName =
   | 'pergunta'
   | 'projecao'
   | 'mes'
+  | 'plano'
 
 export function useSheet() {
   const [location, navigate] = useLocation()

@@ -10,6 +10,9 @@ import { nutritionalDay } from '../lib/day'
 import { fmtDayShort } from '../lib/format'
 import { lisbonInstant } from '../../api/_lib/rules/momentos'
 import { exerciseKey, sameExercise } from '../../api/_lib/rules/exercicios'
+import { dayLabel, isTimedExercise, planDayOfFavorite } from '../../api/_lib/rules/plano-treino'
+import { usePlanoTreino } from '../lib/plano-treino'
+import { useSheet } from '../lib/sheet'
 import {
   FREE_REP_MAX,
   FREE_REP_MIN,
@@ -37,6 +40,7 @@ interface DraftExercise {
   sets: DraftSet[]
   rpe: number | null
   repMax?: number // o topo das repetições no teu treino (sobe a carga aí)
+  note?: string // a nota do teu treino (o plano do treinador: «Pés altos na plataforma»)
 }
 interface Draft {
   startedAt: number
@@ -80,6 +84,8 @@ export default function Ginasio() {
   const dataParam = params.get('data')
   const pastDay = dataParam && /^\d{4}-\d{2}-\d{2}$/.test(dataParam) && dataParam < today ? dataParam : null
   const toast = useToast()
+  const sheet = useSheet()
+  const plan = usePlanoTreino()
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [history, setHistory] = useState<Record<string, LoggedSet[][]>>({})
   const [editing, setEditing] = useState<Workout | null>(null)
@@ -146,10 +152,17 @@ export default function Ginasio() {
         setEditing(workout)
         // Sessão sem séries (veio do relógio): começa com o teu treino.
         const template = strengthFavs.find((f) => f.id === (favParam ?? workout?.favorite_id))
-        const repMaxOf = (name: string) => template?.workout?.exercises?.find((e) => sameExercise(e.name, name))?.rep_max
+        const templateOf = (name: string) => template?.workout?.exercises?.find((e) => sameExercise(e.name, name))
         const byName = new Map<string, DraftExercise>()
         for (const s of (sets ?? []) as ExerciseLogRow[]) {
-          const ex = byName.get(s.exercise) ?? { name: s.exercise, sets: [], rpe: s.rpe, repMax: repMaxOf(s.exercise) }
+          const t = templateOf(s.exercise)
+          const ex = byName.get(s.exercise) ?? {
+            name: s.exercise,
+            sets: [],
+            rpe: s.rpe,
+            repMax: t?.rep_max,
+            ...(t?.note ? { note: t.note } : {}),
+          }
           ex.sets.push({ reps: s.reps ?? 0, load: s.load_kg != null ? Number(s.load_kg) : null, done: true })
           byName.set(s.exercise, ex)
         }
@@ -165,7 +178,9 @@ export default function Ginasio() {
         return
       }
       const saved = readDraft()
-      if (saved && !favParam) {
+      // A sessão a meio do mesmo treino (ex.: voltaste ao plano e tocaste outra
+      // vez em «Começar») continua, em vez de recomeçar do zero.
+      if (saved && (!favParam || (saved.favoriteId === favParam && (saved.day ?? null) === pastDay))) {
         setDraft(saved)
         return
       }
@@ -365,6 +380,8 @@ export default function Ginasio() {
   }
 
   const used = new Set(d.exercises.map((e) => e.name))
+  // Uma sessão de um dia do plano de treino: «Ver plano» (decisão 305).
+  const planDay = planDayOfFavorite(plan, favorites.find((f) => f.id === d.favoriteId)?.name)
   const step = 'flex h-10 w-10 items-center justify-center rounded-lg border border-line text-[20px] leading-none'
 
   return (
@@ -380,6 +397,17 @@ export default function Ginasio() {
           </button>
         )}
       </div>
+
+      {planDay && (
+        <button
+          onClick={() => sheet.open('plano', { ...Object.fromEntries(params), dia: String(planDay.n) })}
+          className="flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-[15px] font-semibold"
+        >
+          <Icon name="calendar" size={18} />
+          <span className="min-w-0 truncate">Ver plano · {dayLabel(planDay, true)}</span>
+          {plan?.cuidados && <span className="shrink-0 font-normal text-attn">· joelho</span>}
+        </button>
+      )}
 
       {d.exercises.length === 0 && (
         <div className="space-y-3">
@@ -405,14 +433,20 @@ export default function Ginasio() {
 
       {d.exercises.map((ex, ei) => {
         const sug = suggestions[ex.name]
+        // Nos de tempo as repetições são segundos: de 5 em 5.
+        const timed = isTimedExercise(ex.name)
+        const repStep = timed ? 5 : 1
         return (
           <section key={ex.name} className="space-y-2 rounded-[18px] border border-line bg-surface p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[17px] font-semibold">{ex.name}</p>
+                {ex.note && <p className="text-[15px] font-semibold text-ink">{ex.note}</p>}
                 <p className="text-[14px] text-dim">
                   {sug?.firstTime
-                    ? `Primeira vez: escolhe um peso com que faças ${ex.repMax ?? FREE_REP_MAX} repetições com folga.`
+                    ? timed
+                      ? 'Primeira vez: os segundos de cada série.'
+                      : `Primeira vez: escolhe um peso com que faças ${ex.repMax ?? FREE_REP_MAX} repetições com folga.`
                     : `Última: ${setsSummary(sug?.lastSets ?? [])}`}
                   {sug?.today != null && (
                     <span className={sug.ready ? 'font-semibold text-burn' : ''}> · Hoje: {String(sug.today).replace('.', ',')} kg</span>
@@ -451,14 +485,21 @@ export default function Ginasio() {
                   <Icon name="check" size={20} />
                 </button>
                 <div className="flex items-center gap-1">
-                  <button className={step} onClick={() => updateSet(ei, si, { reps: Math.max(0, s.reps - 1) })} aria-label="menos uma repetição">
-                    −
-                  </button>
-                  <span className="num w-9 text-center text-[20px]">{s.reps}</span>
                   <button
                     className={step}
-                    onClick={() => updateSet(ei, si, { reps: Math.min(MAX_REPS, s.reps + 1) })}
-                    aria-label="mais uma repetição"
+                    onClick={() => updateSet(ei, si, { reps: Math.max(0, s.reps - repStep) })}
+                    aria-label={timed ? 'menos 5 segundos' : 'menos uma repetição'}
+                  >
+                    −
+                  </button>
+                  <span className="num w-9 text-center text-[20px]">
+                    {s.reps}
+                    {timed && <span className="text-[13px] text-dim">s</span>}
+                  </span>
+                  <button
+                    className={step}
+                    onClick={() => updateSet(ei, si, { reps: Math.min(MAX_REPS, s.reps + repStep) })}
+                    aria-label={timed ? 'mais 5 segundos' : 'mais uma repetição'}
                   >
                     +
                   </button>
@@ -592,6 +633,7 @@ function newExercise(template: TemplateExercise, history: LoggedSet[][]): DraftE
     name: template.name,
     rpe: null,
     repMax,
+    ...(template.note ? { note: template.note } : {}),
     sets: Array.from({ length: count }, (_, i) => {
       const last = sug.lastSets[i] ?? sug.lastSets[sug.lastSets.length - 1]
       return {

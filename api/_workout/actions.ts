@@ -64,6 +64,8 @@ const UpdateSchema = z.object({
   // teus treinos; o nome passa a ser o desse treino.
   favorite_id: z.string().uuid().nullable().optional(),
   name: z.string().trim().max(80).nullable().optional(),
+  // «Qual foi?» respondido (true) ou anulado (false): fica em raw.qual_foi.
+  qual_foi: z.boolean().optional(),
 })
 
 const ShotSchema = z.object({
@@ -610,6 +612,10 @@ export const update = post(async ({ db, userId, body, res }) => {
     | OtherSport
     | null
   if (type === 'other' && (input.sport !== undefined || patch.type !== undefined)) raw = { ...(raw ?? {}), sport }
+  if (input.qual_foi !== undefined) {
+    const { qual_foi: _old, ...rest } = (raw ?? {}) as Record<string, unknown>
+    raw = input.qual_foi ? { ...rest, qual_foi: true } : Object.keys(rest).length ? rest : null
+  }
   if (raw !== workout.raw) patch.raw = raw
   // Mudar o tipo (ex.: a elíptica que entrou como bicicleta): o desporto
   // mostrado acompanha.

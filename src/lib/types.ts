@@ -145,6 +145,7 @@ export interface TemplateExercise {
   rep_min: number
   rep_max: number
   load_kg?: number | null
+  note?: string // o que o treinador diz («Pés altos na plataforma»; decisão 305)
 }
 
 export interface DayRow {
@@ -209,7 +210,7 @@ export interface Workout {
   pain_next_day: number | null
   status: 'green' | 'yellow' | 'red' | null
   planned_session_id: string | null
-  raw: { calories?: number; sport?: string; hora_estimada?: boolean } | null
+  raw: { calories?: number; sport?: string; hora_estimada?: boolean; qual_foi?: boolean } | null
   created_at: string
   deleted_at: string | null
   // Fase 3

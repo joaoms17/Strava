@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import QualFoi from '../components/QualFoi'
 import { useLocation, useParams } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { postApi } from '../lib/api'
@@ -940,6 +941,9 @@ export default function Hoje() {
       {!isToday && !data.offline && data.flags.includes('faltou_algo') && <MissingNote date={date} today={today} />}
 
       {isToday && !data.offline && <MesPronto today={today} />}
+
+      {/* Um treino que chegou sozinho: qual foi? (só com plano de treino; decisão 306) */}
+      {isToday && !data.offline && <QualFoi today={today} />}
 
       {firstCards.map((card) => (
         <div key={card} className="space-y-3 rounded-2xl border border-line p-4">
