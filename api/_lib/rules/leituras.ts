@@ -51,6 +51,7 @@ function monthOf(date: string, asOf: string): string {
 export const COMPARE_DAYS = 30
 export const MIN_VALUES = 7 // dias com valor em cada janela para comparar
 export const MIN_NOW_VALUES = 3 // para haver média
+export const MIN_WEEK_VALUES = 4 // no 1S, dias com valor em cada semana para comparar
 
 export interface Comparison {
   now: number // média dos últimos 30 dias
@@ -67,7 +68,8 @@ function meanIn(rows: DatedValue[], from: string, to: string): { mean: number | 
   return { mean: meanOf(v), n: v.length }
 }
 
-// Os últimos 30 dias contra: no 1M, os 30 antes; no 3M e no «Tudo», os
+// Os últimos 30 dias contra: no 1S, os 7 dias contra os 7 antes (com
+// `days: 7`); no 1M, os 30 antes; no 3M e no «Tudo», os
 // primeiros 30 do período (com o nome do mês do meio dessa janela).
 // `excludeToday`: os passos de hoje ainda vão a meio.
 export function compareWindows(
@@ -87,7 +89,13 @@ export function compareWindows(
   let since: string
   let than: string
   let like: string
-  if (period === '1M') {
+  if (period === '1S') {
+    refTo = shiftDate(nowFrom, -1)
+    refFrom = shiftDate(refTo, -(days - 1))
+    since = 'face à semana anterior'
+    than = 'do que na semana anterior'
+    like = 'como na semana anterior'
+  } else if (period === '1M') {
     refTo = shiftDate(nowFrom, -1)
     refFrom = shiftDate(refTo, -(days - 1))
     since = 'face ao mês anterior'
@@ -105,7 +113,9 @@ export function compareWindows(
     like = `como em ${month}`
   }
   const ref = refTo < nowFrom ? meanIn(rows, refFrom, refTo) : { mean: null, n: 0 }
-  if (ref.mean == null || ref.n < MIN_VALUES || now.n < MIN_VALUES) {
+  // Numa semana chegam 4 dias com valor em cada uma (7 de 7 era pedir muito).
+  const min = period === '1S' ? MIN_WEEK_VALUES : MIN_VALUES
+  if (ref.mean == null || ref.n < min || now.n < min) {
     return { now: now.mean, nowCount: now.n, then: null, diff: null, since: null, than: null, like: null }
   }
   return { now: now.mean, nowCount: now.n, then: ref.mean, diff: now.mean - ref.mean, since, than, like }
@@ -210,6 +220,84 @@ export function weightReading(change: WeightChange | null): string {
   const when = spanText(change.days)
   const text = Math.abs(change.kg) < 0.2 ? `Peso médio estável ${when}` : `${signed1(change.kg)} kg ${when}`
   return change.water ? `${text} (sem a semana de água)` : text
+}
+
+// --- Peso: a semana (1S) --------------------------------------------------
+
+// Até 0,1 kg para cima ou para baixo numa semana é «estável» (é menos do que
+// a balança mexe de um dia para o outro).
+export const WEEK_STABLE_KG = 0.1
+// O peso médio de há 7 (ou 14) dias pode ser de um dia antes ou depois (sem
+// pesagem nesse dia): até 3 dias mais cedo.
+const WEEK_TOLERANCE_DAYS = 3
+
+export interface WeekTrend {
+  end: DatedValue // o peso médio mais recente dos últimos 7 dias
+  kg: number | null // contra o de 7 dias antes (arredondado a 0,1)
+  prevKg: number | null // a semana anterior: o de há 7 dias contra o de há 14
+  water: boolean // o mais recente é da semana de água
+}
+
+// O ponto do peso médio no dia `date` ou, sem pesagem nesse dia, o mais
+// recente até 3 dias antes.
+function trendAt(trend: DatedValue[], date: string): DatedValue | null {
+  const floor = shiftDate(date, -WEEK_TOLERANCE_DAYS)
+  return trend.reduce<DatedValue | null>((best, p) => (p.date <= date && p.date >= floor && (best == null || p.date > best.date) ? p : best), null)
+}
+
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+// A semana do peso médio (7 dias): o mais recente dos últimos 7 dias contra
+// o de 7 dias antes, e a semana anterior da mesma maneira. `today` é o dia de
+// Lisboa (graficos.lisbonDay).
+export function weekTrendChange(trend: DatedValue[], today: string, waterDay?: (d: string) => boolean): WeekTrend | null {
+  const from = shiftDate(today, -6)
+  const end = trend.reduce<DatedValue | null>((best, p) => (p.date >= from && p.date <= today && (best == null || p.date > best.date) ? p : best), null)
+  if (!end) return null
+  const week = trendAt(trend, shiftDate(end.date, -7))
+  const before = week ? trendAt(trend, shiftDate(end.date, -14)) : null
+  return {
+    end,
+    kg: week ? round1(end.value - week.value) : null,
+    prevKg: week && before ? round1(week.value - before.value) : null,
+    water: waterDay?.(end.date) ?? false,
+  }
+}
+
+export const weekStable = (kg: number) => Math.abs(kg) <= WEEK_STABLE_KG + 1e-9
+
+// «Esta semana: −0,3 kg no peso médio (80,9)» · «Esta semana: estável (80,9)».
+export function weekReading(w: WeekTrend | null): string {
+  if (!w) return 'Sem pesagens nos últimos 7 dias'
+  const now = dec1(w.end.value)
+  const text =
+    w.kg == null ? `Esta semana: peso médio ${now} kg` : weekStable(w.kg) ? `Esta semana: estável (${now})` : `Esta semana: ${signed1(w.kg)} kg no peso médio (${now})`
+  return w.water ? `${text} · semana de água` : text
+}
+
+// A segunda linha: «Na semana anterior: −0,6 kg».
+export function prevWeekText(w: WeekTrend | null): string | null {
+  if (!w || w.prevKg == null) return null
+  return `Na semana anterior: ${weekStable(w.prevKg) ? 'estável' : `${signed1(w.prevKg)} kg`}`
+}
+
+// No resumo do topo, curto: «Esta semana: −0,3 kg».
+export function weekShort(w: WeekTrend | null): string | null {
+  if (!w || w.kg == null) return null
+  return `Esta semana: ${weekStable(w.kg) ? 'estável' : `${signed1(w.kg)} kg`}`
+}
+
+// --- Medidas na semana (1S) -----------------------------------------------
+
+// As medições mostradas no 1S (as da semana; com menos de 2, as 2 últimas):
+// diz quando vêm de antes da semana.
+export function weekMeasurementNote(shown: DatedValue[], from: string): string | null {
+  const inWeek = shown.filter((p) => p.date >= from).length
+  if (inWeek >= 2) return null
+  if (shown.length < 2) return inWeek === 0 ? 'Sem medições nos últimos 7 dias.' : null
+  return inWeek === 0
+    ? 'Sem medições nos últimos 7 dias: as 2 últimas, para veres a diferença.'
+    : '1 medição nos últimos 7 dias: com a anterior, para veres a diferença.'
 }
 
 export interface Mark {
@@ -390,6 +478,16 @@ export function trainingReading(weeks: WeekMinutes[], currentMonday: string, per
   return `${base}, ${diff > 0 ? 'mais' : 'menos'} ${int(roundTo(Math.abs(diff), 5))} ${than}`
 }
 
+// O 1S: os minutos dos últimos 7 dias contra os 7 antes.
+export function trainingWeekReading(minutes: number, sessions: number, prevMinutes: number | null): string {
+  if (minutes <= 0) return prevMinutes ? `Sem treinos nos últimos 7 dias (${int(prevMinutes)} min nos 7 antes)` : 'Sem treinos nos últimos 7 dias'
+  const base = `Esta semana: ${int(minutes)} min em ${sessions} ${sessions === 1 ? 'sessão' : 'sessões'}`
+  if (prevMinutes == null) return base
+  const diff = minutes - prevMinutes
+  if (Math.abs(diff) < 15) return `${base}, como na anterior`
+  return `${base}, ${diff > 0 ? 'mais' : 'menos'} ${int(roundTo(Math.abs(diff), 5))} do que na anterior`
+}
+
 // A melhor semana do período (mais minutos; num empate, a mais recente).
 export function bestWeek(weeks: WeekMinutes[]): WeekMinutes | null {
   const withMinutes = weeks.filter((w) => total(w) > 0)
@@ -410,7 +508,7 @@ export function formReading(points: FormPoint[], period: Period, asOf: string): 
   const last = points[points.length - 1]!
   const a = Math.round(first.ctl)
   const b = Math.round(last.ctl)
-  const since = period === '1M' ? 'num mês' : `desde ${monthOf(first.date, asOf)}`
+  const since = period === '1S' ? 'numa semana' : period === '1M' ? 'num mês' : `desde ${monthOf(first.date, asOf)}`
   if (Math.abs(b - a) < 2) return `Estável em ${b} ${since}`
   return `${b > a ? 'Subiu' : 'Desceu'} de ${a} para ${b} ${since}`
 }

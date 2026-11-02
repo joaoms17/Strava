@@ -6,7 +6,7 @@ import type { CorpoData } from '../../lib/corpo'
 import { FAST_LOSS_KG_WEEK, MIN_WEIGHINGS_FOR_TREND, trend7, weeklyRate } from '../../../api/_lib/rules/weight'
 import { inWaterPhase } from '../../../api/_lib/rules/manutencao'
 import { composition, sameWaistSite, withReferenceNeck } from '../../../api/_lib/rules/composicao'
-import { signed1, sinceStart } from '../../../api/_lib/rules/leituras'
+import { signed1, sinceStart, weekShort, weekTrendChange } from '../../../api/_lib/rules/leituras'
 import Projecao from '../Projecao'
 
 function rateText(rate: number): string {
@@ -38,6 +38,10 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
   const enough = weights.length >= MIN_WEIGHINGS_FOR_TREND
   const when = (date: string) => (date === today ? 'hoje' : date === shiftDate(today, -1) ? 'ontem' : fmtDayShort(date))
   const diff = latest && previous ? Math.round((latest.kg - previous.kg) * 10) / 10 : null
+  // «Esta semana: −0,3 kg»: o peso médio de hoje contra o de há 7 dias (o mesmo do 1S).
+  const weekTrend = weekTrendChange(trend, today, data.projection.input.waterDay)
+  const thisWeek = weekShort(weekTrend)
+  const waterNote = weekTrend?.water ? ' · semana de água' : ''
 
   // «Desde o início»: a cintura e a %G só com medições no mesmo sítio da última.
   const height = Number(profile.height_cm ?? 183)
@@ -85,6 +89,7 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
             {fmt1(last.value)} <span className="text-[22px] font-semibold">kg</span>
           </p>
           {rate != null && <p className="text-[15px]">{rateText(rate)}</p>}
+          {thisWeek && <p className="text-[15px] text-dim tabular-nums">{thisWeek}{waterNote}</p>}
         </div>
       ) : (
         <div className="space-y-1">
@@ -98,6 +103,11 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
                 ? `Igual a ${when(previous.date)}`
                 : `${diff < 0 ? '−' : '+'}${fmt1(Math.abs(diff))} kg desde ${when(previous.date)}`}
               {rate != null && <span className="text-dim"> · {rateText(rate)}</span>}
+            </p>
+          )}
+          {thisWeek && (
+            <p className="text-[15px] text-dim tabular-nums">
+              {thisWeek} no peso médio{waterNote}
             </p>
           )}
         </div>

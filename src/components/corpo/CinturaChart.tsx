@@ -7,7 +7,7 @@ import { fmt1, fmtDayMonth } from '../../lib/format'
 import type { BodyMeasurement } from '../../lib/types'
 import { sameWaistSite, targetBodyFatPct, targetWaist, withReferenceNeck, wrongWaistSite } from '../../../api/_lib/rules/composicao'
 import { dayNum, fromDayNum, lowest, niceScale } from '../../../api/_lib/rules/graficos'
-import { waistMarks, waistReading } from '../../../api/_lib/rules/leituras'
+import { waistMarks, waistReading, weekMeasurementNote } from '../../../api/_lib/rules/leituras'
 import { ChartCard, Key, Legend, Marks, TICK, TipBox, padBelowTarget, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
 
 const HEIGHT = 190
@@ -16,7 +16,8 @@ const HEIGHT = 190
 // período, o alvo tracejado (a cintura da %G alvo) e a mais baixa marcada.
 // Com menos de 2 medições no período, as 2 últimas. Um alvo longe dos dados
 // (mais de uma marca do eixo abaixo) não estica o eixo: fica um «alvo 87 ↓» no fundo.
-export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurement[]; from: string; today: string }) {
+// No 1S: as da semana; sem 2 na semana, as 2 últimas com uma nota (decisão 307).
+export default function CinturaChart({ rows, from, today, week = false }: { rows: BodyMeasurement[]; from: string; today: string; week?: boolean }) {
   const colors = useChartColors()
   const sheet = useSheet()
   const profile = useReadyProfile()
@@ -51,8 +52,9 @@ export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurem
       scale,
       axis: timeAxis(start, today, 5),
       lastValue: last.waist_cm,
+      weekNote: week ? weekMeasurementNote(shown, from) : null,
     }
-  }, [rows, from, today, profile])
+  }, [rows, from, today, profile, week])
 
   if (!model) return null
   return (
@@ -60,15 +62,18 @@ export default function CinturaChart({ rows, from, today }: { rows: BodyMeasurem
       kicker="Cintura"
       reading={model.reading}
       aside={
-        <div className="flex items-end gap-3">
-          <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
-            {fmt1(Number(model.lastValue))}
-            <span className="text-[17px] font-semibold">{'\u00a0'}cm</span>
-          </p>
-          <p className="min-w-0 text-[14px] leading-snug text-dim">
-            agora{model.targetCm != null && <> · alvo ~{model.targetCm}&nbsp;cm (a cintura da tua %G alvo)</>}
-          </p>
-        </div>
+        <>
+          {model.weekNote && <p className="text-[14px] text-dim">{model.weekNote}</p>}
+          <div className="flex items-end gap-3">
+            <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
+              {fmt1(Number(model.lastValue))}
+              <span className="text-[17px] font-semibold">{'\u00a0'}cm</span>
+            </p>
+            <p className="min-w-0 text-[14px] leading-snug text-dim">
+              agora{model.targetCm != null && <> · alvo ~{model.targetCm}&nbsp;cm (a cintura da tua %G alvo)</>}
+            </p>
+          </div>
+        </>
       }
       legend={
         <Legend>

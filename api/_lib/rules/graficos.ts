@@ -7,24 +7,63 @@ import { mondayOf } from './manutencao.js'
 
 // --- Período (um para a página toda) -------------------------------------
 
-export type Period = '1M' | '3M' | 'Tudo'
-export const PERIODS: Period[] = ['1M', '3M', 'Tudo']
-export const PERIOD_DAYS = { '1M': 30, '3M': 91 } as const
-export const PERIOD_LABEL: Record<Period, string> = { '1M': '1 mês', '3M': '3 meses', Tudo: 'Tudo' }
+// 1S: os últimos 7 dias até hoje (decisão 307), dia a dia.
+export type Period = '1S' | '1M' | '3M' | 'Tudo'
+export const PERIODS: Period[] = ['1S', '1M', '3M', 'Tudo']
+export const PERIOD_DAYS = { '1S': 7, '1M': 30, '3M': 91 } as const
+export const PERIOD_LABEL: Record<Period, string> = { '1S': 'última semana', '1M': '1 mês', '3M': '3 meses', Tudo: 'Tudo' }
 export const DEFAULT_PERIOD: Period = '3M'
 
 // O que vem do armazenamento do telemóvel (pode vir estragado ou vazio).
 export function cleanPeriod(raw: unknown): Period {
-  return raw === '1M' || raw === '3M' || raw === 'Tudo' ? raw : DEFAULT_PERIOD
+  return raw === '1S' || raw === '1M' || raw === '3M' || raw === 'Tudo' ? raw : DEFAULT_PERIOD
 }
 
-// O primeiro dia do período. 1M e 3M nunca começam antes do primeiro
+// O primeiro dia do período. 1S, 1M e 3M nunca começam antes do primeiro
 // registo (uma conta nova não fica com o gráfico vazio à esquerda); «Tudo»
 // começa no primeiro registo.
 export function periodFrom(period: Period, today: string, first: string | null): string {
   if (period === 'Tudo') return first != null && first < today ? first : shiftDate(today, -(PERIOD_DAYS['3M'] - 1))
   const from = shiftDate(today, -(PERIOD_DAYS[period] - 1))
   return first != null && first > from && first <= today ? first : from
+}
+
+// --- A semana (1S): os últimos 7 dias pelo dia de Lisboa ------------------
+
+const LISBON = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' })
+
+// O dia de calendário em Lisboa de um instante (o «hoje» da semana).
+export function lisbonDay(instant: Date): string {
+  return LISBON.format(instant)
+}
+
+export interface WeekWindow {
+  from: string // hoje − 6
+  to: string // hoje
+  prevFrom: string // os 7 dias antes
+  prevTo: string
+  days: string[] // os 7 dias, do mais antigo para hoje
+}
+
+// A semana do 1S: os 7 dias até hoje (inclusive), não a semana do
+// calendário (numa segunda-feira seria um dia só), e os 7 antes.
+export function weekWindow(today: string): WeekWindow {
+  const from = shiftDate(today, -6)
+  return {
+    from,
+    to: today,
+    prevFrom: shiftDate(today, -13),
+    prevTo: shiftDate(today, -7),
+    days: Array.from({ length: 7 }, (_, i) => shiftDate(from, i)),
+  }
+}
+
+const WEEKDAYS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+
+// A marca do eixo no 1S, em duas linhas: «seg» e «12».
+export function weekdayTick(date: string): [string, string] {
+  const d = new Date(`${date}T00:00:00Z`)
+  return [WEEKDAYS[d.getUTCDay()]!, String(d.getUTCDate())]
 }
 
 // --- Datas como números (eixo do tempo contínuo) --------------------------

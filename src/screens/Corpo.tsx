@@ -28,8 +28,8 @@ function Block({ id, title, children }: { id: string; title: string; children: R
 
 // Corpo: primeiro o resultado (o resumo: hoje, desde o início, a projeção),
 // depois o peso e as medidas, a análise da IA, o treino e, no fim, os
-// sinais do corpo (passos, sono, FC em repouso, HRV). Um só período (1M /
-// 3M / Tudo) para todos os gráficos, guardado neste telemóvel; os dados lêem-
+// sinais do corpo (passos, sono, FC em repouso, HRV). Um só período (1S /
+// 1M / 3M / Tudo) para todos os gráficos, guardado neste telemóvel; os dados lêem-
 // se uma vez para a página toda (lib/corpo.ts).
 export default function Corpo() {
   const profile = useReadyProfile()
@@ -98,8 +98,8 @@ export default function Corpo() {
         </Block>
 
         <Block id="medidas" title="Medidas">
-          <CinturaChart rows={data.measurements} from={from} today={today} />
-          <GorduraChart rows={data.measurements} from={from} today={today} />
+          <CinturaChart rows={data.measurements} from={from} today={today} week={shown === '1S'} />
+          <GorduraChart rows={data.measurements} from={from} today={today} week={shown === '1S'} />
           <CompositionCards rows={data.measurements} scale={scale} />
         </Block>
 
