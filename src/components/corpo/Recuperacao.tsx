@@ -21,7 +21,7 @@ import {
   type Comparison,
   type Mark,
 } from '../../../api/_lib/rules/leituras'
-import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, axisInt, categoryTicks, tooltipBase, useChartColors } from '../charts/kit'
+import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, WEEK_AXIS_HEIGHT, axisInt, categoryTicks, tooltipBase, useChartColors, weekTick } from '../charts/kit'
 
 // Mais de 4 meses dia a dia ficava ilegível (3 meses nas barras): no «Tudo»
 // longo, a média de cada semana.
@@ -46,8 +46,13 @@ type Key = 'steps' | 'sleep' | 'rhr' | 'hrv'
 // tracejada só por cima desses 30 dias, hoje contra essa média e o melhor dia
 // (HRV mais alta, FC mais baixa). Só o que o relógio mandou. Sem os últimos
 // 30 dias (o relógio parou), a frase diz a média do período.
+// No 1S (decisão 307): os 7 dias, cada um com o dia da semana; passos e sono
+// em barras (do zero), FC e HRV em pontos com o valor (barras do zero
+// escondiam 52 contra 55 bpm); a média é a da semana e compara-se com a
+// semana anterior.
 export default function Recuperacao({ data, period, from, today }: { data: CorpoData; period: Period; from: string; today: string }) {
   const colors = useChartColors()
+  const week = period === '1S'
   const model = useMemo(() => {
     const clean = cleanWellness(data.health)
     const byDate = new Map(clean.map((r) => [r.date, r]))
@@ -103,7 +108,18 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
     if (model.series(opts.key).length === 0) return null
     const axis = categoryTicks(points.map((p) => p.date))
     let chart: ReactElement
-    const axisX = (
+    const axisX = week ? (
+      <XAxis
+        dataKey="date"
+        interval={0}
+        tick={weekTick(colors, today)}
+        height={WEEK_AXIS_HEIGHT}
+        // Nas linhas, o primeiro e o último dia não ficam colados à borda.
+        padding={opts.bars ? undefined : { left: 18, right: 18 }}
+        axisLine={{ stroke: colors.grid }}
+        tickLine={false}
+      />
+    ) : (
       <XAxis
         dataKey="date"
         ticks={axis.ticks}
@@ -151,7 +167,7 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
           {axisX}
           {axisY}
           {tooltip}
-          <Bar dataKey="value" fill={opts.color} maxBarSize={24} radius={points.length > 40 ? 0 : [3, 3, 0, 0]} isAnimationActive={false}>
+          <Bar dataKey="value" fill={opts.color} maxBarSize={week ? 28 : 24} radius={points.length > 40 ? 0 : [3, 3, 0, 0]} isAnimationActive={false}>
             {points.map((p) => (
               <Cell key={p.date} fillOpacity={p.date === today || (wk && p.date === mondayOf(today)) ? 0.45 : 1} />
             ))}
@@ -167,8 +183,20 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
           {axisY}
           {tooltip}
           {ref}
-          <Line dataKey="value" stroke={opts.color} strokeWidth={2} dot={false} connectNulls isAnimationActive={false} activeDot={{ r: 5, fill: opts.color, stroke: colors.surface, strokeWidth: 2 }} />
-          <Marks marks={opts.marks} color={opts.color} colors={colors} x={(d) => d} avoid={known.filter((_, i) => i % 2 === 0).map((p) => ({ date: p.date, value: p.value! }))} />
+          <Line
+            dataKey="value"
+            stroke={opts.color}
+            strokeWidth={2}
+            dot={week ? { r: 4.5, fill: opts.color, stroke: colors.surface, strokeWidth: 2 } : false}
+            connectNulls
+            isAnimationActive={false}
+            activeDot={{ r: 5, fill: opts.color, stroke: colors.surface, strokeWidth: 2 }}
+          />
+          {week ? (
+            <Marks marks={opts.marks} color={opts.color} colors={colors} x={(d) => d} dots={false} pointRoom={6} avoid={known.map((p) => ({ date: p.date, value: p.value! }))} />
+          ) : (
+            <Marks marks={opts.marks} color={opts.color} colors={colors} x={(d) => d} avoid={known.filter((_, i) => i % 2 === 0).map((p) => ({ date: p.date, value: p.value! }))} />
+          )}
         </LineChart>
       )
     }
@@ -176,7 +204,7 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
       <ChartCard
         key={opts.key}
         kicker={opts.kicker}
-        reading={known.length < 2 ? 'Ainda poucos dias do relógio neste período' : opts.reading}
+        reading={known.length < 2 ? (week ? 'Poucos dias do relógio nos últimos 7 dias' : 'Ainda poucos dias do relógio neste período') : opts.reading}
         aside={opts.aside && <p className="text-[14px] text-dim tabular-nums">{opts.aside}</p>}
         legend={
           opts.avg != null &&
@@ -205,11 +233,12 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
   const inWindow = (key: Key) => model.series(key).filter((p) => p.date >= from)
   const maxOf = (key: Key) => Math.max(0, ...inWindow(key).map((p) => p.value))
   const minOf = (key: Key) => Math.min(...inWindow(key).map((p) => p.value))
-  const cmp = (key: Key, excludeToday = false) => compareWindows(model.series(key), today, period, from, { excludeToday })
+  const cmp = (key: Key, excludeToday = false) => compareWindows(model.series(key), today, period, from, { excludeToday, days: week ? 7 : undefined })
   // A frase de cada um: a comparação; sem os últimos 30 dias, a média do
   // período (com 7 dias ou mais); só depois «poucos dados».
   const say = (key: Key, c: Comparison | null, read: (c: Comparison | null) => string) => {
     if (c) return read(c)
+    if (week) return 'Poucos dias do relógio nos últimos 7 dias'
     const mean = periodMean(inWindow(key), from, today)
     return mean != null ? staleReading(key, mean) : FEW_DATA
   }
@@ -219,6 +248,10 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
   const rhr = cmp('rhr')
   const hrv = cmp('hrv')
   const daily = !model.weekly
+  const avgLabel = week ? 'média da semana' : 'média dos últimos 30 dias'
+  // No 1S, o valor de cada dia por cima do ponto (FC e HRV).
+  const dayMarks = (key: 'rhr' | 'hrv'): Mark[] =>
+    inWindow(key).map((p) => ({ id: `${key}-${p.date}`, date: p.date, value: p.value, label: `${Math.round(p.value)}`, priority: p.date === today ? 2 : 1, prefer: 'above' as const }))
   const rhrPts = inWindow('rhr')
   const hrvPts = inWindow('hrv')
 
@@ -229,7 +262,7 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
       reading: say('steps', steps, stepsReading),
       aside: todayRow?.steps != null ? `Hoje: ${fmtInt(todayRow.steps)} até agora (o dia ainda vai a meio).` : null,
       avg: steps?.now ?? null,
-      avgText: steps ? `média dos últimos 30 dias (${fmtInt(Math.round(steps.now / 100) * 100)})` : null,
+      avgText: steps ? `${avgLabel} (${fmtInt(Math.round(steps.now / 100) * 100)})` : null,
       color: colors.health,
       bars: true,
       tickFormat: axisInt,
@@ -243,11 +276,12 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
       reading: say('sleep', sleep, sleepReading),
       aside: todayRow?.sleep != null && sleep ? `Esta noite: ${fmtSleep(todayRow.sleep)}, ${vsAverage(todayRow.sleep, Math.round(sleep.now), 'min', 10)}.` : null,
       avg: sleep?.now ?? null,
-      avgText: sleep ? `média dos últimos 30 dias (${fmtSleep(Math.round(sleep.now))})` : null,
+      avgText: sleep ? `${avgLabel} (${fmtSleep(Math.round(sleep.now))})` : null,
       color: colors.health,
-      bars: false,
+      bars: week,
       tickFormat: (v) => `${Math.round(v / 60)} h`,
-      scale: { step: 60, ...hourTicks(minOf('sleep'), maxOf('sleep')) },
+      // Em barras (1S), do zero.
+      scale: { step: 60, ...hourTicks(week ? 0 : minOf('sleep'), maxOf('sleep')) },
       marks: [],
       tip: (r) =>
         'sleep' in r
@@ -260,12 +294,12 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
       reading: say('rhr', rhr, restingHrReading),
       aside: `${todayRow?.rhr != null && rhr ? `Hoje: ${todayRow.rhr} bpm, ${vsAverage(todayRow.rhr, rhr.now, 'bpm', 1)}. ` : ''}Se desce, o coração está mais em forma.`,
       avg: rhr?.now ?? null,
-      avgText: rhr ? `média dos últimos 30 dias (${Math.round(rhr.now)} bpm)` : null,
+      avgText: rhr ? `${avgLabel} (${Math.round(rhr.now)} bpm)` : null,
       color: colors.health,
       bars: false,
       tickFormat: (v) => String(v),
       scale: niceScale(minOf('rhr') - 2, maxOf('rhr') + 2, 4, 8),
-      marks: daily ? [bestDayMark(rhrPts, 'min', 'mais baixa', 'bpm')].filter((m): m is Mark => m != null) : [],
+      marks: week ? dayMarks('rhr') : daily ? [bestDayMark(rhrPts, 'min', 'mais baixa', 'bpm')].filter((m): m is Mark => m != null) : [],
       tip: (r) => ['rhr' in r ? (r.rhr != null ? `${r.rhr} bpm` : 'sem registo') : r.value != null ? `${r.value} bpm (média)` : 'sem registo'],
     }),
     card({
@@ -274,12 +308,12 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
       reading: say('hrv', hrv, hrvReading),
       aside: `${todayRow?.hrv != null && hrv ? `Hoje: ${todayRow.hrv} ms, ${vsAverage(todayRow.hrv, hrv.now, 'ms', 2)}. ` : ''}Mais alta costuma querer dizer mais recuperado.`,
       avg: hrv?.now ?? null,
-      avgText: hrv ? `média dos últimos 30 dias (${Math.round(hrv.now)} ms)` : null,
+      avgText: hrv ? `${avgLabel} (${Math.round(hrv.now)} ms)` : null,
       color: colors.health,
       bars: false,
       tickFormat: (v) => String(v),
       scale: niceScale(minOf('hrv') - 2, maxOf('hrv') + 2, 4, 10),
-      marks: daily ? [bestDayMark(hrvPts, 'max', 'mais alta', 'ms')].filter((m): m is Mark => m != null) : [],
+      marks: week ? dayMarks('hrv') : daily ? [bestDayMark(hrvPts, 'max', 'mais alta', 'ms')].filter((m): m is Mark => m != null) : [],
       tip: (r) => ['hrv' in r ? (r.hrv != null ? `${r.hrv} ms` : 'sem registo') : r.value != null ? `${r.value} ms (média)` : 'sem registo'],
     }),
   ].filter(Boolean)

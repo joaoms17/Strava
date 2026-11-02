@@ -4,9 +4,38 @@ import { fmt1, fmtDayMonth } from '../../lib/format'
 import type { CorpoData } from '../../lib/corpo'
 import { trend7 } from '../../../api/_lib/rules/weight'
 import { fmtDayMon, project } from '../../../api/_lib/rules/projecao'
-import { dayNum, fromDayNum, niceScale, type Period } from '../../../api/_lib/rules/graficos'
-import { projectionHorizon, projectionPath, projectionStart, startWeight, weightChange, weightMarks, weightReading, type Mark } from '../../../api/_lib/rules/leituras'
-import { BAND_OPACITY, ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, dotOpacity, padBelowTarget, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
+import { dayNum, fromDayNum, niceScale, weekWindow, type Period } from '../../../api/_lib/rules/graficos'
+import {
+  dec1,
+  prevWeekText,
+  projectionHorizon,
+  projectionPath,
+  projectionStart,
+  startWeight,
+  weekReading,
+  weekTrendChange,
+  weightChange,
+  weightMarks,
+  weightReading,
+  type Mark,
+} from '../../../api/_lib/rules/leituras'
+import {
+  BAND_OPACITY,
+  ChartCard,
+  EmptyChart,
+  Key,
+  Legend,
+  Marks,
+  TICK,
+  TipBox,
+  WEEK_AXIS_HEIGHT,
+  dotOpacity,
+  padBelowTarget,
+  timeAxis,
+  tooltipBase,
+  useChartColors,
+  weekTick,
+} from '../charts/kit'
 
 const HEIGHT = 240
 // Com muitas pesagens («Tudo» de anos), só a linha do peso médio.
@@ -26,6 +55,9 @@ interface Point {
 // hoje marcados, e as semanas de água do ciclo à vista (o peso sobe sem ser
 // gordura). No «Tudo», o começo é o do resumo «Desde o início» (a média da
 // 1.ª semana): o mesmo número nos dois sítios.
+// No 1S (decisão 307): os 7 dias, cada pesagem grande e com o valor, o eixo
+// dia a dia e justo à volta da semana (±1 kg), sem a projeção; a frase é a
+// semana do peso médio e, por baixo, a semana anterior.
 export default function PesoChart({
   data,
   period,
@@ -42,6 +74,7 @@ export default function PesoChart({
   calm: boolean
 }) {
   const colors = useChartColors()
+  const week = period === '1S'
   const model = useMemo(() => {
     const all = data.weights.map((w) => ({ date: w.date, value: w.kg }))
     const trendAll = trend7(all)
@@ -52,14 +85,15 @@ export default function PesoChart({
     const ever = period === 'Tudo' ? startWeight(data.firstWeighings, waterDay) : null
     const start = ever && ever.start.date >= from ? ever.start : null
     const change = weightChange(trendAll, from, waterDay, start)
-    const marks: Mark[] = weightMarks(trend, { firstEver: firstEver != null && firstEver >= from, lowestEver: period === 'Tudo', start })
+    const marks: Mark[] = week ? [] : weightMarks(trend, { firstEver: firstEver != null && firstEver >= from, lowestEver: period === 'Tudo', start })
+    const weekChange = week ? weekTrendChange(trendAll, today, waterDay) : null
 
     // A projeção (a mesma do resumo) continua a linha do peso médio.
     const p = project(data.projection.input)
     const lastTrend = trend[trend.length - 1]
     const horizon = projectionHorizon(from, today)
     const path =
-      p.status === 'ok' && targetKg != null && lastTrend && lastTrend.date >= shiftBack(today, 7)
+      !week && p.status === 'ok' && targetKg != null && lastTrend && lastTrend.date >= shiftBack(today, 7)
         ? projectionPath(projectionStart(data.projection.input.asOf, p.basis.currentKg), p.weight, targetKg, horizon)
         : null
     if (path && p.status === 'ok' && p.weight.kind === 'date') {
@@ -93,10 +127,21 @@ export default function PesoChart({
     const points = [...byX.values()].sort((a, b) => a.x - b.x)
 
     const values = [...(calm ? [] : daily.map((w) => w.value)), ...trend.map((t) => t.value), ...(path?.points.map((q) => q.mid) ?? [])]
-    const showTarget = targetKg != null && values.length > 0 && (path != null || Math.min(...values) - targetKg < 4)
-    const scale = padBelowTarget(niceScale(Math.min(...values, showTarget ? targetKg! : Infinity), Math.max(...values), 5, 3), showTarget ? targetKg : null)
+    let showTarget = targetKg != null && values.length > 0 && (path != null || Math.min(...values) - targetKg < 4)
+    let scale = padBelowTarget(niceScale(Math.min(...values, showTarget ? targetKg! : Infinity), Math.max(...values), 5, 3), showTarget ? targetKg : null)
+    if (week) {
+      // Justo à volta da semana (±1 kg): 0,3 kg vê-se. A meta só se cair aí dentro.
+      scale = niceScale(Math.min(...values) - 1, Math.max(...values) + 1, 5)
+      showTarget = targetKg != null && targetKg >= scale.domain[0] && targetKg <= scale.domain[1]
+    }
     const end = path ? path.end.date : today
-    const axis = timeAxis(from, end, 5)
+    const axis = week
+      ? { ticks: weekWindow(today).days.filter((d) => d >= from).map(dayNum), domain: [dayNum(from), dayNum(today)] as [number, number], format: (n: number) => String(n) }
+      : timeAxis(from, end, 5)
+    // No 1S, cada pesagem com o valor (por baixo, sem tapar o peso médio).
+    if (week && !calm) {
+      for (const w of daily) marks.push({ id: `p-${w.date}`, date: w.date, value: w.value, label: dec1(w.value), priority: 1 + (w.date === today ? 1 : 0), prefer: 'below' })
+    }
 
     // As semanas de água do ciclo (Joana): faixas claras com «água».
     const water: [number, number][] = []
@@ -112,18 +157,22 @@ export default function PesoChart({
       }
     }
     // Os rótulos não tapam a linha do peso médio nem a da projeção.
-    const avoid = [...trend.filter((_, i) => i % 2 === 0), ...(path?.points.map((q) => ({ date: q.date, value: q.mid })) ?? [])]
-    return { points, marks, change, scale, axis, showTarget, path, water, avoid, count: daily.length }
-  }, [data, from, today, targetKg, calm, period])
+    const avoid = [...(week ? trend : trend.filter((_, i) => i % 2 === 0)), ...(path?.points.map((q) => ({ date: q.date, value: q.mid })) ?? [])]
+    return { points, marks, change, weekChange, scale, axis, showTarget, path, water, avoid, count: daily.length }
+  }, [data, from, today, targetKg, calm, period, week])
 
-  const enough = model.count >= 2
-  const reading = model.count === 0 ? 'Ainda sem pesagens' : weightReading(model.change)
+  // No 1S chega uma pesagem (a linha do peso médio vem das de antes).
+  const enough = model.count >= (week ? 1 : 2)
+  const reading = week ? weekReading(model.weekChange) : model.count === 0 ? 'Ainda sem pesagens' : weightReading(model.change)
+  const previousWeek = week ? prevWeekText(model.weekChange) : null
+  const dotR = week ? 5 : 2.5
   // Os rótulos das linhas de referência (contam como obstáculos dos marcos).
   const refs = model.showTarget ? [{ y: targetKg!, text: `meta ${kg(targetKg!)}`, side: 'left' as const }] : []
   return (
     <ChartCard
       kicker="Peso médio"
       reading={reading}
+      aside={previousWeek && <p className="text-[14px] text-dim tabular-nums">{previousWeek}</p>}
       legend={
         enough && (
           <Legend>
@@ -165,7 +214,13 @@ export default function PesoChart({
     >
       {!enough ? (
         <EmptyChart
-          text={model.count === 0 ? 'Volta daqui a 1 semana: com 7 dias de pesagens aparece aqui a linha do peso médio.' : 'Ainda poucas pesagens: volta daqui a 1 semana.'}
+          text={
+            week
+              ? 'Sem pesagens nos últimos 7 dias: pesa-te de manhã, antes de comer.'
+              : model.count === 0
+                ? 'Volta daqui a 1 semana: com 7 dias de pesagens aparece aqui a linha do peso médio.'
+                : 'Ainda poucas pesagens: volta daqui a 1 semana.'
+          }
           height={140}
         />
       ) : (
@@ -189,10 +244,13 @@ export default function PesoChart({
               <XAxis
                 type="number"
                 dataKey="x"
-                domain={[model.axis.domain[0], model.axis.domain[1] + 1]}
+                // No 1S, meio dia de cada lado: o primeiro e o último ponto não ficam na borda.
+                domain={week ? [model.axis.domain[0] - 0.5, model.axis.domain[1] + 0.5] : [model.axis.domain[0], model.axis.domain[1] + 1]}
                 ticks={model.axis.ticks}
                 tickFormatter={model.axis.format}
-                tick={TICK(colors)}
+                tick={week ? weekTick(colors, today) : TICK(colors)}
+                height={week ? WEEK_AXIS_HEIGHT : undefined}
+                interval={0}
                 axisLine={{ stroke: colors.grid }}
                 tickLine={false}
                 allowDataOverflow
@@ -224,11 +282,21 @@ export default function PesoChart({
                 <Area dataKey="band" stroke="none" fill={colors.weight} fillOpacity={0.1} isAnimationActive={false} connectNulls activeDot={false} />
               )}
               {!calm && model.count <= MAX_DOTS && (
-                <Line dataKey="kg" stroke="none" isAnimationActive={false} dot={{ r: 2.5, fill: colors.weight, fillOpacity: dotOpacity(colors), stroke: 'none' }} activeDot={{ r: 4, fill: colors.weight, stroke: colors.surface, strokeWidth: 2 }} />
+                <Line
+                  dataKey="kg"
+                  stroke="none"
+                  isAnimationActive={false}
+                  dot={{ r: dotR, fill: colors.weight, fillOpacity: week ? dotOpacity(colors) + 0.2 : dotOpacity(colors), stroke: week ? colors.surface : 'none', strokeWidth: week ? 1.5 : 0 }}
+                  activeDot={{ r: dotR + 1.5, fill: colors.weight, stroke: colors.surface, strokeWidth: 2 }}
+                />
               )}
               <Line dataKey="trend" stroke={colors.weight} strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} activeDot={{ r: 5, fill: colors.weight, stroke: colors.surface, strokeWidth: 2 }} strokeLinecap="round" strokeLinejoin="round" />
               {model.path && <Line dataKey="mid" stroke={colors.weight} strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls isAnimationActive={false} activeDot={false} />}
-              <Marks marks={model.marks} color={colors.weight} colors={colors} x={(d) => dayNum(d)} avoid={model.avoid} refs={refs} />
+              {week ? (
+                <Marks marks={model.marks} color={colors.weight} colors={colors} x={(d) => dayNum(d)} avoid={model.avoid} refs={refs} dots={false} pointRoom={dotR + 1} />
+              ) : (
+                <Marks marks={model.marks} color={colors.weight} colors={colors} x={(d) => dayNum(d)} avoid={model.avoid} refs={refs} />
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         </div>

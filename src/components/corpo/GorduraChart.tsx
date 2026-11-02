@@ -13,7 +13,7 @@ import {
   withReferenceNeck,
 } from '../../../api/_lib/rules/composicao'
 import { dayNum, fromDayNum, lowest, niceScale } from '../../../api/_lib/rules/graficos'
-import { fatMarks, fatReading } from '../../../api/_lib/rules/leituras'
+import { fatMarks, fatReading, weekMeasurementNote } from '../../../api/_lib/rules/leituras'
 import { ChartCard, Key, Legend, Marks, TICK, TipBox, padBelowTarget, timeAxis, tooltipBase, useChartColors } from '../charts/kit'
 import ExplicacaoGordura from './ExplicacaoGordura'
 
@@ -34,7 +34,8 @@ const cm = (n: number) => (Number.isInteger(Math.round(n * 10) / 10) ? String(Ma
 // (15 % nos homens, 25 % nas mulheres), o início e a mais baixa marcados.
 // As medições em que contou o pescoço habitual ficam com o ponto oco e uma
 // nota. Tocar num ponto mostra porque mudou desde a anterior.
-export default function GorduraChart({ rows, from, today }: { rows: BodyMeasurement[]; from: string; today: string }) {
+// No 1S: como a cintura (as 2 últimas, com a nota, sem 2 na semana).
+export default function GorduraChart({ rows, from, today, week = false }: { rows: BodyMeasurement[]; from: string; today: string; week?: boolean }) {
   const colors = useChartColors()
   const profile = useReadyProfile()
   const [picked, setPicked] = useState<number | null>(null)
@@ -68,8 +69,9 @@ export default function GorduraChart({ rows, from, today }: { rows: BodyMeasurem
       axis: timeAxis(start, today, 5),
       last,
       anyUsual: shown.some((p) => p.usual != null),
+      weekNote: week ? weekMeasurementNote(shown, from) : null,
     }
-  }, [rows, from, today, profile.sex, height])
+  }, [rows, from, today, profile.sex, height, week])
 
   if (!model) return null
   const selected = model.shown.find((p) => p.index === picked) ?? model.last
@@ -97,15 +99,18 @@ export default function GorduraChart({ rows, from, today }: { rows: BodyMeasurem
       kicker="%G ao longo do tempo"
       reading={model.reading}
       aside={
-        <div className="flex items-end gap-3">
-          <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
-            {fmt1(model.last.value)}
-            <span className="text-[17px] font-semibold">{' '}%</span>
-          </p>
-          <p className="min-w-0 text-[14px] leading-snug text-dim">
-            agora · alvo {model.target}&nbsp;%{model.last.usual != null && <> · {usualNeckLabel(model.last.usual)}</>}
-          </p>
-        </div>
+        <>
+          {model.weekNote && <p className="text-[14px] text-dim">{model.weekNote}</p>}
+          <div className="flex items-end gap-3">
+            <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
+              {fmt1(model.last.value)}
+              <span className="text-[17px] font-semibold">{' '}%</span>
+            </p>
+            <p className="min-w-0 text-[14px] leading-snug text-dim">
+              agora · alvo {model.target}&nbsp;%{model.last.usual != null && <> · {usualNeckLabel(model.last.usual)}</>}
+            </p>
+          </div>
+        </>
       }
       legend={
         <Legend>

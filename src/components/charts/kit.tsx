@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { DefaultZIndexes, ZIndexLayer, usePlotArea, useXAxisScale, useYAxisScale } from 'recharts'
 import { useThemeColors, type ThemeColors } from '../../lib/colors'
 import { fmtDayMonth, fmtInt } from '../../lib/format'
-import { dateTicks, dayNum, fromDayNum, labelWidth, placeLabels, type Box } from '../../../api/_lib/rules/graficos'
+import { dateTicks, dayNum, fromDayNum, labelWidth, placeLabels, weekdayTick, type Box } from '../../../api/_lib/rules/graficos'
 import type { Mark } from '../../../api/_lib/rules/leituras'
 
 // O kit dos gráficos do Corpo e do Balanço: o cartão (o nome pequeno em
@@ -143,6 +143,33 @@ export function timeAxis(from: string, to: string, max = 4) {
     return years && d.slice(5, 7) === '01' ? `${m} ${d.slice(0, 4)}` : m
   }
   return { ticks: ticks.map(dayNum), domain: [dayNum(from), dayNum(to)] as [number, number], format }
+}
+
+// O eixo do 1S (decisão 307): os 7 dias, cada um em duas linhas («seg» por
+// cima de «12»), hoje a cheio. Serve o eixo contínuo (dias como números) e o
+// de categorias (datas).
+export const WEEK_AXIS_HEIGHT = 36
+
+export function weekTick(colors: ChartColors, today: string) {
+  return function WeekTick(props: { x?: number | string; y?: number | string; payload?: { value: string | number } }) {
+    const v = props.payload?.value
+    if (v == null || props.x == null || props.y == null) return <g />
+    const date = typeof v === 'number' ? fromDayNum(v) : v
+    const [dow, day] = weekdayTick(date)
+    const now = date === today
+    return (
+      <g transform={`translate(${Number(props.x)},${Number(props.y)})`}>
+        <text textAnchor="middle" fontSize={AXIS_FONT} fill={now ? colors.ink : colors.dim} fontWeight={now ? 700 : 400}>
+          <tspan x={0} dy={10}>
+            {dow}
+          </tspan>
+          <tspan x={0} dy={14}>
+            {day}
+          </tspan>
+        </text>
+      </g>
+    )
+  }
 }
 
 // --- O cartão ----------------------------------------------------------------
@@ -346,6 +373,7 @@ export function Marks({
   dots = true,
   avoid = [],
   refs = [],
+  pointRoom = 0,
 }: {
   marks: Mark[]
   color: string
@@ -356,6 +384,7 @@ export function Marks({
   dots?: boolean // sem pontos: só o rótulo (em cima de uma barra)
   avoid?: { date: string; value: number }[] // pontos das linhas que os rótulos não tapam
   refs?: RefText[]
+  pointRoom?: number // sem pontos: o raio do ponto que já está desenhado (o rótulo não o tapa)
 }) {
   const xScale = useXAxisScale()
   const yScale = useYAxisScale()
@@ -374,6 +403,7 @@ export function Marks({
     .map((q) => ({ ...q, box: refBox(q.r, q.py, plot) }))
   const obstacles = [
     ...(dots ? pts.map((p) => ({ x: p.px - 6, y: p.py - 6, w: 12, h: 12 })) : []),
+    ...(!dots && pointRoom > 0 ? pts.map((p) => ({ x: p.px - pointRoom, y: p.py - pointRoom, w: pointRoom * 2, h: pointRoom * 2 })) : []),
     ...line,
     ...refPlaced.map((q) => q.box),
     ...extraObstacles,
