@@ -73,7 +73,7 @@ async function readLeftovers(
   const payload = JSON.stringify({
     fotos_antes: before.length,
     itens: meal.items.map((item, indice) => ({
-      indice,
+      index: indice,
       name: item.name,
       grams: item.grams,
       kcal: item.kcal,

@@ -79,6 +79,30 @@ describe('o que a IA disse → parte comida de cada item', () => {
     expect(shares.map((s) => s.fraction)).toEqual([0.7, 0.5, 0])
   })
 
+  // Decisão 308: o nome manda sobre o índice.
+  it('índice e nome em desacordo: vale o nome (índices a partir de 1)', () => {
+    const shares = eatenShares(
+      plate,
+      answer([
+        { index: 1, name: 'Arroz branco', eaten: 0.5 },
+        { index: 2, name: 'Frango grelhado', eaten: 1 },
+        { index: 3, name: 'Salada mista', eaten: 0.8 },
+      ]),
+    )
+    expect(shares.map((s) => s.fraction)).toEqual([0.5, 1, 0.8])
+  })
+
+  it('um nome encurtado encontra o item, se for só um; sem nome vale o índice', () => {
+    expect(eatenShares(plate, answer([{ index: 0, name: 'Frango', eaten: 0.5 }])).map((s) => s.fraction)).toEqual([1, 0.5, 1])
+    expect(eatenShares(plate, answer([{ index: 2, name: '', eaten: 0.5 }])).map((s) => s.fraction)).toEqual([1, 1, 0.5])
+    const twoRice = [{ name: 'Arroz branco' }, { name: 'Arroz de pato' }]
+    expect(eatenShares(twoRice, answer([{ index: 5, name: 'Arroz', eaten: 0.5 }])).map((s) => s.fraction)).toEqual([1, 1])
+  })
+
+  it('um nome que não é de nenhum item não desconta o item do índice', () => {
+    expect(eatenShares(plate, answer([{ index: 0, name: 'Batata frita', eaten: 0 }])).map((s) => s.fraction)).toEqual([1, 1, 1])
+  })
+
   it('nada de novo entra: um item que não está na refeição fica de fora', () => {
     const shares = eatenShares(plate, answer([{ index: 9, name: 'Sobremesa', eaten: 0.5 }]))
     expect(shares).toHaveLength(3)

@@ -48,10 +48,34 @@ const fold = (name: string) =>
     .toLowerCase()
     .trim()
 
+// A que item da refeição se refere uma linha da resposta. Manda o NOME, não
+// o índice: a IA copia o nome que recebeu, mas o índice às vezes vem contado
+// à maneira dela (a partir de 1, pela ordem em que vê os pratos na foto). Se
+// o índice valesse mais, «Arroz: sobrou metade» caía noutro item: o arroz
+// ficava com os gramas todos e descontava-se outra coisa (decisão 308).
+// 1. o índice, se o nome desse item bate certo (ou a resposta não traz nome);
+// 2. o item com esse nome;
+// 3. um só item cujo nome contém o dito, ou está contido nele («Arroz» →
+//    «Arroz branco cozido»);
+// sem isso, -1: a linha fica de fora (nunca se desconta às cegas).
+function itemFor(items: Pick<MealItem, 'name'>[], said: { index: number; name: string }, seen: Set<number>): number {
+  const name = fold(said.name ?? '')
+  const free = (j: number) => !seen.has(j)
+  const validIndex = Number.isInteger(said.index) && said.index >= 0 && said.index < items.length && free(said.index)
+  if (validIndex && (!name || fold(items[said.index]!.name) === name)) return said.index
+  if (!name) return -1
+  const exact = items.findIndex((item, j) => free(j) && fold(item.name) === name)
+  if (exact >= 0) return exact
+  const partial = items
+    .map((item, j) => ({ j, other: fold(item.name) }))
+    .filter(({ j, other }) => free(j) && other && (other.includes(name) || name.includes(other)))
+  return partial.length === 1 ? partial[0]!.j : -1
+}
+
 // Por item da refeição (pela ordem dela), a parte comida. Um item de que a IA
-// não fala fica todo comido; um índice que não existe (ou repetido) procura-se
-// pelo nome; o que não corresponde a nenhum item fica de fora (nada de novo
-// entra). Com o prato vazio, tudo fica como estava.
+// não fala fica todo comido; cada linha da resposta encontra o seu item pelo
+// nome (itemFor); o que não corresponde a nenhum item fica de fora (nada de
+// novo entra). Com o prato vazio, tudo fica como estava.
 export function eatenShares(
   items: Pick<MealItem, 'name'>[],
   answer: Pick<LeftoversAnswer, 'items' | 'empty_plate'>,
@@ -60,8 +84,7 @@ export function eatenShares(
   if (answer.empty_plate) return shares
   const seen = new Set<number>()
   for (const said of answer.items) {
-    let i = Number.isInteger(said.index) && said.index >= 0 && said.index < items.length && !seen.has(said.index) ? said.index : -1
-    if (i < 0) i = items.findIndex((item, j) => !seen.has(j) && fold(item.name) === fold(said.name ?? ''))
+    const i = itemFor(items, said, seen)
     if (i < 0) continue
     seen.add(i)
     shares[i] = { fraction: clampFraction(said.eaten), confidence: said.confidence }
