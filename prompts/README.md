@@ -27,3 +27,4 @@ Uma alteração ao prompt é sempre um ficheiro novo (`v2`, `v3`, …), nunca um
 - `evolution.v4.md` — a Evolução da v3 sem a média de água por dia em `comida` (decisão 286).
 - `weekly-review.v5.md` — o resumo da v4 com os dias completos contra o alvo (`dias_contra_o_alvo`), com os dois «acima» separados: acima do alvo (ainda com défice) e acima do gasto (sem défice; decisão 301).
 - `ask.v3.md` — a «Pergunta à app» da v2 com as regras novas do gasto medido: sem as 2 primeiras semanas da dieta (ou depois de uma pausa ou de um recomeço), a ±15 % da fórmula até 6 semanas de dados e no máximo 100 kcal por semana (decisão 304).
+- `meal-leftovers.v2.md` — o «Sobrou comida?» da v1 com os itens em `index` (a contar de 0, o mesmo nome do campo da resposta), uma linha por item com o `index` e o `name` exatos, `eaten` sempre a parte comida (com um exemplo) e o que não se vê em nenhuma foto (azeite, óleo, manteiga) a 1 (decisão 308).
