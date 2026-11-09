@@ -25,6 +25,7 @@ import { daysSinceMeasure } from '../../api/_lib/rules/composicao'
 import { kcalOut, paceFromDiff, round10 } from '../../api/_lib/rules/gasto'
 import { isDayComplete } from '../../api/_lib/rules/day-close'
 import { weekSoFar, type WeekSoFarDay } from '../../api/_lib/rules/balanco'
+import { planState, proteinReached } from '../../api/_lib/rules/balanco-graficos'
 import { loadExpenditure, type ExpenditureContext } from '../lib/expenditure'
 import { useAutoSync } from '../lib/intervals'
 import { storedExerciseKcal } from '../../api/_lib/rules/targets'
@@ -394,10 +395,17 @@ export default function Hoje() {
   const dayBase = isToday ? profile.base_kcal : (data.dayBase ?? profile.base_kcal)
   const plan = maintenance ? maintenanceTarget(data.latestTdee) : dayBase + kcalExercise
   const left = plan - kcalIn
-  const over = left < 0
   // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
   const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
   const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
+  // Contra o plano, com a regra do Balanço (decisões 289, 301 e 309): até 100
+  // kcal acima é «no alvo» (sem âmbar), acima disso âmbar e, acima do gasto, o
+  // vermelho do grave. `over` passa a querer dizer «acima do alvo».
+  const state = planState(kcalIn, plan, outToday ?? data.latestTdee)
+  const over = state === 'acima_alvo' || state === 'acima_gasto'
+  const grave = state === 'acima_gasto'
+  const inMargin = state === 'no_alvo'
+  const proteinOk = proteinReached(proteinIn, profile.protein_g)
   // A semana até agora (só hoje): dias completos desde segunda mais hoje.
   const week = isToday ? weekSoFar(data.week, today, plan, kcalIn) : null
   const weekText =
@@ -836,12 +844,20 @@ export default function Hoje() {
             {!isToday
               ? !dayComplete || unknown
                 ? 'Comeste'
-                : over
+                : grave
+                  ? '! Acima do gasto'
+                  : over
+                    ? 'Passaste o plano'
+                    : inMargin
+                      ? 'Dia no alvo'
+                      : 'Ficaste abaixo do plano'
+              : grave && !unknown
+                ? '! Acima do gasto'
+                : over && !unknown
                   ? 'Passaste o plano'
-                  : 'Ficaste abaixo do plano'
-              : over && !unknown
-                ? 'Passaste o plano'
-                : `${counted.length === 0 || unknown ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 && !unknown ? ' cerca de' : ''}`}
+                  : inMargin && !unknown
+                    ? 'No plano'
+                    : `${counted.length === 0 || unknown ? 'Podes comer' : 'Podes comer mais'}${stillCounting > 0 && !unknown ? ' cerca de' : ''}`}
           </p>
           <p className="label">Ver o plano ›</p>
         </div>
@@ -851,19 +867,27 @@ export default function Hoje() {
               // Sem rede, um traço (mais pequeno: a 96 px parecia uma barra).
               unknown
                 ? 'text-[64px] font-semibold text-dim'
-                : `text-[96px] font-extrabold ${over && (isToday || dayComplete) ? 'text-attn' : !isToday ? 'text-ink' : 'text-eat'}`
+                : inMargin && (isToday || dayComplete)
+                  ? // Até 100 kcal acima: o número sem alarme, mais pequeno.
+                    'text-[64px] font-semibold text-ink'
+                  : `text-[96px] font-extrabold ${over && (isToday || dayComplete) ? (grave ? 'text-pain' : 'text-attn') : !isToday ? 'text-ink' : 'text-eat'}`
             } ${isToday && stillCounting && !unknown ? 'opacity-80' : ''}`}
           >
             {unknown
               ? '—'
               : !isToday && !dayComplete
                 ? fmtKcal(kcalIn)
-                : over
+                : over || inMargin
                   ? `+${fmtKcal(-left)}`
                   : fmtKcal(left)}
           </span>
-          <span className="num text-[22px] text-dim">KCAL</span>
+          <span className="num text-[22px] text-dim">
+            {inMargin && !unknown && (isToday || dayComplete) ? 'KCAL · DENTRO DA MARGEM' : 'KCAL'}
+          </span>
         </p>
+        {isToday && inMargin && !unknown && (
+          <p className="mt-1 text-[15px] text-dim">Até 100 kcal acima do plano, o dia conta como no alvo.</p>
+        )}
         {isToday && over && (
           <p className="mt-1 text-[15px] text-dim">
             {underSpend
@@ -878,7 +902,13 @@ export default function Hoje() {
         )}
         {!unknown && (
           <div className="mt-3">
-            <Segments value={kcalIn} max={plan} tone="eat" label="Comer" />
+            <Segments
+              value={kcalIn}
+              max={plan}
+              tone="eat"
+              label="Comer"
+              overStyle={grave ? 'danger' : over ? 'warn' : 'fill'}
+            />
           </div>
         )}
         <div className="mt-3.5 grid grid-cols-3 gap-2 border-t border-line pt-3">
@@ -913,11 +943,20 @@ export default function Hoje() {
           <p className="label text-[12px]">Proteína</p>
           <p className="num text-[18px]">
             {unknown ? '—' : fmtInt(proteinIn)} <span className="text-dim">/ {fmtInt(profile.protein_g)} g</span>
+            {proteinOk && !unknown && <span className="text-ok"> ✓</span>}
           </p>
         </div>
         {!unknown && (
           <div className="mt-1.5">
-            <Segments value={proteinIn} max={profile.protein_g} count={14} height={6} tone="protein" label="Proteína" />
+            <Segments
+              value={proteinIn}
+              max={profile.protein_g}
+              count={14}
+              height={6}
+              tone="protein"
+              label="Proteína"
+              overStyle="fill"
+            />
           </div>
         )}
         {maintenance && (
@@ -1162,7 +1201,8 @@ export default function Hoje() {
             ) : (
               <p className="tabular-nums">
                 Comeste {fmtKcal(kcalIn)}&nbsp;kcal
-                {isToday && !over && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
+                {isToday && state === 'dentro' && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
+                {inMargin && <> · {fmtKcal(-left)}&nbsp;kcal acima do plano, no alvo</>}
                 {over && <> · Passaste {fmtKcal(-left)}&nbsp;kcal do plano</>}
               </p>
             )}
