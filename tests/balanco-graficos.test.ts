@@ -8,6 +8,8 @@ import {
   isOnTarget,
   mondaysUpTo,
   monthCalendar,
+  planState,
+  proteinReached,
   showMeanLine,
   weekAction,
   weekDaysReading,
@@ -322,5 +324,37 @@ describe('dias mais cedo com o fim de semana como a semana', () => {
   })
   it('sem diferença, não se aplica', () => {
     expect(daysEarlier(input(2000), 'fds')).toBeNull()
+  })
+})
+
+describe('planState (o cartão do Hoje, decisão 309)', () => {
+  it('até ao plano está dentro', () => {
+    expect(planState(1400, 1500, 2300)).toBe('dentro')
+    expect(planState(1500, 1500, 2300)).toBe('dentro')
+  })
+  it('até 100 kcal acima do plano é no alvo, não «passaste o plano»', () => {
+    expect(planState(1510, 1500, 2300)).toBe('no_alvo')
+    expect(planState(1600, 1500, 2300)).toBe('no_alvo')
+  })
+  it('mais de 100 acima, abaixo do gasto, é acima do alvo', () => {
+    expect(planState(1601, 1500, 2300)).toBe('acima_alvo')
+  })
+  it('acima do gasto é o grave', () => {
+    expect(planState(2400, 1500, 2300)).toBe('acima_gasto')
+  })
+  it('sem gasto conhecido nunca é grave', () => {
+    expect(planState(2400, 1500, null)).toBe('acima_alvo')
+  })
+  it('dentro da margem nunca é grave, mesmo acima do gasto (manutenção)', () => {
+    expect(planState(2350, 2300, 2300)).toBe('no_alvo')
+  })
+})
+
+describe('proteinReached', () => {
+  it('chegar ou passar a meta é bom', () => {
+    expect(proteinReached(193, 120)).toBe(true)
+    expect(proteinReached(120, 120)).toBe(true)
+    expect(proteinReached(90, 120)).toBe(false)
+    expect(proteinReached(10, 0)).toBe(false)
   })
 })

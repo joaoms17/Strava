@@ -37,6 +37,20 @@ export interface WeekDay {
   out?: number | null // o gasto do dia (o da linha azul e do fecho do dia)
 }
 
+// O cartão do Hoje (decisão 309): o comido contra o plano do dia, com a mesma
+// regra do Balanço. «dentro»: ainda não passou o plano; «no_alvo»: passou até
+// 100 kcal (conta como dia no alvo, sem âmbar); acima disso, `overLevel`.
+// `out` é o gasto do dia (ou o mais recente); sem ele, nunca é grave.
+export type PlanState = 'dentro' | 'no_alvo' | 'acima_alvo' | 'acima_gasto'
+
+export function planState(eaten: number, plan: number, out: number | null | undefined): PlanState {
+  if (eaten <= plan) return 'dentro'
+  return overLevel(eaten, plan, out) ?? 'no_alvo'
+}
+
+// A proteína acima da meta é bom sinal: chegou (✓), não é aviso.
+export const proteinReached = (eaten: number, target: number): boolean => target > 0 && eaten >= target
+
 export const isAbove = (r: DayResult | CalResult): r is 'acima_alvo' | 'acima_gasto' => r === 'acima_alvo' || r === 'acima_gasto'
 
 export function dayResult(d: WeekDay, today: string): DayResult {
