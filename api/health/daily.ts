@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient } from '../_lib/supabase.js'
-import { tokenUser } from '../_lib/ingest-token.js'
+import { missingColumn, sharedSecretAccepted, tokenClaimedUser, tokenUser } from '../_lib/ingest-token.js'
 import { sameSecret } from '../_lib/secret.js'
 import { isDeletedWeighing } from '../_lib/rules/weight.js'
 import { lisbonDay } from '../_lib/rules/momentos.js'
@@ -31,12 +31,16 @@ const HealthSchema = z.object({
 // Autenticado por Bearer (o Atalho não tem sessão): HEALTH_INGEST_TOKEN grava
 // na primeira conta (o João, como sempre); o token pessoal de Definições ›
 // Atalho do iPhone grava na conta dessa pessoa (ex.: a Joana).
+// G4: o token pessoal confirma-se com a data em que foi gerado (gerar outro
+// invalida o anterior); o segredo da casa deixa de valer quando a primeira
+// conta gera o seu token. Sem a migração 20261113000061, como antes.
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const secret = process.env.HEALTH_INGEST_TOKEN
   const header = req.headers.authorization ?? ''
   const given = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
-  const personal = secret && given ? tokenUser(secret, given) : null
-  if (!secret || (!sameSecret(given, secret) && !personal)) {
+  const shared = !!secret && !!given && sameSecret(given, secret)
+  const claimed = secret && given && !shared ? tokenClaimedUser(given) : null
+  if (!secret || (!shared && !claimed)) {
     res.status(401).json({ error: 'Token errado.' })
     return
   }
@@ -53,10 +57,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const admin = adminClient()
-    const query = admin.from('profile').select('user_id')
-    const { data: profile } = await (personal
-      ? query.eq('user_id', personal).maybeSingle()
-      : query.order('created_at').limit(1).maybeSingle())
+    // O perfil de quem diz ser o token (ou a primeira conta, com o segredo da
+    // casa) com a data do token; sem a coluna, lê-se sem ela (token de origem).
+    const read = async (columns: string) => {
+      const query = admin.from('profile').select(columns)
+      return claimed ? query.eq('user_id', claimed).maybeSingle() : query.order('created_at').limit(1).maybeSingle()
+    }
+    let { data: found, error: readError } = await read('user_id,ingest_token_at')
+    if (readError && missingColumn(readError)) ({ data: found, error: readError } = await read('user_id'))
+    if (readError) {
+      console.error('Atalho: leitura do perfil', readError.message)
+      res.status(503).json({ error: 'Não consegui confirmar o token. Tenta outra vez.' })
+      return
+    }
+    const profile = found as { user_id: string; ingest_token_at?: string | null } | null
+    const tokenAt = profile?.ingest_token_at ?? null
+    const allowed = claimed ? profile != null && tokenUser(secret, given, tokenAt) === profile.user_id : sharedSecretAccepted(tokenAt)
+    if (!allowed) {
+      res.status(401).json({ error: 'Token errado.' })
+      return
+    }
     if (!profile) {
       res.status(404).json({ error: 'Perfil não encontrado.' })
       return

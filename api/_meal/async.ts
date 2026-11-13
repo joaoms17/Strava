@@ -283,7 +283,7 @@ export const analyse = post(async ({ db, userId, body, res }) => {
     res.status(200).json({ meal: { ...meal, ...(!adding || meal.status === 'a_analisar' ? stopped : {}) }, limit: true })
     return
   }
-  const result = await claimAndAnalyse(admin, meal.id, reset)
+  const result = await claimAndAnalyse(admin, meal.id, reset, { force: input.force === true })
   // «Também para …» que ficou à espera (limite da IA, erro): segue agora. A
   // outra tentativa que o telemóvel pediu sozinho acaba como a da captura,
   // com o aviso «Refeição analisada» (a pessoa pode já ter saído da app).
