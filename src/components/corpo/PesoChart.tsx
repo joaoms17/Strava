@@ -189,7 +189,7 @@ export default function PesoChart({
     <ChartCard
       kicker="Peso médio"
       reading={reading}
-      aside={previousWeek && <p className="text-[14px] text-dim tabular-nums">{previousWeek}</p>}
+      aside={previousWeek && <p className="text-[0.875rem] text-dim tabular-nums">{previousWeek}</p>}
       legend={
         enough && (
           <Legend>

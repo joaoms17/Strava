@@ -35,7 +35,7 @@ export default function AvisoNoite() {
       ? `A rotina da noite não corre desde ${new Date(status.since).toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}. Vê as crons no Vercel.`
       : `A rotina da última noite não correu toda${status.errors ? ` (${status.errors} ${status.errors === 1 ? 'erro' : 'erros'})` : ''}. Os dias que falharam ficam para a noite seguinte.`
   return (
-    <p role="status" className="rounded-2xl bg-surface p-4 text-[13px] text-attn">
+    <p role="status" className="rounded-2xl bg-surface p-4 text-[0.8125rem] text-attn">
       {text}
     </p>
   )

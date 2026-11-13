@@ -35,7 +35,7 @@ export default function PeopleSwitcher() {
               busy="A mudar…"
               onClick={() => pick(account.user_id)}
               aria-pressed={active}
-              className={`min-h-11 flex-1 truncate rounded-lg px-2 text-[15px] ${segment(active)}`}
+              className={`min-h-11 flex-1 truncate rounded-lg px-2 text-[0.9375rem] ${segment(active)}`}
             >
               {account.name}
             </BusyButton>

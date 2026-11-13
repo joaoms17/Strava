@@ -74,7 +74,7 @@ export default function ExercisePicker({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Procurar ou escrever um exercício"
-        className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
+        className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none"
       />
       <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1">
         <button onClick={() => setGroup(null)} className={groupChip(group == null)}>
@@ -87,7 +87,7 @@ export default function ExercisePicker({
         ))}
       </div>
       {typed && !exists && (
-        <BusyButton busy="A guardar…" onClick={create} className="min-h-11 w-full rounded-xl bg-surface2 px-3 text-left text-[15px]">
+        <BusyButton busy="A guardar…" onClick={create} className="min-h-11 w-full rounded-xl bg-surface2 px-3 text-left text-[0.9375rem]">
           ＋ Adicionar «{typed}»{group ? ` em ${group}` : ''}
         </BusyButton>
       )}
@@ -96,18 +96,18 @@ export default function ExercisePicker({
           <button
             key={c.name}
             onClick={() => onPick(c.name)}
-            className="min-h-10 rounded-full border border-line px-3 text-left text-[15px]"
+            className="min-h-10 rounded-full border border-line px-3 text-left text-[0.9375rem]"
           >
             {c.name}
           </button>
         ))}
         {matches.length === 0 && (
-          <p className="text-[14px] text-dim">
+          <p className="text-[0.875rem] text-dim">
             {typed ? 'Não encontrei. Carrega em «Adicionar» para o criar.' : 'Nada neste grupo.'}
           </p>
         )}
       </div>
-      <button onClick={onClose} className="min-h-10 text-[14px] text-dim">
+      <button onClick={onClose} className="min-h-10 text-[0.875rem] text-dim">
         Fechar
       </button>
     </div>

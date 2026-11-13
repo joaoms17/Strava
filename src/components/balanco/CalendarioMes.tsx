@@ -78,7 +78,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
           <button disabled={!canPrev} onClick={() => (setMonth(prev), setPicked(null))} className="h-11 w-11 text-xl text-dim disabled:opacity-30" aria-label="Mês anterior">
             ‹
           </button>
-          <p className="text-[15px] font-semibold capitalize">{monthName(month)}</p>
+          <p className="text-[0.9375rem] font-semibold capitalize">{monthName(month)}</p>
           <button disabled={!canNext} onClick={() => (setMonth(next), setPicked(null))} className="h-11 w-11 text-xl text-dim disabled:opacity-30" aria-label="Mês seguinte">
             ›
           </button>
@@ -103,7 +103,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
           grelha: sem linhas, o VoiceOver perdia-se). */}
       <div className="grid grid-cols-7 gap-1.5 text-center" aria-label={`Calendário de ${monthName(month)}`}>
         {LETTERS.map((l, i) => (
-          <span key={i} className="text-[12px] text-dim" aria-hidden>
+          <span key={i} className="text-[0.75rem] text-dim" aria-hidden>
             {l}
           </span>
         ))}
@@ -117,7 +117,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
               onClick={() => setPicked(picked === c.date ? null : c.date)}
               aria-pressed={picked === c.date}
               aria-label={`${fmtDayShort(c.date)}: ${RESULT_TEXT[c.result]}`}
-              className={`relative flex aspect-square min-h-11 flex-col items-center justify-center rounded-lg text-[14px] leading-none tabular-nums disabled:opacity-40 ${
+              className={`relative flex aspect-square min-h-11 flex-col items-center justify-center rounded-lg text-[0.875rem] leading-none tabular-nums disabled:opacity-40 ${
                 picked === c.date ? 'ring-[2.5px] ring-ink ring-offset-2 ring-offset-surface' : ''
               }`}
               style={style(c)}
@@ -131,7 +131,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
               <span className={`relative font-semibold ${c.result === 'acima_alvo' ? 'rounded-md bg-surface px-1 py-px' : ''}`}>{c.day}</span>
               {sign[c.result] && (
                 <span
-                  className={`relative leading-none font-bold ${c.result === 'hoje' ? 'text-[10px] font-semibold' : 'text-[13px]'} ${c.result === 'acima_alvo' ? 'mt-0.5 rounded-md bg-surface px-1' : ''} ${c.result === 'acima_gasto' ? 'text-[15px] font-extrabold' : ''}`}
+                  className={`relative leading-none font-bold ${c.result === 'hoje' ? 'text-[0.625rem] font-semibold' : 'text-[0.8125rem]'} ${c.result === 'acima_alvo' ? 'mt-0.5 rounded-md bg-surface px-1' : ''} ${c.result === 'acima_gasto' ? 'text-[0.9375rem] font-extrabold' : ''}`}
                   aria-hidden
                 >
                   {sign[c.result]}
@@ -146,7 +146,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
           <>
             <div className="flex items-center justify-between gap-2">
               <div>
-                <p className="text-[14px] text-dim">
+                <p className="text-[0.875rem] text-dim">
                   {fmtDayShort(cell.date)} ·{' '}
                   {cell.result === 'acima_gasto' && <AlertBadge colors={colors} />}
                   <span className={cell.result === 'acima_gasto' ? 'font-semibold text-ink' : undefined}>
@@ -156,7 +156,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
                   </span>
                 </p>
                 {cell.kcalIn != null && (
-                  <p className="text-[15px] tabular-nums">
+                  <p className="text-[0.9375rem] tabular-nums">
                     Comeste <span className="font-semibold">{fmtInt(cell.kcalIn)} kcal</span>
                     {cell.kcalTarget != null && <> · alvo {fmtInt(cell.kcalTarget)}</>}
                     {cell.kcalOut != null && <> · gasto {fmtInt(cell.kcalOut)}</>}
@@ -164,7 +164,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
                 )}
               </div>
               {cell.result !== 'futuro' && (
-                <button onClick={() => onOpenDay(cell.date)} className="min-h-11 shrink-0 text-[15px] font-semibold text-eat">
+                <button onClick={() => onOpenDay(cell.date)} className="min-h-11 shrink-0 text-[0.9375rem] font-semibold text-eat">
                   Abrir ›
                 </button>
               )}
@@ -176,7 +176,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
             )}
           </>
         ) : (
-          <p className="pt-1 text-[14px] text-dim">Toca num dia para veres o que comeste, o alvo e o gasto.</p>
+          <p className="pt-1 text-[0.875rem] text-dim">Toca num dia para veres o que comeste, o alvo e o gasto.</p>
         )}
       </div>
     </ChartCard>

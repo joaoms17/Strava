@@ -140,7 +140,7 @@ export default function DietSheet() {
       onClose={sheet.close}
       footer={
         <div className="space-y-2">
-          <p className="text-center text-[14px] tabular-nums">
+          <p className="text-center text-[0.875rem] tabular-nums">
             {hasMeals ? (
               <>
                 <span className="font-semibold">{fmtKcal(totals.kcal)} kcal</span> · {fmtInt(totals.protein)} g proteína
@@ -158,7 +158,7 @@ export default function DietSheet() {
             busy="A guardar…"
             disabled={!loaded || !hasMeals}
             onClick={save}
-            className="min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
+            className="min-h-14 w-full rounded-2xl bg-eat font-display text-[1.125rem] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40"
           >
             Guardar dieta
           </BusyButton>
@@ -166,7 +166,7 @@ export default function DietSheet() {
       }
     >
       {!loaded ? (
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       ) : (
         <div className="space-y-5 pb-2">
           <label className="block space-y-1">
@@ -176,12 +176,12 @@ export default function DietSheet() {
               onChange={(e) => setName(e.target.value)}
               maxLength={60}
               placeholder="ex.: Dia de treino"
-              className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
+              className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none"
             />
           </label>
 
           {favorites.length === 0 && (
-            <p className="rounded-xl bg-surface2 px-3 py-3 text-[14px] text-dim">
+            <p className="rounded-xl bg-surface2 px-3 py-3 text-[0.875rem] text-dim">
               Ainda não tens favoritas. Cria a primeira em «＋ Nova favorita» numa das refeições abaixo.
             </p>
           )}
@@ -193,7 +193,7 @@ export default function DietSheet() {
               <section key={slot} className="space-y-2" aria-label={SLOT_LABEL[slot]}>
                 <div className="flex items-baseline justify-between">
                   <h3 className="label">{SLOT_LABEL[slot]}</h3>
-                  {habitual && <span className="text-[13px] text-dim tabular-nums">{fmtKcal(habitual.kcal)} kcal</span>}
+                  {habitual && <span className="text-[0.8125rem] text-dim tabular-nums">{fmtKcal(habitual.kcal)} kcal</span>}
                 </div>
                 {options.map((favId, i) => {
                   const fav = byId.get(favId)
@@ -202,8 +202,8 @@ export default function DietSheet() {
                     <div key={favId} className="flex items-center gap-3 rounded-xl border border-line p-2">
                       <Thumb url={urls[favoriteThumb(fav) ?? ''] ?? null} size={48} />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px]">{fav.name}</span>
-                        <span className="block text-[13px] text-dim tabular-nums">
+                        <span className="block truncate text-[0.9375rem]">{fav.name}</span>
+                        <span className="block text-[0.8125rem] text-dim tabular-nums">
                           {i === 0 ? 'habitual' : 'alternativa'} · {fmtKcal(fav.kcal)}&nbsp;kcal · {fmtInt(Number(fav.protein))}&nbsp;g prot.
                         </span>
                       </span>
@@ -212,7 +212,7 @@ export default function DietSheet() {
                         // linhas, para o nome caber).
                         <button
                           onClick={() => setMeals(makeHabitual(meals, slot, favId))}
-                          className="min-h-11 w-[76px] shrink-0 rounded-lg border border-line px-1.5 text-[13px] leading-tight text-eat"
+                          className="min-h-11 w-[76px] shrink-0 rounded-lg border border-line px-1.5 text-[0.8125rem] leading-tight text-eat"
                         >
                           Tornar habitual
                         </button>
@@ -236,7 +236,7 @@ export default function DietSheet() {
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder="Procurar favorita"
                         aria-label="Procurar favorita"
-                        className="h-10 w-full rounded-lg border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
+                        className="h-10 w-full rounded-lg border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none"
                       />
                     )}
                     <div className="max-h-72 space-y-1 overflow-y-auto">
@@ -250,16 +250,16 @@ export default function DietSheet() {
                           className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left active:bg-surface2"
                         >
                           <Thumb url={urls[favoriteThumb(fav) ?? ''] ?? null} size={40} />
-                          <span className="min-w-0 flex-1 truncate text-[15px]">{fav.name}</span>
-                          <span className="shrink-0 text-[13px] text-dim tabular-nums">{fmtKcal(fav.kcal)} kcal</span>
+                          <span className="min-w-0 flex-1 truncate text-[0.9375rem]">{fav.name}</span>
+                          <span className="shrink-0 text-[0.8125rem] text-dim tabular-nums">{fmtKcal(fav.kcal)} kcal</span>
                         </button>
                       ))}
                     </div>
                     <div className="flex justify-between">
-                      <button onClick={() => newFavorite(slot)} className="min-h-10 px-1 text-[15px] text-eat">
+                      <button onClick={() => newFavorite(slot)} className="min-h-10 px-1 text-[0.9375rem] text-eat">
                         ＋ Nova favorita
                       </button>
-                      <button onClick={() => setPicking(null)} className="min-h-10 px-1 text-[15px] text-dim">
+                      <button onClick={() => setPicking(null)} className="min-h-10 px-1 text-[0.9375rem] text-dim">
                         Fechar
                       </button>
                     </div>
@@ -272,7 +272,7 @@ export default function DietSheet() {
                         if (favorites.length === 0) newFavorite(slot)
                         else setPicking(slot)
                       }}
-                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px] text-dim"
+                      className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem] text-dim"
                     >
                       <Icon name="plus" size={16} /> {options.length ? 'Alternativa' : 'Juntar favorita'}
                     </button>
@@ -283,9 +283,9 @@ export default function DietSheet() {
           })}
 
           <label className="flex min-h-12 items-center justify-between gap-3 rounded-xl bg-surface2 px-3">
-            <span className="text-[15px]">
+            <span className="text-[0.9375rem]">
               Seguir esta dieta
-              <span className="block text-[13px] text-dim">Aparece no Hoje e no ＋ (só uma de cada vez).</span>
+              <span className="block text-[0.8125rem] text-dim">Aparece no Hoje e no ＋ (só uma de cada vez).</span>
             </span>
             <input
               type="checkbox"
@@ -296,7 +296,7 @@ export default function DietSheet() {
           </label>
 
           {id && (
-            <BusyButton busy="A apagar…" onClick={remove} className="min-h-11 w-full text-[15px] text-pain">
+            <BusyButton busy="A apagar…" onClick={remove} className="min-h-11 w-full text-[0.9375rem] text-pain">
               Apagar esta dieta
             </BusyButton>
           )}

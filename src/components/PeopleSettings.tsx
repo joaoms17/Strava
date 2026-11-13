@@ -36,13 +36,13 @@ export default function PeopleSettings() {
   return (
     <div className="space-y-3">
       <label className="block space-y-1">
-        <span className="text-[13px] text-dim">O teu nome (aparece no separador)</span>
+        <span className="text-[0.8125rem] text-dim">O teu nome (aparece no separador)</span>
         <span className="flex gap-2">
           <input
             value={shownName}
             onChange={(e) => setName(e.target.value)}
             maxLength={30}
-            className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-[16px] focus:border-eat focus:outline-none"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-[1rem] focus:border-eat focus:outline-none"
           />
           {name != null && name.trim() !== me?.name && (
             <BusyButton busy="A guardar…" onClick={saveName} className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta">
@@ -59,15 +59,15 @@ export default function PeopleSettings() {
             return (
               <li key={account.user_id} className="flex items-center gap-3 px-3 py-2">
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[15px]">
+                  <span className="block truncate text-[0.9375rem]">
                     {account.name}
                     {current && <span className="text-dim"> · agora</span>}
                   </span>
-                  <span className="block truncate text-[13px] text-dim">{account.email}</span>
+                  <span className="block truncate text-[0.8125rem] text-dim">{account.email}</span>
                 </span>
                 {!current && (
                   <>
-                    <BusyButton busy="A mudar…" onClick={() => change(account.user_id)} className="min-h-10 px-2 text-[15px] text-eat">
+                    <BusyButton busy="A mudar…" onClick={() => change(account.user_id)} className="min-h-10 px-2 text-[0.9375rem] text-eat">
                       Mudar
                     </BusyButton>
                     <button
@@ -75,7 +75,7 @@ export default function PeopleSettings() {
                         forgetAccount(account.user_id)
                         toast(`${account.name} saiu deste telemóvel. Os registos continuam guardados.`)
                       }}
-                      className="min-h-10 px-2 text-[15px] text-dim"
+                      className="min-h-10 px-2 text-[0.9375rem] text-dim"
                       aria-label={`Tirar ${account.name} deste telemóvel`}
                     >
                       Tirar
@@ -90,7 +90,7 @@ export default function PeopleSettings() {
 
       <button
         onClick={() => sheet.open('pessoa')}
-        className="min-h-12 w-full rounded-xl border border-dashed border-line text-[15px]"
+        className="min-h-12 w-full rounded-xl border border-dashed border-line text-[0.9375rem]"
       >
         ＋ Juntar pessoa
       </button>

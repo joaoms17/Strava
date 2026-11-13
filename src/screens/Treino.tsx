@@ -134,16 +134,16 @@ export default function Treino() {
     <section className="space-y-2" aria-label="Por enviar">
       {gymQueue.queued.map((q) => (
         <div key={q.client_id} className="space-y-2 rounded-[18px] border border-attn/50 bg-attn/10 p-4">
-          <p className="text-[16px]">
+          <p className="text-[1rem]">
             <span className="font-semibold">{q.label}</span>
             {q.error ? `: não foi aceite (${q.error})` : ': por enviar, vai sozinho quando houver rede.'}
           </p>
           {q.error && (
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => gymQueue.retry(q)} className="min-h-12 rounded-xl border border-line text-[15px]">
+              <button onClick={() => gymQueue.retry(q)} className="min-h-12 rounded-xl border border-line text-[0.9375rem]">
                 Tentar outra vez
               </button>
-              <button onClick={() => gymQueue.discard(q)} className="min-h-12 rounded-xl border border-line text-[15px] text-pain">
+              <button onClick={() => gymQueue.discard(q)} className="min-h-12 rounded-xl border border-line text-[0.9375rem] text-pain">
                 Descartar
               </button>
             </div>
@@ -158,11 +158,11 @@ export default function Treino() {
       <div className="space-y-4 pt-1">
         {queueBanner}
         <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
-          <p className="text-[16px]">
+          <p className="text-[1rem]">
             <span className="block font-semibold">Não consegui ler os teus treinos.</span>
             <span className="text-dim">Sem rede? Podes registar na mesma; aparecem quando houver rede.</span>
           </p>
-          <button onClick={() => void load()} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+          <button onClick={() => void load()} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]">
             Tentar outra vez
           </button>
         </div>
@@ -170,7 +170,7 @@ export default function Treino() {
       </div>
     )
   }
-  if (!data) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+  if (!data) return <p className="pt-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
 
   const { workouts, favorites, pending } = data
   const monday = mondayOf(today)
@@ -256,7 +256,7 @@ export default function Treino() {
     <div className="space-y-4 pt-1">
       {queueBanner}
       {failed && (
-        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[15px] text-attn">
+        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[0.9375rem] text-attn">
           Sem rede: estes são os treinos da última vez que li.
         </p>
       )}
@@ -267,7 +267,7 @@ export default function Treino() {
           className="flex w-full items-center gap-3 rounded-[18px] border border-burn/50 bg-burn/10 p-4 text-left"
         >
           <Icon name="watch" />
-          <span className="flex-1 text-[16px]">
+          <span className="flex-1 text-[1rem]">
             {row.status === 'a_ler'
               ? 'A ler o print do relógio…'
               : row.status === 'erro'
@@ -294,14 +294,14 @@ export default function Treino() {
           ].map(([label, value, tone]) => (
             // O número em baixo nos três: «Kcal do treino» pode ocupar 2 linhas.
             <div key={label} className="flex flex-col justify-between gap-1 rounded-2xl border border-line bg-surface p-3">
-              <p className="label text-[12px]">{label}</p>
-              <p className={`num text-[34px] leading-none font-extrabold ${tone}`}>{value}</p>
+              <p className="label text-[0.75rem]">{label}</p>
+              <p className={`num text-[2.125rem] leading-none font-extrabold ${tone}`}>{value}</p>
             </div>
           ))}
         </div>
       )}
       {weekZone2 != null && weekZone2 > 0 && (
-        <p className="-mt-2 text-[14px] text-dim">{weekZone2} min em zona 2 (ritmo leve, aeróbio) esta semana.</p>
+        <p className="-mt-2 text-[0.875rem] text-dim">{weekZone2} min em zona 2 (ritmo leve, aeróbio) esta semana.</p>
       )}
 
       <WorkoutLogOptions />
@@ -312,10 +312,10 @@ export default function Treino() {
 
       {ridesBike && (
       <div className="rounded-[18px] border border-line bg-surface p-4">
-        <p className="font-display text-[12px] font-bold tracking-[0.16em] text-burn uppercase">Próxima bicicleta</p>
-        <p className="mt-1 text-[17px] font-medium">{suggestion}</p>
+        <p className="font-display text-[0.75rem] font-bold tracking-[0.16em] text-burn uppercase">Próxima bicicleta</p>
+        <p className="mt-1 text-[1.0625rem] font-medium">{suggestion}</p>
         {data.sleep && poorNight(data.sleep) && (
-          <p className="mt-2 text-[15px] text-attn">
+          <p className="mt-2 text-[0.9375rem] text-attn">
             Dormiste mal esta noite
             {data.sleep.sleep_score != null
               ? ` (sono ${data.sleep.sleep_score})`
@@ -331,7 +331,7 @@ export default function Treino() {
 
       {/* Sem treinos (a Joana): o que fazer, em vez de um ecrã que parece por carregar. */}
       {workouts.length === 0 && (
-        <p className="rounded-[18px] border border-line bg-surface p-4 text-[15px] text-dim">
+        <p className="rounded-[18px] border border-line bg-surface p-4 text-[0.9375rem] text-dim">
           <span className="block font-semibold text-ink">Ainda sem treinos.</span>
           Uma caminhada ou uma aula registam-se com «Dizer» ou «À mão».
           {!profile.integration_status?.intervals?.connected &&
@@ -350,19 +350,19 @@ export default function Treino() {
                 className="flex w-full items-center gap-3 py-2.5 text-left"
               >
                 <span className="flex w-11 shrink-0 flex-col items-center">
-                  <span className="font-display text-[12px] font-semibold tracking-[0.1em] text-dim uppercase">
+                  <span className="font-display text-[0.75rem] font-semibold tracking-[0.1em] text-dim uppercase">
                     {weekdayShort(w.date)}
                   </span>
-                  <span className="num text-[24px] leading-none font-extrabold">{Number(w.date.slice(8))}</span>
+                  <span className="num text-[1.5rem] leading-none font-extrabold">{Number(w.date.slice(8))}</span>
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2 text-[16px] font-semibold">
+                  <span className="flex items-center gap-2 text-[1rem] font-semibold">
                     {workoutTitle(w)}
                     {duplicates.has(w.id) && (
-                      <span className="rounded bg-attn/15 px-1.5 text-[12px] font-normal text-attn">possível duplicado</span>
+                      <span className="rounded bg-attn/15 px-1.5 text-[0.75rem] font-normal text-attn">possível duplicado</span>
                     )}
                   </span>
-                  <span className="block truncate text-[14px] text-dim">
+                  <span className="block truncate text-[0.875rem] text-dim">
                     {[
                       w.minutes != null ? `${w.minutes} min` : null,
                       w.distance_km != null ? `${String(w.distance_km).replace('.', ',')} km` : null,
@@ -376,14 +376,14 @@ export default function Treino() {
                   </span>
                 </span>
                 {/* «≈» numa estimativa (ex.: o ginásio sem calorias do relógio, ao teu ritmo). */}
-                <span className="num shrink-0 text-[22px] text-burn">
+                <span className="num shrink-0 text-[1.375rem] text-burn">
                   {w.kcal_estimated ? '≈ ' : ''}+{fmtKcal(w.kcal_est ?? 0)}
                 </span>
               </button>
             ))}
           </div>
           {history.length > shown.length && (
-            <button onClick={() => setShowAll(true)} className="mt-2 text-[15px] text-dim">
+            <button onClick={() => setShowAll(true)} className="mt-2 text-[0.9375rem] text-dim">
               Ver mais ({history.length - shown.length})
             </button>
           )}
@@ -391,13 +391,13 @@ export default function Treino() {
             <button
               onClick={() => void loadOlder()}
               disabled={olderBusy}
-              className="mt-2 min-h-11 text-[15px] text-dim disabled:opacity-60"
+              className="mt-2 min-h-11 text-[0.9375rem] text-dim disabled:opacity-60"
             >
               {olderBusy ? 'A carregar…' : older == null ? 'Ver treinos mais antigos' : 'Mais'}
             </button>
           )}
           {older != null && older.length === 0 && (
-            <p className="mt-2 text-[14px] text-dim">Não há treinos com mais de 12 semanas.</p>
+            <p className="mt-2 text-[0.875rem] text-dim">Não há treinos com mais de 12 semanas.</p>
           )}
         </section>
       )}

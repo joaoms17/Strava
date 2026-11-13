@@ -80,31 +80,31 @@ export default function PendingInfo({ workouts, today }: { workouts: Workout[]; 
       <div className="flex items-center justify-between gap-2">
         <p className="label">Falta informação</p>
         {connected && (
-          <button disabled={fetching} onClick={() => void fetchAgain()} className="min-h-11 text-[15px] text-eat disabled:opacity-50">
+          <button disabled={fetching} onClick={() => void fetchAgain()} className="min-h-11 text-[0.9375rem] text-eat disabled:opacity-50">
             {fetching ? 'A ir buscar…' : 'Ir buscar ao relógio'}
           </button>
         )}
       </div>
       {pending.map((w) => (
         <div key={w.id} className="space-y-3 rounded-[18px] border border-attn/50 bg-attn/10 p-4">
-          <p className="text-[16px]">
+          <p className="text-[1rem]">
             <span className="font-semibold">
               {workoutTitle(w)} de {w.date === today ? 'hoje' : fmtDayShort(w.date)}
               {w.started_at ? `, ${timeOf(w.started_at)}` : ''} · {w.minutes} min
             </span>
             : faltam {missingInfo(w).join(' e ')}.
           </p>
-          <p className="text-[14px] text-dim">
+          <p className="text-[0.875rem] text-dim">
             No Garmin Connect abre o treino › Stats e tira 2 prints (em cima e em baixo, com a secção Connect IQ).
           </p>
           <div className="flex gap-2">
             <ShotButton
               target={w.id}
-              className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-cta font-display text-[16px] font-bold tracking-[0.04em] text-on-cta uppercase"
+              className="flex min-h-12 flex-1 items-center justify-center rounded-xl bg-cta font-display text-[1rem] font-bold tracking-[0.04em] text-on-cta uppercase"
             >
               Juntar os prints
             </ShotButton>
-            <button onClick={() => hide(w.id)} className="min-h-12 rounded-xl border border-line px-3 text-[15px] text-dim">
+            <button onClick={() => hide(w.id)} className="min-h-12 rounded-xl border border-line px-3 text-[0.9375rem] text-dim">
               Não tenho
             </button>
           </div>

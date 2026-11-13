@@ -107,14 +107,14 @@ export default function WorkoutDetail({ id }: { id: string }) {
   if (workout === undefined) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
   if (workout === null) {
     return (
       <BottomSheet title="Treino" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Este treino já não existe.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Este treino já não existe.</p>
       </BottomSheet>
     )
   }
@@ -153,7 +153,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
   }
 
   const field =
-    'h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
+    'h-12 w-full rounded-xl border border-line bg-bg px-3 text-[1.0625rem] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
   const numberField = (label: string, value: string, onChange: (v: string) => void, unit: string) => (
     <label className="block space-y-1">
       <span className="label">{label}</span>
@@ -165,7 +165,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
           placeholder="— adicionar"
           className={field}
         />
-        <span className="w-10 text-[15px] text-dim">{unit}</span>
+        <span className="w-10 text-[0.9375rem] text-dim">{unit}</span>
       </span>
     </label>
   )
@@ -192,7 +192,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
                 'Guardado.',
               )
             }
-            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
             Guardar alterações
           </BusyButton>
@@ -201,16 +201,16 @@ export default function WorkoutDetail({ id }: { id: string }) {
     >
       <div className="space-y-5 pb-2">
         <div>
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             {fmtDayShort(w.date)}
             {startGuessed(w) ? '' : ` · ${timeOf(at)}`} ·{' '}
             {w.favorite_id ? 'teu treino' : (SOURCE_LABEL[w.source] ?? w.source)}
             {(w.merged_from?.length ?? 0) > 0 ? ' · com print' : ''}
           </p>
-          <p className="num text-[40px] leading-tight text-burn">
-            {w.kcal_estimated ? '≈ ' : ''}+{fmtKcal(w.kcal_est ?? 0)} <span className="text-[20px] text-dim">kcal do treino</span>
+          <p className="num text-[2.5rem] leading-tight text-burn">
+            {w.kcal_estimated ? '≈ ' : ''}+{fmtKcal(w.kcal_est ?? 0)} <span className="text-[1.25rem] text-dim">kcal do treino</span>
           </p>
-          <p className="text-[14px] text-dim">
+          <p className="text-[0.875rem] text-dim">
             {kcalExplanation({
               type: w.type,
               minutes: w.minutes,
@@ -270,7 +270,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
 
         {w.deleted_at ? (
           <div className="space-y-2">
-            <p className="text-[15px] text-dim">Apagado — não conta para as contas.</p>
+            <p className="text-[0.9375rem] text-dim">Apagado — não conta para as contas.</p>
             <BusyButton
               busy="A repor…"
               onClick={async () => {
@@ -278,7 +278,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
                 emitDataChanged()
                 await load()
               }}
-              className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+              className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]"
             >
               Repor
             </BusyButton>
@@ -301,22 +301,22 @@ export default function WorkoutDetail({ id }: { id: string }) {
                 <BusyButton
                   busy="A guardar…"
                   onClick={() => patch({ watts: w.watts }, `Confirmado: ${w.watts} W.`, true)}
-                  className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+                  className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]"
                 >
                   Foi isso: confirmar {w.watts} W
                 </BusyButton>
-                <p className="text-[13px] text-dim">≈ {w.watts} W da última sessão: confirmados, contam para subir a potência.</p>
+                <p className="text-[0.8125rem] text-dim">≈ {w.watts} W da última sessão: confirmados, contam para subir a potência.</p>
               </div>
             )}
             {/* A nota que disseste ou escreveste («senti o ombro no fim»; T18). */}
             {w.note && (
-              <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+              <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem]">
                 <span className="label mr-2">Nota</span>
                 {w.note}
               </p>
             )}
 
-            <details className="text-[15px]">
+            <details className="text-[0.9375rem]">
               <summary className="cursor-pointer text-dim">Mudar o tipo, o dia ou a hora</summary>
               <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap gap-2">
@@ -332,7 +332,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
                     value={day}
                     max={today}
                     onChange={(e) => e.target.value && setDay(e.target.value)}
-                    className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+                    className="h-11 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] text-ink"
                     aria-label="Dia do treino"
                   />
                   <label className="flex items-center gap-2">
@@ -341,19 +341,19 @@ export default function WorkoutDetail({ id }: { id: string }) {
                       type="time"
                       value={time}
                       onChange={(e) => setTime(e.target.value)}
-                      className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+                      className="h-11 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] text-ink"
                       aria-label="Hora de início"
                     />
                   </label>
-                  {!time && <span className="text-[13px]">(sem hora: 18:00)</span>}
+                  {!time && <span className="text-[0.8125rem]">(sem hora: 18:00)</span>}
                 </div>
                 {w.type === 'strength' && type !== 'strength' && (
-                  <p className="text-[13px] text-attn">As séries registadas ficam, mas deixam de aparecer no ginásio.</p>
+                  <p className="text-[0.8125rem] text-attn">As séries registadas ficam, mas deixam de aparecer no ginásio.</p>
                 )}
               </div>
             </details>
             {(w.cadence != null || w.distance_km != null || w.aerobic_te != null) && (
-              <p className="text-[14px] text-dim tabular-nums">
+              <p className="text-[0.875rem] text-dim tabular-nums">
                 {[
                   w.cadence != null ? `${w.cadence} rpm` : null,
                   w.distance_km != null ? `${String(w.distance_km).replace('.', ',')} km` : null,
@@ -374,7 +374,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
                   // tempo corria o risco de o «voltar» desfazer a navegação.
                   navigate(`/treino/ginasio?id=${w.id}${w.favorite_id ? `&fav=${w.favorite_id}` : ''}`, { replace: true })
                 }
-                className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+                className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]"
               >
                 {w.source === 'intervals' ? 'Registar as séries' : 'Ver e corrigir as séries'}
               </button>
@@ -383,7 +383,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
               {/* O print junta-se a este treino, mesmo com outra duração (T14). */}
               <ShotButton
                 target={w.id}
-                className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+                className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line text-[0.9375rem]"
               >
                 <Icon name="watch" size={18} /> Juntar print a este
               </ShotButton>
@@ -392,7 +392,7 @@ export default function WorkoutDetail({ id }: { id: string }) {
                   sheet.close()
                   void runBusy('A apagar…', () => deleteWorkout(w, toast))
                 }}
-                className="min-h-12 rounded-xl border border-line text-[15px] text-pain"
+                className="min-h-12 rounded-xl border border-line text-[0.9375rem] text-pain"
               >
                 Apagar
               </button>

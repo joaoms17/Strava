@@ -253,14 +253,14 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
   if (row === undefined) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
   if (row === null) {
     return (
       <BottomSheet title="Treino" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Este print já não existe.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Este print já não existe.</p>
       </BottomSheet>
     )
   }
@@ -270,11 +270,11 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
       <BottomSheet title="Print do relógio" onClose={sheet.close}>
         <div className="space-y-3 pb-2">
           <Thumbs paths={row.thumb_paths} />
-          <p className="text-[15px]">{row.status === 'guardado' ? 'Já está guardado.' : 'Descartado.'}</p>
+          <p className="text-[0.9375rem]">{row.status === 'guardado' ? 'Já está guardado.' : 'Descartado.'}</p>
           {row.workout_id && (
             <button
               onClick={() => sheet.open('confirmar-treino', { id: row.workout_id! })}
-              className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+              className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]"
             >
               Abrir o treino
             </button>
@@ -289,9 +289,9 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
       <BottomSheet title="Print do relógio" onClose={sheet.close}>
         <div className="space-y-4 pb-2">
           <Thumbs paths={row.thumb_paths} />
-          <p className="animate-pulse text-[17px]">A ler o print…</p>
-          <p className="text-[14px] text-dim">Demora 5 a 15 segundos.</p>
-          <button onClick={sheet.close} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+          <p className="animate-pulse text-[1.0625rem]">A ler o print…</p>
+          <p className="text-[0.875rem] text-dim">Demora 5 a 15 segundos.</p>
+          <button onClick={sheet.close} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]">
             Fechar, aviso no Hoje quando estiver pronto
           </button>
         </div>
@@ -313,11 +313,11 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
             >
               Tentar de novo
             </BusyButton>
-            <button onClick={startManual} className="min-h-12 rounded-xl border border-line text-[15px]">
+            <button onClick={startManual} className="min-h-12 rounded-xl border border-line text-[0.9375rem]">
               Preencher à mão
             </button>
           </div>
-          <BusyButton busy="A descartar…" onClick={discard} className="text-[15px] text-dim">
+          <BusyButton busy="A descartar…" onClick={discard} className="text-[0.9375rem] text-dim">
             Descartar
           </BusyButton>
         </div>
@@ -328,7 +328,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
   if (!draft) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A preparar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A preparar…</p>
       </BottomSheet>
     )
   }
@@ -405,13 +405,13 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
             } as Partial<Draft>)
           }
           placeholder="— adicionar"
-          className={`h-12 w-full rounded-xl border bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:outline-none ${
+          className={`h-12 w-full rounded-xl border bg-bg px-3 text-[1.0625rem] tabular-nums placeholder:text-dim focus:outline-none ${
             low.has(lowKey) ? 'border-attn' : 'border-line focus:border-eat'
           }`}
         />
-        <span className="w-10 text-[15px] text-dim">{unit}</span>
+        <span className="w-10 text-[0.9375rem] text-dim">{unit}</span>
       </span>
-      {low.has(lowKey) && <span className="inline-block rounded bg-attn/15 px-1.5 text-[12px] text-attn">confirma</span>}
+      {low.has(lowKey) && <span className="inline-block rounded bg-attn/15 px-1.5 text-[0.75rem] text-attn">confirma</span>}
     </label>
   )
 
@@ -447,7 +447,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
           busy="A guardar…"
           disabled={!canSave}
           onClick={save}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
           {merging ? `Juntar à ${workoutTitle(candidate!).toLowerCase()}` : `Guardar${kcal.kcal > 0 ? ` · +${fmtKcal(kcal.kcal)}` : ''}`}
         </BusyButton>
@@ -456,7 +456,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
       <div className="space-y-5 pb-2">
         <Thumbs paths={row.thumb_paths} />
         {row.source_paths.length < 4 && (
-          <label className={`flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px] ${adding ? 'opacity-50' : ''}`}>
+          <label className={`flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem] ${adding ? 'opacity-50' : ''}`}>
             <Icon name="watch" size={18} /> {adding ? 'A enviar…' : 'Juntar outro print'}
             <input
               type="file"
@@ -473,12 +473,12 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
           </label>
         )}
         {row.parsed?.same_activity === false && (
-          <p className="rounded-xl bg-attn/15 px-3 py-2 text-[15px] text-attn">
+          <p className="rounded-xl bg-attn/15 px-3 py-2 text-[0.9375rem] text-attn">
             Estes prints parecem de treinos diferentes
             {row.parsed.mismatch_reason ? ` (${row.parsed.mismatch_reason})` : ''}. Guarda um de cada vez.
           </p>
         )}
-        {row.parsed?.notes && <p className="text-[14px] text-dim">{row.parsed.notes}</p>}
+        {row.parsed?.notes && <p className="text-[0.875rem] text-dim">{row.parsed.notes}</p>}
 
         {candidate && (
           <div className="space-y-2">
@@ -493,7 +493,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
               </button>
             </div>
             {merging && (
-              <p className="text-[13px] text-dim">
+              <p className="text-[0.8125rem] text-dim">
                 {target
                   ? 'Completa o treino do relógio com o que o print tem a mais: km, calorias, potência.'
                   : 'Junta os batimentos e o resto que faltar. A duração e os watts que deste ficam.'}
@@ -517,18 +517,18 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
             <p className="label flex items-center gap-2">
               Dia e hora
               {(low.has('date') || low.has('start_time')) && (
-                <span className="rounded bg-attn/15 px-1.5 text-[12px] text-attn">confirma</span>
+                <span className="rounded bg-attn/15 px-1.5 text-[0.75rem] text-attn">confirma</span>
               )}
             </p>
             <DayChips today={today} value={draft.day} onChange={(day) => set({ day })} tone="cta" />
             {present.has('time') && (
-              <label className="flex items-center gap-3 text-[15px] text-dim">
+              <label className="flex items-center gap-3 text-[0.9375rem] text-dim">
                 Começou às
                 <input
                   type="time"
                   value={draft.time}
                   onChange={(e) => set({ time: e.target.value })}
-                  className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+                  className="h-11 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] text-ink"
                   aria-label="Hora de início"
                 />
               </label>
@@ -539,7 +539,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
         {/* A juntar, a duração e os watts são os do treino que já lá está:
             não se mostram campos que seriam ignorados (T17). */}
         {merging && (
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             Duração: {candidate!.minutes ?? '?'} min, a do treino que já lá está
             {candidate!.watts != null ? ` · ${candidate!.watts} W` : ''}.
           </p>
@@ -562,7 +562,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
 
         {!merging && type === 'bike' && draft.wattsSource === 'prefill' && (
           <div className="space-y-2">
-            <p className="text-[15px]">Qual era a potência na bicicleta?</p>
+            <p className="text-[0.9375rem]">Qual era a potência na bicicleta?</p>
             <div className="flex flex-wrap gap-2">
               {/* Confirmar os mesmos watts também conta (T13): deixam de ser «≈». */}
               {[...new Set([Number(draft.watts), ...wattsOptions])]
@@ -573,13 +573,13 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
                   </button>
                 ))}
             </div>
-            <p className="text-[13px] text-dim">
+            <p className="text-[0.8125rem] text-dim">
               ≈ {draft.watts} W da última sessão: conta nas calorias, mas não para subir a potência.
             </p>
           </div>
         )}
 
-        <p className="text-[14px] text-dim">
+        <p className="text-[0.875rem] text-dim">
           {kcalExplanation({
             type,
             minutes,
@@ -590,7 +590,7 @@ export default function ImportConfirm({ id, target }: { id: string; target: stri
           })}
         </p>
         {/* Longe do Guardar e com Anular (T17). */}
-        <BusyButton busy="A descartar…" onClick={discard} className="min-h-11 w-full text-[15px] text-pain">
+        <BusyButton busy="A descartar…" onClick={discard} className="min-h-11 w-full text-[0.9375rem] text-pain">
           Descartar este print
         </BusyButton>
       </div>

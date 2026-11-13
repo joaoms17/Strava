@@ -24,7 +24,7 @@ export default function MergedDetail({ ids }: { ids: string[] }) {
   if (!rows) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
@@ -32,7 +32,7 @@ export default function MergedDetail({ ids }: { ids: string[] }) {
   if (!session) {
     return (
       <BottomSheet title="Treino" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Este treino já não existe.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Este treino já não existe.</p>
       </BottomSheet>
     )
   }
@@ -59,20 +59,20 @@ export default function MergedDetail({ ids }: { ids: string[] }) {
     <BottomSheet title={workoutTitle(session)} onClose={sheet.close}>
       <div className="space-y-5 pb-2">
         <div>
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             {fmtDayShort(session.date)}
             {session.started_at ? ` · ${timeOf(session.started_at)}${end ? `–${timeOf(end)}` : ''}` : ''}
           </p>
-          <p className="text-[14px] text-dim">
+          <p className="text-[0.875rem] text-dim">
             {parts.length} partes juntas: o relógio dividiu o treino (parou e recomeçou).
           </p>
         </div>
-        <p className="num text-[34px] leading-none font-extrabold text-burn">+{fmtKcal(session.kcal_est ?? 0)}</p>
+        <p className="num text-[2.125rem] leading-none font-extrabold text-burn">+{fmtKcal(session.kcal_est ?? 0)}</p>
         <div className="grid grid-cols-2 gap-2">
           {tiles.map(([label, value]) => (
             <div key={label} className="rounded-2xl border border-line bg-surface p-3">
-              <p className="label text-[12px]">{label}</p>
-              <p className="num text-[22px] leading-tight font-semibold">{value}</p>
+              <p className="label text-[0.75rem]">{label}</p>
+              <p className="num text-[1.375rem] leading-tight font-semibold">{value}</p>
             </div>
           ))}
         </div>
@@ -85,10 +85,10 @@ export default function MergedDetail({ ids }: { ids: string[] }) {
                   onClick={() => sheet.open('confirmar-treino', { id: p.id })}
                   className="flex min-h-14 w-full items-center gap-3 px-3 text-left"
                 >
-                  <span className="w-14 shrink-0 text-[15px] text-dim tabular-nums">
+                  <span className="w-14 shrink-0 text-[0.9375rem] text-dim tabular-nums">
                     {p.started_at ? timeOf(p.started_at) : `Parte ${i + 1}`}
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[15px] tabular-nums">
+                  <span className="min-w-0 flex-1 truncate text-[0.9375rem] tabular-nums">
                     {[
                       p.minutes != null ? `${p.minutes} min` : null,
                       p.distance_km != null ? `${comma(p.distance_km, 2)} km` : null,
@@ -98,13 +98,13 @@ export default function MergedDetail({ ids }: { ids: string[] }) {
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
-                  <span className="num shrink-0 text-[18px] text-burn">+{fmtKcal(p.kcal_est ?? 0)}</span>
+                  <span className="num shrink-0 text-[1.125rem] text-burn">+{fmtKcal(p.kcal_est ?? 0)}</span>
                   <Icon name="chevron" size={18} className="shrink-0 text-dim" />
                 </button>
               </li>
             ))}
           </ul>
-          <p className="text-[13px] text-dim">Para corrigir ou apagar, abre a parte.</p>
+          <p className="text-[0.8125rem] text-dim">Para corrigir ou apagar, abre a parte.</p>
         </div>
       </div>
     </BottomSheet>

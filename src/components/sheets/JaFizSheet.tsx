@@ -165,7 +165,7 @@ export default function JaFizSheet() {
   }
 
   const field =
-    'h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
+    'h-12 w-full rounded-xl border border-line bg-bg px-3 text-[1.0625rem] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
 
   return (
     <BottomSheet
@@ -179,7 +179,7 @@ export default function JaFizSheet() {
             busy="A guardar…"
             disabled={!canSave}
             onClick={() => save()}
-            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
             {`Guardar${preview.kcal > 0 ? ` · +${fmtKcal(preview.kcal)}` : ''}`}
           </BusyButton>
@@ -200,7 +200,7 @@ export default function JaFizSheet() {
               // Substitui a entrada da folha (fechar e navegar desfazia a navegação, T5).
               navigate(`/treino/ginasio${day !== today ? `?data=${day}` : ''}`, { replace: true })
             }
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-line text-[0.9375rem]"
           >
             Registar as séries no Ginásio
           </button>
@@ -209,13 +209,13 @@ export default function JaFizSheet() {
         <div className="space-y-2">
           <p className="label">Quando</p>
           <DayChips today={today} value={day} onChange={setDay} tone="cta" />
-          <label className="flex items-center gap-3 text-[15px] text-dim">
+          <label className="flex items-center gap-3 text-[0.9375rem] text-dim">
             Começou às
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="h-11 rounded-xl border border-line bg-bg px-3 text-[17px] text-ink"
+              className="h-11 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] text-ink"
               aria-label="Hora de início"
             />
             {!time && <span>{day === today ? '(agora)' : '(18:00)'}</span>}
@@ -238,7 +238,7 @@ export default function JaFizSheet() {
               </button>
             ))}
             {/* Outra duração: com o aspeto de escolhida quando está escrita (como nos teus treinos). */}
-            <label className="flex items-center gap-1.5 text-[15px] text-dim">
+            <label className="flex items-center gap-1.5 text-[0.9375rem] text-dim">
               <input
                 inputMode="numeric"
                 placeholder="outro"
@@ -247,7 +247,7 @@ export default function JaFizSheet() {
                   setOtherMinutes(e.target.value.replace(/\D/g, ''))
                   setMinutes(null)
                 }}
-                className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                className={`h-11 w-20 rounded-full border px-3 text-[0.9375rem] tabular-nums placeholder:text-dim ${
                   otherMinutes ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
                 }`}
                 aria-label="Outra duração em minutos"
@@ -267,7 +267,7 @@ export default function JaFizSheet() {
                     {w} W
                   </button>
                 ))}
-                <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                <label className="flex items-center gap-1.5 text-[0.9375rem] text-dim">
                   <input
                     inputMode="numeric"
                     aria-label="Outra potência em watts"
@@ -277,7 +277,7 @@ export default function JaFizSheet() {
                       const n = Number.parseInt(e.target.value.replace(/\D/g, '').slice(0, 3), 10)
                       setWatts(Number.isFinite(n) && n > 0 ? n : null)
                     }}
-                    className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                    className={`h-11 w-20 rounded-full border px-3 text-[0.9375rem] tabular-nums placeholder:text-dim ${
                       watts != null && !wattsOptions.includes(watts) ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
                     }`}
                   />
@@ -308,7 +308,7 @@ export default function JaFizSheet() {
                   />
                 </label>
               </div>
-              <span className="block text-[13px] text-dim">Opcionais. Com os dois, a app pode subir a potência.</span>
+              <span className="block text-[0.8125rem] text-dim">Opcionais. Com os dois, a app pode subir a potência.</span>
             </div>
           </>
         )}
@@ -323,7 +323,7 @@ export default function JaFizSheet() {
               placeholder="ex.: 250"
               className={field}
             />
-            <span className="block text-[13px] text-dim">
+            <span className="block text-[0.8125rem] text-dim">
               {type === 'strength'
                 ? kcalExplanation({
                     type,

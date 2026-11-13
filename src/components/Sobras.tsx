@@ -125,11 +125,11 @@ export function LeftoversNote({ meal }: { meal: Meal }) {
     <div className="flex items-center gap-3 rounded-2xl bg-surface2 p-2 pr-3">
       <span className="relative shrink-0 overflow-hidden rounded-xl">
         <Thumb url={path ? urls[path] : null} size={52} />
-        <span className="absolute inset-x-0 bottom-0 bg-black/60 py-px text-center text-[11px] font-semibold text-white">depois</span>
+        <span className="absolute inset-x-0 bottom-0 bg-black/60 py-px text-center text-[0.6875rem] font-semibold text-white">depois</span>
       </span>
       <span className="min-w-0">
-        <span className="block text-[15px] tabular-nums">{left > 0 ? `Sobraram ≈ ${fmtKcal(left)} kcal no prato` : 'Comeste tudo'}</span>
-        <span className="block text-[13px] text-dim">{left > 0 ? 'Já descontado nos números.' : 'Os números ficam como estavam.'}</span>
+        <span className="block text-[0.9375rem] tabular-nums">{left > 0 ? `Sobraram ≈ ${fmtKcal(left)} kcal no prato` : 'Comeste tudo'}</span>
+        <span className="block text-[0.8125rem] text-dim">{left > 0 ? 'Já descontado nos números.' : 'Os números ficam como estavam.'}</span>
       </span>
     </div>
   )
@@ -210,8 +210,8 @@ export function LeftoversQuestion({
       <div className="flex items-center gap-3">
         <Thumb url={thumb ? urls[thumb] : null} size={44} />
         <div className="min-w-0">
-          <p className="text-[16px] leading-snug font-semibold">Isto é o que sobrou {ofSlot(slot)}?</p>
-          <p className="text-[13px] text-dim tabular-nums">
+          <p className="text-[1rem] leading-snug font-semibold">Isto é o que sobrou {ofSlot(slot)}?</p>
+          <p className="text-[0.8125rem] text-dim tabular-nums">
             Desconto o que ficou no prato das {timeOf(meal.logged_at)}{' '}
             <span className="whitespace-nowrap">(≈ {fmtKcal(Number(meal.kcal))} kcal).</span>
           </p>
@@ -222,11 +222,11 @@ export function LeftoversQuestion({
           onClick={yes}
           disabled={busy}
           aria-busy={busy || undefined}
-          className="min-h-11 rounded-xl border border-eat text-[15px] font-semibold text-eat"
+          className="min-h-11 rounded-xl border border-eat text-[0.9375rem] font-semibold text-eat"
         >
           {busy ? <BusyLabel text="A comparar…" /> : 'Sim'}
         </button>
-        <button onClick={no} disabled={busy} className="min-h-11 rounded-xl bg-surface text-[15px]">
+        <button onClick={no} disabled={busy} className="min-h-11 rounded-xl bg-surface text-[0.9375rem]">
           Não, é outra refeição
         </button>
       </div>

@@ -32,7 +32,7 @@ export default function AtalhoSaude() {
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         Para quem tem Apple Watch: um Atalho do iPhone manda todas as noites os passos e as horas de sono do Saúde
         para esta conta. Cada pessoa usa o seu token.
       </p>
@@ -40,7 +40,7 @@ export default function AtalhoSaude() {
         <button
           disabled={busy}
           onClick={() => void show()}
-          className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] disabled:opacity-50"
+          className="min-h-12 w-full rounded-xl bg-surface2 text-[0.9375rem] disabled:opacity-50"
         >
           {busy ? 'A obter…' : 'Mostrar endereço e token'}
         </button>
@@ -55,16 +55,16 @@ export default function AtalhoSaude() {
             <div key={label} className="space-y-1">
               <p className="label">{label}</p>
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 rounded-lg bg-surface2 px-3 py-2 text-[12px] break-all select-all">
+                <code className="min-w-0 flex-1 rounded-lg bg-surface2 px-3 py-2 text-[0.75rem] break-all select-all">
                   {value}
                 </code>
-                <button onClick={() => void copy(value, label)} className="min-h-10 shrink-0 px-2 text-[14px] text-eat">
+                <button onClick={() => void copy(value, label)} className="min-h-10 shrink-0 px-2 text-[0.875rem] text-eat">
                   Copiar
                 </button>
               </div>
             </div>
           ))}
-          <ol className="list-decimal space-y-1 pl-5 text-[13px] text-dim">
+          <ol className="list-decimal space-y-1 pl-5 text-[0.8125rem] text-dim">
             <li>Atalhos › novo atalho: «Procurar amostras de saúde» de Passos de hoje e «Calcular estatísticas» › Soma.</li>
             <li>
               Outra vez para Análise do sono, desde ontem às 18:00, só «A dormir»; soma da duração em minutos.

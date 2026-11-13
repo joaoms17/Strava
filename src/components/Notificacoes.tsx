@@ -53,8 +53,8 @@ function KindToggle({
   return (
     <label className="flex items-start justify-between gap-4">
       <span>
-        <span className="block text-[15px]">{label}</span>
-        <span className="block text-[13px] text-dim">{help}</span>
+        <span className="block text-[0.9375rem]">{label}</span>
+        <span className="block text-[0.8125rem] text-dim">{help}</span>
       </span>
       {mine ? (
         <Spinner size={24} className="mt-1" />
@@ -87,7 +87,7 @@ export default function Notificacoes() {
 
   if (support === 'instalar') {
     return (
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         No iPhone, as notificações só funcionam com a app no ecrã principal: no Safari, toca em Partilhar › «Adicionar ao
         ecrã principal» e abre a app pelo ícone. Depois liga-as aqui.
       </p>
@@ -95,7 +95,7 @@ export default function Notificacoes() {
   }
   if (support === 'nao') {
     return (
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         Este telemóvel não recebe notificações da app. No iPhone é preciso o iOS 16.4 ou mais recente, com a app no ecrã
         principal.
       </p>
@@ -125,13 +125,13 @@ export default function Notificacoes() {
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         Avisos no ecrã do telemóvel, só os que ligares. Não mostram pesos nem gordura. No iPhone, só com a app no ecrã
         principal; cada telemóvel liga as suas.
       </p>
-      {permission === 'denied' && <p className="text-[14px] text-attn">{DENIED_TEXT}</p>}
+      {permission === 'denied' && <p className="text-[0.875rem] text-attn">{DENIED_TEXT}</p>}
       {state.other && !on && (
-        <p className="text-[14px] text-attn">
+        <p className="text-[0.875rem] text-attn">
           Neste telemóvel as notificações estão ligadas para outra pessoa. Se as ligares aqui, passam a ser tuas.
         </p>
       )}
@@ -152,7 +152,7 @@ export default function Notificacoes() {
             await testPush()
             toast('Enviada. Deve aparecer daqui a uns segundos.')
           }}
-          className="min-h-11 w-full rounded-xl bg-surface2 text-[15px]"
+          className="min-h-11 w-full rounded-xl bg-surface2 text-[0.9375rem]"
         >
           Mandar uma de teste
         </BusyButton>

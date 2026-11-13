@@ -90,7 +90,7 @@ function ChangePassword() {
   }, [open])
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px]">
+      <button onClick={() => setOpen(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[0.9375rem]">
         Mudar palavra-passe
       </button>
     )
@@ -105,7 +105,7 @@ function ChangePassword() {
           toast('Palavra-passe mudada.')
         }}
       />
-      <button onClick={() => setOpen(false)} className="min-h-11 w-full text-[15px] text-dim">
+      <button onClick={() => setOpen(false)} className="min-h-11 w-full text-[0.9375rem] text-dim">
         Cancelar
       </button>
     </div>
@@ -117,19 +117,19 @@ function SignOut() {
   const [confirming, setConfirming] = useState(false)
   if (!confirming) {
     return (
-      <button onClick={() => setConfirming(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] text-pain">
+      <button onClick={() => setConfirming(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[0.9375rem] text-pain">
         Terminar sessão
       </button>
     )
   }
   return (
     <div role="alertdialog" aria-label="Terminar sessão" className="space-y-2 rounded-xl border border-line p-3">
-      <p className="text-[15px]">Terminar a sessão neste telemóvel? Para voltar a entrar precisas do email e da palavra-passe.</p>
+      <p className="text-[0.9375rem]">Terminar a sessão neste telemóvel? Para voltar a entrar precisas do email e da palavra-passe.</p>
       <div className="grid grid-cols-2 gap-2">
-        <button autoFocus onClick={() => setConfirming(false)} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+        <button autoFocus onClick={() => setConfirming(false)} className="min-h-12 rounded-xl bg-surface2 text-[0.9375rem]">
           Cancelar
         </button>
-        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 rounded-xl bg-surface2 text-[15px] font-semibold text-pain">
+        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 rounded-xl bg-surface2 text-[0.9375rem] font-semibold text-pain">
           Terminar
         </BusyButton>
       </div>
@@ -140,7 +140,7 @@ function SignOut() {
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="px-1 text-[13px] font-semibold text-dim">{title}</h2>
+      <h2 className="px-1 text-[0.8125rem] font-semibold text-dim">{title}</h2>
       <div className="space-y-3 rounded-2xl bg-surface p-4">{children}</div>
     </section>
   )
@@ -150,8 +150,8 @@ function Toggle({ label, help, value, onChange }: { label: string; help?: string
   return (
     <label className="flex items-start justify-between gap-4">
       <span>
-        <span className="block text-[15px]">{label}</span>
-        {help && <span className="block text-[13px] text-dim">{help}</span>}
+        <span className="block text-[0.9375rem]">{label}</span>
+        {help && <span className="block text-[0.8125rem] text-dim">{help}</span>}
       </span>
       <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-6 w-6 shrink-0 accent-cta" />
     </label>
@@ -160,7 +160,7 @@ function Toggle({ label, help, value, onChange }: { label: string; help?: string
 
 function Choice<T extends string>({ options, value, onChange }: { options: [T, string][]; value: T; onChange: (v: T) => void }) {
   return (
-    <div className={`grid ${SEGMENT_TRACK} text-[15px]`} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
+    <div className={`grid ${SEGMENT_TRACK} text-[0.9375rem]`} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
       {options.map(([id, label]) => (
         <button key={id} onClick={() => onChange(id)} aria-pressed={value === id} className={`min-h-11 rounded-lg ${segment(value === id)}`}>
           {label}
@@ -277,7 +277,7 @@ export default function Definicoes() {
     return (
       <label key={field.key} className="block space-y-1">
         <span className="flex items-baseline justify-between gap-3">
-          <span className="text-[15px]">{field.label}</span>
+          <span className="text-[0.9375rem]">{field.label}</span>
           <span className="flex items-center gap-1.5">
             <input
               inputMode="decimal"
@@ -285,10 +285,10 @@ export default function Definicoes() {
               onChange={(e) => setValues((prev) => ({ ...prev, [field.key]: e.target.value }))}
               className="h-11 w-24 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
             />
-            {field.unit && <span className="w-8 text-[13px] text-dim">{field.unit}</span>}
+            {field.unit && <span className="w-8 text-[0.8125rem] text-dim">{field.unit}</span>}
           </span>
         </span>
-        {field.help && <span className="block text-[13px] text-dim">{field.help}</span>}
+        {field.help && <span className="block text-[0.8125rem] text-dim">{field.help}</span>}
       </label>
     )
   }
@@ -298,7 +298,7 @@ export default function Definicoes() {
   const saveButton = (fields: Field[], changed = dirty(fields)) => (
     <div className="space-y-1">
       {changed && (
-        <p role="status" className="text-[13px] font-semibold text-attn">
+        <p role="status" className="text-[0.8125rem] font-semibold text-attn">
           Tens alterações por guardar.
         </p>
       )}
@@ -317,14 +317,14 @@ export default function Definicoes() {
     <Section title="Bicicleta">
       <label className="block space-y-1">
         <span className="flex items-baseline justify-between gap-3">
-          <span className="text-[15px]">Potências que usas</span>
+          <span className="text-[0.9375rem]">Potências que usas</span>
           <input
             value={watts}
             onChange={(e) => setWatts(e.target.value)}
             className="h-11 w-36 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
           />
         </span>
-        <span className="block text-[13px] text-dim">Em watts, por exemplo 130 · 140 · 150.</span>
+        <span className="block text-[0.8125rem] text-dim">Em watts, por exemplo 130 · 140 · 150.</span>
       </label>
       {BIKE.map(numberInput)}
       {saveButton(BIKE, bikeDirty)}
@@ -350,7 +350,7 @@ export default function Definicoes() {
 
       <Section title="Perfil e metas">
         <div className="space-y-1">
-          <p className="text-[15px]">Sexo</p>
+          <p className="text-[0.9375rem]">Sexo</p>
           <Choice
             options={[
               ['m', 'Homem'],
@@ -359,7 +359,7 @@ export default function Definicoes() {
             value={profile.sex === 'f' ? 'f' : 'm'}
             onChange={(v) => set({ sex: v })}
           />
-          <p className="text-[13px] text-dim">Muda a fórmula da gordura (as mulheres medem também a anca), o gasto e as categorias.</p>
+          <p className="text-[0.8125rem] text-dim">Muda a fórmula da gordura (as mulheres medem também a anca), o gasto e as categorias.</p>
         </div>
         {GOALS.map(numberInput)}
         <Toggle
@@ -420,20 +420,20 @@ export default function Definicoes() {
       </Section>
 
       <Section title="Sessão">
-        <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
+        <p className="text-[0.8125rem] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
         <ChangePassword />
         <SignOut />
       </Section>
 
       <Section title="Os meus dados">
-        <p className="text-[13px] text-dim">Exportar em CSV (abre no Excel ou no Numbers).</p>
+        <p className="text-[0.8125rem] text-dim">Exportar em CSV (abre no Excel ou no Numbers).</p>
         <div className="grid grid-cols-2 gap-2">
           {EXPORT_TABLES.map(([table, filename, label]) => (
             <BusyButton
               key={table}
               busy="A exportar…"
               onClick={() => exportTable(table, filename, label)}
-              className="min-h-11 rounded-xl bg-surface2 text-[15px] disabled:opacity-50"
+              className="min-h-11 rounded-xl bg-surface2 text-[0.9375rem] disabled:opacity-50"
             >
               {label}
             </BusyButton>
@@ -442,14 +442,14 @@ export default function Definicoes() {
       </Section>
 
       <div className="divide-y divide-line rounded-2xl bg-surface">
-        <Link href="/favoritos" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+        <Link href="/favoritos" className="flex min-h-14 items-center justify-between px-4 text-[0.9375rem]">
           Favoritas e dieta <span className="text-dim">›</span>
         </Link>
-        <Link href="/definicoes/avancado" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+        <Link href="/definicoes/avancado" className="flex min-h-14 items-center justify-between px-4 text-[0.9375rem]">
           Avançado <span className="text-dim">›</span>
         </Link>
         {uses.chapters && (
-          <Link href="/definicoes/arquivo" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+          <Link href="/definicoes/arquivo" className="flex min-h-14 items-center justify-between px-4 text-[0.9375rem]">
             Arquivo <span className="text-dim">›</span>
           </Link>
         )}
@@ -462,7 +462,7 @@ export default function Definicoes() {
             {!uses.shortcut && shortcutSection}
           </>
         ) : (
-          <button onClick={() => setShowMore(true)} className="min-h-12 w-full rounded-xl border border-line text-[15px] text-dim">
+          <button onClick={() => setShowMore(true)} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem] text-dim">
             Mais definições ({[!uses.bike && 'bicicleta', !uses.shortcut && 'Atalho do iPhone'].filter(Boolean).join(', ')})
           </button>
         ))}

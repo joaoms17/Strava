@@ -21,7 +21,7 @@ export default function ItemList({
 }) {
   const [editing, setEditing] = useState<{ index: number; original: MealItem; text: string } | null>(null)
   const cancelled = useRef(false)
-  const button = 'h-10 w-10 shrink-0 rounded-lg bg-surface text-[17px]'
+  const button = 'h-10 w-10 shrink-0 rounded-lg bg-surface text-[1.0625rem]'
 
   const replace = (i: number, item: MealItem) => onChange(items.map((it, j) => (j === i ? item : it)))
 
@@ -53,8 +53,8 @@ export default function ItemList({
         const editable = !readOnly && item.grams > 0
         const line = (
           <>
-            <span className="block truncate text-[15px]">{item.name}</span>
-            <span className="block text-[13px] text-dim tabular-nums">
+            <span className="block truncate text-[0.9375rem]">{item.name}</span>
+            <span className="block text-[0.8125rem] text-dim tabular-nums">
               {item.grams > 0 && (
                 <>
                   <span className={editable ? 'underline decoration-dotted underline-offset-2' : ''}>
@@ -72,8 +72,8 @@ export default function ItemList({
           <li key={i} className="flex items-center gap-2 px-3 py-1.5">
             {editing?.index === i ? (
               <label className="min-h-11 min-w-0 flex-1">
-                <span className="block truncate text-[15px]">{item.name}</span>
-                <span className="flex items-center gap-1.5 text-[13px] text-dim tabular-nums">
+                <span className="block truncate text-[0.9375rem]">{item.name}</span>
+                <span className="flex items-center gap-1.5 text-[0.8125rem] text-dim tabular-nums">
                   <input
                     autoFocus
                     inputMode="decimal"
@@ -87,7 +87,7 @@ export default function ItemList({
                       if (e.key === 'Escape') cancelled.current = true
                       if (e.key === 'Enter' || e.key === 'Escape') e.currentTarget.blur()
                     }}
-                    className="h-9 w-20 rounded-lg border border-eat bg-bg px-2 text-[17px] text-ink focus:outline-none"
+                    className="h-9 w-20 rounded-lg border border-eat bg-bg px-2 text-[1.0625rem] text-ink focus:outline-none"
                   />
                   g · {fmtInt(item.kcal)} kcal
                 </span>

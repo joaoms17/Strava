@@ -18,8 +18,8 @@ export default function PlanoTreinoCard() {
           <Icon name="calendar" size={22} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[17px] font-semibold">Plano de treino</span>
-          <span className="block truncate text-[14px] text-dim">Fase {plan.fase} · cuidados e progressão</span>
+          <span className="block truncate text-[1.0625rem] font-semibold">Plano de treino</span>
+          <span className="block truncate text-[0.875rem] text-dim">Fase {plan.fase} · cuidados e progressão</span>
         </span>
         <Icon name="chevron" size={20} />
       </button>
@@ -31,8 +31,8 @@ export default function PlanoTreinoCard() {
             className="flex min-h-14 flex-col justify-center rounded-xl border border-line bg-bg px-2.5 py-2 text-left leading-tight"
             aria-label={dayLabel(d)}
           >
-            <span className={`num text-[18px] ${dayTone(d.n).text}`}>Dia {d.n}</span>
-            <span className="text-[13px] text-dim">{d.curto ?? d.titulo}</span>
+            <span className={`num text-[1.125rem] ${dayTone(d.n).text}`}>Dia {d.n}</span>
+            <span className="text-[0.8125rem] text-dim">{d.curto ?? d.titulo}</span>
           </button>
         ))}
       </div>

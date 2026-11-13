@@ -54,7 +54,7 @@ export default function ExplicacaoGordura({
   const sheet = useSheet()
   const ask = offerConfirm && x.askConfirm && row != null && x.neck != null
   return (
-    <div className={`space-y-2 ${compact ? 'text-[14px]' : 'text-[15px]'}`}>
+    <div className={`space-y-2 ${compact ? 'text-[0.875rem]' : 'text-[0.9375rem]'}`}>
       <p>
         <span className="text-dim">Desde {fmtDayMonth(x.previousDate)}: </span>
         {x.change.text}
@@ -65,11 +65,11 @@ export default function ExplicacaoGordura({
           <BusyButton
             busy="A guardar…"
             onClick={() => confirmNeck(row, x.neck!.measured)}
-            className="min-h-11 rounded-xl border border-line px-2 text-[14px] font-semibold"
+            className="min-h-11 rounded-xl border border-line px-2 text-[0.875rem] font-semibold"
           >
             Está certo ({cm(x.neck!.measured)} cm)
           </BusyButton>
-          <button onClick={() => sheet.open('medidas', { id: row.id })} className="min-h-11 rounded-xl border border-line px-2 text-[14px]">
+          <button onClick={() => sheet.open('medidas', { id: row.id })} className="min-h-11 rounded-xl border border-line px-2 text-[0.875rem]">
             Corrigir a medida
           </button>
         </div>

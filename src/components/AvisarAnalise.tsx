@@ -54,7 +54,7 @@ export default function AvisarAnalise({ className = '' }: { className?: string }
   }
 
   return (
-    <p className={`flex flex-wrap items-center gap-x-1 text-[14px] ${className}`}>
+    <p className={`flex flex-wrap items-center gap-x-1 text-[0.875rem] ${className}`}>
       <button onClick={turnOn} disabled={mine} className="min-h-10 text-eat">
         {busyContent(mine, 'A ligar…', 'Avisar-me quando acabar')}
       </button>

@@ -293,7 +293,7 @@ export default function CaptureSheet() {
   }
 
   const big =
-    'flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-2xl font-display text-[18px] font-bold tracking-[0.06em] uppercase'
+    'flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-2xl font-display text-[1.125rem] font-bold tracking-[0.06em] uppercase'
   const pastParam: Record<string, string> = when.date !== today ? { data: when.date } : {}
   const otherPhotoDay = isNow && reviewing && photoDay != null && photoDay !== today
 
@@ -306,7 +306,7 @@ export default function CaptureSheet() {
             disabled={busy}
             aria-busy={busy || undefined}
             onClick={sendNow}
-            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase"
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[1.125rem] font-bold tracking-[0.04em] text-bg uppercase"
           >
             {busy ? (
               <BusyLabel text="A guardar…" />
@@ -338,7 +338,7 @@ export default function CaptureSheet() {
                 </div>
               ))}
               {photos.length < MAX_MEAL_PHOTOS && (
-                <label className="flex h-28 w-28 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-line text-[13px] text-dim">
+                <label className="flex h-28 w-28 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-line text-[0.8125rem] text-dim">
                   <Icon name="camera" size={24} />
                   Outra foto
                   <input
@@ -366,7 +366,7 @@ export default function CaptureSheet() {
                 sheet.close()
               }}
             />
-            <p className="text-[13px] text-dim">
+            <p className="text-[0.8125rem] text-dim">
               Junta uma nota se quiseres (o que não se vê, o que sobrou) e carrega em Registar.
             </p>
           </div>
@@ -396,7 +396,7 @@ export default function CaptureSheet() {
                 ? 'Nota (opcional). Ex.: comi metade do arroz, molho à parte, frito em azeite'
                 : 'O que comeste? Ex.: 2 ovos mexidos, torrada, café com leite'
             }
-            className={`block w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none ${
+            className={`block w-full resize-none rounded-2xl border border-line bg-bg px-4 py-3 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none ${
               reviewing ? '' : 'pr-14'
             }`}
           />
@@ -438,7 +438,7 @@ export default function CaptureSheet() {
             ))}
           </div>
         ) : (
-          <p className="-mt-2 text-[13px] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
+          <p className="-mt-2 text-[0.8125rem] text-dim">Escreve ou dita (microfone do teclado). A conta chega sozinha.</p>
         )}
         {hasContent && people.length > 0 && (
           <AlsoFor
@@ -462,7 +462,7 @@ export default function CaptureSheet() {
               setPhotos([])
               setText('')
             }}
-            className="min-h-11 w-full text-[15px] text-dim"
+            className="min-h-11 w-full text-[0.9375rem] text-dim"
           >
             Cancelar a foto
           </button>
@@ -501,7 +501,7 @@ export default function CaptureSheet() {
         <section className="space-y-2" aria-label="Repetir">
           <h3 className="label">Repetir</h3>
           {favorites != null && favorites.length === 0 ? (
-            <p className="rounded-xl bg-surface2 px-3 py-3 text-[13px] text-dim">
+            <p className="rounded-xl bg-surface2 px-3 py-3 text-[0.8125rem] text-dim">
               Guarda as refeições que repetes na ☆ de uma refeição ou em «Nova favorita». Depois registas com 1 toque.
             </p>
           ) : (
@@ -514,8 +514,8 @@ export default function CaptureSheet() {
                 >
                   <Thumb url={favUrls[favoriteThumb(favorite) ?? ''] ?? null} size={42} />
                   <span className="min-w-0">
-                    <span className="line-clamp-2 text-[15px] leading-tight">{favorite.name}</span>
-                    <span className="block text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
+                    <span className="line-clamp-2 text-[0.9375rem] leading-tight">{favorite.name}</span>
+                    <span className="block text-[0.8125rem] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
                   </span>
                 </button>
               ))}
@@ -526,7 +526,7 @@ export default function CaptureSheet() {
             className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"
           >
             <Icon name="repeat" size={20} className="shrink-0 text-eat" />
-            <span className="min-w-0 flex-1 text-[15px]">Procurar nas favoritas e no histórico</span>
+            <span className="min-w-0 flex-1 text-[0.9375rem]">Procurar nas favoritas e no histórico</span>
             <Icon name="chevron" size={18} className="shrink-0 text-dim" />
           </button>
         </section>
@@ -543,7 +543,7 @@ export default function CaptureSheet() {
             <button
               key={icon}
               onClick={run}
-              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-line px-1 text-[13px] text-dim"
+              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-line px-1 text-[0.8125rem] text-dim"
             >
               <Icon name={icon} size={20} className="text-ink" />
               {text}
@@ -554,20 +554,20 @@ export default function CaptureSheet() {
         <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => sheet.open('peso', pastParam)}
-            className="relative flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
+            className="relative flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[1.0625rem] font-bold tracking-[0.06em] uppercase"
           >
             <Icon name="scale" size={20} /> Peso
             {weighDot && <span className="absolute top-2 right-3 h-2 w-2 rounded-full bg-eat" aria-label="por fazer hoje" />}
           </button>
           <button
             onClick={() => sheet.open('medidas')}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[1.0625rem] font-bold tracking-[0.06em] uppercase"
           >
             <Icon name="ruler" size={20} /> Medidas
           </button>
           <button
             onClick={() => sheet.open('treino', pastParam)}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[17px] font-bold tracking-[0.06em] uppercase"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line bg-surface2 font-display text-[1.0625rem] font-bold tracking-[0.06em] uppercase"
           >
             <Icon name="bike" size={20} /> Treino
           </button>

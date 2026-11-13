@@ -278,14 +278,14 @@ export default function Ginasio() {
   if (loadFailed) {
     return (
       <div className="space-y-3 pt-8 text-center">
-        <p className="text-[16px]">Sem rede: não consegui abrir esta sessão.</p>
-        <button onClick={() => window.location.reload()} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+        <p className="text-[1rem]">Sem rede: não consegui abrir esta sessão.</p>
+        <button onClick={() => window.location.reload()} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]">
           Tentar outra vez
         </button>
       </div>
     )
   }
-  if (!draft) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+  if (!draft) return <p className="pt-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
 
   const d = draft
   const setExercises = (exercises: DraftExercise[]) => setDraft({ ...d, exercises })
@@ -444,15 +444,15 @@ export default function Ginasio() {
   if (savedId) {
     return (
       <div className="space-y-4 pt-4 text-center">
-        <p className="num text-[40px] leading-none font-extrabold text-burn">Feito</p>
-        <p className="text-[15px] text-dim">
+        <p className="num text-[2.5rem] leading-none font-extrabold text-burn">Feito</p>
+        <p className="text-[0.9375rem] text-dim">
           {doneSets} séries · {minutes} min
         </p>
         {savedId === 'fila' && (
-          <p className="text-[15px] text-attn">Por enviar: fica no telemóvel e vai sozinha quando houver rede.</p>
+          <p className="text-[0.9375rem] text-attn">Por enviar: fica no telemóvel e vai sozinha quando houver rede.</p>
         )}
         {savedId !== 'fila' && !editId && !d.favoriteId && !d.planName && favName == null && (
-          <button onClick={() => setFavName('')} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+          <button onClick={() => setFavName('')} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]">
             ☆ Guardar nos meus treinos
           </button>
         )}
@@ -464,7 +464,7 @@ export default function Ginasio() {
               onChange={(e) => setFavName(e.target.value)}
               placeholder="Nome, ex.: Pernas C"
               aria-label="Nome do treino"
-              className="h-12 flex-1 rounded-xl border border-line bg-bg px-3 text-[17px]"
+              className="h-12 flex-1 rounded-xl border border-line bg-bg px-3 text-[1.0625rem]"
             />
             <BusyButton
               busy="A guardar…"
@@ -478,7 +478,7 @@ export default function Ginasio() {
         )}
         <button
           onClick={() => navigate('/treino')}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase"
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase"
         >
           Voltar ao Treino
         </button>
@@ -489,24 +489,24 @@ export default function Ginasio() {
   const used = new Set(d.exercises.map((e) => e.name))
   // Uma sessão de um dia do plano de treino: «Ver plano» (decisão 305).
   const planDay = planDayOfFavorite(plan, favorites.find((f) => f.id === d.favoriteId)?.name ?? d.planName ?? undefined)
-  const step = 'flex h-11 w-11 items-center justify-center rounded-lg border border-line text-[20px] leading-none'
+  const step = 'flex h-11 w-11 items-center justify-center rounded-lg border border-line text-[1.25rem] leading-none'
 
   return (
     <div className="space-y-4 pt-1 pb-24">
       <div className="flex items-center justify-between">
-        <p className="num text-[28px]">
-          {minutes} min <span className="text-[16px] font-semibold text-dim">· {doneSets} séries</span>
-          {shownDay && <span className="block text-[15px] font-semibold text-dim">Em {fmtDayShort(shownDay)}</span>}
+        <p className="num text-[1.75rem]">
+          {minutes} min <span className="text-[1rem] font-semibold text-dim">· {doneSets} séries</span>
+          {shownDay && <span className="block text-[0.9375rem] font-semibold text-dim">Em {fmtDayShort(shownDay)}</span>}
         </p>
         {!editId && d.exercises.length > 0 && (
-          <button onClick={restart} className="-mr-3 min-h-11 px-3 text-[14px] text-dim">
+          <button onClick={restart} className="-mr-3 min-h-11 px-3 text-[0.875rem] text-dim">
             Recomeçar
           </button>
         )}
       </div>
 
       {offline && (
-        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[15px] text-attn">
+        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[0.9375rem] text-attn">
           {offline === 'cache'
             ? 'Sem rede: as cargas da última vez são as que o telemóvel guardou. Podes treinar; o Terminar envia quando houver rede.'
             : 'Sem rede: não consegui ler o teu histórico (as cargas da última vez não aparecem). Podes treinar; o Terminar envia quando houver rede.'}
@@ -516,7 +516,7 @@ export default function Ginasio() {
       {planDay && (
         <button
           onClick={() => sheet.open('plano', { ...Object.fromEntries(params), dia: String(planDay.n) })}
-          className="flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-[15px] font-semibold"
+          className="flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-[0.9375rem] font-semibold"
         >
           <Icon name="calendar" size={18} />
           <span className="min-w-0 truncate">Ver plano · {dayLabel(planDay, true)}</span>
@@ -536,12 +536,12 @@ export default function Ginasio() {
             >
               <Icon name="dumbbell" size={26} />
               <span className="flex-1">
-                <span className="block font-display text-[22px] leading-none font-extrabold uppercase">{f.name}</span>
-                <span className="text-[14px] font-semibold">{f.workout?.exercises?.map((e) => e.name).join(' · ')}</span>
+                <span className="block font-display text-[1.375rem] leading-none font-extrabold uppercase">{f.name}</span>
+                <span className="text-[0.875rem] font-semibold">{f.workout?.exercises?.map((e) => e.name).join(' · ')}</span>
               </span>
             </button>
           ))}
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             Ou escolhe o primeiro exercício.
           </p>
         </div>
@@ -555,9 +555,9 @@ export default function Ginasio() {
           <section key={ex.name} className="space-y-2 rounded-[18px] border border-line bg-surface p-3">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[17px] font-semibold">{ex.name}</p>
-                {ex.note && <p className="text-[15px] font-semibold text-ink">{ex.note}</p>}
-                <p className="text-[14px] text-dim">
+                <p className="text-[1.0625rem] font-semibold">{ex.name}</p>
+                {ex.note && <p className="text-[0.9375rem] font-semibold text-ink">{ex.note}</p>}
+                <p className="text-[0.875rem] text-dim">
                   {sug?.firstTime && offline === 'none'
                     ? 'Sem rede: sem as cargas da última vez.'
                     : sug?.firstTime
@@ -574,7 +574,7 @@ export default function Ginasio() {
                 {ex.sets.some((s) => !s.done && s.reps > 0) && (
                   <button
                     onClick={() => markAll(ei)}
-                    className="flex min-h-11 items-center gap-1 rounded-lg px-2 text-[14px] font-semibold text-burn"
+                    className="flex min-h-11 items-center gap-1 rounded-lg px-2 text-[0.875rem] font-semibold text-burn"
                     aria-label={`Marcar as séries de ${ex.name} como feitas`}
                   >
                     <Icon name="check" size={16} /> Todas
@@ -602,7 +602,7 @@ export default function Ginasio() {
                   <Icon name="check" size={20} />
                 </button>
                 {/* As repetições escrevem-se (60 s eram 12 toques no +; T23). */}
-                <label className="flex items-center gap-1 text-[14px] text-dim">
+                <label className="flex items-center gap-1 text-[0.875rem] text-dim">
                   <input
                     inputMode="numeric"
                     value={texts[textKey(ex.name, si, 'reps')] ?? String(s.reps)}
@@ -615,7 +615,7 @@ export default function Ginasio() {
                     }}
                     onBlur={() => dropText(textKey(ex.name, si, 'reps'))}
                     aria-label={`${timed ? 'Segundos' : 'Repetições'} da série ${si + 1}`}
-                    className="num h-11 w-14 rounded-lg border border-line bg-bg text-center text-[20px] text-ink"
+                    className="num h-11 w-14 rounded-lg border border-line bg-bg text-center text-[1.25rem] text-ink"
                   />
                   {timed ? 's' : 'rep'}
                 </label>
@@ -645,7 +645,7 @@ export default function Ginasio() {
                     onBlur={() => dropText(textKey(ex.name, si, 'load'))}
                     placeholder="kg"
                     aria-label={`Carga da série ${si + 1} em kg`}
-                    className="num h-11 w-16 rounded-lg border border-line bg-bg text-center text-[18px]"
+                    className="num h-11 w-16 rounded-lg border border-line bg-bg text-center text-[1.125rem]"
                   />
                   <button
                     className={step}
@@ -670,11 +670,11 @@ export default function Ginasio() {
                     ),
                   )
                 }}
-                className="-ml-2 min-h-11 px-2 text-[15px] text-dim"
+                className="-ml-2 min-h-11 px-2 text-[0.9375rem] text-dim"
               >
                 + série
               </button>
-              <label className="flex items-center gap-2 text-[14px] text-dim">
+              <label className="flex items-center gap-2 text-[0.875rem] text-dim">
                 Esforço
                 <select
                   value={ex.rpe ?? ''}
@@ -711,14 +711,14 @@ export default function Ginasio() {
       ) : (
         <button
           onClick={() => setPicking(true)}
-          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+          className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem]"
         >
           <Icon name="plus" size={18} /> Exercício
         </button>
       )}
 
       {d.exercises.length > 0 && (
-        <label className="flex items-center gap-3 text-[15px] text-dim">
+        <label className="flex items-center gap-3 text-[0.9375rem] text-dim">
           Duração
           <input
             inputMode="numeric"
@@ -729,10 +729,10 @@ export default function Ginasio() {
               setDraft({ ...d, minutes: v ? Math.min(MAX_MINUTES, Number(v)) : null })
             }}
             aria-label="Duração em minutos"
-            className="num h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-[18px] text-ink placeholder:text-dim"
+            className="num h-11 w-20 rounded-xl border border-line bg-bg px-3 text-center text-[1.125rem] text-ink placeholder:text-dim"
           />
           min
-          {d.minutes == null && !d.day && !editId && <span className="text-[13px]">(pelo cronómetro; muda se te esqueceste de terminar)</span>}
+          {d.minutes == null && !d.day && !editId && <span className="text-[0.8125rem]">(pelo cronómetro; muda se te esqueceste de terminar)</span>}
         </label>
       )}
 
@@ -741,7 +741,7 @@ export default function Ginasio() {
           busy="A guardar…"
           disabled={doneSets === 0}
           onClick={finish}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
           {editId ? 'Guardar correções' : 'Terminar'}
         </BusyButton>

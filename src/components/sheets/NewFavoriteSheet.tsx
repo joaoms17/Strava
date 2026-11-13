@@ -233,9 +233,9 @@ export default function NewFavoriteSheet() {
   }
 
   const field =
-    'w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none'
+    'w-full rounded-xl border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none'
   const big =
-    'min-h-14 w-full rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40'
+    'min-h-14 w-full rounded-2xl bg-eat font-display text-[1.125rem] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40'
   const segment = (m: Mode, label: string) => (
     <button
       onClick={() => setMode(m)}
@@ -273,7 +273,7 @@ export default function NewFavoriteSheet() {
   return (
     <BottomSheet title="Nova favorita" onClose={sheet.close} footer={footer ?? undefined}>
       <div className="space-y-4 pb-2">
-        <div className={`grid grid-cols-3 ${SEGMENT_TRACK} text-[15px]`}>
+        <div className={`grid grid-cols-3 ${SEGMENT_TRACK} text-[0.9375rem]`}>
           {segment('escrever', 'Escrever')}
           {segment('receita', 'Receita')}
           {segment('refeicao', 'De uma refeição')}
@@ -281,7 +281,7 @@ export default function NewFavoriteSheet() {
 
         {mode === 'refeicao' ? (
           <>
-            <p className="text-[14px] text-dim">Toca numa refeição que já registaste: fica nas favoritas com a foto dela.</p>
+            <p className="text-[0.875rem] text-dim">Toca numa refeição que já registaste: fica nas favoritas com a foto dela.</p>
             <MealHistoryList
               today={today}
               onPick={(meal) => void runBusy('A guardar…', () => fromMeal(meal))}
@@ -292,7 +292,7 @@ export default function NewFavoriteSheet() {
         ) : (
           <>
             <div className="flex gap-3">
-              <label className="relative flex h-24 w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-dashed border-line text-[13px] text-dim">
+              <label className="relative flex h-24 w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-dashed border-line text-[0.8125rem] text-dim">
                 {photo ? (
                   <img loading="lazy" decoding="async" src={photo.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
@@ -326,7 +326,7 @@ export default function NewFavoriteSheet() {
                   className={`${field} h-11`}
                 />
                 {photo && (
-                  <button onClick={() => setPhoto(null)} className="text-[14px] text-dim">
+                  <button onClick={() => setPhoto(null)} className="text-[0.875rem] text-dim">
                     Tirar a foto
                   </button>
                 )}
@@ -344,16 +344,16 @@ export default function NewFavoriteSheet() {
                   }}
                   placeholder="O que leva? Ex.: 60 g de aveia, 200 ml de leite meio-gordo, 1 banana"
                   aria-label="O que leva"
-                  className={`${field} block resize-none py-3 text-[17px]`}
+                  className={`${field} block resize-none py-3 text-[1.0625rem]`}
                 />
-                <p className="-mt-2 text-[13px] text-dim">
+                <p className="-mt-2 text-[0.8125rem] text-dim">
                   Com texto, a conta sai das quantidades; só com a foto, a IA estima pela foto.
                 </p>
 
                 {items && totals && (
                   <div className="space-y-2">
                     <ItemList items={items} onChange={setItems} onRemoveLast={() => setItems(null)} />
-                    <p className="text-[14px] tabular-nums">
+                    <p className="text-[0.875rem] tabular-nums">
                       <span className="font-semibold">{fmtKcal(totals.kcal)} kcal</span>
                       <span className="text-dim">
                         {' '}
@@ -375,9 +375,9 @@ export default function NewFavoriteSheet() {
                   }}
                   placeholder="Cola o link da receita (https://…) ou o texto, com os ingredientes e as quantidades"
                   aria-label="Link ou texto da receita"
-                  className={`${field} block resize-none py-3 text-[17px]`}
+                  className={`${field} block resize-none py-3 text-[1.0625rem]`}
                 />
-                <p className="-mt-2 text-[13px] text-dim">
+                <p className="-mt-2 text-[0.8125rem] text-dim">
                   Pingo Doce, Continente, Teleculinária, blogs… A conta sai dos ingredientes da receita toda e
                   divide-se pelas doses.
                 </p>
@@ -392,25 +392,25 @@ export default function NewFavoriteSheet() {
                     />
                     <div className="flex items-center gap-3 rounded-2xl border border-line p-3">
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[16px] font-semibold">Doses</span>
+                        <span className="block text-[1rem] font-semibold">Doses</span>
                         {!recipe.dosesKnown && (
-                          <span className="block text-[14px] text-attn">A receita não diz para quantos. Em quantas doses se divide?</span>
+                          <span className="block text-[0.875rem] text-attn">A receita não diz para quantos. Em quantas doses se divide?</span>
                         )}
                       </span>
                       <button
                         onClick={() => setRecipe({ ...recipe, doses: Math.max(1, recipe.doses - 1), dosesKnown: true })}
                         aria-label="Menos uma dose"
-                        className="h-11 w-11 rounded-xl bg-surface2 text-[17px]"
+                        className="h-11 w-11 rounded-xl bg-surface2 text-[1.0625rem]"
                       >
                         −
                       </button>
-                      <span className="num w-10 text-center text-[24px] tabular-nums">{recipe.doses}</span>
+                      <span className="num w-10 text-center text-[1.5rem] tabular-nums">{recipe.doses}</span>
                       <button
                         onClick={() =>
                           setRecipe({ ...recipe, doses: Math.min(MAX_DOSES, recipe.doses + 1), dosesKnown: true })
                         }
                         aria-label="Mais uma dose"
-                        className="h-11 w-11 rounded-xl bg-surface2 text-[17px]"
+                        className="h-11 w-11 rounded-xl bg-surface2 text-[1.0625rem]"
                       >
                         +
                       </button>
@@ -421,14 +421,14 @@ export default function NewFavoriteSheet() {
                           <button
                             key={n}
                             onClick={() => setRecipe({ ...recipe, doses: n, dosesKnown: true })}
-                            className="min-h-11 min-w-11 rounded-xl border border-line px-3 text-[15px]"
+                            className="min-h-11 min-w-11 rounded-xl border border-line px-3 text-[0.9375rem]"
                           >
                             {n === 1 ? '1 (tudo)' : n}
                           </button>
                         ))}
                       </div>
                     )}
-                    <p className="text-[14px] tabular-nums">
+                    <p className="text-[0.875rem] tabular-nums">
                       <span className="text-dim">Por dose: </span>
                       <span className="font-semibold">{fmtKcal(perDose.kcal)} kcal</span>
                       <span className="text-dim">

@@ -65,7 +65,7 @@ export default function DietToday({
     <div className="space-y-2 rounded-2xl border border-line p-3" aria-label="Dieta">
       <div className="flex items-baseline justify-between gap-2">
         <p className="label truncate">Dieta · {diet.name}</p>
-        <button onClick={() => navigate('/favoritos?separador=dieta')} className="shrink-0 text-[13px] text-eat">
+        <button onClick={() => navigate('/favoritos?separador=dieta')} className="shrink-0 text-[0.8125rem] text-eat">
           Ver ›
         </button>
       </div>
@@ -75,7 +75,7 @@ export default function DietToday({
         if (d.done) {
           const eaten = d.followed ? byId.get(d.followed) : null
           return (
-            <p key={d.slot} className="flex items-center gap-2 text-[14px] text-dim">
+            <p key={d.slot} className="flex items-center gap-2 text-[0.875rem] text-dim">
               <Icon name="check" size={16} className="shrink-0 text-eat" />
               <span className="truncate">
                 {SLOT_LABEL[d.slot]} · {eaten ? eaten.name : 'outra refeição'}
@@ -88,16 +88,16 @@ export default function DietToday({
             <div className="flex items-center gap-3">
               <Thumb url={urls[favoriteThumb(main) ?? ''] ?? null} size={52} />
               <span className="min-w-0 flex-1">
-                <span className="block text-[12px] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[d.slot]}</span>
-                <span className="block truncate text-[15px]">{main.name}</span>
-                <span className="block text-[13px] text-dim tabular-nums">
+                <span className="block text-[0.75rem] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[d.slot]}</span>
+                <span className="block truncate text-[0.9375rem]">{main.name}</span>
+                <span className="block text-[0.8125rem] text-dim tabular-nums">
                   {fmtKcal(main.kcal)} kcal · {fmtInt(Number(main.protein))} g prot.
                 </span>
               </span>
               <button
                 onClick={() => register(main, d.slot)}
                 aria-label={`Registar ${main.name}`}
-                className="min-h-10 shrink-0 rounded-xl bg-eat px-3 text-[15px] font-semibold text-bg"
+                className="min-h-10 shrink-0 rounded-xl bg-eat px-3 text-[0.9375rem] font-semibold text-bg"
               >
                 Registar
               </button>
@@ -109,7 +109,7 @@ export default function DietToday({
                     key={fav.id}
                     onClick={() => register(fav, d.slot)}
                     aria-label={`Registar ${fav.name}`}
-                    className="flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[14px]"
+                    className="flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[0.875rem]"
                   >
                     <Thumb url={urls[favoriteThumb(fav) ?? ''] ?? null} size={26} className="rounded-full" />
                     ou {fav.name}
@@ -121,12 +121,12 @@ export default function DietToday({
         )
       })}
       {missing.length > 0 && missing.length < rows.length && (
-        <p className="text-[13px] text-dim tabular-nums">
+        <p className="text-[0.8125rem] text-dim tabular-nums">
           Falta da dieta: {fmtKcal(left.kcal)} kcal · {fmtInt(left.protein)} g proteína
         </p>
       )}
       {missing.length === 0 && (
-        <p className="text-[13px] text-eat">Dieta cumprida{date === today ? ' hoje' : ''}. ✓</p>
+        <p className="text-[0.8125rem] text-eat">Dieta cumprida{date === today ? ' hoje' : ''}. ✓</p>
       )}
     </div>
   )

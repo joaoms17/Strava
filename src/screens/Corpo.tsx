@@ -19,7 +19,7 @@ import Recuperacao from '../components/corpo/Recuperacao'
 function Block({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section id={id} aria-labelledby={`${id}-titulo`} className="space-y-3" style={{ scrollMarginTop: BAR_OFFSET }}>
-      <h2 id={`${id}-titulo`} className="pt-2 font-display text-[22px] leading-none font-extrabold uppercase">
+      <h2 id={`${id}-titulo`} className="pt-2 font-display text-[1.375rem] leading-none font-extrabold uppercase">
         {title}
       </h2>
       {children}
@@ -50,7 +50,7 @@ export default function Corpo() {
 
   if (!data) {
     return (
-      <p className="pt-8 text-center text-[15px] text-dim">{error ? 'Não consegui carregar o Corpo. Tenta outra vez daqui a pouco.' : 'A carregar…'}</p>
+      <p className="pt-8 text-center text-[0.9375rem] text-dim">{error ? 'Não consegui carregar o Corpo. Tenta outra vez daqui a pouco.' : 'A carregar…'}</p>
     )
   }
 
@@ -100,7 +100,7 @@ export default function Corpo() {
         }}
       />
 
-      {offlineTudo && <p className="text-[14px] text-dim">Sem rede: a mostrar os últimos 3 meses.</p>}
+      {offlineTudo && <p className="text-[0.875rem] text-dim">Sem rede: a mostrar os últimos 3 meses.</p>}
 
       <div className={`space-y-6 transition-opacity ${dimmed ? 'opacity-60' : ''}`} aria-busy={dimmed}>
         <Block id="peso" title="Peso">

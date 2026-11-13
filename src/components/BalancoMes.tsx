@@ -81,7 +81,7 @@ export default function BalancoMes({ today, days, health }: { today: string; day
   return (
     <div className="space-y-4">
       {linkLines.length > 0 && (
-        <section className="space-y-1 rounded-[18px] border border-line bg-surface p-4 text-[15px]">
+        <section className="space-y-1 rounded-[18px] border border-line bg-surface p-4 text-[0.9375rem]">
           <p className="label">O que comes, o sono e os passos</p>
           {linkLines.map((line) => (
             <p key={line} className="text-dim">
@@ -99,10 +99,10 @@ export default function BalancoMes({ today, days, health }: { today: string; day
           <p className="label">Os 10 alimentos mais frequentes (30 dias)</p>
           <ol className="divide-y divide-line/60">
             {foods.map((f, i) => (
-              <li key={f.name} className="flex items-center gap-3 py-2 text-[15px]">
+              <li key={f.name} className="flex items-center gap-3 py-2 text-[0.9375rem]">
                 <span className="num w-6 text-dim">{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                <span className="shrink-0 text-[14px] text-dim tabular-nums">
+                <span className="shrink-0 text-[0.875rem] text-dim tabular-nums">
                   {f.count}× · ≈ {fmtKcal(f.kcal)} kcal
                 </span>
               </li>

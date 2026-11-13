@@ -67,7 +67,7 @@ export default function MesSheet() {
               toast('Não consegui criar a imagem.')
             }
           }}
-          className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg disabled:opacity-40"
         >
           Partilhar
         </BusyButton>
@@ -83,7 +83,7 @@ export default function MesSheet() {
           >
             ‹
           </button>
-          <p className="text-[17px] font-semibold">{monthLabel(month)}</p>
+          <p className="text-[1.0625rem] font-semibold">{monthLabel(month)}</p>
           <button
             disabled={nextMonth(month) > thisMonth}
             onClick={() => setMonth(nextMonth(month))}
@@ -94,13 +94,13 @@ export default function MesSheet() {
           </button>
         </div>
         {summary === 'erro' ? (
-          <p className="py-6 text-center text-[15px] text-dim">Não consegui ler o mês.</p>
+          <p className="py-6 text-center text-[0.9375rem] text-dim">Não consegui ler o mês.</p>
         ) : image ? (
           <img src={image} alt={`O meu mês, ${monthLabel(month)}`} className="w-full rounded-2xl border border-line" />
         ) : (
-          <p className="py-6 text-center text-[15px] text-dim">A carregar…</p>
+          <p className="py-6 text-center text-[0.9375rem] text-dim">A carregar…</p>
         )}
-        {month === thisMonth && <p className="text-[13px] text-dim">O mês ainda não acabou: os números são até hoje.</p>}
+        {month === thisMonth && <p className="text-[0.8125rem] text-dim">O mês ainda não acabou: os números são até hoje.</p>}
       </div>
     </BottomSheet>
   )

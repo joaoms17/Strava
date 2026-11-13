@@ -25,7 +25,7 @@ export default function PlanoTreino() {
   const ver = new URLSearchParams(useSearch()).get('ver') ?? ''
 
   if (!plan) {
-    return <p className="pt-8 text-center text-[15px] text-dim">Ainda não tens um plano de treino.</p>
+    return <p className="pt-8 text-center text-[0.9375rem] text-dim">Ainda não tens um plano de treino.</p>
   }
 
   const go = (v: string) => navigate(v ? `/treino/plano?ver=${v}` : '/treino/plano', { replace: true })
@@ -50,7 +50,7 @@ export default function PlanoTreino() {
             key={v || 'indice'}
             onClick={() => go(v)}
             aria-current={current === v ? 'page' : undefined}
-            className={`min-h-11 rounded-lg text-[16px] ${segment(current === v)}`}
+            className={`min-h-11 rounded-lg text-[1rem] ${segment(current === v)}`}
           >
             {label}
           </button>
@@ -65,15 +65,15 @@ export default function PlanoTreino() {
           <BusyButton
             busy="A abrir…"
             onClick={() => start(day)}
-            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase"
+            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase"
           >
             <Icon name="dumbbell" size={22} />
             <span className="leading-tight">
               Começar Dia {day.n}
-              <span className="block font-sans text-[14px] font-semibold tracking-normal normal-case opacity-80">{day.titulo}</span>
+              <span className="block font-sans text-[0.875rem] font-semibold tracking-normal normal-case opacity-80">{day.titulo}</span>
             </span>
           </BusyButton>
-          <p className="text-center text-[14px] text-dim">
+          <p className="text-center text-[0.875rem] text-dim">
             Abre o Ginásio com estes exercícios, as séries e as notas. Durante a sessão, «Ver plano» mostra este dia.
           </p>
         </>
@@ -97,15 +97,15 @@ export default function PlanoTreino() {
         <>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="rounded-full bg-cta px-3 py-1 font-display text-[15px] font-bold tracking-[0.12em] text-on-cta uppercase">
+              <span className="rounded-full bg-cta px-3 py-1 font-display text-[0.9375rem] font-bold tracking-[0.12em] text-on-cta uppercase">
                 Fase {plan.fase}
               </span>
-              {plan.quando && <span className="text-[15px] text-dim">{plan.quando}</span>}
+              {plan.quando && <span className="text-[0.9375rem] text-dim">{plan.quando}</span>}
             </div>
-            <h2 className="font-display text-[48px] leading-[0.92] font-extrabold uppercase">
+            <h2 className="font-display text-[3rem] leading-[0.92] font-extrabold uppercase">
               Plano de <span className="text-burn">treino</span>
             </h2>
-            {plan.lema && <p className="text-[18px] text-dim">{plan.lema}</p>}
+            {plan.lema && <p className="text-[1.125rem] text-dim">{plan.lema}</p>}
           </div>
 
           <section className="space-y-2">
@@ -118,13 +118,13 @@ export default function PlanoTreino() {
                   onClick={() => go(`dia-${d.n}`)}
                   className={`flex w-full items-center gap-4 rounded-[18px] border border-l-4 border-line ${tone.border} bg-surface p-4 text-left`}
                 >
-                  <span className={`num w-8 text-center text-[46px] leading-none ${tone.text}`}>{d.n}</span>
+                  <span className={`num w-8 text-center text-[2.875rem] leading-none ${tone.text}`}>{d.n}</span>
                   <span className="min-w-0 flex-1">
                     <span className={`${kicker} block ${tone.text}`}>
                       Dia {d.n} · {d.exercicios.length} exercícios
                     </span>
-                    <span className="block text-[19px] leading-tight font-semibold">{d.titulo}</span>
-                    {d.resumo && <span className="block text-[15px] text-dim">{d.resumo}</span>}
+                    <span className="block text-[1.1875rem] leading-tight font-semibold">{d.titulo}</span>
+                    {d.resumo && <span className="block text-[0.9375rem] text-dim">{d.resumo}</span>}
                   </span>
                   <Icon name="chevron" size={22} />
                 </button>
@@ -140,8 +140,8 @@ export default function PlanoTreino() {
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-attn/15 text-attn">
                     <Icon name="alert" size={20} />
                   </span>
-                  <span className="mt-3 block text-[17px] font-semibold">Cuidados</span>
-                  <span className="block text-[15px] text-dim">{plan.cuidados.zona}</span>
+                  <span className="mt-3 block text-[1.0625rem] font-semibold">Cuidados</span>
+                  <span className="block text-[0.9375rem] text-dim">{plan.cuidados.zona}</span>
                 </button>
               )}
               {plan.progressao.length > 0 && (
@@ -149,8 +149,8 @@ export default function PlanoTreino() {
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-burn/15 text-burn">
                     <Icon name="chart" size={20} />
                   </span>
-                  <span className="mt-3 block text-[17px] font-semibold">Progressão</span>
-                  <span className="block text-[15px] text-dim">
+                  <span className="mt-3 block text-[1.0625rem] font-semibold">Progressão</span>
+                  <span className="block text-[0.9375rem] text-dim">
                     {plan.progressao.length > 1
                       ? `Fases ${plan.progressao
                           .filter((f) => f.estado !== 'atual')

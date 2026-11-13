@@ -48,7 +48,7 @@ function CardSkeleton({ height }: { height: number }) {
 // «Tentar outra vez», em vez de «Regista alguns dias».
 function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-line p-5 text-center text-[15px]" role="alert">
+    <div className="space-y-3 rounded-2xl border border-line p-5 text-center text-[0.9375rem]" role="alert">
       <p>Não consegui ler o Balanço. Verifica a rede e tenta outra vez.</p>
       <button onClick={onRetry} className="min-h-11 rounded-xl border border-line px-4 font-semibold">
         Tentar outra vez
@@ -109,7 +109,7 @@ export default function Balanco() {
   const openDay = (date: string) => navigate(date === today ? '/hoje' : `/hoje/${date}`)
 
   const toggle = (
-    <div className={`grid grid-cols-2 ${SEGMENT_TRACK} font-display text-[15px] font-bold tracking-[0.08em] uppercase`}>
+    <div className={`grid grid-cols-2 ${SEGMENT_TRACK} font-display text-[0.9375rem] font-bold tracking-[0.08em] uppercase`}>
       {(
         [
           ['semana', 'Semana'],
@@ -133,7 +133,7 @@ export default function Balanco() {
       <button onClick={() => setMonday(shiftDate(monday, -7))} className="h-11 w-11 text-xl text-dim" aria-label="Semana anterior">
         ‹
       </button>
-      <p className="text-[17px] font-semibold tabular-nums">{fmtRange(monday, sunday)}</p>
+      <p className="text-[1.0625rem] font-semibold tabular-nums">{fmtRange(monday, sunday)}</p>
       <button
         disabled={shiftDate(monday, 7) > today}
         onClick={() => setMonday(shiftDate(monday, 7))}
@@ -157,7 +157,7 @@ export default function Balanco() {
         {longo && <BalancoMes today={today} days={longo.days} health={longo.health} />}
         <button
           onClick={() => sheet.open('mes', { mes: today.slice(8, 10) <= '03' ? previousMonth(today) : today.slice(0, 7) })}
-          className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[15px] font-semibold"
+          className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[0.9375rem] font-semibold"
         >
           O teu mês (imagem)
         </button>
@@ -250,7 +250,7 @@ export default function Balanco() {
   })()
   const reviewLines = (text: string) =>
     text.split('\n').map((line, i) => (
-      <p key={i} className="text-[15px]">
+      <p key={i} className="text-[0.9375rem]">
         {line}
       </p>
     ))
@@ -258,7 +258,7 @@ export default function Balanco() {
     <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4">
       <div className="flex items-baseline justify-between gap-2">
         <p className="label">A semana passada</p>
-        <button onClick={() => setMonday(shiftDate(monday, -7))} className="min-h-11 text-[15px] text-eat">
+        <button onClick={() => setMonday(shiftDate(monday, -7))} className="min-h-11 text-[0.9375rem] text-eat">
           Ver a semana ›
         </button>
       </div>
@@ -300,7 +300,7 @@ export default function Balanco() {
 
   // Ideia 14: a única ação do Balanço que muda o plano fica à vista, não em «Ver detalhes».
   const suggestionCard = suggestion != null && (
-    <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4 text-[15px]" aria-label="Plano base">
+    <section className="space-y-2 rounded-[18px] border border-line bg-surface p-4 text-[0.9375rem]" aria-label="Plano base">
       <p className="label">Plano base</p>
       {suggestion.atMinimum ? (
         <p>
@@ -334,7 +334,7 @@ export default function Balanco() {
 
       {!hasAny ? (
         <>
-          <div className="space-y-2 rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
+          <div className="space-y-2 rounded-2xl border border-line p-5 text-center text-[0.9375rem] text-dim">
             <p>
               {data.firstDate == null
                 ? 'Regista alguns dias e aqui aparece a tua semana.'
@@ -359,28 +359,28 @@ export default function Balanco() {
         <>
           <section className="space-y-2 rounded-[18px] border border-line bg-surface p-5">
             {averages && avgOut != null ? (
-              <p className="text-[20px] leading-snug font-semibold">{weekSentence(averages.eaten, avgOut, rate, thisWeek)}</p>
+              <p className="text-[1.25rem] leading-snug font-semibold">{weekSentence(averages.eaten, avgOut, rate, thisWeek)}</p>
             ) : leftOut > 0 ? (
-              <p className="text-[17px] text-dim">
+              <p className="text-[1.0625rem] text-dim">
                 {thisWeek ? 'Ainda não há dias completos esta semana.' : 'Nenhum dia completo nesta semana.'}
               </p>
             ) : (
-              <p className="text-[17px] text-dim">A semana começou agora. A média aparece amanhã.</p>
+              <p className="text-[1.0625rem] text-dim">A semana começou agora. A média aparece amanhã.</p>
             )}
-            {facts && <p className="text-[14px] text-dim tabular-nums">{facts}</p>}
+            {facts && <p className="text-[0.875rem] text-dim tabular-nums">{facts}</p>}
             {coherent === 'bate_certo' && (
               <p>
-                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-burn px-3 text-[15px] font-semibold text-burn">
+                <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-burn px-3 text-[0.9375rem] font-semibold text-burn">
                   <span aria-hidden>✓</span> {COHERENCE_TEXT.bate_certo.replace(/\.$/, '')}
                 </span>
               </p>
             )}
-            {coherent === 'ainda_nao' && <p className="text-[16px] text-dim">{COHERENCE_TEXT.ainda_nao}</p>}
+            {coherent === 'ainda_nao' && <p className="text-[1rem] text-dim">{COHERENCE_TEXT.ainda_nao}</p>}
             {waterWeek && rate != null && (
-              <p className="text-[14px] text-dim">Semana de água do ciclo: o peso pode subir sem ser gordura.</p>
+              <p className="text-[0.875rem] text-dim">Semana de água do ciclo: o peso pode subir sem ser gordura.</p>
             )}
             {leftOut > 0 && (
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[14px] text-dim">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[0.875rem] text-dim">
                 <span>
                   {leftOut === 1
                     ? `1 dia ficou de fora (incompleto ou com «faltou${NBSP}algo»):`
@@ -397,7 +397,7 @@ export default function Balanco() {
                 ))}
               </div>
             )}
-            <p className="text-[14px] text-dim">{gastoLine}</p>
+            <p className="text-[0.875rem] text-dim">{gastoLine}</p>
             {noWeighings && (
               <button onClick={() => sheet.open('peso')} className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta">
                 Pesar
@@ -413,7 +413,7 @@ export default function Balanco() {
           {lastWeekCard}
 
           {belowFloor(averages, profile.kcal_floor_week) && (
-            <p className="rounded-2xl border border-attn/40 bg-attn/10 px-4 py-3 text-[15px] text-attn">
+            <p className="rounded-2xl border border-attn/40 bg-attn/10 px-4 py-3 text-[0.9375rem] text-attn">
               {thisWeek ? 'Esta semana comeste' : 'Nesta semana comeste'} menos de {fmtInt(profile.kcal_floor_week)} por dia em
               média. Come um pouco mais: perder devagar protege o músculo.
             </p>
@@ -454,17 +454,17 @@ export default function Balanco() {
                 })
                 .catch(() => toast('Não consegui criar a imagem.'))
             }
-            className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[15px] font-semibold"
+            className="min-h-12 w-full rounded-2xl border border-line bg-surface text-[0.9375rem] font-semibold"
           >
             Partilhar a semana (imagem)
           </button>
 
-          <button onClick={() => setDetails(!details)} className="min-h-11 text-[15px] text-dim">
+          <button onClick={() => setDetails(!details)} className="min-h-11 text-[0.9375rem] text-dim">
             {details ? 'Esconder detalhes' : 'Ver detalhes ›'}
           </button>
 
           {details && (
-            <section className="space-y-3 rounded-[18px] border border-line bg-surface p-5 text-[15px]">
+            <section className="space-y-3 rounded-[18px] border border-line bg-surface p-5 text-[0.9375rem]">
               {averages && (
                 <>
                   <p>
@@ -490,7 +490,7 @@ export default function Balanco() {
                       O gasto muda devagar (no máximo 100{NBSP}kcal por semana) e não conta as 2 primeiras semanas da dieta nem as de depois de uma pausa.
                     </span>
                   )}
-                  {exp.note && <span className="block pt-1 text-[14px] text-dim">{exp.note}</span>}
+                  {exp.note && <span className="block pt-1 text-[0.875rem] text-dim">{exp.note}</span>}
                 </p>
               ) : (
                 <p className="text-dim">
@@ -513,7 +513,7 @@ export default function Balanco() {
                       value={birthYear}
                       onChange={(e) => setBirthYear(e.target.value.replace(/\D/g, ''))}
                       placeholder="1986"
-                      className="h-11 w-28 rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums"
+                      className="h-11 w-28 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] tabular-nums"
                     />
                     <BusyButton
                       busy="A guardar…"

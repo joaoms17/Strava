@@ -90,9 +90,9 @@ export function QualFoiQuestion({ workout: w, onDone }: { workout: Workout; onDo
             <button
               key={d.n}
               onClick={() => answer({ kind: 'dia-plano', n: d.n })}
-              className="flex min-h-12 items-center gap-3 rounded-xl border border-line bg-bg px-3 text-left text-[16px] font-semibold"
+              className="flex min-h-12 items-center gap-3 rounded-xl border border-line bg-bg px-3 text-left text-[1rem] font-semibold"
             >
-              <span className={`num w-5 text-center text-[22px] ${tone.text}`}>{d.n}</span>
+              <span className={`num w-5 text-center text-[1.375rem] ${tone.text}`}>{d.n}</span>
               <span className="min-w-0 flex-1 truncate">{dayLabel(d, true)}</span>
             </button>
           )
@@ -178,8 +178,8 @@ export default function QualFoi({
               <Icon name="watch" size={22} />
             </span>
             <p className="min-w-0 flex-1">
-              <span className="block font-display text-[22px] leading-none font-extrabold uppercase">Qual foi?</span>
-              <span className="mt-1 block text-[15px] text-dim">
+              <span className="block font-display text-[1.375rem] leading-none font-extrabold uppercase">Qual foi?</span>
+              <span className="mt-1 block text-[0.9375rem] text-dim">
                 {workoutTitle(w)} de {w.date === today ? 'hoje' : fmtDayShort(w.date)}
                 {w.started_at && !w.raw?.hora_estimada ? `, ${timeOf(w.started_at)}` : ''}
                 {w.minutes != null ? ` · ${w.minutes} min` : ''}

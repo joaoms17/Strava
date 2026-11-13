@@ -97,14 +97,14 @@ export default function RepeatSheet() {
             >
               <Thumb url={favUrls[favoriteThumb(favorite) ?? ''] ?? null} size={42} />
               <span className="min-w-0">
-                <span className="line-clamp-2 text-[15px] leading-tight">{favorite.name}</span>
-                <span className="block text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
+                <span className="line-clamp-2 text-[0.9375rem] leading-tight">{favorite.name}</span>
+                <span className="block text-[0.8125rem] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
               </span>
             </button>
           ))}
         </div>
         {!searching && !allFavorites && found.length > FAVORITES_SHOWN && (
-          <button onClick={() => setAllFavorites(true)} className="min-h-11 w-full text-[15px] text-eat">
+          <button onClick={() => setAllFavorites(true)} className="min-h-11 w-full text-[0.9375rem] text-eat">
             Ver as {found.length} favoritas
           </button>
         )}

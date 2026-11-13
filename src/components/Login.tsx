@@ -61,10 +61,10 @@ export default function Login() {
   }
 
   const field =
-    'w-full rounded-xl border border-line bg-surface px-4 py-3 text-[17px] text-ink placeholder:text-dim focus:border-eat focus:outline-none'
+    'w-full rounded-xl border border-line bg-surface px-4 py-3 text-[1.0625rem] text-ink placeholder:text-dim focus:border-eat focus:outline-none'
   const primary =
-    'min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50'
-  const link = 'min-h-11 w-full text-[15px] text-dim underline underline-offset-4'
+    'min-h-12 w-full rounded-xl bg-cta font-display text-[1.0625rem] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50'
+  const link = 'min-h-11 w-full text-[0.9375rem] text-dim underline underline-offset-4'
   const emailField = (
     <input
       type="email"
@@ -82,24 +82,24 @@ export default function Login() {
     <div className="flex min-h-dvh items-center justify-center bg-bg p-6 text-ink">
       {mode === 'entrar' && (
         <form onSubmit={submit} className="w-full max-w-sm space-y-4">
-          <h1 className="text-center font-display text-[28px] font-bold tracking-[0.02em] uppercase">
+          <h1 className="text-center font-display text-[1.75rem] font-bold tracking-[0.02em] uppercase">
             Daily Track
           </h1>
           {saved.length > 0 && (
             <div className="space-y-2">
-              <p className="text-center text-[14px] text-dim">Neste telemóvel</p>
+              <p className="text-center text-[0.875rem] text-dim">Neste telemóvel</p>
               {saved.map((account) => (
                 <button
                   key={account.user_id}
                   type="button"
                   disabled={busy}
                   onClick={() => void enterAs(account.user_id)}
-                  className="min-h-12 w-full rounded-xl border border-line bg-surface text-[17px] disabled:opacity-50"
+                  className="min-h-12 w-full rounded-xl border border-line bg-surface text-[1.0625rem] disabled:opacity-50"
                 >
                   Entrar como {account.name}
                 </button>
               ))}
-              <p className="pt-2 text-center text-[14px] text-dim">ou com email</p>
+              <p className="pt-2 text-center text-[0.875rem] text-dim">ou com email</p>
             </div>
           )}
           {emailField}
@@ -112,7 +112,7 @@ export default function Login() {
             onChange={(e) => setPassword(e.target.value)}
             className={field}
           />
-          {error && <p className="text-[14px] text-eat">{error}</p>}
+          {error && <p className="text-[0.875rem] text-eat">{error}</p>}
           <button type="submit" disabled={busy || !email || !password} className={primary}>
             {busy ? 'A entrar…' : 'Entrar'}
           </button>
@@ -131,12 +131,12 @@ export default function Login() {
 
       {mode === 'recuperar' && (
         <form onSubmit={sendReset} className="w-full max-w-sm space-y-4">
-          <h1 className="font-display text-[28px] font-bold tracking-[0.02em] uppercase">Recuperar palavra-passe</h1>
-          <p className="text-[15px] text-dim">
+          <h1 className="font-display text-[1.75rem] font-bold tracking-[0.02em] uppercase">Recuperar palavra-passe</h1>
+          <p className="text-[0.9375rem] text-dim">
             Escreve o teu email. Mando-te um link para escolheres uma palavra-passe nova.
           </p>
           {emailField}
-          {error && <p className="text-[14px] text-eat">{error}</p>}
+          {error && <p className="text-[0.875rem] text-eat">{error}</p>}
           <button type="submit" disabled={busy || !email.includes('@')} className={primary}>
             {busy ? 'A enviar…' : 'Enviar link'}
           </button>
@@ -148,12 +148,12 @@ export default function Login() {
 
       {mode === 'enviado' && (
         <div className="w-full max-w-sm space-y-4">
-          <h1 className="font-display text-[28px] font-bold tracking-[0.02em] uppercase">Vê o teu email</h1>
-          <p className="text-[17px]">
+          <h1 className="font-display text-[1.75rem] font-bold tracking-[0.02em] uppercase">Vê o teu email</h1>
+          <p className="text-[1.0625rem]">
             Se houver uma conta com <strong className="break-all">{email.trim()}</strong>, chega um email com um link
             em poucos minutos.
           </p>
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             Vê também no lixo (spam). O link abre no browser: aí escolhes a palavra-passe nova e depois entras aqui
             com ela.
           </p>

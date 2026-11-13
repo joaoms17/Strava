@@ -45,7 +45,7 @@ export default function Ciclo({ today }: { today: string }) {
       <p className="label">Ciclo</p>
       {info ? (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             Dia {info.dayOfCycle}
             {options.pill && info.phase === 'pilula' ? ` de ~${info.length}` : ''} ·{' '}
             {info.overdue ? 'atrasado' : PHASE_LABEL[info.phase]}
@@ -58,22 +58,22 @@ export default function Ciclo({ today }: { today: string }) {
           </p>
           {info.overdue ? (
             // Mais de uma semana depois da data prevista: já não se desculpa o peso com água.
-            <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+            <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem]">
               Passaram {info.daysLate} dias da data prevista. Já começou? Marca o dia em que começou.
             </p>
           ) : info.waterWeek ? (
-            <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+            <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem]">
               Semana de água: é normal o peso subir 0,5–2&nbsp;kg agora. Não é gordura e desce depois do período.
             </p>
           ) : (
-            <p className="text-[14px] text-dim">
+            <p className="text-[0.875rem] text-dim">
               {options.pill ? 'Período' : 'Ciclo'} a cada cerca de {info.length} dias
               {starts.length < 3 ? ' (ainda a aprender)' : ''}.
             </p>
           )}
         </>
       ) : (
-        <p className="text-[15px] text-dim">
+        <p className="text-[0.9375rem] text-dim">
           Opcional: marca o primeiro dia do período e a app avisa na semana em que o peso sobe com água.
         </p>
       )}
@@ -85,9 +85,9 @@ export default function Ciclo({ today }: { today: string }) {
             value={date}
             max={today}
             onChange={(e) => setDate(e.target.value)}
-            className="h-11 flex-1 rounded-xl border border-line bg-bg px-3 text-[15px] focus:border-eat focus:outline-none"
+            className="h-11 flex-1 rounded-xl border border-line bg-bg px-3 text-[0.9375rem] focus:border-eat focus:outline-none"
           />
-          <button onClick={() => add(date)} className="min-h-11 rounded-xl bg-surface2 px-4 text-[15px]">
+          <button onClick={() => add(date)} className="min-h-11 rounded-xl bg-surface2 px-4 text-[0.9375rem]">
             Marcar
           </button>
         </div>
@@ -96,11 +96,11 @@ export default function Ciclo({ today }: { today: string }) {
           <button
             disabled={starts.includes(today)}
             onClick={() => add(today)}
-            className="min-h-11 rounded-xl bg-surface2 text-[15px] disabled:opacity-40"
+            className="min-h-11 rounded-xl bg-surface2 text-[0.9375rem] disabled:opacity-40"
           >
             Começou hoje
           </button>
-          <button onClick={() => setOther(true)} className="min-h-11 rounded-xl text-[15px] text-eat">
+          <button onClick={() => setOther(true)} className="min-h-11 rounded-xl text-[0.9375rem] text-eat">
             Outro dia
           </button>
         </div>
@@ -110,12 +110,12 @@ export default function Ciclo({ today }: { today: string }) {
           de o ciclo estar a contar; o cartão deixa de ocupar ~330 px entre o
           Peso e as Medidas. */}
       <details open={starts.length === 0} className="group border-t border-line/60 pt-1">
-        <summary className="flex min-h-11 cursor-pointer items-center text-[15px] text-dim">
+        <summary className="flex min-h-11 cursor-pointer items-center text-[0.9375rem] text-dim">
           Opções{starts.length > 0 ? ' e inícios marcados' : ''} <span className="ml-1 group-open:hidden">›</span>
           <span className="ml-1 hidden group-open:inline">▾</span>
         </summary>
       <div className="space-y-2 pt-2">
-        <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
+        <label className="flex min-h-11 items-center justify-between gap-3 text-[0.9375rem]">
           Tomo a pílula
           <input
             type="checkbox"
@@ -125,7 +125,7 @@ export default function Ciclo({ today }: { today: string }) {
           />
         </label>
         {options.pill && (
-          <div className="grid grid-cols-2 gap-2 text-[14px]">
+          <div className="grid grid-cols-2 gap-2 text-[0.875rem]">
             {(
               [
                 [28, 'Todos os meses'],
@@ -143,12 +143,12 @@ export default function Ciclo({ today }: { today: string }) {
           </div>
         )}
         {options.pill && (
-          <p className="text-[13px] text-dim">Com a pílula não há ovulação nem fases; conta só a semana de água antes da pausa.</p>
+          <p className="text-[0.8125rem] text-dim">Com a pílula não há ovulação nem fases; conta só a semana de água antes da pausa.</p>
         )}
       </div>
 
       {starts.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 pt-2 text-[13px] text-dim">
+        <div className="flex flex-wrap items-center gap-2 pt-2 text-[0.8125rem] text-dim">
           <span>Inícios marcados (toca para tirar):</span>
           {starts.slice(-4).reverse().map((d) => (
             <button

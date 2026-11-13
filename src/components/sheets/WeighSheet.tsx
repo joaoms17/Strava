@@ -195,7 +195,7 @@ export default function WeighSheet() {
         <div className="space-y-3 pb-2">
           {stage.suggestion != null ? (
             <>
-              <p className="text-[17px]">Queres dizer {fmt1(stage.suggestion)}?</p>
+              <p className="text-[1.0625rem]">Queres dizer {fmt1(stage.suggestion)}?</p>
               <BusyButton
                 busy="A guardar…"
                 onClick={() => save(stage.suggestion!)}
@@ -207,14 +207,14 @@ export default function WeighSheet() {
                 <BusyButton
                   busy="A guardar…"
                   onClick={() => save(Math.round(stage.value * 10) / 10)}
-                  className="min-h-12 w-full rounded-2xl border border-line text-[15px]"
+                  className="min-h-12 w-full rounded-2xl border border-line text-[0.9375rem]"
                 >
                   Não, está certo ({fmt1(stage.value)})
                 </BusyButton>
               ) : (
                 <button
                   onClick={() => setStage({ kind: 'input' })}
-                  className="min-h-12 w-full rounded-2xl border border-line text-[15px]"
+                  className="min-h-12 w-full rounded-2xl border border-line text-[0.9375rem]"
                 >
                   Corrigir
                 </button>
@@ -222,7 +222,7 @@ export default function WeighSheet() {
             </>
           ) : (
             <>
-              <p className="text-[17px]">Confirma: {fmt1(stage.value)} kg?</p>
+              <p className="text-[1.0625rem]">Confirma: {fmt1(stage.value)} kg?</p>
               <BusyButton
                 busy="A guardar…"
                 onClick={() => save(Math.round(stage.value * 10) / 10)}
@@ -232,7 +232,7 @@ export default function WeighSheet() {
               </BusyButton>
               <button
                 onClick={() => setStage({ kind: 'input' })}
-                className="min-h-12 w-full rounded-2xl border border-line text-[15px]"
+                className="min-h-12 w-full rounded-2xl border border-line text-[0.9375rem]"
               >
                 Corrigir
               </button>
@@ -253,7 +253,7 @@ export default function WeighSheet() {
           disabled={saving || !value.trim() || !loaded}
           aria-busy={saving || undefined}
           onClick={submit}
-          className={`min-h-14 w-full rounded-2xl bg-cta text-[17px] font-semibold text-on-cta disabled:opacity-40 ${saving ? 'opacity-100!' : ''}`}
+          className={`min-h-14 w-full rounded-2xl bg-cta text-[1.0625rem] font-semibold text-on-cta disabled:opacity-40 ${saving ? 'opacity-100!' : ''}`}
         >
           {busyContent(saving, 'A guardar…', 'Guardar')}
         </button>
@@ -263,7 +263,7 @@ export default function WeighSheet() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => step(-0.1)}
-            className="h-12 w-12 shrink-0 rounded-xl bg-surface2 text-[17px] tabular-nums"
+            className="h-12 w-12 shrink-0 rounded-xl bg-surface2 text-[1.0625rem] tabular-nums"
             aria-label="menos 0,1"
           >
             −0,1
@@ -280,16 +280,16 @@ export default function WeighSheet() {
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submit()
               }}
-              className="h-16 w-full rounded-2xl border border-line bg-bg text-center font-display text-[44px] font-bold tabular-nums placeholder:text-dim/60 focus:border-eat focus:outline-none"
+              className="h-16 w-full rounded-2xl border border-line bg-bg text-center font-display text-[2.75rem] font-bold tabular-nums placeholder:text-dim/60 focus:border-eat focus:outline-none"
               aria-label="Peso em kg"
             />
-            <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-[15px] text-dim">
+            <span className="pointer-events-none absolute top-1/2 right-4 -translate-y-1/2 text-[0.9375rem] text-dim">
               kg
             </span>
           </div>
           <button
             onClick={() => step(0.1)}
-            className="h-12 w-12 shrink-0 rounded-xl bg-surface2 text-[17px] tabular-nums"
+            className="h-12 w-12 shrink-0 rounded-xl bg-surface2 text-[1.0625rem] tabular-nums"
             aria-label="mais 0,1"
           >
             +0,1
@@ -297,7 +297,7 @@ export default function WeighSheet() {
         </div>
         {/* Ideia 15: o peso não mudou? Um toque preenche-o. */}
         {last && !value && (
-          <button onClick={() => setValue(fmt1(last.kg))} className="mx-auto block min-h-11 rounded-full border border-line px-4 text-[15px] text-dim tabular-nums">
+          <button onClick={() => setValue(fmt1(last.kg))} className="mx-auto block min-h-11 rounded-full border border-line px-4 text-[0.9375rem] text-dim tabular-nums">
             {last.date === shiftDate(date, -1) ? 'ontem' : 'última'} {fmt1(last.kg)} · usar
           </button>
         )}
@@ -324,11 +324,11 @@ export default function WeighSheet() {
         </div>
         {existing && (
           <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] text-dim">Já há {fmt1(existing.kg)} kg neste dia; guardar substitui.</p>
+            <p className="text-[0.8125rem] text-dim">Já há {fmt1(existing.kg)} kg neste dia; guardar substitui.</p>
             <BusyButton
               busy="A apagar…"
               onClick={remove}
-              className="min-h-11 shrink-0 px-1 text-[15px] text-pain disabled:opacity-40"
+              className="min-h-11 shrink-0 px-1 text-[0.9375rem] text-pain disabled:opacity-40"
             >
               Apagar pesagem
             </BusyButton>
@@ -336,7 +336,7 @@ export default function WeighSheet() {
         )}
 
         {profile.scale_has_bodyfat && (
-          <label className="flex items-center justify-between gap-3 text-[15px]">
+          <label className="flex items-center justify-between gap-3 text-[0.9375rem]">
             <span className="text-dim">% de gordura da balança (opcional)</span>
             <input
               inputMode="decimal"
@@ -347,8 +347,8 @@ export default function WeighSheet() {
           </label>
         )}
 
-        <p className="text-[13px] text-dim">De manhã, depois da casa de banho, antes de comer, sem roupa.</p>
-        {error && <p className="text-[15px] text-pain">{error}</p>}
+        <p className="text-[0.8125rem] text-dim">De manhã, depois da casa de banho, antes de comer, sem roupa.</p>
+        {error && <p className="text-[0.9375rem] text-pain">{error}</p>}
       </div>
     </BottomSheet>
   )
