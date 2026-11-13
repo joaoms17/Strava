@@ -99,6 +99,9 @@ export async function sameDaySession(draft: {
   date: string
   minutes: number
   started_at: string | null
+  // Sem hora (dito ou escrito), qualquer treino do relógio desse dia e tipo
+  // pode ser o mesmo, mesmo com outra duração (T1, T3): o mais parecido.
+  anyFromWatch?: boolean
 }): Promise<Workout | null> {
   const { data } = await supabase.from('workouts_active').select('*').eq('date', draft.date).eq('type', draft.type)
   const rows = ((data ?? []) as Workout[]).filter(
@@ -108,7 +111,12 @@ export async function sameDaySession(draft: {
     { type: draft.type, date: draft.date, minutes: draft.minutes, started_at: draft.started_at },
     rows.map((w) => ({ ...w, started_at: startGuessed(w) ? null : (w.started_at ?? null) })),
   )
-  return match ? (rows.find((w) => w.id === match.id) ?? null) : null
+  if (match) return rows.find((w) => w.id === match.id) ?? null
+  if (!draft.anyFromWatch || draft.started_at) return null
+  const watch = rows
+    .filter((w) => w.source === 'intervals' || w.external_id != null)
+    .sort((a, b) => Math.abs((a.minutes ?? 0) - draft.minutes) - Math.abs((b.minutes ?? 0) - draft.minutes))
+  return watch[0] ?? null
 }
 
 // « · +210 kcal do treino» (« · ≈ +122 …» numa estimativa) para os avisos.

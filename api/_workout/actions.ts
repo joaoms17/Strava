@@ -110,6 +110,11 @@ const StrengthSchema = z.object({
   name: z.string().trim().max(80).nullable().optional(),
   // As calorias do relógio ditas («Dizer ou escrever»): contam por inteiro.
   kcal_device: int(0, 5000).nullable().optional(),
+  // Com workout_id: «Sim, é esse» ao ginásio do dia (o do relógio, T3). As
+  // séries juntam-se a essa sessão sem mexer na duração nem na hora dela.
+  merge: z.boolean().optional(),
+  // «Não, é outro»: havia um ginásio parecido nesse dia e não é o mesmo.
+  not_duplicate: z.boolean().optional(),
 })
 
 const ShotAddSchema = z.object({
@@ -495,6 +500,75 @@ export const strength = post(async ({ db, userId, body, res }) => {
       } | null)
     : null
 
+  // «Sim, é esse» (T3): as séries ditas vão para o ginásio do dia que já lá
+  // estava (o do relógio). Fica a duração e a hora dele; as calorias ditas só
+  // entram se ele não as tem; as séries que já tiver ficam e as novas
+  // continuam a numeração.
+  if (input.workout_id && input.merge) {
+    const target = await ownWorkout(db, input.workout_id)
+    if (target.deleted_at) throw new HttpError(409, 'Esse treino foi apagado.')
+    if (target.type !== 'strength') throw new HttpError(422, 'Esse treino não é um ginásio.')
+    const patch: Record<string, unknown> = {}
+    const filled: string[] = []
+    if (target.minutes == null) {
+      patch.minutes = input.minutes
+      filled.push('minutes')
+    }
+    if (input.kcal_device != null && input.kcal_device > 0 && storedDeviceKcal(target) == null) {
+      patch.kcal_device = input.kcal_device
+      filled.push('kcal_device')
+    }
+    if (favorite && !target.favorite_id) {
+      Object.assign(patch, { favorite_id: favorite.id, name: favorite.name })
+      filled.push('favorite_id')
+    } else if (input.name && !target.favorite_id && target.source !== 'manual') {
+      patch.name = input.name
+    }
+    const note = input.note?.trim()
+    if (note && !target.note) {
+      patch.note = note
+      filled.push('note')
+    }
+    const again = kcalAfterMerge(
+      {
+        type: 'strength',
+        minutes: (target.minutes as number | null) ?? input.minutes,
+        watts: null,
+        watts_source: null,
+        kcal_device: storedDeviceKcal(target),
+      },
+      patch,
+      input.minutes,
+    )
+    if (again) Object.assign(patch, again)
+    const { data: existingSets } = await db.from('exercise_log').select('exercise,set_index').eq('workout_id', target.id)
+    const offset = new Map<string, number>()
+    for (const row of (existingSets ?? []) as { exercise: string; set_index: number }[]) {
+      offset.set(row.exercise, Math.max(offset.get(row.exercise) ?? 0, row.set_index))
+    }
+    if (input.sets.length) filled.push('series')
+    patch.merged_from = [
+      ...(((target.merged_from as unknown[]) ?? []) as unknown[]),
+      { said: true, at: new Date().toISOString(), filled },
+    ]
+    const { data, error } = await db.from('workouts').update(patch).eq('id', target.id).select().single()
+    if (error) throw new HttpError(500, error.message)
+    if (input.sets.length) {
+      const { error: logError } = await db
+        .from('exercise_log')
+        .insert(rows(target.id).map((r) => ({ ...r, set_index: r.set_index + (offset.get(r.exercise) ?? 0) })))
+      if (logError) throw new HttpError(500, logError.message)
+    }
+    if (favorite) {
+      await db
+        .from('favorites')
+        .update({ use_count: (favorite.use_count ?? 0) + 1, last_used_at: new Date().toISOString() })
+        .eq('id', favorite.id)
+    }
+    res.status(200).json({ workout: data, merged: true, filled })
+    return
+  }
+
   if (input.workout_id) {
     const target = await ownWorkout(db, input.workout_id)
     const patch: Record<string, unknown> = { minutes: input.minutes }
@@ -557,7 +631,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
       favorite_id: favorite?.id ?? null,
       ...(favorite ? { name: favorite.name } : input.name ? { name: input.name } : {}),
       note: input.note?.trim() || null,
-      raw: withGuess(null, guessed),
+      raw: withGuess(input.not_duplicate ? { outro_treino: true } : null, guessed),
     })
     .select()
     .single()

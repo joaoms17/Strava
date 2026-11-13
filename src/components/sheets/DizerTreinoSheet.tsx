@@ -122,14 +122,22 @@ export default function DizerTreinoSheet() {
   const canSave = said != null && Number.isInteger(mins) && mins >= 1 && mins <= 600
   useEffect(() => setMatch(null), [day, minutes, said])
 
-  // Sem decisão, vê primeiro se já há um treino parecido nesse dia (fora do
-  // ginásio: as séries vão para uma sessão nova).
+  // Sem decisão, vê primeiro se já há um treino parecido nesse dia. No
+  // ginásio, «Sim, é esse» grava as séries na sessão que lá está (a do
+  // relógio) em vez de criar outra (T3).
   async function save(decision?: 'merge' | 'new') {
     if (!said || !canSave) return
     const startedAt = day !== today ? lisbonInstant(day, '18:00').toISOString() : null
     const name = title.trim() || null
-    if (!decision && said.type !== 'strength') {
-      const found = await sameDaySession({ type: said.type, sport: said.sport, date: day, minutes: mins, started_at: null })
+    if (!decision) {
+      const found = await sameDaySession({
+        type: said.type,
+        sport: said.sport,
+        date: day,
+        minutes: mins,
+        started_at: null,
+        anyFromWatch: said.type === 'strength',
+      })
       if (found) {
         setMatch(found)
         return
@@ -147,14 +155,20 @@ export default function DizerTreinoSheet() {
           note: said.note,
           // As calorias do relógio ditas contam por inteiro.
           kcal_device: said.kcal_device,
+          ...(decision === 'merge' && match ? { workout_id: match.id, merge: true } : {}),
+          ...(decision === 'new' ? { not_duplicate: true } : {}),
         }
-        const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
+        const { workout, merged } = await postApi<{ workout: Workout; merged?: boolean }>('/api/workout/strength', {
           client_id: clientIdFor(body),
           ...body,
         })
         saved = workout
         emitDataChanged()
-        toast(`${name ?? 'Ginásio'} registado${kcalOfWorkout(workout)}`)
+        toast(
+          merged
+            ? `Juntei as séries ao ginásio que lá estava: não conta duas vezes${kcalOfWorkout(workout)}`
+            : `${name ?? 'Ginásio'} registado${kcalOfWorkout(workout)}`,
+        )
       } catch (err) {
         toast(err instanceof Error ? err.message : 'Não consegui gravar.')
       }
