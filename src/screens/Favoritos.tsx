@@ -40,6 +40,9 @@ export default function Favoritos() {
   const [editing, setEditing] = useState<Favorite | null>(null)
   const [editingFood, setEditingFood] = useState<Food | null>(null)
   const [workoutFavs, setWorkoutFavs] = useState<Favorite[]>([])
+  // H17: as arquivadas têm uma lista própria, para se poderem repor.
+  const [archived, setArchived] = useState<Favorite[]>([])
+  const [showArchived, setShowArchived] = useState(false)
   const sheet = useSheet()
   const [, navigate] = useLocation()
   const profile = useReadyProfile()
@@ -60,7 +63,7 @@ export default function Favoritos() {
   }
 
   const load = useCallback(async () => {
-    const [{ data: favRows }, { data: foodRows }, { data: workoutRows }] = await Promise.all([
+    const [{ data: favRows }, { data: foodRows }, { data: workoutRows }, { data: archivedRows }] = await Promise.all([
       supabase
         .from('favorites')
         .select('*')
@@ -74,8 +77,16 @@ export default function Favoritos() {
         .eq('kind', 'workout')
         .eq('archived', false)
         .order('use_count', { ascending: false }),
+      supabase
+        .from('favorites')
+        .select('*')
+        .eq('kind', 'meal')
+        .eq('archived', true)
+        .order('updated_at', { ascending: false })
+        .limit(100),
     ])
     setWorkoutFavs((workoutRows ?? []) as Favorite[])
+    setArchived((archivedRows ?? []) as Favorite[])
     const list = (favRows ?? []) as Favorite[]
     setFavorites(list)
     setFoods((foodRows ?? []) as Food[])
@@ -85,6 +96,16 @@ export default function Favoritos() {
   useEffect(() => {
     void load()
   }, [load, version])
+
+  // H11: o ★ de uma refeição abre a favorita dela (?abrir=id), uma vez.
+  const openId = search.get('abrir')
+  useEffect(() => {
+    if (!openId || !favorites) return
+    const found = favorites.find((f) => f.id === openId)
+    if (found) setEditing(found)
+    navigate('/favoritos', { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, favorites])
 
   async function archive(favorite: Favorite) {
     const { error } = await supabase.from('favorites').update({ archived: true }).eq('id', favorite.id)
@@ -105,6 +126,16 @@ export default function Favoritos() {
     ])
   }
 
+  async function restore(favorite: Favorite) {
+    const { error } = await supabase.from('favorites').update({ archived: false }).eq('id', favorite.id)
+    if (error) {
+      toast('Não consegui repor. Tenta outra vez.')
+      return
+    }
+    emitDataChanged()
+    toast(`Reposta · ${favorite.name}`)
+  }
+
   return (
     <div className="space-y-4 pt-1">
       <div className={`grid grid-cols-5 ${SEGMENT_TRACK} text-[14px]`}>
@@ -121,7 +152,7 @@ export default function Favoritos() {
             key={id}
             onClick={() => setSegment(id)}
             aria-pressed={segment === id}
-            className={`min-h-10 rounded-lg ${tabStyle(segment === id)}`}
+            className={`min-h-11 rounded-lg ${tabStyle(segment === id)}`}
           >
             {label}
           </button>
@@ -161,9 +192,11 @@ export default function Favoritos() {
               const photo = favorite.photo_path ? photos[favorite.photo_path] : null
               return (
                 <div key={favorite.id} className="overflow-hidden rounded-2xl bg-surface">
+                  {/* H17: aqui gere-se; tocar abre a favorita (registar fica lá dentro). */}
                   <button
-                    onClick={() => void runBusy('A registar…', () => logFavorite(favorite, null, toast))}
-                    className="block w-full text-left"
+                    onClick={() => setEditing(favorite)}
+                    className="block w-full pb-2 text-left"
+                    aria-label={`Abrir ${favorite.name}`}
                   >
                     {photo ? (
                       <img loading="lazy" decoding="async" src={photo} alt="" className="h-28 w-full object-cover" />
@@ -179,20 +212,35 @@ export default function Favoritos() {
                       </p>
                     </div>
                   </button>
-                  <div className="flex justify-end px-1 pb-1">
-                    <button
-                      onClick={() => setEditing(favorite)}
-                      className="min-h-10 px-3 text-[17px] text-dim"
-                      aria-label={`Opções de ${favorite.name}`}
-                    >
-                      ⋯
-                    </button>
-                  </div>
                 </div>
               )
             })}
           </div>
         ))}
+
+      {segment === 'refeicoes' && archived.length > 0 && (
+        <section className="space-y-2">
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            aria-expanded={showArchived}
+            className="flex min-h-11 w-full items-center justify-between px-1 text-[15px] text-dim"
+          >
+            Arquivadas ({archived.length}) <span aria-hidden>{showArchived ? '▴' : '▾'}</span>
+          </button>
+          {showArchived && (
+            <ul className="divide-y divide-line rounded-2xl bg-surface">
+              {archived.map((favorite) => (
+                <li key={favorite.id} className="flex items-center gap-3 px-4 py-1">
+                  <span className="min-w-0 flex-1 truncate text-[15px]">{favorite.name}</span>
+                  <BusyButton busy="A repor…" onClick={() => restore(favorite)} className="min-h-11 shrink-0 px-2 text-[15px] text-eat">
+                    Repor
+                  </BusyButton>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {segment === 'treinos' && (
         <div className="space-y-2">
@@ -229,13 +277,13 @@ export default function Favoritos() {
                     ? navigate(`/treino/ginasio?fav=${favorite.id}`)
                     : sheet.open('registar-treino', { fav: favorite.id })
                 }
-                className="min-h-10 rounded-xl bg-cta px-3 font-semibold text-on-cta"
+                className="min-h-11 rounded-xl bg-cta px-3 font-semibold text-on-cta"
               >
                 Registar
               </button>
               <button
                 onClick={() => sheet.open('meu-treino', { id: favorite.id })}
-                className="min-h-10 px-2 text-[17px] text-dim"
+                className="min-h-11 min-w-11 px-2 text-[17px] text-dim"
                 aria-label={`Editar ${favorite.name}`}
               >
                 ⋯
@@ -278,7 +326,14 @@ export default function Favoritos() {
       )}
 
       {editing && (
-        <EditFavorite favorite={editing} onClose={() => setEditing(null)} onArchive={() => archive(editing)} />
+        <EditFavorite
+          favorite={editing}
+          onClose={() => setEditing(null)}
+          onArchive={() => archive(editing)}
+          onLog={async () => {
+            if (await logFavorite(editing, null, toast)) setEditing(null)
+          }}
+        />
       )}
       {editingFood && <EditFood food={editingFood} onClose={() => setEditingFood(null)} />}
     </div>
@@ -289,10 +344,12 @@ function EditFavorite({
   favorite,
   onClose,
   onArchive,
+  onLog,
 }: {
   favorite: Favorite
   onClose: () => void
   onArchive: () => Promise<void>
+  onLog: () => Promise<void>
 }) {
   const toast = useToast()
   const [name, setName] = useState(favorite.name)
@@ -329,8 +386,9 @@ function EditFavorite({
 
   return (
     <BottomSheet
-      title="Editar favorita"
+      title="Favorita"
       onClose={onClose}
+      closeOnBack
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
           <BusyButton busy="A arquivar…" onClick={onArchive} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-dim">
@@ -343,10 +401,13 @@ function EditFavorite({
       }
     >
       <div className="space-y-4 pb-2">
+        <BusyButton busy="A registar…" onClick={onLog} className="min-h-12 w-full rounded-xl border border-line text-[15px] font-semibold">
+          Registar agora
+        </BusyButton>
         <div className="flex items-center gap-3">
           <Thumb url={photoPath ? urls[photoPath] : null} size={88} />
           <div className="flex flex-col items-start gap-1">
-            <label className={`cursor-pointer text-[15px] text-eat ${busy ? 'pointer-events-none' : ''}`}>
+            <label className={`flex min-h-11 cursor-pointer items-center text-[15px] text-eat ${busy ? 'pointer-events-none' : ''}`}>
               {busy ? <BusyLabel text="A enviar a foto…" /> : photoPath ? 'Mudar a foto' : 'Juntar foto'}
               <input
                 type="file"
@@ -361,7 +422,7 @@ function EditFavorite({
               />
             </label>
             {photoPath && (
-              <BusyButton busy="A tirar a foto…" onClick={() => changePhoto(null)} className="text-[15px] text-dim">
+              <BusyButton busy="A tirar a foto…" onClick={() => changePhoto(null)} className="min-h-11 text-[15px] text-dim">
                 Tirar a foto
               </BusyButton>
             )}
@@ -445,6 +506,7 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
     <BottomSheet
       title="Alimento"
       onClose={onClose}
+      closeOnBack
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
           <BusyButton busy="A apagar…" onClick={remove} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-pain">

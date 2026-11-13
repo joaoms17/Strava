@@ -13,6 +13,7 @@ import AtalhoSaude from '../components/AtalhoSaude'
 import Notificacoes from '../components/Notificacoes'
 import { signOutCurrent } from '../lib/accounts'
 import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
+import { campoMudou, lerPotencias, potenciasMudaram, usaBicicleta } from '../lib/definicoes'
 
 interface Field {
   key: keyof Profile & string
@@ -60,7 +61,6 @@ const BIKE: Field[] = [
     min: 90,
     max: 220,
   },
-  { key: 'bike_min_cadence', label: 'Cadência mínima', unit: 'rpm', min: 50, max: 130 },
 ]
 
 const EXPORT_PAGE = 1000
@@ -112,6 +112,31 @@ function ChangePassword() {
   )
 }
 
+// H14: terminar a sessão pede confirmação (um toque ao lado não tira ninguém).
+function SignOut() {
+  const [confirming, setConfirming] = useState(false)
+  if (!confirming) {
+    return (
+      <button onClick={() => setConfirming(true)} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] text-pain">
+        Terminar sessão
+      </button>
+    )
+  }
+  return (
+    <div role="alertdialog" aria-label="Terminar sessão" className="space-y-2 rounded-xl border border-line p-3">
+      <p className="text-[15px]">Terminar a sessão neste telemóvel? Para voltar a entrar precisas do email e da palavra-passe.</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button autoFocus onClick={() => setConfirming(false)} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+          Cancelar
+        </button>
+        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 rounded-xl bg-surface2 text-[15px] font-semibold text-pain">
+          Terminar
+        </BusyButton>
+      </div>
+    </div>
+  )
+}
+
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
@@ -137,7 +162,7 @@ function Choice<T extends string>({ options, value, onChange }: { options: [T, s
   return (
     <div className={`grid ${SEGMENT_TRACK} text-[15px]`} style={{ gridTemplateColumns: `repeat(${options.length}, 1fr)` }}>
       {options.map(([id, label]) => (
-        <button key={id} onClick={() => onChange(id)} aria-pressed={value === id} className={`min-h-10 rounded-lg ${segment(value === id)}`}>
+        <button key={id} onClick={() => onChange(id)} aria-pressed={value === id} className={`min-h-11 rounded-lg ${segment(value === id)}`}>
           {label}
         </button>
       ))}
@@ -159,6 +184,43 @@ export default function Definicoes() {
     profile.sex === 'f'
       ? BODY.map((f) => (f.key === 'measure_interval_days' ? { ...f, label: 'Medir cintura, anca e pescoço a cada' } : f))
       : BODY
+  // H14 e L2: a bicicleta, o Atalho e o Arquivo só para quem os usa. Até se
+  // saber (ou se a consulta falhar), ficam em «Mais definições».
+  const [uses, setUses] = useState<{ bike: boolean; shortcut: boolean; chapters: boolean }>({
+    bike: (profile.bike_watts_options?.length ?? 0) > 0,
+    shortcut: false,
+    chapters: false,
+  })
+  const [showMore, setShowMore] = useState(false)
+  useEffect(() => {
+    let alive = true
+    const count = async (run: () => PromiseLike<{ data: unknown[] | null; error: unknown }>) => {
+      try {
+        const { data, error } = await run()
+        return error ? 0 : (data?.length ?? 0)
+      } catch {
+        return 0
+      }
+    }
+    void Promise.all([
+      count(() => supabase.from('workouts').select('id').eq('type', 'bike').limit(1)),
+      count(() => supabase.from('health_daily').select('date').eq('source', 'shortcut').limit(1)),
+      count(() => supabase.from('chapters').select('id').limit(1)),
+    ]).then(([bikes, shortcut, chapters]) => {
+      if (!alive) return
+      setUses({
+        bike: usaBicicleta({ potencias: profile.bike_watts_options, treinosBicicleta: bikes }),
+        shortcut: shortcut > 0,
+        chapters: chapters > 0,
+      })
+    })
+    return () => {
+      alive = false
+    }
+  }, [profile.bike_watts_options])
+  const dirty = (fields: Field[]) => fields.some((f) => campoMudou(values[f.key], profile[f.key]))
+  const bikeDirty = dirty(BIKE) || potenciasMudaram(watts, profile.bike_watts_options)
+
   // Os interruptores mudam logo; se não gravar, voltam atrás e avisa.
   const set = (patch: Partial<Profile>) =>
     void update(patch).then((ok) => {
@@ -181,15 +243,12 @@ export default function Definicoes() {
       patch[field.key] = n
     }
     if (fields === BIKE) {
-      const options = watts
-        .split(/[^\d]+/)
-        .map(Number)
-        .filter((n) => n >= 30 && n <= 500)
+      const options = lerPotencias(watts)
       if (options.length === 0) {
         toast('Escreve pelo menos uma potência, por exemplo 130 · 140 · 150.')
         return
       }
-      patch.bike_watts_options = [...new Set(options)].sort((a, b) => a - b)
+      patch.bike_watts_options = options
     }
     const ok = await update(patch as Partial<Profile>)
     toast(ok ? 'Guardado.' : 'Não consegui guardar. Tenta outra vez.')
@@ -234,15 +293,49 @@ export default function Definicoes() {
     )
   }
 
-  const saveButton = (fields: Field[]) => (
-    <BusyButton
-      busy="A guardar…"
-      onClick={() => saveFields(fields)}
-      className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-50"
-    >
-      Guardar
-    </BusyButton>
+  // H14: os números só gravam com «Guardar» (os interruptores e as escolhas
+  // gravam ao toque). Com algo por guardar diz-se; sem nada, o botão apaga-se.
+  const saveButton = (fields: Field[], changed = dirty(fields)) => (
+    <div className="space-y-1">
+      {changed && (
+        <p role="status" className="text-[13px] font-semibold text-attn">
+          Tens alterações por guardar.
+        </p>
+      )}
+      <BusyButton
+        busy="A guardar…"
+        disabled={!changed}
+        onClick={() => saveFields(fields)}
+        className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta disabled:opacity-40"
+      >
+        {changed ? 'Guardar' : 'Guardado'}
+      </BusyButton>
+    </div>
   )
+
+  const bikeSection = (
+    <Section title="Bicicleta">
+      <label className="block space-y-1">
+        <span className="flex items-baseline justify-between gap-3">
+          <span className="text-[15px]">Potências que usas</span>
+          <input
+            value={watts}
+            onChange={(e) => setWatts(e.target.value)}
+            className="h-11 w-36 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
+          />
+        </span>
+        <span className="block text-[13px] text-dim">Em watts, por exemplo 130 · 140 · 150.</span>
+      </label>
+      {BIKE.map(numberInput)}
+      {saveButton(BIKE, bikeDirty)}
+    </Section>
+  )
+  const shortcutSection = (
+    <Section title="Ligações · Atalho do iPhone (Apple Watch)">
+      <AtalhoSaude />
+    </Section>
+  )
+  const hidden = !uses.bike || !uses.shortcut
 
   return (
     <div className="space-y-6 pt-1 pb-4">
@@ -278,31 +371,14 @@ export default function Definicoes() {
         {saveButton(GOALS)}
       </Section>
 
-      <Section title="Bicicleta">
-        <label className="block space-y-1">
-          <span className="flex items-baseline justify-between gap-3">
-            <span className="text-[15px]">Potências que usas</span>
-            <input
-              value={watts}
-              onChange={(e) => setWatts(e.target.value)}
-              className="h-11 w-36 rounded-xl border border-line bg-bg px-2 text-right tabular-nums focus:border-eat focus:outline-none"
-            />
-          </span>
-          <span className="block text-[13px] text-dim">Em watts, por exemplo 130 · 140 · 150.</span>
-        </label>
-        {BIKE.map(numberInput)}
-        {saveButton(BIKE)}
+      {uses.bike && bikeSection}
+
+      <Section title="Relógio">
         <Toggle
           label="Gravo os treinos num relógio (Garmin, Amazfit…)"
           help="O print do relógio junta os batimentos às sessões. Os treinos automáticos (intervals.icu) vêm mais tarde."
           value={profile.has_garmin_watch ?? false}
           onChange={(v) => set({ has_garmin_watch: v })}
-        />
-        <Toggle
-          label="A consola da bicicleta mostra os watts"
-          help="Sem watts, a app usa os da última sessão (≈), que não contam para subir a potência."
-          value={profile.console_shows_watts ?? false}
-          onChange={(v) => set({ console_shows_watts: v })}
         />
       </Section>
 
@@ -312,9 +388,7 @@ export default function Definicoes() {
         </Section>
       )}
 
-      <Section title="Ligações · Atalho do iPhone (Apple Watch)">
-        <AtalhoSaude />
-      </Section>
+      {uses.shortcut && shortcutSection}
 
       <Section title="Corpo e balança">
         {body.map(numberInput)}
@@ -348,9 +422,7 @@ export default function Definicoes() {
       <Section title="Sessão">
         <p className="text-[13px] text-dim">A app fica sempre com a sessão iniciada neste telemóvel.</p>
         <ChangePassword />
-        <BusyButton busy="A sair…" onClick={signOutCurrent} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] text-pain">
-          Terminar sessão
-        </BusyButton>
+        <SignOut />
       </Section>
 
       <Section title="Os meus dados">
@@ -376,10 +448,24 @@ export default function Definicoes() {
         <Link href="/definicoes/avancado" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
           Avançado <span className="text-dim">›</span>
         </Link>
-        <Link href="/definicoes/arquivo" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
-          Arquivo <span className="text-dim">›</span>
-        </Link>
+        {uses.chapters && (
+          <Link href="/definicoes/arquivo" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+            Arquivo <span className="text-dim">›</span>
+          </Link>
+        )}
       </div>
+
+      {hidden &&
+        (showMore ? (
+          <>
+            {!uses.bike && bikeSection}
+            {!uses.shortcut && shortcutSection}
+          </>
+        ) : (
+          <button onClick={() => setShowMore(true)} className="min-h-12 w-full rounded-xl border border-line text-[15px] text-dim">
+            Mais definições ({[!uses.bike && 'bicicleta', !uses.shortcut && 'Atalho do iPhone'].filter(Boolean).join(', ')})
+          </button>
+        ))}
     </div>
   )
 }

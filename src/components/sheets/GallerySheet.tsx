@@ -37,6 +37,9 @@ interface GroupState {
 }
 
 // Fotos tiradas mais cedo: cada uma cai na refeição, hora e dia certos (EXIF).
+// De cada vez lêem-se até 12 fotos; as que passam disso diz-se (H17).
+const GALLERY_MAX = 12
+
 // Fotos a 15 min umas das outras juntam-se; as sem hora pedem dia e momento.
 export default function GallerySheet() {
   const profile = useReadyProfile()
@@ -44,6 +47,7 @@ export default function GallerySheet() {
   const toast = useToast()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [photos, setPhotos] = useState<Photo[] | null>(null)
+  const [leftOut, setLeftOut] = useState(0)
   const [fallbackDate, setFallbackDate] = useState<string | null>(null)
   const [fallbackSlot, setFallbackSlot] = useState<Slot | null>(null)
   const [split, setSplit] = useState<Set<string>>(new Set())
@@ -67,7 +71,8 @@ export default function GallerySheet() {
       const now = new Date()
       const result: Photo[] = []
       // Uma de cada vez: só se lê o início de cada ficheiro (EXIF).
-      for (const file of pending.files.slice(0, 12)) {
+      if (alive) setLeftOut(Math.max(0, pending.files.length - GALLERY_MAX))
+      for (const file of pending.files.slice(0, GALLERY_MAX)) {
         const { exif, size } = await photoHeaderOf(file)
         result.push({
           id: crypto.randomUUID(),
@@ -172,6 +177,12 @@ export default function GallerySheet() {
       }
     >
       <div className="space-y-4 pb-2">
+        {leftOut > 0 && (
+          <p role="status" className="rounded-xl bg-attn/10 px-3 py-2 text-[14px] text-attn">
+            Só cabem {GALLERY_MAX} fotos de cada vez: {leftOut === 1 ? 'ficou 1 de fora' : `ficaram ${leftOut} de fora`}. Depois de
+            analisar estas, escolhe as outras na Galeria.
+          </p>
+        )}
         {groups.map((group) => {
           const key = group[0]!.id
           const state = stateOf(key)
@@ -191,7 +202,7 @@ export default function GallerySheet() {
                   {group.length > 1 && (
                     <button
                       onClick={() => setSplit((prev) => new Set(prev).add(key))}
-                      className="ml-3 text-[13px] text-eat"
+                      className="ml-1 min-h-11 px-2 text-[13px] text-eat"
                     >
                       Separar
                     </button>
