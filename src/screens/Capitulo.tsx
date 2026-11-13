@@ -59,7 +59,7 @@ export default function Capitulo({ onOpenTimeline }: { onOpenTimeline?: () => vo
         chapter = (prologue ?? null) as Chapter | null
       }
       if (!chapter) {
-        setError('Capítulo não encontrado — corre os seeds no Supabase.')
+        setError('Ainda não há capítulos para mostrar.')
         return
       }
       setData({

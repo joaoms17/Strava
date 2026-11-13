@@ -300,21 +300,25 @@ function Shell() {
   if (status === 'needs-migration') {
     return (
       <Centered>
-        <p className="text-[17px] font-semibold text-ink">Falta um passo no Supabase</p>
+        <p className="text-[17px] font-semibold text-ink">A app precisa de uma atualização</p>
         <p>
-          A app nova precisa de uma atualização da base de dados. No Supabase, abre o SQL Editor e corre,
-          por esta ordem, {missingMigrations.length === 1 ? 'o ficheiro' : 'os ficheiros'}:
+          Esta versão precisa de uma atualização dos dados que ainda não foi feita. Avisa quem gere a app e
+          tenta outra vez depois.
         </p>
-        <ul className="space-y-1">
-          {missingMigrations.map((file) => (
-            <li key={file}>
-              <code className="text-[13px] break-all text-ink">supabase/migrations/{file}</code>
-            </li>
-          ))}
-        </ul>
-        <p>Cola cada um, carrega em Run. Demora segundos e não apaga nada.</p>
-        <button onClick={() => void reload()} className="mt-2 rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
-          Já corri, tentar outra vez
+        {/* H13: o pormenor técnico fica escondido, para quem gere a app. */}
+        <details className="text-left text-[13px]">
+          <summary className="min-h-11 cursor-pointer py-2">Detalhes técnicos</summary>
+          <p>No SQL Editor do Supabase, correr por esta ordem:</p>
+          <ul className="space-y-1">
+            {missingMigrations.map((file) => (
+              <li key={file}>
+                <code className="break-all text-ink">supabase/migrations/{file}</code>
+              </li>
+            ))}
+          </ul>
+        </details>
+        <button onClick={() => void reload()} className="mt-2 min-h-12 rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
+          Tentar outra vez
         </button>
       </Centered>
     )
@@ -322,7 +326,7 @@ function Shell() {
   if (status === 'error') {
     return (
       <Centered>
-        <p>Não consegui ligar ao Supabase.</p>
+        <p>Não consegui carregar os teus dados. Verifica a internet.</p>
         <button onClick={() => void reload()} className="rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
           Tentar outra vez
         </button>

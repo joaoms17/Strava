@@ -48,7 +48,7 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
   if (missing) {
     return (
       <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
-        Para fazer dietas falta correr a migração 10 (dietas) no Supabase.
+        As dietas ainda não estão disponíveis nesta conta.
       </p>
     )
   }
