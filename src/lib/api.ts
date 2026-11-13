@@ -13,11 +13,11 @@ export class ApiError extends Error {
   }
 }
 
-async function callApi<T>(path: string, init: RequestInit): Promise<T> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  if (!session) throw new Error('Sessão expirada. Volta a entrar.')
+// `accessToken`: o token de uma pessoa certa (a fila envia com o do início do
+// ciclo, H8: ao trocar de pessoa a meio, o texto não sai com a sessão da outra).
+async function callApi<T>(path: string, init: RequestInit, accessToken?: string): Promise<T> {
+  const token = accessToken ?? (await supabase.auth.getSession()).data.session?.access_token
+  if (!token) throw new Error('Sessão expirada. Volta a entrar.')
 
   let res: Response
   try {
@@ -25,7 +25,7 @@ async function callApi<T>(path: string, init: RequestInit): Promise<T> {
       ...init,
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
         ...init.headers,
       },
     })
@@ -40,8 +40,8 @@ async function callApi<T>(path: string, init: RequestInit): Promise<T> {
   return json as T
 }
 
-export async function postApi<T>(path: string, body: unknown): Promise<T> {
-  return callApi<T>(path, { method: 'POST', body: JSON.stringify(body) })
+export async function postApi<T>(path: string, body: unknown, opts: { accessToken?: string } = {}): Promise<T> {
+  return callApi<T>(path, { method: 'POST', body: JSON.stringify(body) }, opts.accessToken)
 }
 
 export async function getApi<T>(path: string): Promise<T> {
