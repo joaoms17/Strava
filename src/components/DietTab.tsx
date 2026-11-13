@@ -11,6 +11,7 @@ import { followDiet, loadDiets } from '../lib/diets'
 import { dietSlots, dietTotals } from '../../api/_lib/rules/dieta'
 import { SLOT_LABEL } from '../../api/_lib/rules/momentos'
 import type { Diet, Favorite } from '../lib/types'
+import { favoriteThumb } from '../lib/favorites'
 
 // Favoritas › Dieta: as tuas dietas feitas com as favoritas (com fotos), a
 // que estás a seguir em cima.
@@ -96,7 +97,7 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
                 if (!fav) return null
                 return (
                   <li key={slot} className="flex items-center gap-3">
-                    <Thumb url={fav.photo_path ? photos[fav.photo_path] : null} size={44} />
+                    <Thumb url={photos[favoriteThumb(fav) ?? ''] ?? null} size={44} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[12px] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[slot]}</span>
                       <span className="block truncate text-[15px]">

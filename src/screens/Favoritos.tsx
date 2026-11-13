@@ -5,7 +5,7 @@ import { useToast } from '../lib/toast'
 import { BusyButton, BusyLabel, runBusy, useBusyKey } from '../lib/busy'
 import { emitDataChanged, useDataVersion } from '../lib/events'
 import { signedUrls, useSignedUrls } from '../lib/photos'
-import { setFavoritePhoto, uploadFavoritePhoto } from '../lib/favorites'
+import { setFavoritePhoto, uploadFavoritePhoto, favoriteThumb } from '../lib/favorites'
 import Thumb from '../components/ui/Thumb'
 import DietTab from '../components/DietTab'
 import { fmtInt, fmtKcal } from '../lib/format'
@@ -90,7 +90,7 @@ export default function Favoritos() {
     const list = (favRows ?? []) as Favorite[]
     setFavorites(list)
     setFoods((foodRows ?? []) as Food[])
-    setPhotos(await signedUrls(list.map((f) => f.photo_path).filter((p): p is string => !!p)))
+    setPhotos(await signedUrls(list.map(favoriteThumb).filter((p): p is string => !!p)))
   }, [])
 
   useEffect(() => {
@@ -188,7 +188,7 @@ export default function Favoritos() {
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {favorites.map((favorite) => {
-              const photo = favorite.photo_path ? photos[favorite.photo_path] : null
+              const photo = photos[favoriteThumb(favorite) ?? ''] ?? null
               return (
                 <div key={favorite.id} className="overflow-hidden rounded-2xl bg-surface">
                   {/* H17: aqui gere-se; tocar abre a favorita (registar fica lá dentro). */}

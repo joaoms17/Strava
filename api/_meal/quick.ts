@@ -196,7 +196,8 @@ export const logFavorite = post(async (db, userId, rawBody) => {
     raw_text: favorite.name,
     photo_path: favorite.photo_path,
     photo_paths: favorite.photo_path ? [favorite.photo_path] : [],
-    thumb_paths: favorite.photo_path ? [favorite.photo_path] : [],
+    // A miniatura da favorita quando a há (P6; sem a coluna, a foto).
+    thumb_paths: favorite.photo_path ? [(favorite.thumb_path as string | null | undefined) ?? favorite.photo_path] : [],
     favorite_id,
     portion_factor: factor,
     is_estimate: false,

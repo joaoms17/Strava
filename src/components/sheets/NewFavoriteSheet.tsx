@@ -12,7 +12,7 @@ import { getApi, postApi } from '../../lib/api'
 import { nutritionalDay } from '../../lib/day'
 import { fmtInt, fmtKcal } from '../../lib/format'
 import { mealName, mealSlot } from '../../lib/repetir'
-import { deleteFavorite, favoriteFromMeal, insertFavorite, uploadFavoritePhoto } from '../../lib/favorites'
+import { deleteFavorite, favoriteFromMeal, insertFavorite, thumbPathOf, uploadFavoritePhoto } from '../../lib/favorites'
 import { favoriteName, scaleItems } from '../../../api/_lib/rules/favoritos'
 import { MAX_DOSES } from '../../../api/_lib/rules/receita'
 import { addOption } from '../../../api/_lib/rules/dieta'
@@ -120,7 +120,7 @@ export default function NewFavoriteSheet() {
     try {
       const path = await photoPath()
       const finalName = name.trim() || favoriteName(items)
-      await insertFavorite({ id: favId, name: finalName, items, slot, photoPath: path })
+      await insertFavorite({ id: favId, name: finalName, items, slot, photoPath: path, thumbPath: path && thumbPathOf(path) })
       emitDataChanged()
       if (backToDiet(favId)) {
         toast(`Guardada nas favoritas · ${finalName}`)
@@ -171,7 +171,7 @@ export default function NewFavoriteSheet() {
     try {
       const path = await photoPath()
       const finalName = name.trim() || favoriteName(perDose)
-      await insertFavorite({ id: favId, name: finalName, items: perDose, slot, photoPath: path })
+      await insertFavorite({ id: favId, name: finalName, items: perDose, slot, photoPath: path, thumbPath: path && thumbPathOf(path) })
       const copies: { id: string; to: string; userId: string }[] = []
       for (const userId of alsoFor) {
         // A cópia é um extra: se falhar, a favorita desta pessoa já ficou.

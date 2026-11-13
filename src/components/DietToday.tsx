@@ -12,6 +12,7 @@ import { dayLabel } from '../lib/when'
 import { dietDay } from '../../api/_lib/rules/dieta'
 import { SLOT_LABEL, slotOf, type Slot } from '../../api/_lib/rules/momentos'
 import type { Diet, Favorite, Meal } from '../lib/types'
+import { favoriteThumb } from '../lib/favorites'
 
 // Hoje › Dieta: cada refeição da dieta que segues, com a foto. As que já
 // registaste ficam numa linha; as que faltam têm «Registar» (e as
@@ -37,7 +38,9 @@ export default function DietToday({
     meals.map((m) => ({ slot: mealSlot(m), favorite_id: m.favorite_id })),
   )
   const rows = day.filter((d) => d.options.some((id) => byId.has(id)))
-  const urls = useSignedUrls(rows.flatMap((d) => d.options.map((id) => byId.get(id)?.photo_path)))
+  const urls = useSignedUrls(
+    rows.flatMap((d) => d.options.map((id) => byId.get(id))).map((f) => (f ? favoriteThumb(f) : null)),
+  )
   if (rows.length === 0) return null
 
   const missing = rows.filter((d) => !d.done)
@@ -83,7 +86,7 @@ export default function DietToday({
         return (
           <div key={d.slot} className="space-y-1.5">
             <div className="flex items-center gap-3">
-              <Thumb url={main.photo_path ? urls[main.photo_path] : null} size={52} />
+              <Thumb url={urls[favoriteThumb(main) ?? ''] ?? null} size={52} />
               <span className="min-w-0 flex-1">
                 <span className="block text-[12px] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[d.slot]}</span>
                 <span className="block truncate text-[15px]">{main.name}</span>
@@ -108,7 +111,7 @@ export default function DietToday({
                     aria-label={`Registar ${fav.name}`}
                     className="flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-line py-1 pr-3 pl-1 text-[14px]"
                   >
-                    <Thumb url={fav.photo_path ? urls[fav.photo_path] : null} size={26} className="rounded-full" />
+                    <Thumb url={urls[favoriteThumb(fav) ?? ''] ?? null} size={26} className="rounded-full" />
                     ou {fav.name}
                   </button>
                 ))}

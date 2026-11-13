@@ -118,6 +118,8 @@ export interface Favorite {
   carbs: number
   fat: number
   photo_path: string | null
+  // A miniatura de 256 px (migração 20261113000060; sem ela, não vem). P6.
+  thumb_path?: string | null
   default_slot: Slot | null
   source_meal_id: string | null
   use_count: number

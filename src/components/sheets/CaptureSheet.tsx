@@ -43,6 +43,7 @@ import { favoritesGrid } from '../../../api/_lib/rules/favoritos'
 import { photoInstant } from '../../../api/_lib/rules/captura'
 import { lisbonClock } from '../../../api/_lib/rules/momentos'
 import type { Diet, Favorite, Slot } from '../../lib/types'
+import { favoriteThumb } from '../../lib/favorites'
 
 // Registar: tudo numa folha, em duas camadas guiadas pelo uso real (H10). Em
 // cima o «Quando» (dia e refeição, com «Agora» por defeito), o campo para
@@ -197,7 +198,7 @@ export default function CaptureSheet() {
     const rest = favoritesGrid(favorites ?? [], refSlot, dietOptions.map((f) => f.id), QUICK_FAVORITES - fromDiet.length)
     return [...fromDiet, ...rest.map((favorite) => ({ favorite, dietSlot: null as Slot | null }))]
   }, [favorites, refSlot, dietOptions])
-  const favUrls = useSignedUrls(quick.map((q) => q.favorite.photo_path))
+  const favUrls = useSignedUrls(quick.map((q) => favoriteThumb(q.favorite)))
   const weighDot = !weighedToday && lisbonClock(now).hour < 11
   const label = whenLabel(when, today)
 
@@ -511,7 +512,7 @@ export default function CaptureSheet() {
                   onClick={() => pickFavorite(favorite, dietSlot)}
                   className="flex min-h-14 items-center gap-2 rounded-xl bg-surface2 p-1.5 pr-3 text-left"
                 >
-                  <Thumb url={favorite.photo_path ? favUrls[favorite.photo_path] : null} size={42} />
+                  <Thumb url={favUrls[favoriteThumb(favorite) ?? ''] ?? null} size={42} />
                   <span className="min-w-0">
                     <span className="line-clamp-2 text-[15px] leading-tight">{favorite.name}</span>
                     <span className="block text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>

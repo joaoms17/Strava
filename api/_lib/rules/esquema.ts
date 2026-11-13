@@ -5,7 +5,7 @@
 
 // A última migração do repositório que escreve schema_version. Sobe com cada
 // migração nova (tests/guardas.test.ts confirma que o ficheiro existe).
-export const SCHEMA_VERSION = 20261113000050
+export const SCHEMA_VERSION = 20261113000060
 
 // em_dia: igual; atrasada: faltam migrações na base de dados; adiantada: a
 // base de dados tem migrações que este código ainda não conhece (um deploy
@@ -79,6 +79,7 @@ export const MIGRATIONS = [
   '20261113000041_limites_buckets.sql',
   '20261113000042_schema_version.sql',
   '20261113000050_limpeza.sql',
+  '20261113000060_favoritas_miniatura.sql',
 ] as const
 
 // A app só fica parada no «A app precisa de uma atualização» por migrações

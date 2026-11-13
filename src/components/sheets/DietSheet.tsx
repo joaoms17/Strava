@@ -22,6 +22,7 @@ import {
 } from '../../../api/_lib/rules/dieta'
 import { SLOTS, SLOT_LABEL, type Slot } from '../../../api/_lib/rules/momentos'
 import type { Favorite } from '../../lib/types'
+import { favoriteThumb } from '../../lib/favorites'
 
 const fold = (s: string) =>
   s
@@ -43,7 +44,7 @@ export default function DietSheet() {
   const [favorites, setFavorites] = useState<Favorite[]>([])
   const [picking, setPicking] = useState<Slot | null>(null)
   const [query, setQuery] = useState('')
-  const urls = useSignedUrls(favorites.map((f) => f.photo_path))
+  const urls = useSignedUrls(favorites.map(favoriteThumb))
 
   useEffect(() => {
     let alive = true
@@ -199,7 +200,7 @@ export default function DietSheet() {
                   if (!fav) return null
                   return (
                     <div key={favId} className="flex items-center gap-3 rounded-xl border border-line p-2">
-                      <Thumb url={fav.photo_path ? urls[fav.photo_path] : null} size={48} />
+                      <Thumb url={urls[favoriteThumb(fav) ?? ''] ?? null} size={48} />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[15px]">{fav.name}</span>
                         <span className="block text-[13px] text-dim tabular-nums">
@@ -248,7 +249,7 @@ export default function DietSheet() {
                           }}
                           className="flex w-full items-center gap-3 rounded-lg p-1.5 text-left active:bg-surface2"
                         >
-                          <Thumb url={fav.photo_path ? urls[fav.photo_path] : null} size={40} />
+                          <Thumb url={urls[favoriteThumb(fav) ?? ''] ?? null} size={40} />
                           <span className="min-w-0 flex-1 truncate text-[15px]">{fav.name}</span>
                           <span className="shrink-0 text-[13px] text-dim tabular-nums">{fmtKcal(fav.kcal)} kcal</span>
                         </button>

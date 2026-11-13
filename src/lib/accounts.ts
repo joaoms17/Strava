@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
 import { postApi } from './api'
+import { forgetSignedUrls } from './photos'
 import { parseAccounts, personName, switchOutcome, upsertAccount } from '../../api/_lib/rules/pessoas'
 
 // Várias pessoas no mesmo telemóvel, cada uma com a sua conta: guarda-se a
@@ -145,6 +146,8 @@ export async function signOutCurrent(): Promise<void> {
   const currentId = data.session?.user.id ?? null
   const others = read().filter((a) => a.user_id !== currentId)
   await supabase.auth.signOut({ scope: 'local' })
+  // Os URLs das fotos guardados (P6) não ficam para quem vier a seguir.
+  forgetSignedUrls()
   if (currentId) forgetAccount(currentId)
   for (const other of others) {
     try {
