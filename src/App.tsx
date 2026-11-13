@@ -19,6 +19,7 @@ import { setActiveUser } from './lib/scoped'
 import { sessionEnded } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
 import { bootUrl } from './lib/boot-url'
+import { canGoBackInApp, installNavIndex } from './lib/nav-history'
 import TabBar from './components/TabBar'
 import BusyLayer from './components/ui/BusyLayer'
 import Icon from './components/ui/Icon'
@@ -92,6 +93,9 @@ const MesSheet = screen(() => import('./components/sheets/MesSheet'))
 const MedidasSheet = screen(() => import('./components/sheets/MedidasSheet'))
 const ComoMedirSheet = screen(() => import('./components/sheets/MedidasSheet').then((m) => ({ default: m.ComoMedirSheet })))
 
+// H12: cada entrada do histórico sabe se tem outra da app antes de si.
+if (typeof window !== 'undefined') installNavIndex()
+
 function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bg p-6">
@@ -140,7 +144,12 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
     >
       <div className="flex min-w-0 items-center gap-1">
         {parent && (
-          <button onClick={() => navigate(parent)} className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink">
+          <button
+            // H12: recua (Favoritas volta às Definições se veio de lá); só sem
+            // histórico da app (aberta por um link) é que vai para o pai.
+            onClick={() => (canGoBackInApp() ? window.history.back() : navigate(parent, { replace: true }))}
+            className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink"
+          >
             ‹ Voltar
           </button>
         )}

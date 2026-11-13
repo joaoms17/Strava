@@ -1308,7 +1308,7 @@ export default function Hoje() {
       )}
 
       {planOpen && (
-        <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)}>
+        <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)} closeOnBack>
           <div className="space-y-4 pb-2 text-[15px]">
             {outToday != null && (
               <div className="space-y-1">
