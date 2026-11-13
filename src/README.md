@@ -1,19 +1,21 @@
 # /src — app React (PWA)
 
-Redesenho em curso (docs/redesenho-2026-09.md). Fases 1 e 2:
+Como está organizada (o plano do redesenho de que saiu está em docs/redesenho-2026-09.md):
 
 ```
 /screens
   Hoje.tsx            quanto ainda podes comer, proteína, dieta, próximo passo, linha do dia, faixa da semana
   Balanco.tsx         a semana numa frase com o selo, o gráfico dia a dia (tocar num dia), «Para esta semana», Semana a semana; Mês com o calendário dos dias no alvo
-  Treino.tsx          «Já fiz», sugestão seguinte, plano de 4 semanas (até à Fase 5), histórico, progressão
+  Treino.tsx          registar treino, sugestão seguinte, plano de treino, histórico, progressão
+  Ginasio.tsx         sessão de ginásio: séries com as cargas da última vez
+  PlanoTreino.tsx     o plano de treino da pessoa, dia a dia
   Corpo.tsx           resumo (desde o início, projeção), peso, medidas, evolução, treino, recuperação; um período 1M · 3M · Tudo e a barra das secções
   Favoritos.tsx       refeições favoritas (1 toque) e biblioteca de alimentos
   Definicoes.tsx      pessoas, perfil, bicicleta, ligações, notificações, balança, aparência, exportar
-  Avancado.tsx        custos da IA, mínimo semanal, exercícios seguros, calendário
+  Avancado.tsx        uso e custos da IA, verificações do deploy
   Arquivo.tsx         capítulos, linha do tempo e resumos antigos (só leitura)
 /components
-  sheets/             folhas por URL: (+), Peso, Refeição, Galeria, Escrever, Nota, Código de barras, Rever
+  sheets/             folhas por URL (`?folha=`, src/lib/sheet.ts): (+), Peso, Medidas, Refeição, Galeria, Nota, Código de barras, Menu, Rever, treino, …
   charts/             o kit dos gráficos: cartão com a frase-título, eixos, dica, legenda, marcos sem sobreposição
   corpo/, balanco/    os gráficos e cartões do Corpo e do Balanço
   ui/                 folha inferior, Quando (dia e refeição), barras, faixa da semana, botão de foto

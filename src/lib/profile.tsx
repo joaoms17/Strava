@@ -96,11 +96,12 @@ export function ProfileProvider({ children, token }: { children: ReactNode; toke
         migration.error.code === 'PGRST205' ||
         /favorites/.test(migration.error.message ?? ''))
     const missing = [
-      ...(noFavorites || !('pin_mode' in data) ? ['20260928000000_fase1.sql'] : []),
+      // Marcadores em colunas que a app usa (não em colunas mortas, que uma
+      // limpeza da base de dados pode apagar).
+      ...(noFavorites || !('dismissed_hints' in data) ? ['20260928000000_fase1.sql'] : []),
       ...(!('ai_monthly_cap_eur' in data) ? ['20260929000000_fase2.sql'] : []),
       ...(!('has_garmin_watch' in data) ? ['20260930000000_fase3.sql'] : []),
       ...(!('measure_interval_days' in data) ? ['20261001000000_fase4.sql'] : []),
-      ...(!('trend_method' in data) ? ['20261003000000_fase6.sql'] : []),
       ...(!('integration_status' in data) ? ['20261004000000_fase7.sql'] : []),
       ...(missingColumn(sleep.error) ? ['20261005000000_sono.sql'] : []),
     ]
