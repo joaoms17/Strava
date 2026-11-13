@@ -97,6 +97,16 @@ export default function Favoritos() {
     void load()
   }, [load, version])
 
+  // H11: o ★ de uma refeição abre a favorita dela (?abrir=id), uma vez.
+  const openId = search.get('abrir')
+  useEffect(() => {
+    if (!openId || !favorites) return
+    const found = favorites.find((f) => f.id === openId)
+    if (found) setEditing(found)
+    navigate('/favoritos', { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId, favorites])
+
   async function archive(favorite: Favorite) {
     const { error } = await supabase.from('favorites').update({ archived: true }).eq('id', favorite.id)
     if (error) {

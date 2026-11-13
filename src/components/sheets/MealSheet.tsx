@@ -519,8 +519,8 @@ export default function MealSheet() {
           <button
             onClick={() =>
               favoriteId
-                ? // Já é favorita: diz-o e leva às favoritas, em vez de não fazer nada (H11).
-                  toast('Já está nas favoritas.', [{ label: 'Ver', run: () => navigate('/favoritos') }])
+                ? // Já é favorita: abre-a (nome, foto, refeição habitual), em vez de não fazer nada (H11).
+                  navigate(`/favoritos?abrir=${favoriteId}`, { replace: true })
                 : setMode('favorite')
             }
             aria-pressed={favoriteId != null}
