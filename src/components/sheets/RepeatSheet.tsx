@@ -30,9 +30,11 @@ export default function RepeatSheet() {
     }
     const api = whenApi(when, today)
     sheet.close()
-    // «Agora»: fica na refeição desta hora.
+    // «Agora»: fica na refeição desta hora, à hora real (M18; antes ia para a
+    // hora habitual da refeição: às 21:30 ficava às 20:00).
+    const now = when.slot === 'agora'
     void runBusy('A registar…', () =>
-      repeatMeal(mealId, api.date ?? null, `Repetido · ${label}`, toast, api.slot ?? slotOf(new Date())),
+      repeatMeal(mealId, api.date ?? null, `Repetido · ${label}`, toast, api.slot ?? slotOf(new Date()), now),
     )
   }
 
