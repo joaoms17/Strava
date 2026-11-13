@@ -116,7 +116,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
       <div className="grid grid-cols-2 gap-3">
         <div>
           <p className="num text-[34px] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>
-          <p className="text-[14px] text-dim">gordura · cerca de {last.c.shown.pct}&nbsp;%</p>
+          <p className="text-[14px] text-dim">gordura · cerca de {fmt1(last.c.pct)}&nbsp;% {/* B11: a mesma casa decimal do gráfico da %G */}</p>
         </div>
         <div>
           <p className="num text-[34px] leading-none font-extrabold">{fmt1(last.c.shown.leanKg)} kg</p>

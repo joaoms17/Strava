@@ -97,7 +97,9 @@ export default function PesoChart({
     const horizon = projectionHorizon(from, today)
     const path =
       !week && p.status === 'ok' && targetKg != null && lastTrend && lastTrend.date >= shiftBack(today, 7)
-        ? projectionPath(projectionStart(data.projection.input.asOf, p.basis.currentKg), p.weight, targetKg, horizon)
+        ? // B11/ideia 16: a tracejada parte do último peso médio (7 dias), sem
+          // degrau: um só «peso médio» no gráfico; chega ao alvo na mesma data.
+          projectionPath(projectionStart(lastTrend.date, lastTrend.value), p.weight, targetKg, horizon)
         : null
     if (path && p.status === 'ok' && p.weight.kind === 'date') {
       marks.push({

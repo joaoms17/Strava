@@ -106,9 +106,9 @@ export default function SemanaChart({
           <Key shape="line" color={colors.burn} label={gasto ? `gasto (${gasto})` : 'gasto'} />
           {avg7 != null &&
             (meanLine ? (
-              <Key shape="dash" color={colors.dim} label={`comeste em média (7 dias): ${fmtInt(avg7)} kcal`} />
+              <Key shape="dash" color={colors.dim} label={`média dos últimos 7 dias completos: ${fmtInt(avg7)} kcal`} />
             ) : (
-              <span>comeste em média (7 dias): {fmtInt(avg7)} kcal</span>
+              <span>média dos últimos 7 dias completos: {fmtInt(avg7)} kcal</span>
             ))}
         </Legend>
       }

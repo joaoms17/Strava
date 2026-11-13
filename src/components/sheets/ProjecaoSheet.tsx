@@ -157,7 +157,8 @@ export default function ProjecaoSheet() {
           <p className="text-dim">
             pelas contas {perWeek(b.energyKgDay)} · pelo peso médio {perWeek(b.observedKgDay)}
           </p>
-          <p>Peso médio hoje {fmt1(b.currentKg)} kg</p>
+          {/* B11: é o fim da reta das 4 semanas, não o peso médio de 7 dias do Corpo. */}
+          <p>Peso hoje pela reta das 4 semanas {fmt1(b.currentKg)} kg</p>
           {b.waistCm != null && b.waistDate && (
             <p>
               Cintura {fmt1(b.waistCm)} cm a {fmtDayMon(b.waistDate, today)}
