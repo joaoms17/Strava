@@ -73,7 +73,7 @@ export default function Capitulo({ onOpenTimeline }: { onOpenTimeline?: () => vo
     void load()
   }, [])
 
-  if (error) return <p className="pt-8 text-center text-sm text-warn">{error}</p>
+  if (error) return <p className="pt-8 text-center text-[15px] text-dim">{error}</p>
   if (!data) return <p className="pt-8 text-center text-sm text-dim">A carregar…</p>
 
   const { chapter, block, sessions, blockWorkouts, timeline } = data
