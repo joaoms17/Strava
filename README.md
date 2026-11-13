@@ -1,39 +1,42 @@
 # Daily Track
 
-App pessoal para registar o dia: comida, treino, peso e sono. Para uma casa: cada pessoa (até 4; hoje o João e a Joana) tem a sua conta e os seus registos, e troca-se no separador do topo. PWA mobile-first, interface em PT-PT. (Começou como «A Época do Regresso»; os capítulos antigos ficam no Arquivo.)
+App pessoal para registar o dia: comida, treino, peso e sono. Para uma casa: cada pessoa (até 4) tem a sua conta e os seus registos, e troca-se no separador do topo. PWA mobile-first, interface em PT-PT.
 
-**Estado atual: M1–M6 completos e em produção; em curso o redesenho para centro de fitness** ([plano](docs/redesenho-2026-09.md)). Fase 0 feita: deploy estável, estado do deploy, estado do deploy em `/api/day/health`. Fase 1 feita: casca nova (Hoje · Balanço · (+) · Treino · Corpo), pesagem em 2 toques, favoritos e «Igual a ontem» sem IA. Fase 2 feita: fotos analisadas em segundo plano (sem esperar), galeria com a hora certa, notas, correções por texto, fila sem rede, e juntar fotos a uma refeição que não carregou. Fase 3 feita: Bicicleta habitual em 3 toques com o joelho, «Já fiz», print do Garmin/Strava/consola lido pela IA e junto à sessão sem duplicar, separador Treino novo. Fase 4 feita: medidas com fita (pescoço e cintura), gordura e massa magra com intervalo, cintura alvo e histórico. Fase 5 feita: ginásio livre (8–12 repetições com as cargas da última vez, favoritos «Pernas A» e «Corpo todo B»); o plano de 4 semanas e o calendário foram arquivados e ficam 5 funções. Fase 6 feita: Balanço completo (comer contra gasto numa frase, «Bate certo», linha do gasto, resumo neutro da semana, gasto medido contra a fórmula, sugestão de plano base) e «Gastas cerca de … hoje» na folha do plano. Fase 7 feita: treinos do Garmin entram sozinhos pelo intervals.icu (Definições › Ligações), juntando-se à Bicicleta habitual ou ao print sem duplicar. Extras: Balanço › Mês com os 10 alimentos mais frequentes, «Juntar outro print» a um rascunho, imagens dos prints apagadas aos 90 dias e o peso da balança pelo Atalho do iPhone. Treino registado por print do relógio, print da app ou a dizer/escrever o que fizeste (texto ou áudio, a IA passa para o registo e pode guardar nos teus treinos). Evolução no Corpo (análise da IA de tudo — peso, medidas, comida, treino e relógio — e gráficos de passos, sono, FC em repouso, minutos de treino, watts por batimento e forma). O plano semanal com IA no Treino foi desligado para repensar (o código fica guardado). Várias pessoas (ex.: a Joana): cada uma com a sua conta e os seus registos, separador no topo para trocar, criar a conta dela em Definições › Pessoas. Favoritas com foto (escritas, só com foto ou a partir de uma refeição; a foto aparece sempre que a usas) e dietas feitas com elas, no Hoje e no ＋. Código de barras com vários produtos na mesma refeição e a juntar a uma refeição já registada. «Escolher pelo menu» no ＋: fotografas o menu do restaurante e a IA diz os 3 pratos que melhor cabem no que te falta hoje, pelas calorias e pela proteína, e registas o escolhido com um toque. Registo de refeições reformulado: «Quando» com qualquer dia e refeição, campo «O que comeste?» já aberto e «Repetir uma refeição» de qualquer dia, com pesquisa. Design novo («Dia de jogo» no escuro, cores do «Cartaz» no claro) e entrada sem PIN. Notificações no iPhone com a app no ecrã principal (Definições › Notificações): refeição analisada, lembrete do jantar e resumo da semana, cada uma à escolha. Foto do antes e do depois: depois de comer, «Sobrou comida?» na refeição (ou, no ＋, «Isto é o que sobrou do almoço?») fotografa o que ficou no prato e a IA desconta-o, com Anular. «Pergunta à app» (o ícone ao lado da pessoa, no topo do Hoje e do Balanço): perguntas sobre os próprios números («quanto me falta hoje?», «porque é que não desci esta semana?») e pedidos («ontem foi tudo, marca o dia», «junta isto à lista de compras»), que a app propõe num cartão e só faz com «Fazer». Porção numa refeição já analisada (½ · 1 · 1½ · 2 na folha da refeição, também em «Todo o jantar» e nas cópias partilhadas) e, ao partilhar, como comeram: «A meias», «João 60 · Joana 40» ou cada um a refeição toda. Pedidos de entrega por captura de ecrã: no ＋ › Galeria, a captura do resumo do pedido (Glovo, Uber Eats, Bolt Food…, 1 a 4 capturas) passa a uma refeição com todos os pratos e as quantidades. Ginásio com as calorias do relógio: as do print, as do relógio pelo intervals.icu e as ditas contam por inteiro, para cada pessoa; sem elas, estima-se pelos minutos ao ritmo dos últimos ginásios da pessoa (ou pelo peso), com «≈» e sem mínimo de 30 min. Projeção no Corpo: «A este ritmo: 82 kg a 16 dez · cintura 87 cm em jan», com o intervalo, «dados insuficientes» antes de 14 dias, o «E se…» (−100/−200/−300 kcal, +1 treino, fins de semana como a semana) e a nota quando a data mexe 5 dias ou mais numa semana, com a causa. «O teu mês»: imagem para partilhar (kg, cm, treinos, dias no alvo, a refeição mais repetida, a melhor semana e a projeção), com aviso no Hoje nos dias 1–3 e qualquer mês em Balanço › Mês. Gráficos do Corpo e do Balanço refeitos para motivar: o Corpo começa pelo resultado («Desde o início» em kg, cm e %G, a projeção) e segue por peso, medidas, evolução, treino e recuperação, com um só período (1M · 3M · Tudo) e uma barra das secções presa em cima; cada gráfico tem como título uma frase com os números («−6,7 kg em 13 semanas», «Desceu 3 bpm desde agosto») e os marcos à vista (início, mais baixo, meta, a projeção tracejada até ao alvo, a melhor semana, a HRV mais alta). No Balanço, os dias da semana pintados contra o alvo de cada dia (tocar num dia mostra os números), «Para esta semana» com uma ação só, «Semana a semana» (12 semanas de défice e de peso médio) e, no Mês, o calendário dos dias no alvo. Migrações aplicadas no Supabase até à 12 (água, 15/10; a coluna fica, a app já não a usa — decisão 286); as seguintes estão no passo 2b. As 12 regras de negócio têm todas testes, mais guardas do deploy em `tests/guardas.test.ts`.
+- **Hoje** — quanto ainda podes comer, o que já comeste e treinaste, o próximo passo.
+- **＋** — registar comida por foto, texto, galeria, código de barras, favorita, repetir ou menu de restaurante; a IA analisa em segundo plano.
+- **Balanço** — comer contra gasto, semana a semana e mês a mês.
+- **Treino** — o que o relógio manda sozinho (intervals.icu), prints, treino dito ou escrito, ginásio com séries e o plano de treino.
+- **Corpo** — peso, medidas com fita, gordura estimada, projeção, evolução e recuperação.
+
+Como chegou aqui: [docs/historia.md](docs/historia.md). Porque é que cada coisa é como é: [docs/decisions.md](docs/decisions.md). O que a auditoria de novembro de 2026 encontrou: [docs/auditoria-2026-11.md](docs/auditoria-2026-11.md).
 
 ## Stack
 
-React + Vite + TypeScript, Tailwind, Recharts, vite-plugin-pwa (service worker com `public/push-sw.js` para as notificações). Supabase (Postgres, Auth, Storage, RLS). Vercel Hobby (frontend, 6 funções em `/api`, crons às 04:30 UTC e dos lembretes às 20:45 UTC). IA só em `/api`: o Gemini (plano gratuito) com `GEMINI_API_KEY`, senão o Claude; Zod valida todo o JSON. Notificações por Web Push (`web-push`, chaves VAPID). Timezone Europe/Lisbon em tudo.
+React + Vite + TypeScript, Tailwind, Recharts, vite-plugin-pwa (service worker com `public/push-sw.js` para as notificações). Supabase (Postgres, Auth, Storage, RLS). Vercel Hobby (frontend, 6 funções em `/api` e 2 crons). IA só em `/api`: o Gemini (plano gratuito) com `GEMINI_API_KEY`, senão o Claude; Zod valida todo o JSON. Notificações por Web Push (`web-push`, chaves VAPID). Timezone Europe/Lisbon em tudo; o dia nutricional vai das 04:00 às 04:00.
 
 ## Estrutura de pastas
 
 ```
-/api                      Funções serverless (Vercel)
+/api                      Funções serverless (Vercel) — ver api/README.md
   /_lib                   Clientes partilhados (supabase admin, IA, notificações, intervals.icu)
-    /rules                Regras de negócio da secção 5, funções puras — testadas em /tests
-  meal.ts + /_meal        captura, análise, correções, favoritos, código de barras (uma função, rewrites no vercel.json)
-  workout.ts + /_workout  save, strength, prints do relógio, update, delete, checkin
-  day.ts + /_day          health (estado do deploy), recompute, evolução, pessoas, Atalho, uso da IA, notificações
-  /health                 daily.ts (Atalho iOS)
-  /cron                   daily.ts (fecho do dia, adaptativo, review à segunda), lembretes.ts (notificações)
-/archive/strava           integração por API do Strava (exige subscrição paga) — fora do deploy
-/archive/plano            plano de 4 semanas gerado pela IA e calendário .ics (saíram na Fase 5)
-/docs
-  decisions.md            registo de decisões
-/prompts                  prompts versionados: <funcao>.v<N>.md
-/src                      App React (PWA)
-  /screens                Hoje, Balanço, Treino, Corpo, Favoritos, Registar, Definições (+ Avançado, Arquivo)
-  /components             folhas (+, peso, refeição), ui (folha inferior, joelho, barras, faixa da semana), gráficos
-  /lib                    cliente supabase, perfil, tema, avisos com Anular, fila offline — sem regras de negócio
-  /types
+    /rules                Regras de negócio, funções puras — testadas em /tests e usadas também pelo cliente
+  meal.ts + /_meal        refeições: captura, análise, correções, favoritos, código de barras, partilha, sobras
+  workout.ts + /_workout  treinos: guardar, séries, prints do relógio, treino dito, intervals.icu
+  day.ts + /_day          estado do deploy, recálculo, evolução, pessoas, «Pergunta à app», notificações
+  /health                 daily.ts (Atalho do iPhone)
+  /cron                   daily.ts (fecho do dia, resumo da semana, limpeza), lembretes.ts (notificações)
+/archive                  código arquivado, fora do deploy (Strava por API, planos gerados pela IA, prompts antigos)
+/docs                     história, decisões, auditoria, plano do redesenho
+/prompts                  prompts versionados: <funcao>.v<N>.md (só as versões em uso)
+/src                      App React (PWA) — ver src/README.md
+  /screens                Hoje, Balanço, Treino, Ginásio, Plano de treino, Corpo, Favoritas, Definições (+ Avançado, Arquivo)
+  /components             folhas (sheets), gráficos (charts, corpo, balanco), ui
+  /lib                    cliente supabase, perfil, fila offline, dados lidos uma vez por ecrã — sem regras de negócio
 /supabase
-  /migrations             SQL com RLS em todas as tabelas
-  /seed                   01_profile.sql, 02_chapters.sql, 03_exercise_catalog.sql
+  /migrations             SQL com RLS em todas as tabelas, para correr por ordem
+  /seed                   dados iniciais da primeira conta (perfil, capítulos, catálogo de exercícios)
   /oneoff                 correções de uma vez, corridas à mão no SQL Editor (não são migrações)
-/tests                    testes das regras de negócio (secção 5)
+/tests                    testes das regras e guardas do deploy (Vitest)
 ```
 
 ## Comandos
@@ -48,28 +51,45 @@ npm run typecheck  # TypeScript
 
 ## Schema
 
-Fonte de verdade: [`supabase/migrations/20260908000000_initial_schema.sql`](supabase/migrations/20260908000000_initial_schema.sql).
-
-Tabelas: `profile`, `foods`, `meals`, `days`, `weights`, `health_daily`, `workouts`, `exercise_log`, `exercise_catalog`, `chapters`, `plan_blocks`, `planned_sessions`, `strava_tokens`, `weekly_reviews`, `api_calls`. Depois, nas migrações do redesenho: `favorites`, `workout_imports`, `body_measurements`, `integrations`, `diets`, `weights_deleted`, `push_subscriptions` e `app_secrets`. RLS ativa em todas; dados filtrados por `user_id = auth.uid()`; `strava_tokens`, `integrations` e `app_secrets` sem acesso nenhum do cliente. Desvios em relação ao texto da spec estão justificados em [`docs/decisions.md`](docs/decisions.md).
+A fonte de verdade é o conjunto das migrações em [`supabase/migrations/`](supabase/migrations/), por ordem. RLS ativa em todas as tabelas; os dados são filtrados por `user_id = auth.uid()`; `integrations`, `app_secrets`, `off_searches` e `strava_tokens` não têm acesso nenhum do cliente.
 
 ## Setup
 
-1. Criar projeto no Supabase; criar a primeira conta em Auth (email + password). As outras pessoas criam-se depois na app, em Definições › Pessoas.
-2. Aplicar as migrations de `supabase/migrations/` por ordem (`supabase db push` ou SQL editor) e correr os três seeds de `supabase/seed/` por ordem — falham com mensagem clara se a conta ainda não existir; são idempotentes.
-   - 2b. **Migrações do redesenho, por ordem:** no Supabase, SQL Editor → New query → colar `supabase/migrations/20260928000000_fase1.sql` → Run; depois o mesmo com `supabase/migrations/20260929000000_fase2.sql`, com `supabase/migrations/20260929120000_fase2_permissoes.sql` (tira à app o acesso à função de limpeza do Storage) com `supabase/migrations/20260930000000_fase3.sql` (treino: prints do relógio, Bicicleta habitual) e com `supabase/migrations/20261001000000_fase4.sql` (medidas) com `supabase/migrations/20261002000000_fase5.sql` (favoritos de ginásio) com `supabase/migrations/20261003000000_fase6.sql` (gasto e resumo da semana) com `supabase/migrations/20261004000000_fase7.sql` (intervals.icu) com `supabase/migrations/20261005000000_sono.sql` (pontuação do sono, HRV) e com `supabase/migrations/20261006000000_dietas.sql` (dietas feitas com as favoritas; sem ela a app funciona, só o separador Dieta pede a migração) e com `supabase/migrations/20261007000000_evolucao.sql` (guardar a análise da evolução), com `supabase/migrations/20261015000000_agua.sql` (água do dia), com `supabase/migrations/20261018110000_pesagens_apagadas.sql` (uma pesagem apagada não volta), com `supabase/migrations/20261018110001_forma_intervals.sql` (forma e VO2máx do intervals.icu), com `supabase/migrations/20261018150000_notificacoes.sql` (notificações; sem ela só Definições › Notificações pede a migração), com `supabase/migrations/20261018150001_fotos_capitulos.sql` (cada pessoa só escreve na sua pasta das fotos dos capítulos), com `supabase/migrations/20261018150002_ia_reserva.sql` (aviso de foto lida pelo modelo de reserva), com `supabase/migrations/20261018160000_partilhar_ao_registar.sql` («Também para …» no ＋; sem ela regista na mesma e partilha-se pela folha da refeição) com `supabase/migrations/20261018200000_sobras.sql` (foto do que sobrou; sem ela só não aparece o «Sobrou comida?») com `supabase/migrations/20261018210000_divisao_partilha.sql` (dividir ao partilhar no ＋; sem ela o «Também para …» partilha a refeição toda e a divisão faz-se na folha da refeição) e com `supabase/migrations/20261018220000_pedidos_entrega.sql` (a dica «Pedido para 2» num pedido de entrega por dividir; sem ela o pedido é lido na mesma, sem a dica). Podem correr-se mais de uma vez; no fim de cada uma aparece uma tabela que tem de vir vazia. Sem elas a app mostra «Falta um passo no Supabase» com os ficheiros em falta.
-3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), a chave da IA — `GEMINI_API_KEY` (Gemini, plano gratuito: criar em aistudio.google.com › Get API key) **ou** `ANTHROPIC_API_KEY` (Claude, pago) —, `CRON_SECRET` (protege as crons; sem ela não correm), `HEALTH_INGEST_TOKEN` (o Atalho do iPhone, passo 7), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Opcionais: `AI_PROVIDER`, `GEMINI_MODEL_VISION`/`GEMINI_MODEL_TEXT`, `VAPID_SUBJECT` (contacto `mailto:` das notificações; sem ela, o endereço da app) e `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (sem elas, o servidor cria as chaves das notificações na primeira vez e guarda-as no Supabase; não as troques depois, senão cada telemóvel tem de ligar as notificações outra vez). Em dev local: copiar `.env.example` para `.env`.
+1. Criar projeto no Supabase e a primeira conta em Auth (email + password). **Desligar o registo livre:** Authentication › Sign In / Providers › «Allow new users to sign up» desligado — a «casa» é quem tem conta neste projeto. As outras pessoas criam-se depois na app, em Definições › Pessoas.
+2. Aplicar **todas** as migrações de `supabase/migrations/`, por ordem do nome (`supabase db push`, ou no SQL Editor: New query → colar o ficheiro inteiro → Run). Podem correr-se mais de uma vez; as do redesenho acabam com uma tabela que tem de vir vazia. A app avisa («Falta um passo no Supabase») da falta de algumas, mas não de todas: confere pela lista. Depois, os seeds de `supabase/seed/` por ordem, para a primeira conta.
+
+   | Migração | O que traz |
+   | --- | --- |
+   | `20260908000000_initial_schema.sql` | tabelas de base e RLS |
+   | `20260908120000_storage_meal_photos.sql` | bucket privado das fotos das refeições |
+   | `20260910000000_storage_chapter_photos.sql` | bucket das fotos dos capítulos (Arquivo) |
+   | `20260928000000_fase1.sql` | casca nova: favoritos, marca «precisa de recálculo», vistas `meals_counted` e `workouts_active` |
+   | `20260929000000_fase2.sql` | fotos analisadas em segundo plano, limites da IA |
+   | `20260929120000_fase2_permissoes.sql` | tira à app o acesso à função de limpeza do Storage |
+   | `20260930000000_fase3.sql` | treino: prints do relógio, Bicicleta habitual |
+   | `20261001000000_fase4.sql` | medidas |
+   | `20261002000000_fase5.sql` | favoritos de ginásio |
+   | `20261003000000_fase6.sql` | gasto e resumo da semana |
+   | `20261004000000_fase7.sql` | intervals.icu |
+   | `20261005000000_sono.sql` | pontuação do sono, HRV |
+   | `20261006000000_dietas.sql` | dietas feitas com as favoritas (sem ela só o separador Dieta pede a migração) |
+   | `20261007000000_evolucao.sql` | guardar a análise da evolução |
+   | `20261015000000_agua.sql` | água do dia (a coluna fica; a app já não a usa, decisão 286) |
+   | `20261018110000_pesagens_apagadas.sql` | uma pesagem apagada não volta |
+   | `20261018110001_forma_intervals.sql` | forma e VO2máx do intervals.icu |
+   | `20261018130000_alimentos_marca.sql` | produtos de marca (fibra, açúcares, sal, Nutri-Score) e cache da pesquisa no Open Food Facts |
+   | `20261018140000_dias_certos.sql` | o plano base de cada dia (`days.base_kcal`) e o gasto só pelo peso (`days.tdee_raw`) |
+   | `20261018150000_notificacoes.sql` | notificações (sem ela só Definições › Notificações pede a migração) |
+   | `20261018150001_fotos_capitulos.sql` | cada pessoa só escreve na sua pasta das fotos dos capítulos |
+   | `20261018150002_ia_reserva.sql` | aviso de foto lida pelo modelo de reserva |
+   | `20261018160000_partilhar_ao_registar.sql` | «Também para …» no ＋ |
+   | `20261018200000_sobras.sql` | foto do que sobrou |
+   | `20261018210000_divisao_partilha.sql` | dividir ao partilhar no ＋ |
+   | `20261018220000_pedidos_entrega.sql` | a dica «Pedido para 2» num pedido de entrega |
+
+3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), a chave da IA — `GEMINI_API_KEY` (Gemini, plano gratuito: criar em aistudio.google.com › Get API key) **ou** `ANTHROPIC_API_KEY` (Claude, pago) —, `CRON_SECRET` (protege as crons; sem ela não correm), `HEALTH_INGEST_TOKEN` (o Atalho do iPhone, passo 6), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Opcionais: `AI_PROVIDER`, `GEMINI_MODEL_VISION`/`GEMINI_MODEL_TEXT`, `VAPID_SUBJECT` (contacto `mailto:` das notificações; sem ela, o endereço da app) e `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (sem elas, o servidor cria as chaves das notificações na primeira vez e guarda-as no Supabase; não as troques depois, senão cada telemóvel tem de ligar as notificações outra vez). Em dev local: copiar `.env.example` para `.env`.
 3b. **Recuperar a palavra-passe:** no Supabase, Authentication → URL Configuration → Site URL = `https://a-tua-app.vercel.app` e, em Redirect URLs, `https://a-tua-app.vercel.app/**`. Sem isto, o link do email «Esqueci-me da palavra-passe» abre `localhost`. O email sai pelo serviço do Supabase (poucos por hora; vê no lixo/spam).
 4. Abrir o domínio do Vercel no telemóvel e "Adicionar ao ecrã principal" — a PWA instala com o ícone e abre em standalone. No primeiro arranque: login (o iPhone preenche o email e a password); a sessão fica iniciada, sem PIN.
 5. Verificar o deploy: abrir `https://a-tua-app.vercel.app/api/day/health?token=<CRON_SECRET>` — diz que variáveis faltam (nunca mostra valores), se os prompts foram incluídos, se o Supabase responde e se a chave da IA em uso chega aos dois modelos. Na app, Definições › Avançado › «Verificar a IA» faz uma chamada mínima a cada modelo e diz o que está mal. Da linha de comandos: `CRON_SECRET=... node scripts/smoke.mjs https://a-tua-app.vercel.app`.
-6. (O calendário .ics saiu na Fase 5, com o plano de 4 semanas.)
-7. Saúde (Atalho iOS, todas as noites): POST para `https://a-tua-app.vercel.app/api/health/daily` com header `Authorization: Bearer <token>` e corpo JSON `{"steps": 8500, "sleep_minutes": 430, "resting_hr": 52}` (a data por omissão é o próprio dia). O token pessoal de cada pessoa está em Definições › Ligações · Atalho do iPhone (grava na conta dela); `HEALTH_INGEST_TOKEN` grava na primeira conta. A balança pode mandar também `"body": [{"date": "2026-10-18", "weight_kg": 82.4, "body_fat_pct": 21.5}]` (só entra em dias sem pesagem nem pesagem apagada).
-8. Notificações: em cada iPhone (iOS 16.4 ou mais recente), com a app aberta pelo ícone do ecrã principal, Definições › Notificações e ligar as que se quer (o iPhone pede autorização). «Mandar uma de teste» confirma que chegam. Nada a configurar no Vercel além da migração `20261018150000_notificacoes.sql`.
-
-## Marcos
-
-- **M1** — repo, migrations + RLS + seeds, auth + PIN, PWA shell, Registar (texto e foto → Claude → guardar), Hoje com os dois números, Prólogo (cartaz do Baggio + timeline). Fica a usar-se já.
-- **M2** — barcode, foods pessoais com aprendizagem de porções, fila offline, fecho do dia, peso + gráfico.
-- **M3** — Strava OAuth + webhook + reconciliação, workouts, check-in de dor, sessão manual.
-- **M4** — catálogo, profile de limitações, geração de bloco com capítulo, execução e progressão, abertura e fecho de capítulo, gráficos de treino com anotações.
-- **M5** — adaptativo, review semanal em voz de narrador, semana de manutenção, Linha do tempo.
-- **M6** — .ics, /api/health/daily, export, páginas de história com fotos CC.
+6. Saúde (Atalho iOS, todas as noites): POST para `https://a-tua-app.vercel.app/api/health/daily` com header `Authorization: Bearer <token>` e corpo JSON `{"steps": 8500, "sleep_minutes": 430, "resting_hr": 52}` (a data por omissão é o próprio dia). O token pessoal de cada pessoa está em Definições › Ligações · Atalho do iPhone (grava na conta dela); `HEALTH_INGEST_TOKEN` grava na primeira conta. A balança pode mandar também `"body": [{"date": "2026-10-18", "weight_kg": 82.4, "body_fat_pct": 21.5}]` (só entra em dias sem pesagem nem pesagem apagada).
+7. Notificações: em cada iPhone (iOS 16.4 ou mais recente), com a app aberta pelo ícone do ecrã principal, Definições › Notificações e ligar as que se quer (o iPhone pede autorização). «Mandar uma de teste» confirma que chegam. Nada a configurar no Vercel além da migração `20261018150000_notificacoes.sql`.

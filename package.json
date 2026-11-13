@@ -29,11 +29,11 @@
     "vite-plugin-pwa": "^1.3.0",
     "vitest": "^5.0.0"
   },
-  "name": "epoca-do-regresso",
+  "name": "daily-track",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "App pessoal de nutrição, treino e peso — A Época do Regresso",
+  "description": "Daily Track — app pessoal de comida, treino, peso e sono",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
