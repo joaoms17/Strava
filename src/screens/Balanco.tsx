@@ -118,7 +118,7 @@ export default function Balanco() {
         <button
           key={id}
           onClick={() => setView(id)}
-          className={`min-h-10 rounded-lg ${segment(view === id)}`}
+          className={`min-h-11 rounded-lg ${segment(view === id)}`}
           aria-pressed={view === id}
         >
           {label}

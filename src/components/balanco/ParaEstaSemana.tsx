@@ -11,7 +11,7 @@ export default function ParaEstaSemana({ action, onOpenDay }: { action: WeekActi
       <p className="text-[19px] leading-snug font-semibold">{action.title}</p>
       <p className="text-[15px] text-dim">{action.detail}</p>
       {action.date && (
-        <button onClick={() => onOpenDay(action.date!)} className="min-h-10 text-[15px] font-semibold text-eat">
+        <button onClick={() => onOpenDay(action.date!)} className="min-h-11 text-[15px] font-semibold text-eat">
           Abrir {fmtDayShort(action.date)} ›
         </button>
       )}

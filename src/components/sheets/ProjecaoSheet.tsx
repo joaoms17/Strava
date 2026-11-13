@@ -113,7 +113,7 @@ export default function ProjecaoSheet() {
             )}
             {changed && before == null && after && <p className="text-[15px] font-semibold text-eat">Assim já chegas lá.</p>}
             {!changed && note && <p className="text-[13px] text-dim">Desde a semana passada: {note.text}.</p>}
-            <button onClick={() => setEditTarget(true)} className="min-h-10 text-[13px] text-dim underline">
+            <button onClick={() => setEditTarget(true)} className="min-h-11 text-[14px] text-dim underline">
               Mudar o peso alvo
             </button>
           </div>
