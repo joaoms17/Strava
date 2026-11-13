@@ -21,13 +21,8 @@ import QualFoi from '../components/QualFoi'
 import PendingInfo from '../components/PendingInfo'
 import { mergeSessions, possibleDuplicates, zoneMinutes } from '../../api/_lib/rules/sessoes'
 import { useGymQueue } from '../lib/ginasio-fila'
+import { workoutOrigin } from '../lib/treino-origem'
 
-function origin(w: Workout): string {
-  if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
-  if (w.source === 'strava') return 'Strava'
-  if (w.source === 'intervals') return 'Relógio (auto)'
-  return w.favorite_id ? 'teu treino' : 'à mão'
-}
 
 interface TreinoData {
   workouts: Workout[]
@@ -313,7 +308,7 @@ export default function Treino() {
                       w.distance_km != null ? `${String(w.distance_km).replace('.', ',')} km` : null,
                       w.watts != null ? `${w.watts_source === 'prefill' ? '≈' : ''}${w.watts} W` : null,
                       w.avg_hr != null ? `${w.avg_hr} bpm` : null,
-                      origin(w),
+                      workoutOrigin(w),
                       w.parts.length > 1 ? `${w.parts.length} partes juntas` : null,
                     ]
                       .filter(Boolean)
