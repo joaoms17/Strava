@@ -87,6 +87,23 @@ describe('ginásio livre (regra 11 revista)', () => {
     expect(suggestExercise([top(40), top(40)])).toMatchObject({ ready: true, topLoad: 40, today: 42 })
   })
 
+  it('T7: ao subir, as repetições começam no mínimo', () => {
+    expect(suggestExercise([top(40), top(40)], 12, { repMin: 8 })).toMatchObject({ today: 42, repsToday: 8 })
+    expect(suggestExercise([top(40), top(40)])).toMatchObject({ repsToday: 8 })
+    expect(suggestExercise([top(40)])).toMatchObject({ ready: false, repsToday: null })
+  })
+
+  it('T7: só sobe com a mesma carga de topo nas duas sessões', () => {
+    expect(suggestExercise([top(30), top(40)])).toMatchObject({ ready: false, today: 40 })
+  })
+
+  it('T7: peso do corpo (carga 0) e exercícios de tempo não sugerem carga', () => {
+    expect(suggestExercise([top(0), top(0)])).toMatchObject({ ready: false, today: null })
+    const plank = [1, 2].map(() => [{ reps: 12, load_kg: null, rpe: null }])
+    expect(suggestExercise(plank, 12, { timed: true })).toMatchObject({ ready: false, today: null })
+    expect(suggestExercise([top(10), top(10)], 12, { timed: true })).toMatchObject({ ready: false, today: 10 })
+  })
+
   it('sem esforço registado conta como com folga; esforço 9 trava', () => {
     expect(readyForIncreaseFree([top(40), top(40)])).toBe(true)
     expect(readyForIncreaseFree([top(40), top(40, 9)])).toBe(false)

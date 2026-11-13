@@ -204,7 +204,9 @@ export default function Ginasio() {
   const suggestions = useMemo(() => {
     const out: Record<string, ExerciseSuggestion> = {}
     for (const ex of draft?.exercises ?? []) {
-      out[ex.name] = suggestExercise(history[exerciseKey(ex.name)] ?? [], ex.repMax ?? FREE_REP_MAX)
+      out[ex.name] = suggestExercise(history[exerciseKey(ex.name)] ?? [], ex.repMax ?? FREE_REP_MAX, {
+        timed: isTimedExercise(ex.name),
+      })
     }
     return out
   }, [draft?.exercises, history])
@@ -627,7 +629,7 @@ export default function Ginasio() {
 // histórico, as do teu treino (repetições mínimas e carga, se tiver).
 function newExercise(template: TemplateExercise, history: LoggedSet[][]): DraftExercise {
   const repMax = template.rep_max > 0 ? template.rep_max : FREE_REP_MAX
-  const sug = suggestExercise(history, repMax)
+  const sug = suggestExercise(history, repMax, { repMin: template.rep_min || FREE_REP_MIN, timed: isTimedExercise(template.name) })
   const count = Math.max(template.sets, sug.lastSets.length || template.sets)
   return {
     name: template.name,
@@ -637,7 +639,8 @@ function newExercise(template: TemplateExercise, history: LoggedSet[][]): DraftE
     sets: Array.from({ length: count }, (_, i) => {
       const last = sug.lastSets[i] ?? sug.lastSets[sug.lastSets.length - 1]
       return {
-        reps: last?.reps ?? template.rep_min ?? 10,
+        // Ao subir a carga, começa no mínimo de repetições (T7).
+        reps: sug.repsToday ?? last?.reps ?? template.rep_min ?? 10,
         load: sug.today ?? last?.load_kg ?? template.load_kg ?? null,
         done: false,
       }
