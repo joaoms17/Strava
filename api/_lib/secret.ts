@@ -1,10 +1,12 @@
-import { timingSafeEqual } from 'node:crypto'
+import { createHash, timingSafeEqual } from 'node:crypto'
 
-// Segredos comparados em tempo constante (CRON_SECRET, tokens).
+// Segredos comparados em tempo constante (CRON_SECRET, tokens): compara-se o
+// SHA-256 de cada um, sempre com 32 bytes, para nem o tamanho se notar no tempo.
 export function sameSecret(given: string, expected: string): boolean {
-  const a = Buffer.from(given)
-  const b = Buffer.from(expected)
-  return a.length === b.length && timingSafeEqual(a, b)
+  if (!expected) return false
+  const a = createHash('sha256').update(given).digest()
+  const b = createHash('sha256').update(expected).digest()
+  return timingSafeEqual(a, b) && given.length === expected.length
 }
 
 // As crons do Vercel mandam «Authorization: Bearer <CRON_SECRET>». Sem a

@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { adminClient } from '../_lib/supabase.js'
 import { tokenUser } from '../_lib/ingest-token.js'
+import { sameSecret } from '../_lib/secret.js'
 import { isDeletedWeighing } from '../_lib/rules/weight.js'
 
 const HealthSchema = z.object({
@@ -43,7 +44,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const header = req.headers.authorization ?? ''
   const given = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
   const personal = secret && given ? tokenUser(secret, given) : null
-  if (!secret || (given !== secret && !personal)) {
+  if (!secret || (!sameSecret(given, secret) && !personal)) {
     res.status(401).json({ error: 'Token errado.' })
     return
   }
