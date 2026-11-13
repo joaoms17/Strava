@@ -46,6 +46,37 @@ describe('guardas do deploy', () => {
     expect(offenders).toEqual([])
   })
 
+  it('import() relativos em /api terminam em .js e o ficheiro existe (P7)', () => {
+    const offenders: string[] = []
+    for (const file of apiFiles) {
+      const source = fs.readFileSync(file, 'utf8')
+      for (const match of source.matchAll(/import\(\s*'(\.{1,2}\/[^']+)'\s*\)/g)) {
+        const target = match[1]!
+        const ts = path.resolve(path.dirname(file), target.replace(/\.js$/, '.ts'))
+        if (!target.endsWith('.js') || !fs.existsSync(ts)) offenders.push(`${path.relative(ROOT, file)}: ${target}`)
+      }
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('cada ação dos routers aponta para um export que existe (P7)', async () => {
+    const missing: string[] = []
+    for (const router of ['meal', 'workout', 'day']) {
+      const source = fs.readFileSync(path.join(API, `${router}.ts`), 'utf8')
+      for (const match of source.matchAll(/import\('(\.\/[^']+)'\)\.then\(\(m\) => m\.([A-Za-z]+)\)/g)) {
+        const file = path.join(API, match[1]!.replace(/\.js$/, '.ts'))
+        const name = match[2]!
+        const text = fs.readFileSync(file, 'utf8')
+        const ok =
+          name === 'default'
+            ? /export default /.test(text)
+            : new RegExp(`export (const|async function|function) ${name}\\b`).test(text)
+        if (!ok) missing.push(`${router}: ${match[1]} → ${name}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
   it('as regras de negócio são puras (sem Supabase nem node:)', () => {
     const rules = walk(path.join(API, '_lib', 'rules')).filter((f) => f.endsWith('.ts'))
     const offenders = rules.filter((file) =>
