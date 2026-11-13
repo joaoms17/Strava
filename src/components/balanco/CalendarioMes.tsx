@@ -33,11 +33,13 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
   const hatch = `cal-${useId().replace(/:/g, '')}`
   const [month, setMonth] = useState(today.slice(0, 7))
   const [picked, setPicked] = useState<string | null>(null)
-  const cal = useMemo(() => monthCalendar(month, data.days, today), [month, data.days, today])
+  // L15: os dias antes da primeira refeição registada ficam em branco.
+  const cal = useMemo(() => monthCalendar(month, data.days, today, data.firstDate), [month, data.days, today, data.firstDate])
   const prev = shiftDate(`${month}-01`, -1).slice(0, 7)
   const next = shiftDate(monthBounds(month).last, 1).slice(0, 7)
   // Só os meses lidos por inteiro (a página lê as últimas 12 semanas).
-  const canPrev = `${prev}-01` >= data.from
+  // Nem os meses de antes da primeira refeição (L15).
+  const canPrev = `${prev}-01` >= data.from && (data.firstDate == null || prev >= data.firstDate.slice(0, 7))
   const canNext = next <= today.slice(0, 7)
   const cell = cal.weeks.flat().find((c) => c?.date === picked) ?? null
   // Marcado «faltou algo»: o quadro do dia diz porquê e deixa voltar atrás.
