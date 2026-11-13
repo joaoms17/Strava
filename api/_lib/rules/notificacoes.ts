@@ -107,7 +107,7 @@ export function dinnerNotice(date: string): PushNotice {
   }
 }
 
-// O resumo da semana que acabou (feito pela cron das 04:30), avisado de manhã.
+// O resumo da semana que acabou (feito pela cron das 05:30 UTC), avisado ao fim do dia.
 export function weekNotice(weekStart: string): PushNotice {
   return {
     title: 'Resumo da semana pronto',
@@ -135,8 +135,9 @@ export const PUSH_TTL_S: Record<PushKind | 'teste', number> = {
 
 // A cron dos lembretes corre uma vez por noite (20:45 UTC; no Hobby do Vercel
 // num minuto qualquer dessa hora UTC, por isso entre as 20:00 e as 22:00 em
-// Lisboa). À segunda leva também o resumo da semana: o Hobby pode aceitar só
-// duas crons, e a das 04:30 é a do fecho do dia.
+// Lisboa). Leva também o resumo da semana (à segunda ou, se só saiu depois,
+// na primeira noite em que existe; rules/rotinas.ts): o Hobby pode aceitar só
+// duas crons, e a das 05:30 UTC é a do fecho do dia.
 export function isMonday(date: string): boolean {
   return new Date(`${date}T12:00:00Z`).getUTCDay() === 1
 }
