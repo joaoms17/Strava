@@ -7,10 +7,6 @@ import {
   suggestExercise,
 } from '../api/_lib/rules/progressao-forca'
 
-const set = (reps: number, rpe: number, load = 20) => ({ reps, rpe, load_kg: load })
-
-// Regra 11: todas as séries no topo com RPE <= 8 em 2 sessões: +2 kg.
-// Regra 11: deload na semana 4 = -40% de volume.
 describe('ginásio livre (regra 11 revista)', () => {
   const top = (load: number, rpe: number | null = null) => [
     { reps: 12, load_kg: load, rpe },

@@ -44,7 +44,7 @@ import {
   type NextStepId,
   type NudgeState,
 } from '../../api/_lib/rules/proximo-passo'
-import type { DayRow, Diet, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
+import type { Diet, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
 import Segments from '../components/ui/Segments'
 import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'

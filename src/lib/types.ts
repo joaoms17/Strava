@@ -144,20 +144,6 @@ export interface TemplateExercise {
   note?: string // o que o treinador diz («Pés altos na plataforma»; decisão 305)
 }
 
-export interface DayRow {
-  date: string
-  kcal_in: number
-  protein: number
-  carbs: number
-  fat: number
-  kcal_exercise: number
-  kcal_target: number
-  is_complete: boolean
-  flags: string[]
-  tdee_est: number | null
-  weight_trend: number | null
-}
-
 export interface WeeklyReview {
   week_start: string
   text: string
