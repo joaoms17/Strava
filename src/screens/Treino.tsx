@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { postApi } from '../lib/api'
 import { useSheet } from '../lib/sheet'
 import { useDataVersion } from '../lib/events'
 import { useReadyProfile } from '../lib/profile'
@@ -99,6 +100,29 @@ export default function Treino() {
   useEffect(() => {
     void load()
   }, [load, version])
+
+  // «A ler o print…» atualiza-se sozinho depois de fechar a folha (T20): de
+  // 3 em 3 s enquanto houver um print a ler; uma leitura parada (a função
+  // morreu) pede-se outra vez, uma vez só, como na folha.
+  const reading = data?.pending.filter((r) => r.status === 'a_ler') ?? []
+  const kicked = useRef(new Set<string>())
+  useEffect(() => {
+    if (reading.length === 0) return
+    for (const row of reading) {
+      const stale =
+        Date.now() - Date.parse(row.created_at) > 20_000 &&
+        (row.analysis_started_at == null || Date.now() - Date.parse(row.analysis_started_at) > 90_000)
+      if (stale && !kicked.current.has(row.id)) {
+        kicked.current.add(row.id)
+        void postApi('/api/workout/parse-shot', { import_id: row.id }).then(load, load)
+      }
+    }
+    const timer = setInterval(() => {
+      if (!document.hidden) void load()
+    }, 3000)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reading.map((r) => r.id).join(','), load])
 
   const queueBanner = gymQueue.queued.length > 0 && (
     <section className="space-y-2" aria-label="Por enviar">
