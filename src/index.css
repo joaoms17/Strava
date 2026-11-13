@@ -122,7 +122,8 @@
     margin: 0;
     background-color: var(--color-bg);
     font-family: var(--font-sans);
-    font-size: 17px;
+    /* H16: em rem, para seguir o tamanho de letra do navegador (17 px por omissão) */
+    font-size: 1.0625rem;
     color: var(--color-ink);
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
@@ -146,7 +147,7 @@
 @utility label {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 0.8125rem; /* H16: 13 px, em rem */
   line-height: 1.2;
   letter-spacing: 0.14em;
   text-transform: uppercase;
