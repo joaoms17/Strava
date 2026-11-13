@@ -25,3 +25,16 @@ export function reloadWhenIdle(): void {
   document.addEventListener('visibilitychange', tryNow)
   tryNow()
 }
+
+// Ao voltar ao primeiro plano (no máximo de 10 em 10 min), pergunta ao
+// servidor se há service worker novo (H7). Sem rede falha calado.
+const CHECK_EVERY_MS = 10 * 60_000
+
+export function checkForUpdates(registration: ServiceWorkerRegistration): void {
+  let last = Date.now()
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !navigator.onLine || Date.now() - last < CHECK_EVERY_MS) return
+    last = Date.now()
+    registration.update().catch(() => {})
+  })
+}
