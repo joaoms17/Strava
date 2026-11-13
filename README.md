@@ -86,6 +86,11 @@ A fonte de verdade é o conjunto das migrações em [`supabase/migrations/`](sup
    | `20261018200000_sobras.sql` | foto do que sobrou |
    | `20261018210000_divisao_partilha.sql` | dividir ao partilhar no ＋ |
    | `20261018220000_pedidos_entrega.sql` | a dica «Pedido para 2» num pedido de entrega |
+   | `20261113000020_etiquetas_analise.sql` | etiquetas já aplicadas pela análise (`meals.analysis_tags`) |
+   | `20261113000021_meals_counted_colunas.sql` | recria a vista `meals_counted` com as colunas atuais (correr depois da anterior) |
+   | `20261113000022_custo_ia_mes.sql` | custo mensal da IA somado na base de dados (`ai_cost_since`) |
+   | `20261113000030_cron_runs.sql` | registo de cada noite da cron (aviso em Avançado) |
+   | `20261113000031_push_so_servidor.sql` | subscrições das notificações só criadas pelo servidor |
 
 3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), a chave da IA — `GEMINI_API_KEY` (Gemini, plano gratuito: criar em aistudio.google.com › Get API key) **ou** `ANTHROPIC_API_KEY` (Claude, pago) —, `CRON_SECRET` (protege as crons; sem ela não correm), `HEALTH_INGEST_TOKEN` (o Atalho do iPhone, passo 6), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Opcionais: `HOUSE_EMAILS` (emails da casa separados por vírgulas: com ela, o servidor só aceita contas que estejam na lista ou já tenham perfil; sem ela, aceita qualquer conta do projeto, por isso o registo livre tem de estar desligado), `AI_PROVIDER`, `GEMINI_MODEL_VISION`/`GEMINI_MODEL_TEXT`, `VAPID_SUBJECT` (contacto `mailto:` das notificações; sem ela, o endereço da app) e `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (sem elas, o servidor cria as chaves das notificações na primeira vez e guarda-as no Supabase; não as troques depois, senão cada telemóvel tem de ligar as notificações outra vez). Em dev local: copiar `.env.example` para `.env`.
 3b. **Recuperar a palavra-passe:** no Supabase, Authentication → URL Configuration → Site URL = `https://a-tua-app.vercel.app` e, em Redirect URLs, `https://a-tua-app.vercel.app/**`. Sem isto, o link do email «Esqueci-me da palavra-passe» abre `localhost`. O email sai pelo serviço do Supabase (poucos por hora; vê no lixo/spam).
