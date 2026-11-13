@@ -16,6 +16,7 @@ import { syncUser } from '../_lib/intervals-sync.js'
 import { cronAuthorized } from '../_lib/secret.js'
 import { finishCronRun, lastStepAt, startCronRun } from '../_lib/cron-runs.js'
 import { cronError, monthlyCleanupDue, retentionCutoff, weeklyCleanupDue, type CronError } from '../_lib/rules/rotinas.js'
+import { REVIEW_LOOKBACK_WEEKS, REVIEW_REWRITES_PER_NIGHT, reviewWeeks } from '../_lib/rules/resumo.js'
 
 // Cron diária às 05:30 UTC (no Hobby, num minuto qualquer das 05:00–05:59 UTC:
 // sempre depois das 04:00 em Lisboa, com ou sem DST, com uma hora de margem):
@@ -23,7 +24,10 @@ import { cronError, monthlyCleanupDue, retentionCutoff, weeklyCleanupDue, type C
 // (marcados pelo trigger mark_day_dirty) e sempre os últimos 3 — no máximo 21
 // por noite, a noite seguinte continua —, com o gasto adaptativo e a semana de
 // pausa da dieta; o resumo neutro da semana anterior, na primeira noite em
-// que falte e quando os dados dessa semana mudam; ao domingo (ou na noite
+// que falte e quando os dados dessa semana mudam, e os das semanas já
+// resumidas das últimas 8 cujos dados mudaram (B9: um dia de há 3 semanas
+// respondido; no máximo 6 semanas vistas e 2 reescritas por pessoa e por
+// noite, rules/resumo.ts); ao domingo (ou na noite
 // seguinte, se a última limpeza tem mais de 7 dias), limpa refeições apagadas
 // há mais de 7 dias, fotos sem dono e as imagens dos prints com mais de 90
 // dias; uma vez por mês, os registos de api_calls, off_searches e cron_runs
@@ -64,6 +68,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const startedAt = Date.now()
     const closed = []
+    // B9: os dias fechados esta noite, por pessoa (as semanas deles revêem-se).
+    const touched = new Map<string, string[]>()
     let reviews = 0
 
     // Análises presas passam a 'erro' (sem IA aqui: o telemóvel tenta outra
@@ -122,6 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           try {
             closed.push(await closeDay(admin, profile, date, anchor))
+            touched.set(profile.user_id, [...(touched.get(profile.user_id) ?? []), date])
           } catch (err) {
             // O dia fica sujo (a noite seguinte tenta outra vez); os dias
             // seguintes e as outras pessoas continuam.
@@ -157,19 +164,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // O resumo da semana que terminou: na primeira noite em que falte e
-    // quando os dados dessa semana mudam (só com tempo para a chamada à IA).
+    // Os resumos: o da semana que terminou (na primeira noite em que falte e
+    // quando os dados dessa semana mudam) e os das semanas já resumidas cujos
+    // dados mudaram (B9). Ver uma semana são só leituras; a IA só corre se a
+    // impressão digital mudou, no máximo REVIEW_REWRITES_PER_NIGHT vezes por
+    // pessoa, e só com tempo para a chamada.
     for (const profile of people) {
-      if (Date.now() - startedAt >= REVIEW_BUDGET_MS) {
-        console.warn('Cron: resumo semanal fica para a noite seguinte', profile.user_id)
-        continue
-      }
       const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+      let weeks = [mondayOf(shiftDate(today, -7))]
       try {
-        if (await generateWeeklyReview(admin, profile.user_id, mondayOf(shiftDate(today, -7)))) reviews++
+        const { data: reviewedRows, error: reviewedError } = await admin
+          .from('weekly_reviews')
+          .select('week_start')
+          .eq('user_id', profile.user_id)
+          .eq('kind', 'neutro')
+          .gte('week_start', shiftDate(weeks[0]!, -7 * REVIEW_LOOKBACK_WEEKS))
+        if (reviewedError) throw new Error(reviewedError.message)
+        weeks = reviewWeeks({
+          today,
+          reviewed: (reviewedRows ?? []).map((r) => r.week_start as string),
+          touched: touched.get(profile.user_id) ?? [],
+        })
       } catch (err) {
-        console.error('Resumo semanal falhou:', err)
-        errors.push(cronError('resumo', err, { user_id: profile.user_id }))
+        // Sem a lista, fica a semana anterior (como antes).
+        console.error('Cron: semanas resumidas', profile.user_id, err)
+        errors.push(cronError('resumo_semanas', err, { user_id: profile.user_id }))
+      }
+      let rewrites = 0
+      for (const weekStart of weeks) {
+        if (rewrites >= REVIEW_REWRITES_PER_NIGHT) break
+        if (Date.now() - startedAt >= REVIEW_BUDGET_MS) {
+          console.warn('Cron: resumo semanal fica para a noite seguinte', profile.user_id, weekStart)
+          break
+        }
+        try {
+          if (await generateWeeklyReview(admin, profile.user_id, weekStart)) {
+            reviews++
+            rewrites++
+          }
+        } catch (err) {
+          console.error('Resumo semanal falhou:', err)
+          errors.push(cronError('resumo', err, { user_id: profile.user_id, date: weekStart }))
+        }
       }
     }
 
