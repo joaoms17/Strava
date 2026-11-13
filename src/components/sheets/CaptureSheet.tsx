@@ -41,7 +41,7 @@ import {
 } from '../../lib/when'
 import { favoritesGrid } from '../../../api/_lib/rules/favoritos'
 import { photoInstant } from '../../../api/_lib/rules/captura'
-import { SLOT_LABEL, lisbonClock } from '../../../api/_lib/rules/momentos'
+import { lisbonClock } from '../../../api/_lib/rules/momentos'
 import type { Diet, Favorite, Slot } from '../../lib/types'
 
 // Registar: tudo numa folha, em duas camadas guiadas pelo uso real (H10). Em
