@@ -40,8 +40,7 @@ function itemOf(food: Food, grams: number): MealItem {
 
 // Código de barras (Open Food Facts, sem IA): lê vários produtos para a mesma
 // refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
-// juntos a uma já registada (?refeicao=id, a partir da folha da refeição, ou
-// escolhida aqui entre as desse dia). Também se procura pelo nome, e um
+// juntos a uma já registada (escolhida aqui entre as desse dia). Também se procura pelo nome, e um
 // produto que o Open Food Facts não tem lê-se pela foto do rótulo (fica
 // ligado ao código para a próxima vez, também para a outra pessoa).
 export default function BarcodeSheet() {
@@ -52,7 +51,6 @@ export default function BarcodeSheet() {
   // O «Quando» escolhido no Registar (?data=…&momento=…); sem ele, agora.
   const when = whenFromParams(sheet.params, today)
   const date = when.date
-  const targetId = sheet.params.get('refeicao')
   // Os produtos lidos de antes (fechou-se sem guardar) voltam (H17); com eles
   // abre-se a lista (ler outro está lá).
   const [basket, setBasket] = useState<MealItem[]>(() =>
@@ -75,20 +73,10 @@ export default function BarcodeSheet() {
   // Tocar outra vez depois de uma falha de rede não grava a dobrar; outros
   // produtos (ou outro dia) são outro registo.
   const clientIdFor = useClientId()
-  const [target, setTarget] = useState<Target | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [dayMeals, setDayMeals] = useState<Target[]>([])
 
   const columns = 'id,items,status,slot,logged_at,date,input_type,raw_text'
-  useEffect(() => {
-    if (!targetId) return
-    void supabase
-      .from('meals')
-      .select(columns)
-      .eq('id', targetId)
-      .maybeSingle()
-      .then(({ data }) => setTarget((data as Target | null) ?? null))
-  }, [targetId])
 
   useEffect(() => {
     if (!choosing) return
@@ -188,7 +176,7 @@ export default function BarcodeSheet() {
   // Fechar com produtos lidos: ficam guardados e o aviso leva lá.
   function close() {
     if (items.length > 0) {
-      const params = { ...whenParams(when, today), ...(targetId ? { refeicao: targetId } : {}) }
+      const params = whenParams(when, today)
       toast(
         items.length === 1 ? 'O produto lido ficou guardado.' : `Os ${items.length} produtos lidos ficaram guardados.`,
         [{ label: 'Abrir', run: () => sheet.open('barras', params) }],
@@ -284,18 +272,17 @@ export default function BarcodeSheet() {
 
   return (
     <BottomSheet
-      title={target ? 'Juntar à refeição' : 'Código de barras'}
+      title="Código de barras"
       onClose={close}
       footer={
         items.length > 0 && !choosing ? (
-          <BusyButton busy="A guardar…" onClick={() => (target ? addTo(target) : saveNew())} className={primary}>
-            {`${target ? 'Juntar' : 'Guardar'}${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
+          <BusyButton busy="A guardar…" onClick={saveNew} className={primary}>
+            {`Guardar${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
           </BusyButton>
         ) : undefined
       }
     >
       <div className="space-y-4 pb-2">
-        {target && <p className="truncate text-[15px] text-dim">A juntar a: {describe(target)}</p>}
         {restored > 0 && basket.length > 0 && (
           <p className="text-[13px] text-dim">
             {restored === 1 ? 'O produto que leste antes ficou guardado.' : `Os ${restored} produtos que leste antes ficaram guardados.`}
@@ -485,11 +472,9 @@ export default function BarcodeSheet() {
                 Total: {fmtInt(kcal)} kcal · proteína {fmtInt(protein)} g
               </p>
             )}
-            {!target && (
-              <button onClick={() => setChoosing(true)} className="min-h-11 text-[15px] text-eat">
-                Juntar a uma refeição já registada
-              </button>
-            )}
+            <button onClick={() => setChoosing(true)} className="min-h-11 text-[15px] text-eat">
+              Juntar a uma refeição já registada
+            </button>
           </>
         )}
 

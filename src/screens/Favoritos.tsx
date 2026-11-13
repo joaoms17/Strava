@@ -104,7 +104,6 @@ export default function Favoritos() {
     const found = favorites.find((f) => f.id === openId)
     if (found) setEditing(found)
     navigate('/favoritos', { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openId, favorites])
 
   async function archive(favorite: Favorite) {

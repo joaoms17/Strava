@@ -43,7 +43,7 @@ function getOnce(url: URL, deadline: number): Promise<Page> {
         method: 'GET',
         lookup: publicLookup as unknown as typeof dns.lookup,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; EpocaDoRegresso/0.2; receita pedida por quem usa a app)',
+          'User-Agent': 'Mozilla/5.0 (compatible; DailyTrack/0.1; receita pedida por quem usa a app)',
           Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
           'Accept-Language': 'pt-PT,pt;q=0.9',
           'Accept-Encoding': 'gzip, deflate, br',

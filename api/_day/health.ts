@@ -3,7 +3,7 @@ import { adminClient } from '../_lib/supabase.js'
 import { sameSecret } from '../_lib/secret.js'
 import { aiProvider, anthropic, MODELS } from '../_lib/anthropic.js'
 import { geminiModels } from '../_lib/rules/gemini.js'
-import { SCHEMA_VERSION, compareSchema, type SchemaState } from '../_lib/rules/esquema.js'
+import { DEFERRED_MIGRATIONS, MIGRATIONS, SCHEMA_VERSION, compareSchema, missingMigrations, type SchemaState } from '../_lib/rules/esquema.js'
 import {
   PROMPT_REVIEW_NEUTRAL,
   PROMPT_MEAL_PHOTO_V3,
@@ -37,7 +37,6 @@ const ENV_VARS = [
   'ANTHROPIC_API_KEY',
   'GEMINI_API_KEY',
   'CRON_SECRET',
-  'ICS_TOKEN',
   'HEALTH_INGEST_TOKEN',
   'HOUSE_EMAILS',
 ] as const
@@ -173,8 +172,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!haiku.ok || !sonnet.ok) problems.push(`a IA (${provider}) não responde (chave ou modelos)`)
 
   const avisos: string[] = []
-  if (versao.estado === 'atrasada') avisos.push(`faltam migrações no Supabase: a base de dados está na ${versao.base_de_dados}, o código conhece a ${SCHEMA_VERSION}`)
-  if (versao.estado === 'desconhecida') avisos.push(`sem schema_version: corre a migração ${SCHEMA_VERSION}_schema_version.sql`)
+  if (versao.estado === 'atrasada') {
+    const pending = missingMigrations(versao.base_de_dados, MIGRATIONS).map((f) =>
+      DEFERRED_MIGRATIONS[f] ? `${f} (${DEFERRED_MIGRATIONS[f]})` : f,
+    )
+    avisos.push(`faltam migrações no Supabase: ${pending.join(', ')}`)
+  }
+  if (versao.estado === 'desconhecida') avisos.push('sem schema_version: corre a migração 20261113000042_schema_version.sql')
 
   res.setHeader('Cache-Control', 'no-store')
   res.status(ok ? 200 : 503).json({

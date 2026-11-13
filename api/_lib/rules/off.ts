@@ -6,7 +6,7 @@ import { round1 } from './meal-totals.js'
 import { implausibleItem } from './analise.js'
 
 // O Open Food Facts pede um User-Agent que identifique a app.
-export const OFF_USER_AGENT = 'EpocaDoRegresso/0.2 (https://github.com/joaoms17/strava)'
+export const OFF_USER_AGENT = 'DailyTrack/0.1 (https://github.com/joaoms17/strava)'
 
 export const NUTRISCORES = ['a', 'b', 'c', 'd', 'e'] as const
 export type NutriScore = (typeof NUTRISCORES)[number]

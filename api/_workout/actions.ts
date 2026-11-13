@@ -11,6 +11,7 @@ import {
   kcalAfterMerge,
   mergePatch,
   pickWatts,
+  LAST_WATTS_WINDOW_DAYS,
   startGuessed,
   joinPatch,
   pickJoinTarget,
@@ -219,7 +220,7 @@ async function lastConfirmedWatts(db: SupabaseClient, date: string): Promise<num
     .not('watts', 'is', null)
     // Em SQL, «<> 'prefill'» deixa de fora os nulos (treinos antigos).
     .or('watts_source.is.null,watts_source.neq.prefill')
-    .gte('date', shiftDate(date, -30))
+    .gte('date', shiftDate(date, -LAST_WATTS_WINDOW_DAYS))
     .lte('date', date)
     .order('date', { ascending: false })
     .limit(1)

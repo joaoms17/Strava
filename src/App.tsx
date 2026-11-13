@@ -217,13 +217,12 @@ function Sheets() {
 }
 
 function SheetFor(sheet: ReturnType<typeof useSheet>): ReactNode {
-  if (sheet.name === 'registar') return <CaptureSheet key="registar" />
+  if (sheet.name === 'registar') return <CaptureSheet />
   if (sheet.name === 'peso') return <WeighSheet key={sheet.params.get('data') ?? ''} />
   if (sheet.name === 'refeicao' && sheet.params.get('id')) {
     return <MealSheet key={sheet.params.get('id')} />
   }
   if (sheet.name === 'galeria') return <GallerySheet />
-  if (sheet.name === 'escrever') return <CaptureSheet key="escrever" focus />
   if (sheet.name === 'repetir') return <RepeatSheet />
   if (sheet.name === 'nova-favorita') return <NewFavoriteSheet key={sheet.params.get('momento') ?? ''} />
   if (sheet.name === 'dieta') return <DietSheet key={sheet.params.get('id') ?? 'nova'} />
@@ -259,7 +258,6 @@ function CaptureSync() {
           { label: 'Abrir', run: () => sheet.open('refeicao', { id: meal.id }) },
         ]),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [toast],
   )
   return null

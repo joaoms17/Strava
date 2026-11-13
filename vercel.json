@@ -1,7 +1,25 @@
 {
   "functions": {
-    "api/**/*.ts": {
-      "includeFiles": "prompts/**",
+    "api/meal.ts": {
+      "includeFiles": "prompts/*.md",
+      "maxDuration": 60
+    },
+    "api/workout.ts": {
+      "includeFiles": "prompts/*.md",
+      "maxDuration": 60
+    },
+    "api/day.ts": {
+      "includeFiles": "prompts/*.md",
+      "maxDuration": 60
+    },
+    "api/cron/daily.ts": {
+      "includeFiles": "prompts/*.md",
+      "maxDuration": 60
+    },
+    "api/cron/lembretes.ts": {
+      "maxDuration": 60
+    },
+    "api/health/daily.ts": {
       "maxDuration": 60
     }
   },

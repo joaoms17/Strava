@@ -1,8 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-export const PROMPT_PLAN = 'plan-generate.v1.md'
-export const PROMPT_REVIEW = 'weekly-review.v1.md'
 export const PROMPT_REVIEW_NEUTRAL = 'weekly-review.v5.md'
 export const PROMPT_MEAL_PHOTO_V3 = 'meal-photo.v3.md'
 export const PROMPT_MEAL_TEXT_V2 = 'meal-text.v2.md'
