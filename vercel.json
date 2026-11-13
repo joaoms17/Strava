@@ -6,7 +6,7 @@
     }
   },
   "crons": [
-    { "path": "/api/cron/daily", "schedule": "30 4 * * *" },
+    { "path": "/api/cron/daily", "schedule": "30 5 * * *" },
     { "path": "/api/cron/lembretes", "schedule": "45 20 * * *" }
   ],
   "rewrites": [
