@@ -9,7 +9,6 @@ import {
   deadSubscription,
   dinnerNotice,
   envVapidKeys,
-  isMonday,
   mealAnalysedNotice,
   needsDinnerReminder,
   offerMealPush,
@@ -107,13 +106,6 @@ describe('lembrete do jantar', () => {
         [],
       ),
     ).toBe(true)
-  })
-})
-
-describe('cron dos lembretes', () => {
-  it('segunda-feira', () => {
-    expect(isMonday('2026-10-19')).toBe(true)
-    expect(isMonday('2026-10-18')).toBe(false)
   })
 })
 

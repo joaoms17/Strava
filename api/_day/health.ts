@@ -3,6 +3,7 @@ import { adminClient } from '../_lib/supabase.js'
 import { sameSecret } from '../_lib/secret.js'
 import { aiProvider, anthropic, MODELS } from '../_lib/anthropic.js'
 import { geminiModels } from '../_lib/rules/gemini.js'
+import { SCHEMA_VERSION, compareSchema, type SchemaState } from '../_lib/rules/esquema.js'
 import {
   PROMPT_REVIEW_NEUTRAL,
   PROMPT_MEAL_PHOTO_V3,
@@ -25,6 +26,9 @@ import {
 // /api/day/health?token=<CRON_SECRET> (fica no histórico e nos registos).
 // Diz que variáveis existem (nunca os valores), se os prompts foram incluídos,
 // se o Supabase responde e se a chave da Anthropic dá acesso aos dois modelos.
+// Mostra também a versão do schema (tabela schema_version, ideia 6) ao lado
+// da que o código conhece; uma base de dados atrasada fica em `avisos`, sem
+// tirar o «ok» (o código lê as colunas novas com tolerância).
 
 const ENV_VARS = [
   'SUPABASE_URL',
@@ -123,7 +127,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!res.ok) throw new Error(`Gemini ${res.status}: ${((await res.json().catch(() => ({}))) as { error?: { message?: string } }).error?.message ?? ''}`)
     return undefined
   }
-  const [supabase, schema, haiku, sonnet] = await Promise.all([
+  // A versão do schema: sem a tabela (antes da migração 20261113000042) é
+  // «desconhecida».
+  async function schemaVersion(): Promise<{ base_de_dados: number | null; codigo: number; estado: SchemaState }> {
+    const { data, error } = await adminClient().from('schema_version').select('version').maybeSingle()
+    const db = error ? null : ((data as { version?: unknown } | null)?.version ?? null)
+    return { base_de_dados: db == null ? null : Number(db), codigo: SCHEMA_VERSION, estado: compareSchema(db) }
+  }
+  const [supabase, schema, haiku, sonnet, versao] = await Promise.all([
     timed(async () => {
       const { count, error } = await adminClient()
         .from('profile')
@@ -147,6 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }),
     timed(async () => modelExists(textModel)),
     timed(async () => modelExists(visionModel)),
+    schemaVersion().catch(() => ({ base_de_dados: null, codigo: SCHEMA_VERSION, estado: 'desconhecida' as SchemaState })),
   ])
 
   const missing = [...REQUIRED_ENV, keyName].filter((name) => !env[name])
@@ -160,6 +172,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   else if (!schema.ok) problems.push(`falta uma migração no Supabase (${schema.detail ?? ''})`)
   if (!haiku.ok || !sonnet.ok) problems.push(`a IA (${provider}) não responde (chave ou modelos)`)
 
+  const avisos: string[] = []
+  if (versao.estado === 'atrasada') avisos.push(`faltam migrações no Supabase: a base de dados está na ${versao.base_de_dados}, o código conhece a ${SCHEMA_VERSION}`)
+  if (versao.estado === 'desconhecida') avisos.push(`sem schema_version: corre a migração ${SCHEMA_VERSION}_schema_version.sql`)
+
   res.setHeader('Cache-Control', 'no-store')
   res.status(ok ? 200 : 503).json({
     ok,
@@ -170,6 +186,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     prompts,
     supabase,
     schema,
+    versao_schema: versao,
+    avisos,
     ia: { provider, [textModel]: haiku, [visionModel]: sonnet },
   })
 }

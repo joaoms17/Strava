@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  dayExerciseKcal,
   kcalTarget,
   proteinMealOk,
   storedExerciseKcal,
@@ -79,10 +78,9 @@ describe('storedExerciseKcal', () => {
 
 describe('kcalTarget', () => {
   it('soma a base com o exercício do dia', () => {
-    const exercise = dayExerciseKcal([
-      { type: 'bike', watts: 130, minutes: 30, deviceCalories: null },
-      { type: 'strength', watts: null, minutes: 45, deviceCalories: null },
-    ])
+    const exercise =
+      workoutKcal({ type: 'bike', watts: 130, minutes: 30, deviceCalories: null }) +
+      workoutKcal({ type: 'strength', watts: null, minutes: 45, deviceCalories: null })
     expect(exercise).toBe(234 + 180)
     expect(kcalTarget(1500, exercise)).toBe(1914)
   })

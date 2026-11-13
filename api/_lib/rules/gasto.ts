@@ -4,8 +4,9 @@
 // (tdee_est, regra 4). Sem imports do servidor: o telemóvel usa as mesmas
 // funções.
 import { FAST_LOSS_KG_WEEK } from './weight.js'
+import { KCAL_PER_KG } from './comum.js'
 
-export const KCAL_PER_KG = 7700
+export { KCAL_PER_KG }
 export const SEDENTARY_FACTOR = 1.2
 export const MIN_COMPLETE_DAYS_FOR_MEASURED = 10
 export const COHERENCE_KG_WEEK = 0.25

@@ -16,29 +16,17 @@ export function isDayComplete(input: {
   return input.mealCount >= 2 && input.kcalIn >= 800
 }
 
-// Regra 6: média dos últimos 7 dias completos < kcal_floor_week gera aviso.
-// Com menos de 7 dias completos ainda não há aviso (dados a menos).
-export function floorWarning(lastCompleteDaysKcal: number[], floorKcal: number): boolean {
-  if (lastCompleteDaysKcal.length < 7) return false
-  const last7 = lastCompleteDaysKcal.slice(-7)
-  const mean = last7.reduce((a, b) => a + b, 0) / last7.length
-  return mean < floorKcal
-}
-
 // Sequência de dias com tudo registado (Hoje): dias seguidos, para trás a
 // partir de ontem, que contam como completos pela regra 5 — 2 refeições e
 // 800 kcal, ou «Sim, foi tudo» (jejum, refeições saltadas). Um dia com
 // refeições e «Não, faltou algo» não soma nem quebra (a resposta honesta não
 // castiga); um dia sem nada, ou incompleto sem resposta, quebra. Hoje ainda
-// vai a meio: soma 1 se já estiver completo, mas não quebra. Conta a partir
-// das refeições (`byDate`); streakFromDays junta os dias guardados.
+// vai a meio: soma 1 se já estiver completo, mas não quebra. streakFromDays
+// conta pelos dias guardados, com as refeições de hoje à parte.
 export interface StreakDay {
   mealCount: number
   kcalIn: number
   flags?: string[] | null
-}
-export function completeStreak(byDate: Record<string, StreakDay>, today: string, maxDays = 365): number {
-  return countStreak((date) => streakState(byDate[date]), today, maxDays)
 }
 
 type StreakState = 'feito' | 'honesto' | 'quebra'

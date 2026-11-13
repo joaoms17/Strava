@@ -17,6 +17,7 @@ import {
   type DatedValue,
   type Period,
 } from './graficos.js'
+import { round1 } from './comum.js'
 
 // --- Números em PT-PT ----------------------------------------------------
 
@@ -245,7 +246,6 @@ function trendAt(trend: DatedValue[], date: string): DatedValue | null {
   return trend.reduce<DatedValue | null>((best, p) => (p.date <= date && p.date >= floor && (best == null || p.date > best.date) ? p : best), null)
 }
 
-const round1 = (n: number) => Math.round(n * 10) / 10
 
 // A semana do peso médio (7 dias): o mais recente dos últimos 7 dias contra
 // o de 7 dias antes, e a semana anterior da mesma maneira. `today` é o dia de

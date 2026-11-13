@@ -20,6 +20,7 @@ import {
   zoneValue,
   type MeasureRow,
 } from './composicao.js'
+import { mean, round1 } from './comum.js'
 
 export const AREAS = ['peso', 'medidas', 'comida', 'treino', 'sono', 'coracao', 'passos'] as const
 export const ESTADOS = ['melhor', 'igual', 'pior', 'sem_dados'] as const
@@ -52,8 +53,6 @@ export interface Pergunta {
 }
 
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
-const round1 = (n: number) => Math.round(n * 10) / 10
-const mean = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null)
 
 // A resposta da IA, arrumada: só áreas conhecidas, uma vez cada, pela ordem
 // fixa; as «sem dados» e as vazias saem (não se mostra o que vem vazio).

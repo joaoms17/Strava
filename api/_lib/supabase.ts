@@ -1,6 +1,7 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js'
 import type { VercelRequest } from '@vercel/node'
 import { houseByEmail, houseEmails } from './rules/casa.js'
+import { SESSION_CACHE_MAX, sessionCacheUntil, userFromClaims } from './rules/sessao.js'
 
 function env(name: string): string {
   const value = process.env[name]
@@ -47,11 +48,52 @@ export async function requireUser(
   const header = req.headers.authorization
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null
   if (!token) throw new HttpError(401, 'Sessão em falta.')
-  const db = userClient(token)
-  const { data, error } = await db.auth.getUser()
-  if (error || !data.user) throw new HttpError(401, 'Sessão inválida.')
-  await requireHouse(data.user)
-  return { user: data.user, db, token }
+  const user = await verifiedUser(token)
+  if (!user) throw new HttpError(401, 'Sessão inválida.')
+  await requireHouse(user)
+  return { user, db: userClient(token), token }
+}
+
+// P7: o token verifica-se pela assinatura (getClaims: chaves públicas do
+// projeto, guardadas 10 min, quando o projeto usa chaves assimétricas; com o
+// segredo partilhado HS256, o próprio getClaims pergunta ao Auth, como o
+// getUser de antes). A assinatura e a validade são sempre verificadas; um
+// token verificado fica lembrado no máximo 60 s nesta instância da função
+// (rules/sessao.ts), nunca para lá da validade dele. A autenticação não
+// enfraquece: um token falso, expirado ou da chave anónima continua a dar 401.
+let verifier: SupabaseClient | null = null
+const verifiedTokens = new Map<string, { user: User; until: number }>()
+
+async function verifiedUser(token: string): Promise<User | null> {
+  const now = Date.now()
+  const hit = verifiedTokens.get(token)
+  if (hit && hit.until > now) return hit.user
+  if (hit) verifiedTokens.delete(token)
+  verifier ??= createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  let claims: unknown
+  try {
+    const { data, error } = await verifier.auth.getClaims(token)
+    if (error || !data) return null
+    claims = data.claims
+  } catch (err) {
+    console.error('Sessão: verificação do token falhou', err)
+    return null
+  }
+  const fromClaims = userFromClaims(claims)
+  if (!fromClaims) return null
+  const user = { ...fromClaims, created_at: '' } as User
+  const until = sessionCacheUntil(now, (claims as { exp?: unknown }).exp)
+  if (until != null) {
+    // Poucas pessoas, poucos tokens: o mais antigo sai quando a lista enche.
+    if (verifiedTokens.size >= SESSION_CACHE_MAX) {
+      const oldest = verifiedTokens.keys().next().value
+      if (oldest !== undefined) verifiedTokens.delete(oldest)
+    }
+    verifiedTokens.set(token, { user, until })
+  }
+  return user
 }
 
 // G1: com HOUSE_EMAILS definida, só entra quem está na lista ou já tem

@@ -39,12 +39,12 @@ const nonNegative = (n: number) => (Number.isFinite(n) && n > 0 ? round1(n) : 0)
 // mais ou a menos): mais de 1,5 kg num item, mais de 9 kcal por grama (o
 // azeite tem 8,8) ou macros que dão bem mais calorias do que as escritas. O
 // contrário (kcal acima dos macros) é normal no álcool, por isso não conta.
-export const MAX_ITEM_GRAMS = 1500
+export const MAX_ANALYSED_ITEM_GRAMS = 1500
 export const MAX_KCAL_PER_GRAM = 9
 
 export function implausibleItem(
   item: Pick<MealItem, 'grams' | 'kcal' | 'protein' | 'carbs' | 'fat'>,
-  maxGrams = MAX_ITEM_GRAMS,
+  maxGrams = MAX_ANALYSED_ITEM_GRAMS,
 ): boolean {
   if (item.grams > maxGrams) return true
   if (item.grams > 0 && item.kcal > item.grams * MAX_KCAL_PER_GRAM) return true
@@ -58,7 +58,7 @@ export function implausibleItem(
 export function toMealItems(
   items: AnalysedItem[],
   refs: Record<string, string>,
-  maxGrams = MAX_ITEM_GRAMS,
+  maxGrams = MAX_ANALYSED_ITEM_GRAMS,
 ): MealItem[] {
   return items
     .filter((item) => item.name.trim())

@@ -8,6 +8,7 @@
 import { isMaintenanceWeek, mondayOf } from './manutencao.js'
 import { shiftDate } from './nutritional-day.js'
 import { linearSlope } from './weight.js'
+import { KCAL_PER_KG, round1 } from './comum.js'
 
 export interface ClosedDay {
   date: string
@@ -15,15 +16,10 @@ export interface ClosedDay {
   weight_trend: number | null
 }
 
-const KCAL_PER_KG = 7700
 export const TDEE_ALPHA = 0.1
 export const TDEE_MAX_STEP_KCAL = 30
 export const TDEE_WINDOW_DAYS = 28
 export const MIN_COMPLETE_DAYS = 10
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10
-}
 
 // K1: o gasto medido só com pesagens reais suficientes na janela — pelo
 // menos 4 dias de pesagem, a cobrir 10 dias ou mais (como a projeção). O
@@ -345,13 +341,4 @@ export function adaptiveDay(input: {
   // Com 6 semanas de dados o limite é o de sempre (400), e fica dito como tal.
   const shown: AdaptiveLimit | null = stable && limit === 'teto' ? 'teto400' : stable && limit === 'piso' ? 'piso400' : limit
   return { raw, tdee: value, excluded, stable, limit: shown, eligibleDays: window.length, missingWeighings: missing }
-}
-
-export function shouldAdjustBase(tdeeEst: number, expectedTdee: number): boolean {
-  return Math.abs(tdeeEst - expectedTdee) > 250
-}
-
-// Ritmo em kg/semana para um dado gasto: negativo = a perder peso.
-export function paceKgPerWeek(kcalMeanIn: number, tdee: number): number {
-  return Math.round((((kcalMeanIn - tdee) * 7) / KCAL_PER_KG) * 100) / 100
 }

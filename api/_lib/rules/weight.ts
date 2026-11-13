@@ -13,10 +13,6 @@ function dayNumber(date: string): number {
   return Date.parse(`${date}T00:00:00Z`) / DAY_MS
 }
 
-function dateFromDayNumber(day: number): string {
-  return new Date(day * DAY_MS).toISOString().slice(0, 10)
-}
-
 function round2(n: number): number {
   return Math.round(n * 100) / 100
 }
@@ -59,40 +55,6 @@ export function linearSlope(points: DatedValue[]): number {
   return den === 0 ? 0 : num / den
 }
 
-export interface WeightProjection {
-  slopePerDay: number
-  projected: DatedValue[] // 4 semanas a partir do último ponto da tendência
-  targetDate: string | null // data prevista para o alvo (null se não converge)
-}
-
-export function projectWeight(
-  trend: DatedValue[],
-  targetKg: number,
-  horizonDays = 28,
-): WeightProjection {
-  const last = trend[trend.length - 1]
-  if (!last) return { slopePerDay: 0, projected: [], targetDate: null }
-
-  const lastDay = dayNumber(last.date)
-  const recent = trend.filter((p) => dayNumber(p.date) >= lastDay - 20)
-  const slope = linearSlope(recent)
-
-  const projected: DatedValue[] = []
-  for (let i = 1; i <= horizonDays; i++) {
-    projected.push({ date: dateFromDayNumber(lastDay + i), value: round2(last.value + slope * i) })
-  }
-
-  let targetDate: string | null = null
-  if (last.value <= targetKg) {
-    targetDate = last.date
-  } else if (slope < 0) {
-    const days = (targetKg - last.value) / slope
-    if (days <= 365) targetDate = dateFromDayNumber(lastDay + Math.ceil(days))
-  }
-
-  return { slopePerDay: slope, projected, targetDate }
-}
-
 // O peso médio só aparece a partir de 3 pesagens.
 export const MIN_WEIGHINGS_FOR_TREND = 3
 
@@ -122,29 +84,6 @@ export function weeklyRateAsOf(weights: DatedValue[], asOf: string): number | nu
   const last = upTo.reduce((a, w) => (w.date > a ? w.date : a), '')
   if (!last || dayNumber(asOf) - dayNumber(last) > RATE_MAX_AGE_DAYS) return null
   return weeklyRate(upTo)
-}
-
-// «Meta: cerca de <mês>»: o peso médio de hoje ao ritmo da semana (o mesmo
-// de «a descer 0,4 kg por semana», com 8 pesagens em 14 dias). Sem ritmo, a
-// subir, estável ou a mais de um ano, não há data.
-export function goalDate(fromDate: string, fromKg: number, targetKg: number, ratePerWeek: number | null): string | null {
-  if (ratePerWeek == null || ratePerWeek > -0.05 || fromKg <= targetKg) return null
-  const days = Math.ceil((fromKg - targetKg) / (-ratePerWeek / 7))
-  return days <= 365 ? dateFromDayNumber(dayNumber(fromDate) + days) : null
-}
-
-// O gráfico «Tudo» com anos de pesagens: um ponto por semana, com a média
-// dessa semana, na segunda-feira.
-export function weeklyMeans(weights: { date: string; kg: number }[]): { date: string; kg: number }[] {
-  const weeks = new Map<string, number[]>()
-  for (const w of [...weights].sort((a, b) => a.date.localeCompare(b.date))) {
-    const day = dayNumber(w.date)
-    const monday = dateFromDayNumber(day - ((new Date(day * DAY_MS).getUTCDay() + 6) % 7))
-    const list = weeks.get(monday) ?? []
-    list.push(w.kg)
-    weeks.set(monday, list)
-  }
-  return [...weeks].map(([date, kgs]) => ({ date, kg: round2(kgs.reduce((a, b) => a + b, 0) / kgs.length) }))
 }
 
 // Faixa segura: perder mais de 0,85 kg por semana gasta músculo.

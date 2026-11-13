@@ -3,15 +3,9 @@
 // do texto). Nunca a estimativa crua de uma foto: as fotos só ensinam
 // depois de «Está certo» ou de uma correção.
 import type { MealItem } from './meal-totals.js'
+import { fold } from './comum.js'
 
 export type LearnEvent = 'analisada' | 'confirmada' | 'editada'
-
-const fold = (name: string) =>
-  name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
 
 // - analisada: só refeições de texto, os itens com confiança alta (o texto
 //   deu a quantidade ou é um alimento da biblioteca);

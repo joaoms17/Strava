@@ -18,6 +18,7 @@ import { KCAL_PER_KG, measuredNoteFromDays } from './gasto.js'
 import { shortRefs, type AskRefs } from './pergunta-acoes.js'
 import type { MealItem } from './meal-totals.js'
 import type { DietMeals } from './dieta.js'
+import { mean, round1 } from './comum.js'
 
 export const ASK_DAYS = 28
 export const ASK_MEAL_DAYS = 7 // além de hoje
@@ -124,9 +125,7 @@ const n = (v: Num): number | null => {
   return Number.isFinite(x) ? x : null
 }
 const round = (v: number | null) => (v == null ? null : Math.round(v))
-const round1 = (v: number) => Math.round(v * 10) / 10
 const round2 = (v: number) => Math.round(v * 100) / 100
-const mean = (values: number[]) => (values.length ? values.reduce((a, b) => a + b, 0) / values.length : null)
 const WEEKDAY = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const WEEKDAY_LONG = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
 const dow = (date: string) => new Date(`${date}T12:00:00Z`).getUTCDay()

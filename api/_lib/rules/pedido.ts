@@ -5,6 +5,7 @@
 // servidor: o telemóvel usa este ficheiro diretamente.
 import { sharedFrom } from './partilha.js'
 import { factorOf, sameFactor } from './porcoes.js'
+import { fold as foldName } from './comum.js'
 
 // O bloco do pedido que a análise da foto devolve (só no meal-photo v3).
 export interface Order {
@@ -13,13 +14,7 @@ export interface Order {
   people: number | null
 }
 
-const fold = (name: string) =>
-  name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim()
+const fold = (name: string) => foldName(name).replace(/\s+/g, ' ')
 
 // Linhas que nunca são comida, mesmo que a IA as deixe passar: taxas,
 // gorjeta, descontos, totais, a entrega e o estafeta (em português e em

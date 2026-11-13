@@ -1,45 +1,38 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import save from './_meal/save.js'
-import barcode, { foodSearch, label } from './_meal/barcode.js'
-import menu from './_meal/menu.js'
-import { logFavorite, portion, portionUndo, remove, repeat, restore } from './_meal/quick.js'
-import { analyse, attach, capture, correct, detach, estimate, inBackground, update } from './_meal/async.js'
-import { favoriteCopy, people, share, shareUndo } from './_meal/share.js'
-import recipe from './_meal/recipe.js'
-import { leftovers, leftoversUndo } from './_meal/leftovers.js'
-import { recomputeDirtyPast } from './_lib/meal-recompute.js'
-import { adminClient } from './_lib/supabase.js'
+import { dispatch, type Routes } from './_lib/router.js'
 
 // O plano Hobby do Vercel limita a 12 funções por deploy; os endpoints de
 // refeições vivem juntos numa função, com os caminhos originais preservados
 // por rewrites no vercel.json (/api/meal/:action -> /api/meal?action=...,
 // /api/food/barcode/:ean -> /api/meal?action=barcode&ean=...).
-const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promise<void> | void> = {
-  save,
-  barcode,
-  label,
-  'food-search': foodSearch,
-  menu,
-  'log-favorite': logFavorite,
-  repeat,
-  portion,
-  'portion-undo': portionUndo,
-  delete: remove,
-  restore,
-  capture,
-  analyse,
-  attach,
-  detach,
-  leftovers,
-  'leftovers-undo': leftoversUndo,
-  correct,
-  update,
-  estimate,
-  share,
-  'share-undo': shareUndo,
-  people,
-  recipe,
-  'favorite-copy': favoriteCopy,
+// P7: cada ação carrega só o ficheiro dela, quando é chamada (o arranque a
+// frio deixa de trazer o código e as dependências de todas as outras).
+const routes: Routes = {
+  save: () => import('./_meal/save.js').then((m) => m.default),
+  barcode: () => import('./_meal/barcode.js').then((m) => m.default),
+  label: () => import('./_meal/barcode.js').then((m) => m.label),
+  'food-search': () => import('./_meal/barcode.js').then((m) => m.foodSearch),
+  menu: () => import('./_meal/menu.js').then((m) => m.default),
+  'log-favorite': () => import('./_meal/quick.js').then((m) => m.logFavorite),
+  repeat: () => import('./_meal/quick.js').then((m) => m.repeat),
+  portion: () => import('./_meal/quick.js').then((m) => m.portion),
+  'portion-undo': () => import('./_meal/quick.js').then((m) => m.portionUndo),
+  delete: () => import('./_meal/quick.js').then((m) => m.remove),
+  restore: () => import('./_meal/quick.js').then((m) => m.restore),
+  capture: () => import('./_meal/async.js').then((m) => m.capture),
+  analyse: () => import('./_meal/async.js').then((m) => m.analyse),
+  attach: () => import('./_meal/async.js').then((m) => m.attach),
+  detach: () => import('./_meal/async.js').then((m) => m.detach),
+  leftovers: () => import('./_meal/leftovers.js').then((m) => m.leftovers),
+  'leftovers-undo': () => import('./_meal/leftovers.js').then((m) => m.leftoversUndo),
+  correct: () => import('./_meal/async.js').then((m) => m.correct),
+  update: () => import('./_meal/async.js').then((m) => m.update),
+  estimate: () => import('./_meal/async.js').then((m) => m.estimate),
+  share: () => import('./_meal/share.js').then((m) => m.share),
+  'share-undo': () => import('./_meal/share.js').then((m) => m.shareUndo),
+  people: () => import('./_meal/share.js').then((m) => m.people),
+  recipe: () => import('./_meal/recipe.js').then((m) => m.default),
+  'favorite-copy': () => import('./_meal/share.js').then((m) => m.favoriteCopy),
 }
 
 // Escritas nas refeições: no fim, os dias passados que mudaram (marcados pelo
@@ -63,13 +56,18 @@ const WRITES = new Set([
   'share-undo',
 ])
 
+async function recomputeAfterWrite(): Promise<void> {
+  const [{ inBackground }, { recomputeDirtyPast }, { adminClient }] = await Promise.all([
+    import('./_meal/async.js'),
+    import('./_lib/meal-recompute.js'),
+    import('./_lib/supabase.js'),
+  ])
+  inBackground(recomputeDirtyPast(adminClient()))
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const action = typeof req.query.action === 'string' ? req.query.action : ''
-  const route = routes[action]
-  if (!route) {
-    res.status(404).json({ error: 'Endpoint desconhecido.' })
-    return
+  const action = await dispatch(routes, req, res)
+  if (action && WRITES.has(action) && res.statusCode < 400) {
+    await recomputeAfterWrite().catch((err: unknown) => console.error('Recálculo depois da escrita:', err))
   }
-  await route(req, res)
-  if (WRITES.has(action) && res.statusCode < 400) inBackground(recomputeDirtyPast(adminClient()))
 }

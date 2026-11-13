@@ -4,6 +4,7 @@ import { adminClient } from '../_lib/supabase.js'
 import { tokenUser } from '../_lib/ingest-token.js'
 import { sameSecret } from '../_lib/secret.js'
 import { isDeletedWeighing } from '../_lib/rules/weight.js'
+import { lisbonDay } from '../_lib/rules/momentos.js'
 
 const HealthSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -22,15 +23,6 @@ const HealthSchema = z.object({
     .max(31)
     .optional(),
 })
-
-function localCalendarDate(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Lisbon',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
-}
 
 // Passos, sono e FC em repouso, enviados por um Atalho iOS todas as noites;
 // com `body[]`, também o peso e a % de gordura da balança (só entram em dias
@@ -131,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : await admin.from('health_daily').upsert(
       {
         user_id: profile.user_id,
-        date: body.data.date ?? localCalendarDate(),
+        date: body.data.date ?? lisbonDay(),
         // Só o que o Atalho mandou (não apaga o que veio do relógio) e marcado
         // como dele, para a sincronização do intervals.icu não o substituir.
         ...(body.data.steps != null ? { steps: body.data.steps } : {}),

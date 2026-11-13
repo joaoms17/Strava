@@ -5,6 +5,8 @@ import { GYM_PACE_DAYS, gymPace } from './rules/kcal-ginasio.js'
 // O que as kcal de um treino sem calorias do relógio precisam de ler: o peso
 // perto do dia e, no ginásio, o ritmo da pessoa. Com o cliente da pessoa
 // (RLS) ou, com `userId`, com o de serviço (sincronização do intervals.icu).
+// O telemóvel usa estas mesmas consultas (src/lib/kcal-context.ts, L20): só
+// tipos do Supabase e regras puras aqui, nada de node: nem do servidor.
 
 // Peso médio dos 7 dias até esta data ou, sem pesagens nesses dias, o último antes.
 export async function weightNear(db: SupabaseClient, date: string, userId?: string): Promise<number | null> {

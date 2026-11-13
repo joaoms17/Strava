@@ -2,6 +2,7 @@
 // Hodgdon & Beckett, versão métrica para homens). A gordura e a massa magra
 // calculam-se sempre a partir da medição guardada (weight_used_kg) e nunca se
 // projetam entre medições. Sem imports: o telemóvel usa as mesmas funções.
+import { round1 } from './comum.js'
 
 export type Zone = 'neck' | 'waist' | 'chest' | 'hips' | 'arm' | 'thigh' | 'calf'
 
@@ -70,10 +71,6 @@ export const DETECTABLE_CHANGE_PP = 1.5 // mínima mudança detetável com 1 lei
 export const LEAN_STABLE_KG = 0.5
 export const THIRD_READING_CM = 1
 export const REFERENCE_WINDOW_DAYS = 7
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10
-}
 
 // Marinha dos EUA (Hodgdon e Beckett), em cm, %G = 495 / D − 450.
 // Homens: D = 1,0324 − 0,19077 × log10(cintura − pescoço) + 0,15456 × log10(altura).

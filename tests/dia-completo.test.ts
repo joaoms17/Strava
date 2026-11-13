@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { completeStreak, floorWarning, isDayComplete, streakFromDays } from '../api/_lib/rules/day-close'
+import { isDayComplete, streakFromDays } from '../api/_lib/rules/day-close'
 
 // Regra 5: >= 2 refeições ou "dia fechado"; < 800 kcal sem marca é incompleto.
 describe('isDayComplete', () => {
@@ -37,65 +37,6 @@ describe('isDayComplete', () => {
 })
 
 // Regra 6: média de 7 dias completos < kcal_floor_week gera aviso.
-describe('floorWarning', () => {
-  it('avisa quando a média dos últimos 7 dias completos fica abaixo do chão', () => {
-    const days = [1300, 1350, 1380, 1390, 1350, 1300, 1320]
-    expect(floorWarning(days, 1400)).toBe(true)
-  })
-
-  it('não avisa com a média no chão ou acima', () => {
-    const days = [1400, 1400, 1400, 1400, 1400, 1400, 1400]
-    expect(floorWarning(days, 1400)).toBe(false)
-  })
-
-  it('usa só os 7 dias completos mais recentes', () => {
-    const days = [900, 900, 1450, 1450, 1450, 1450, 1450, 1450, 1450]
-    expect(floorWarning(days, 1400)).toBe(false)
-  })
-
-  it('com menos de 7 dias completos ainda não avisa', () => {
-    expect(floorWarning([1000, 1000, 1000], 1400)).toBe(false)
-  })
-})
-
-describe('completeStreak', () => {
-  const full = { mealCount: 3, kcalIn: 1800 }
-  it('conta para trás a partir de ontem até ao primeiro dia incompleto', () => {
-    const days = {
-      '2026-10-12': full,
-      '2026-10-11': full,
-      '2026-10-10': { mealCount: 1, kcalIn: 600 }, // quebra
-      '2026-10-09': full,
-    }
-    expect(completeStreak(days, '2026-10-13')).toBe(2)
-  })
-
-  it('jejum ou refeições saltadas contam com «Sim, foi tudo»', () => {
-    const days = {
-      '2026-10-12': { mealCount: 1, kcalIn: 900, flags: ['dia_fechado'] },
-      '2026-10-11': full,
-    }
-    expect(completeStreak(days, '2026-10-13')).toBe(2)
-  })
-
-  it('«faltou algo» com refeições não soma nem quebra; sem nada quebra', () => {
-    expect(completeStreak({ '2026-10-12': { ...full, flags: ['faltou_algo'] } }, '2026-10-13')).toBe(0)
-    const honest = {
-      '2026-10-12': full,
-      '2026-10-11': { mealCount: 2, kcalIn: 900, flags: ['faltou_algo'] },
-      '2026-10-10': full,
-      '2026-10-09': { mealCount: 0, kcalIn: 0, flags: ['faltou_algo'] }, // quebra: nada registado
-      '2026-10-08': full,
-    }
-    expect(completeStreak(honest, '2026-10-13')).toBe(2)
-  })
-
-  it('hoje soma se completo mas não quebra', () => {
-    expect(completeStreak({ '2026-10-13': full, '2026-10-12': full }, '2026-10-13')).toBe(2)
-    expect(completeStreak({ '2026-10-13': { mealCount: 1, kcalIn: 300 }, '2026-10-12': full }, '2026-10-13')).toBe(1)
-  })
-})
-
 describe('streakFromDays (H3: a sequência pelos dias guardados)', () => {
   const full = { mealCount: 3, kcalIn: 1800 }
   it('dias fechados pelo is_complete; hoje e ontem pelas refeições', () => {

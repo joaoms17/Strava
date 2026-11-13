@@ -9,7 +9,9 @@
 // resposta conta como normal; as antigas marcadas com incómodo (amarelo ou
 // vermelho) continuam a pedir uma sessão leve a seguir, tal como uma em que
 // o esforço dado no relógio foi 9 ou 10 (muito duro).
-import type { Semaforo } from './semaforo.js'
+// O estado guardado nos treinos antigos (o check-in de dor, regra 9, que já
+// não se pede): verde <= 2, amarelo 3-5, vermelho >= 6.
+export type Semaforo = 'green' | 'yellow' | 'red'
 
 export interface BikeSessionSummary {
   watts: number | null

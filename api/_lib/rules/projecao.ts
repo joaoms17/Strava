@@ -8,8 +8,9 @@
 // Sem imports do servidor: o telemóvel corre tudo isto.
 import { linearSlope, trend7, type DatedValue } from './weight.js'
 import { shiftDate } from './nutritional-day.js'
+import { KCAL_PER_KG, mean } from './comum.js'
 
-export const KCAL_PER_KG = 7700
+export { KCAL_PER_KG }
 export const PROJ_WINDOW_DAYS = 28
 export const PROJ_MIN_DAYS = 14 // dias completos e dias de pesagens
 export const PROJ_MIN_WEIGHINGS = 8
@@ -82,7 +83,6 @@ const isWeekend = (d: string) => {
   const dow = new Date(`${d}T00:00:00Z`).getUTCDay()
   return dow === 0 || dow === 6
 }
-const mean = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null)
 
 export function counted(d: Pick<ProjDay, 'is_complete' | 'flags'>): boolean {
   return d.is_complete && !(d.flags ?? []).includes('faltou_algo')

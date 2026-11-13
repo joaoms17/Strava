@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { stripAccents } from './comum.js'
 
 // Respostas da IA em JSON estrito (structured outputs), sem depender do
 // helper zodOutputFormat do SDK: esse helper tira os `enum` do schema que
@@ -57,9 +58,7 @@ export function outputSchema(schema: z.ZodType): Json {
 }
 
 const fold = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+  stripAccents(s)
     .trim()
     .toLowerCase()
     .replace(/[\s-]+/g, '_')
