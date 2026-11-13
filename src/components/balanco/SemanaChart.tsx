@@ -52,14 +52,15 @@ export default function SemanaChart({
   days,
   today,
   avg7,
-  learning,
+  gasto,
   note,
   onOpenDay,
 }: {
   days: ChartDay[]
   today: string
   avg7: number | null
-  learning: boolean
+  // O estado do gasto quando ainda não é medido («a aprender (faltam 2 pesagens)», «fórmula»).
+  gasto?: string | null
   // Uma linha quando o gasto medido está limitado ou a acompanhar (decisão 304).
   note?: string | null
   onOpenDay: (date: string) => void
@@ -101,7 +102,7 @@ export default function SemanaChart({
           {results.has('fora') && <Key shape="outline" color={colors.dim} label="fora (incompleto)" />}
           {results.has('hoje') && <Key shape="outline" color={colors.dim} label="hoje (a meio)" />}
           <Key shape="line" color={colors.ink} label="alvo do dia" />
-          <Key shape="line" color={colors.burn} label={`gasto${learning ? ' (a aprender)' : ''}`} />
+          <Key shape="line" color={colors.burn} label={gasto ? `gasto (${gasto})` : 'gasto'} />
           {avg7 != null &&
             (meanLine ? (
               <Key shape="dash" color={colors.dim} label={`comeste em média (7 dias): ${fmtInt(avg7)} kcal`} />

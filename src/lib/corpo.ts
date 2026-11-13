@@ -37,7 +37,7 @@ export interface CorpoData {
 type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 
 // O Supabase devolve no máximo 1000 linhas por pedido.
-async function allPages<T>(make: (from: number, to: number) => Page<T>): Promise<T[]> {
+export async function allPages<T>(make: (from: number, to: number) => Page<T>): Promise<T[]> {
   const rows: T[] = []
   for (;;) {
     const { data, error } = await make(rows.length, rows.length + PAGE - 1)
