@@ -32,7 +32,8 @@ import ShotButton from '../ui/ShotButton'
 import Icon from '../ui/Icon'
 import { DayChips, chip } from '../ui/Chips'
 import ErrorReason from '../ui/ErrorReason'
-import { mergeSessions } from '../../../api/_lib/rules/sessoes'
+import { duplicatePairs, mergeSessions } from '../../../api/_lib/rules/sessoes'
+import Duplicado from '../Duplicado'
 
 type Kind = 'bike' | 'strength' | OtherSport
 const KINDS: [Kind, string][] = [
@@ -740,6 +741,8 @@ function WorkoutDetail({ id }: { id: string }) {
   const [day, setDay] = useState('')
   const [time, setTime] = useState('')
   const [templates, setTemplates] = useState<Favorite[]>([])
+  // O mesmo treino registado duas vezes nesse dia: «Juntar os dois» (T1).
+  const [pair, setPair] = useState<[Workout, Workout] | null>(null)
   const plan = usePlanoTreino()
 
   const load = useCallback(async () => {
@@ -757,6 +760,10 @@ function WorkoutDetail({ id }: { id: string }) {
     const w = (data ?? null) as Workout | null
     setWorkout(w)
     setThumbs((imports ?? []).flatMap((i) => (i.thumb_paths as string[]) ?? []))
+    if (w && !w.deleted_at) {
+      const { data: sameDay } = await supabase.from('workouts_active').select('*').eq('date', w.date)
+      setPair(duplicatePairs((sameDay ?? []) as Workout[]).find(([a, b]) => a.id === w.id || b.id === w.id) ?? null)
+    }
     if (w) {
       setMinutes(str(w.minutes))
       setWatts(str(w.watts))
@@ -886,6 +893,19 @@ function WorkoutDetail({ id }: { id: string }) {
             })}
           </p>
         </div>
+
+        {pair && (
+          <div className="space-y-2 rounded-2xl border border-attn/50 bg-attn/10 p-3">
+            <p className="label text-attn">Possível duplicado</p>
+            <Duplicado
+              a={pair[0]}
+              b={pair[1]}
+              compact
+              onSeparated={() => void load()}
+              onJoined={(kept) => (kept.id === w.id ? void load() : sheet.open('confirmar-treino', { id: kept.id }))}
+            />
+          </div>
+        )}
 
         {/* Com plano de treino, um treino automático sem resposta pergunta «Qual foi?» com os dias do plano (decisão 306). */}
         {asked && (

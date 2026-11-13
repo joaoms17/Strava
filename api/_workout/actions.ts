@@ -77,6 +77,9 @@ const UpdateSchema = z.object({
   name: z.string().trim().max(80).nullable().optional(),
   // «Qual foi?» respondido (true) ou anulado (false): fica em raw.qual_foi.
   qual_foi: z.boolean().optional(),
+  // «São dois treinos» ao aviso de possível duplicado (true) ou o Anular
+  // (false): fica em raw.outro_treino, como o «Não, é outro» ao guardar.
+  outro_treino: z.boolean().optional(),
 })
 
 const ShotSchema = z.object({
@@ -703,6 +706,10 @@ export const update = post(async ({ db, userId, body, res }) => {
   if (input.qual_foi !== undefined) {
     const { qual_foi: _old, ...rest } = (raw ?? {}) as Record<string, unknown>
     raw = input.qual_foi ? { ...rest, qual_foi: true } : Object.keys(rest).length ? rest : null
+  }
+  if (input.outro_treino !== undefined) {
+    const { outro_treino: _old, ...rest } = (raw ?? {}) as Record<string, unknown>
+    raw = input.outro_treino ? { ...rest, outro_treino: true } : Object.keys(rest).length ? rest : null
   }
   if (raw !== workout.raw) patch.raw = raw
   // Mudar o tipo (ex.: a elíptica que entrou como bicicleta): o desporto

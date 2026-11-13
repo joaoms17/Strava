@@ -20,7 +20,8 @@ import WorkoutLogOptions from '../components/WorkoutLogOptions'
 import PlanoTreinoCard from '../components/PlanoTreinoCard'
 import QualFoi from '../components/QualFoi'
 import PendingInfo from '../components/PendingInfo'
-import { mergeSessions, possibleDuplicates, zoneMinutes } from '../../api/_lib/rules/sessoes'
+import { duplicatePairs, mergeSessions, possibleDuplicates, zoneMinutes } from '../../api/_lib/rules/sessoes'
+import Duplicado from '../components/Duplicado'
 import { useGymQueue } from '../lib/ginasio-fila'
 import { workoutOrigin } from '../lib/treino-origem'
 
@@ -177,6 +178,9 @@ export default function Treino() {
   const weekZone2 = zoneMinutes(week.flatMap((w) => w.parts), 2)
   // O mesmo treino registado duas vezes (ex.: «Já fiz» e o do relógio).
   const duplicates = possibleDuplicates(sessions)
+  // Os das últimas 2 semanas perguntam «Juntar os dois» (os mais antigos só
+  // ficam marcados no histórico).
+  const pairs = duplicatePairs(sessions.filter((w) => w.date >= shiftDate(today, -13))).reverse().slice(0, 3)
 
   const openWorkout = (w: Workout & { parts?: Workout[] }) =>
     w.type === 'strength' && data.logs.some((l) => l.workout_id === w.id)
@@ -248,6 +252,10 @@ export default function Treino() {
       ))}
 
       <QualFoi today={today} />
+
+      {pairs.map(([a, b]) => (
+        <Duplicado key={`${a.id}+${b.id}`} a={a} b={b} />
+      ))}
 
       {week.length > 0 && (
         <div className="grid grid-cols-3 gap-2">

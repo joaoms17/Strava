@@ -131,7 +131,15 @@ export function intervalsOverlap(a: SessionLike & { raw?: unknown }, b: SessionL
 export function possibleDuplicates<
   T extends SessionLike & { source?: string | null; external_id?: string | null; raw?: unknown },
 >(sessions: T[]): Set<string> {
-  const out = new Set<string>()
+  return new Set(duplicatePairs(sessions).flatMap(([a, b]) => [a.id!, b.id!]))
+}
+
+// Os pares por trás do aviso, para «Juntar os dois»: o do relógio (quando há)
+// fica em segundo.
+export function duplicatePairs<
+  T extends SessionLike & { source?: string | null; external_id?: string | null; raw?: unknown },
+>(sessions: T[]): [T, T][] {
+  const out: [T, T][] = []
   const fromWatch = (w: T) => w.external_id != null || w.source === 'intervals'
   const confirmed = (w: T) => !!w.raw && typeof w.raw === 'object' && (w.raw as { outro_treino?: unknown }).outro_treino === true
   const knownStart = (w: T) => (w.started_at && w.source !== 'manual' && !startGuessed(w) ? Date.parse(w.started_at) : NaN)
@@ -150,8 +158,7 @@ export function possibleDuplicates<
       const other = fromWatch(a) ? b : a
       const sameTime = watchAndOther && (intervalsOverlap(a, b) || startGuessed(other))
       if (!similar && !sameTime) continue
-      out.add(a.id)
-      out.add(b.id)
+      out.push(fromWatch(a) && !fromWatch(b) ? [b, a] : [a, b])
     }
   }
   return out
