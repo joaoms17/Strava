@@ -7,6 +7,12 @@ export function emitDataChanged(): void {
   window.dispatchEvent(new Event(EVENT))
 }
 
+// Só os dados (sem o voltar ao primeiro plano): devolve a função que desliga.
+export function onDataChanged(listener: () => void): () => void {
+  window.addEventListener(EVENT, listener)
+  return () => window.removeEventListener(EVENT, listener)
+}
+
 // Versão que sobe quando os dados mudam ou a app volta ao primeiro plano.
 export function useDataVersion(): number {
   const [version, setVersion] = useState(0)
