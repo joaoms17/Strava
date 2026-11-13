@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'wouter'
 import BottomSheet from '../ui/BottomSheet'
 import WhenPicker from '../ui/WhenPicker'
 import { whenLabel, type When } from '../../lib/when'
@@ -22,7 +23,6 @@ import { LeftoversButton, LeftoversNote } from '../Sobras'
 import { analysisStuck } from '../../../api/_lib/rules/analise'
 import { retryContext, retryIfDue, useAutoRetrying } from '../../lib/analise-auto'
 import { splitStoredError } from '../../../api/_lib/rules/resposta-ia'
-import { recomputeFrom } from '../../lib/recompute'
 import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtInt, fmtKcal, timeOf } from '../../lib/format'
 import { changePortion, deleteMeal, repeatMeal, shareMeals } from '../../lib/meal-actions'
@@ -48,6 +48,7 @@ export default function MealSheet() {
   const { update } = useProfile()
   const sheet = useSheet()
   const toast = useToast()
+  const [, navigate] = useLocation()
   const id = sheet.params.get('id')
   const [meal, setMeal] = useState<Meal | null | undefined>(undefined)
   const [photos, setPhotos] = useState<string[]>([])
@@ -83,6 +84,13 @@ export default function MealSheet() {
     if (mode === 'share') chooser.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [mode])
 
+  // O que se está a editar não volta atrás quando a folha recarrega sozinha
+  // (de 3 em 3 s enquanto analisa ou a partilha está por aplicar, H5): as
+  // gramas mexidas, o nome e a refeição da favorita a meio.
+  const editing = useRef({ mode: 'view' as Mode, items: [] as MealItem[], loaded: [] as MealItem[] })
+  editing.current.mode = mode
+  editing.current.items = items
+
   async function load() {
     if (!id) return
     const [{ data }, { data: favs }] = await Promise.all([
@@ -92,10 +100,14 @@ export default function MealSheet() {
     const row = (data ?? null) as Meal | null
     setMeal(row)
     if (!row) return
-    setItems(row.items)
+    const edited = JSON.stringify(editing.current.items) !== JSON.stringify(editing.current.loaded)
+    editing.current.loaded = row.items
+    if (!edited) setItems(row.items)
     setFavoriteId(row.favorite_id ?? favs?.[0]?.id ?? null)
-    setName(favoriteName(row.items))
-    setSlot(row.slot ?? slotOf(new Date(row.logged_at)))
+    if (editing.current.mode !== 'favorite') {
+      setName(favoriteName(row.items))
+      setSlot(row.slot ?? slotOf(new Date(row.logged_at)))
+    }
     void loadSlot(row)
     const paths = row.photo_paths?.length ? row.photo_paths : row.photo_path ? [row.photo_path] : []
     if (paths.length) {
@@ -198,6 +210,10 @@ export default function MealSheet() {
   const goingTo = people.filter((p) => shareWith.includes(p.user_id) && !p.shared)
   // E como comeram («a meias»), só com uma pessoa.
   const goingSplit = goingTo.length === 1 ? splitText(current.share_split, me, goingTo[0]!.name) : null
+  // Analisada há mais de 2 min e ainda com «Também para …»: a cópia falhou
+  // (o servidor deixa a marca só para quem não a recebeu, M13).
+  const shareStuck =
+    analysed && goingTo.length > 0 && !splitPending && Date.now() - Date.parse(current.analysis_started_at ?? current.created_at) > 2 * 60_000
   // Mexer nos alimentos de uma refeição por rever também a confirma.
   const confirming = current.status === 'por_rever'
   // A porção: nesta ou em todo o momento («Todo o jantar (5)») e, quando há
@@ -236,6 +252,7 @@ export default function MealSheet() {
     if (updated) {
       setMeal(updated)
       setItems(updated.items)
+      editing.current.loaded = updated.items
     }
   }
 
@@ -260,11 +277,9 @@ export default function MealSheet() {
             ...(confirming ? { confirm: false } : {}),
           }).catch(() => null)
           emitDataChanged()
-          recomputeFrom(current.date, today)
         },
       },
     ])
-    recomputeFrom(current.date, today)
     sheet.close()
   }
 
@@ -274,7 +289,7 @@ export default function MealSheet() {
   }
 
   async function correct(correction: string) {
-    const result = await call<{ meal: Meal; previous: { items: MealItem[] } }>('/api/meal/correct', {
+    const result = await call<{ meal: Meal; previous: { items: MealItem[]; status: string } }>('/api/meal/correct', {
       meal_id: current.id,
       text: correction,
     })
@@ -282,11 +297,55 @@ export default function MealSheet() {
     await afterWrite(result.meal)
     setMode('view')
     setText('')
+    // Anular volta aos itens e, se estava por rever, a por rever (M11).
+    const wasPending = result.previous.status === 'por_rever'
     toast(diffText(result.previous.items, result.meal.items), [
-      { label: 'Anular', run: () => undo({ items: result.previous.items, undo: true }) },
+      { label: 'Anular', run: () => undo({ items: result.previous.items, undo: true, ...(wasPending ? { confirm: false } : {}) }) },
     ])
-    recomputeFrom(current.date, today)
     return true
+  }
+
+  // «Analisar outra vez» numa foto lida pelo modelo de reserva (M2): relê as
+  // fotos de raiz e mostra o antes → depois, com Anular. Se falhar, fica como estava.
+  async function rereadPhoto() {
+    if (reanalysing) return
+    setReanalysing(true)
+    toast('A ler a foto outra vez…')
+    const result = await call<{
+      meal: Meal
+      limit?: boolean
+      reread_error?: string
+      previous?: { items: MealItem[]; status: 'ok' | 'por_rever'; model_reserve: boolean }
+    }>('/api/meal/analyse', { meal_id: current.id, reread: true })
+    setReanalysing(false)
+    if (!result) return
+    await afterWrite(result.meal)
+    if (result.limit) {
+      toast('Chegaste ao limite da IA de hoje. Tenta outra vez amanhã.')
+      return
+    }
+    const previous = result.previous
+    if (result.reread_error || !previous) {
+      toast(`Não consegui ler outra vez: ${result.reread_error ?? 'tenta mais logo'}. Ficou como estava.`)
+      return
+    }
+    const mealId = current.id
+    const paths = { photo_paths: current.photo_paths ?? [], thumb_paths: current.thumb_paths ?? [], image_hashes: current.image_hashes ?? [] }
+    toast(`Lida outra vez · ${diffText(previous.items, result.meal.items)}`, [
+      {
+        label: 'Anular',
+        run: async () => {
+          const undone = await call<{ meal: Meal }>('/api/meal/detach', {
+            meal_id: mealId,
+            items: previous.items,
+            status: previous.status,
+            model_reserve: previous.model_reserve,
+            ...paths,
+          })
+          if (undone) await afterWrite(undone.meal)
+        },
+      },
+    ])
   }
 
   async function analyse(body: Record<string, unknown>, message: string) {
@@ -311,7 +370,7 @@ export default function MealSheet() {
   }
 
   async function moveTo(date: string, newSlot: Slot) {
-    const result = await call<{ meal: Meal; previous: { logged_at: string } }>('/api/meal/update', {
+    const result = await call<{ meal: Meal; previous: { logged_at: string; slot: Slot | null } }>('/api/meal/update', {
       meal_id: current.id,
       date,
       slot: newSlot,
@@ -319,9 +378,10 @@ export default function MealSheet() {
     if (!result) return
     await afterWrite(result.meal)
     setMode('view')
-    recomputeFrom(date < current.date ? date : current.date, today)
+    // Anular volta à hora e ao momento de antes (o servidor não o deduz pela hora, M6).
+    const before = result.previous
     toast(`Passou para ${SLOT_LABEL[newSlot].toLowerCase()}${date !== today ? ` de ${fmtDayShort(date)}` : ''}`, [
-      { label: 'Anular', run: () => undo({ logged_at: result.previous.logged_at }) },
+      { label: 'Anular', run: () => undo({ logged_at: before.logged_at, ...(before.slot ? { slot: before.slot } : {}) }) },
     ])
   }
 
@@ -355,6 +415,7 @@ export default function MealSheet() {
     if (mine) {
       setMeal(mine)
       setItems(mine.items)
+      editing.current.loaded = mine.items
     }
     if (rows.length) setSlotMeals((list) => list.map((m) => rows.find((r) => r.id === m.id) ?? m))
   }
@@ -411,7 +472,6 @@ export default function MealSheet() {
     const result = await call<{ meal: Meal }>('/api/meal/restore', { meal_id: current.id })
     if (!result) return
     emitDataChanged()
-    recomputeFrom(current.date, today)
     sheet.close()
   }
 
@@ -427,9 +487,14 @@ export default function MealSheet() {
     )
   } else if (mode === 'favorite') {
     footer = (
-      <BusyButton busy="A guardar…" onClick={saveFavorite} className={primary}>
-        Guardar favorita
-      </BusyButton>
+      <div className="grid grid-cols-[1fr_2fr] gap-2">
+        <button onClick={() => setMode('view')} className={secondary}>
+          Cancelar
+        </button>
+        <BusyButton busy="A guardar…" onClick={saveFavorite} className={primary}>
+          Guardar favorita
+        </BusyButton>
+      </div>
     )
   } else if (analysed && dirty) {
     footer = (
@@ -450,9 +515,15 @@ export default function MealSheet() {
             Está certo
           </BusyButton>
         )}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => (favoriteId ? undefined : setMode('favorite'))}
+            onClick={() =>
+              favoriteId
+                ? // Já é favorita: diz-o e leva às favoritas, em vez de não fazer nada (H11).
+                  toast('Já está nas favoritas.', [{ label: 'Ver', run: () => navigate('/favoritos') }])
+                : setMode('favorite')
+            }
+            aria-pressed={favoriteId != null}
             className={`${secondary} ${favoriteId ? 'text-attn' : ''}`}
           >
             {favoriteId ? '★ Favorita' : '☆ Favorita'}
@@ -466,17 +537,17 @@ export default function MealSheet() {
           >
             Repetir hoje
           </button>
+        </div>
+        {/* Apagar à parte, longe dos outros dois: um toque ao lado não apaga (H11). */}
+        <div className="flex justify-center pt-2">
           <button
             onClick={() => {
               sheet.close()
-              void runBusy('A apagar…', async () => {
-                await deleteMeal(current.id, toast)
-                recomputeFrom(current.date, today)
-              })
+              void runBusy('A apagar…', () => deleteMeal(current.id, toast))
             }}
-            className={`${secondary} text-pain`}
+            className="min-h-11 px-4 text-[15px] text-pain"
           >
-            Apagar
+            Apagar refeição
           </button>
         </div>
       </div>
@@ -605,9 +676,20 @@ export default function MealSheet() {
                   placeholder="Ex.: bitoque com batata frita e ovo"
                   className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
                 />
-                <BusyButton busy="A guardar…" disabled={!text.trim()} onClick={writeInstead} className={`${primary}`}>
-                  Enviar
-                </BusyButton>
+                <div className="grid grid-cols-[1fr_2fr] gap-2">
+                  <button
+                    onClick={() => {
+                      setText('')
+                      setMode('view')
+                    }}
+                    className={secondary}
+                  >
+                    Cancelar
+                  </button>
+                  <BusyButton busy="A guardar…" disabled={!text.trim()} onClick={writeInstead} className={primary}>
+                    Enviar
+                  </BusyButton>
+                </div>
               </div>
             )}
           </div>
@@ -667,7 +749,7 @@ export default function MealSheet() {
                   A IA principal não respondeu a tempo ou chegou ao limite de hoje; esta foto foi lida por outra que
                   acerta menos nas porções. Confirma as quantidades ou analisa outra vez mais logo.
                 </p>
-                <button onClick={() => void analyse({ reset: true }, 'A analisar outra vez…')} className="text-[15px] text-eat">
+                <button onClick={() => void rereadPhoto()} className="min-h-11 text-[15px] text-eat">
                   Analisar outra vez
                 </button>
               </div>
@@ -676,6 +758,13 @@ export default function MealSheet() {
               <p className="text-[14px] text-attn">
                 A foto nova não foi analisada. {splitStoredError(current.analysis_error).message} Junta o que faltava
                 em «Corrigir por texto».
+              </p>
+            )}
+
+            {shareStuck && current.deleted_at == null && (
+              <p className="text-[14px] text-attn">
+                Não consegui partilhar com {joinNames(goingTo.map((p) => p.name))}. Toca em «Partilhar com …» para tentar
+                outra vez.
               </p>
             )}
 
@@ -730,9 +819,20 @@ export default function MealSheet() {
                       }}
                       className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
                     />
-                    <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
-                      Corrigir
-                    </BusyButton>
+                    <div className="grid grid-cols-[1fr_2fr] gap-2">
+                      <button
+                        onClick={() => {
+                          setText('')
+                          setMode('view')
+                        }}
+                        className={secondary}
+                      >
+                        Cancelar
+                      </button>
+                      <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
+                        Corrigir
+                      </BusyButton>
+                    </div>
                   </div>
                 ) : (
                   mode === 'view' && (
@@ -752,7 +852,7 @@ export default function MealSheet() {
                       <LeftoversButton meal={current} onDone={() => void load()} className="text-eat" />
                       {people.map((p) =>
                         // Uma cópia não se partilha de volta com quem a partilhou.
-                        p.from ? null : p.shared || shared.includes(p.user_id) || shareWith.includes(p.user_id) ? (
+                        p.from ? null : p.shared || shared.includes(p.user_id) || (shareWith.includes(p.user_id) && !shareStuck) ? (
                           // Um estado, não um botão: sem contorno.
                           <span key={p.user_id} className="!border-transparent bg-surface2 text-dim">
                             <span>
@@ -812,6 +912,7 @@ export default function MealSheet() {
             action="Mudar"
             unchanged={(date, slot) => date === current.date && slot === mealSlot}
             onPick={(date, slot) => moveTo(date, slot)}
+            onCancel={() => setMode('view')}
           />
         )}
 
@@ -827,12 +928,14 @@ function PickWhen({
   action,
   unchanged,
   onPick,
+  onCancel,
 }: {
   today: string
   initial: When
   action: string
   unchanged?: (date: string, slot: Slot) => boolean
   onPick: (date: string, slot: Slot, label: string) => unknown
+  onCancel?: () => void
 }) {
   const [when, setWhen] = useState<When>(initial)
   // «Agora» é a refeição desta hora.
@@ -840,14 +943,21 @@ function PickWhen({
   return (
     <div className="space-y-3">
       <WhenPicker today={today} value={when} onChange={setWhen} />
-      <BusyButton
-        busy="A mudar…"
-        disabled={slot == null || (unchanged?.(when.date, slot) ?? false)}
-        onClick={() => slot && onPick(when.date, slot, whenLabel(when, today))}
-        className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-40"
-      >
-        {action}
-      </BusyButton>
+      <div className={onCancel ? 'grid grid-cols-[1fr_2fr] gap-2' : ''}>
+        {onCancel && (
+          <button onClick={onCancel} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+            Cancelar
+          </button>
+        )}
+        <BusyButton
+          busy="A mudar…"
+          disabled={slot == null || (unchanged?.(when.date, slot) ?? false)}
+          onClick={() => slot && onPick(when.date, slot, whenLabel(when, today))}
+          className="min-h-12 w-full rounded-xl bg-eat font-semibold text-bg disabled:opacity-40"
+        >
+          {action}
+        </BusyButton>
+      </div>
     </div>
   )
 }
