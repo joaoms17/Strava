@@ -119,6 +119,16 @@ export function splitFactors(current: number, split: number | null): { own: numb
   return { own, copy: clampFactor(base - own) }
 }
 
+// Partilhar outra vez depois de a outra pessoa apagar a cópia (M12): a
+// refeição já ficou com a parte de quem partilha da primeira vez, por isso não
+// se divide outra vez (0,25 + 0,25 perdia metade do jantar). Fica como está e
+// a cópia nova leva o resto da mesa que havia (a meias: o mesmo que a dela).
+export function resplitFactors(current: number, split: number | null): { own: number; copy: number } {
+  const own = factorOf(current)
+  if (split == null || !isSplit(split)) return { own, copy: own }
+  return { own, copy: clampFactor(own / split - own) }
+}
+
 function percent(n: number): number {
   return Math.round(n * 100)
 }

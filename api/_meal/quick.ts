@@ -20,6 +20,7 @@ import {
   type FactorChange,
 } from '../_lib/rules/porcoes.js'
 import { SLOTS, SLOT_TIME, clockTime, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
+import { rescaleLeftoverKcal } from '../_lib/rules/sobras.js'
 
 // Registos de 1 toque, sem IA: favorito, «Igual a ontem» / «Repetir hoje» /
 // «Copiar para outro dia», mudar a porção, apagar e repor. Os totais e o dia
@@ -33,6 +34,7 @@ const SLOT = z.enum(SLOTS as [Slot, ...Slot[]])
 
 const LogFavoriteSchema = z.object({
   favorite_id: z.string().uuid(),
+  client_id: z.string().uuid().optional(), // chave de idempotência (H6)
   factor: FACTOR.optional(),
   date: DATE.optional(), // dia nutricional; sem ele, agora
   slot: SLOT.optional(), // a refeição escolhida; sem ela, a do favorito ou a da hora
@@ -40,6 +42,7 @@ const LogFavoriteSchema = z.object({
 
 const RepeatSchema = z.object({
   meal_id: z.string().uuid(),
+  client_id: z.string().uuid().optional(), // chave de idempotência (H6)
   date: DATE.optional(), // sem ele, hoje
   slot: SLOT.optional(), // sem ela, a mesma hora do original
 })
@@ -84,9 +87,12 @@ export async function rescaleRow(
   const items = row.items as MealItem[] | null
   if (!items?.length || sameFactor(from, to)) return null
   const scaled = rescaleItems(items, from, to)
+  // As kcal que sobraram no prato escalam com a porção (M7). Só quando a
+  // linha as traz (lida de `meals`; sem a migração das sobras não há coluna).
+  const leftover = row.leftover_kcal != null ? { leftover_kcal: rescaleLeftoverKcal(row.leftover_kcal as number, from, to) } : {}
   let query = client
     .from('meals')
-    .update({ items: scaled, portion_factor: to, ...mealTotals(scaled) })
+    .update({ items: scaled, portion_factor: to, ...mealTotals(scaled), ...leftover })
     .eq('id', row.id as string)
   if (guard.copyOf) query = query.eq('source_meal_id', guard.copyOf)
   if (guard.notUser) query = query.neq('user_id', guard.notUser)
@@ -122,6 +128,14 @@ function post(run: (db: SupabaseClient, userId: string, body: unknown) => Promis
   }
 }
 
+// O mesmo pedido outra vez (resposta perdida, segundo toque, H6): a refeição
+// que já foi gravada com esta chave.
+async function sameRequest(db: SupabaseClient, clientId: string | undefined) {
+  if (!clientId) return null
+  const { data } = await db.from('meals').select('*').eq('client_id', clientId).maybeSingle()
+  return data
+}
+
 async function insertMeal(
   db: SupabaseClient,
   row: Record<string, unknown> & { items: MealItem[]; logged_at: Date; cutoff: number },
@@ -143,14 +157,23 @@ async function insertMeal(
     })
     .select()
     .single()
-  if (error) throw new HttpError(500, error.message)
+  if (error) {
+    // Dois envios em simultâneo com a mesma chave: o outro ganhou.
+    if (error.code === '23505' && typeof rest.client_id === 'string') {
+      const again = await sameRequest(db, rest.client_id)
+      if (again) return again
+    }
+    throw new HttpError(500, error.message)
+  }
   return data
 }
 
 export const logFavorite = post(async (db, userId, rawBody) => {
   const body = LogFavoriteSchema.safeParse(rawBody)
   if (!body.success) throw new HttpError(400, 'Pedido inválido.')
-  const { favorite_id, factor = 1, date, slot: chosenSlot } = body.data
+  const { favorite_id, factor = 1, date, slot: chosenSlot, client_id } = body.data
+  const existing = await sameRequest(db, client_id)
+  if (existing) return { meal: existing }
 
   const { data: favorite } = await db
     .from('favorites')
@@ -168,6 +191,7 @@ export const logFavorite = post(async (db, userId, rawBody) => {
   const meal = await insertMeal(db, {
     user_id: userId,
     input_type: 'favorite',
+    ...(client_id ? { client_id } : {}),
     raw_text: favorite.name,
     photo_path: favorite.photo_path,
     photo_paths: favorite.photo_path ? [favorite.photo_path] : [],
@@ -191,6 +215,8 @@ export const logFavorite = post(async (db, userId, rawBody) => {
 export const repeat = post(async (db, userId, rawBody) => {
   const body = RepeatSchema.safeParse(rawBody)
   if (!body.success) throw new HttpError(400, 'Pedido inválido.')
+  const existing = await sameRequest(db, body.data.client_id)
+  if (existing) return { meal: existing }
 
   const { data: source } = await db
     .from('meals_counted')
@@ -205,10 +231,16 @@ export const repeat = post(async (db, userId, rawBody) => {
   // A refeição escolhida (hora habitual dela) ou a mesma hora do original,
   // no dia escolhido (nunca no futuro).
   const slot = body.data.slot
-  const loggedAt = loggedAtFor(target, slot ? SLOT_TIME[slot] : clockTime(new Date(source.logged_at)), cutoff, now)
+  // Hoje, na refeição desta hora («Agora»): fica a hora real, como numa
+  // favorita, e não a hora habitual (às 21:30 ficava às 20:00, M18).
+  const loggedAt =
+    slot && target === nutritionalDay(now, cutoff) && slot === slotOf(now)
+      ? now
+      : loggedAtFor(target, slot ? SLOT_TIME[slot] : clockTime(new Date(source.logged_at)), cutoff, now)
   const meal = await insertMeal(db, {
     user_id: userId,
     input_type: 'repeat',
+    ...(body.data.client_id ? { client_id: body.data.client_id } : {}),
     raw_text: source.raw_text,
     photo_path: source.photo_path,
     photo_paths: source.photo_paths ?? [],
@@ -239,7 +271,14 @@ export const portion = post(async (db, userId, rawBody) => {
   if (!body.success) throw new HttpError(400, 'Pedido inválido.')
   const { meal_id, factor, with_shared } = body.data
   const ids = [...new Set([meal_id, ...(body.data.meal_ids ?? [])])]
-  const { data: rows } = await db.from('meals_counted').select('*').in('id', ids)
+  // De `meals` com o filtro da vista: a vista meals_counted pode não ter as
+  // colunas novas (leftover_kcal) até se correr a 20261113000021 (L14).
+  const { data: rows } = await db
+    .from('meals')
+    .select('*')
+    .in('id', ids)
+    .is('deleted_at', null)
+    .in('status', ['ok', 'por_rever'])
   const own = (rows ?? []) as Record<string, unknown>[]
   if (!own.some((m) => m.id === meal_id)) throw new HttpError(404, 'Refeição não encontrada.')
 
@@ -296,7 +335,12 @@ export const portion = post(async (db, userId, rawBody) => {
 // ainda forem cópias de uma refeição de quem pede, noutra conta.
 export async function restoreFactors(db: SupabaseClient, userId: string, changes: readonly FactorChange[]) {
   const ids = [...new Set(changes.map((c) => c.meal_id))]
-  const { data: ownRows } = await db.from('meals_counted').select('*').in('id', ids)
+  const { data: ownRows } = await db
+    .from('meals')
+    .select('*')
+    .in('id', ids)
+    .is('deleted_at', null)
+    .in('status', ['ok', 'por_rever'])
   const own = (ownRows ?? []) as Record<string, unknown>[]
   const others = ids.filter((id) => !own.some((m) => m.id === id))
   const admin = others.length ? adminClient() : null

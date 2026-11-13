@@ -16,6 +16,8 @@ import {
   signatureSimilarity,
   statusAfterLeftovers,
   mergeAfterLeftovers,
+  leftoversContext,
+  rescaleLeftoverKcal,
   type CandidateMeal,
 } from '../api/_lib/rules/sobras'
 import { mealTotals, type MealItem } from '../api/_lib/rules/meal-totals'
@@ -363,5 +365,18 @@ describe('juntar foto depois de descontar', () => {
       ['Frango grelhado', 130],
       ['Pudim', 100],
     ])
+  })
+})
+
+describe('sobras com a porção e as etiquetas (M5, M7)', () => {
+  it('M7: mudar a porção depois de descontar escala as kcal que sobraram', () => {
+    expect(rescaleLeftoverKcal(378, 1, 0.5)).toBe(189)
+    expect(rescaleLeftoverKcal(100, 0.5, 1)).toBe(200)
+    expect(rescaleLeftoverKcal(null, 1, 0.5)).toBeNull()
+  })
+
+  it('M5: a IA recebe o que já está descontado (etiquetas e porção)', () => {
+    expect(leftoversContext(['comi_metade', 'jantar_fora'], 0.5)).toEqual({ etiquetas: ['comi metade'], porcao: 0.5 })
+    expect(leftoversContext(null, null)).toEqual({ etiquetas: [], porcao: 1 })
   })
 })

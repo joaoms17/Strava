@@ -13,6 +13,7 @@ import {
   applyLeftovers,
   canTakeLeftovers,
   eatenShares,
+  leftoversContext,
   leftoversOutcome,
   mealFolder,
   platePhotos,
@@ -81,6 +82,9 @@ async function readLeftovers(
     })),
     texto: meal.raw_text || null,
     nota: meal.note || null,
+    // O que já está descontado nos itens (M5): sem isto, numa refeição a
+    // metade, o meio prato do depois cortava outra vez (25 %).
+    ...leftoversContext(meal.tags, meal.portion_factor),
     nota_depois: afterNote,
   })
   const images = await photoContent(admin, [...before, after])

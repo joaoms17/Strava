@@ -1,7 +1,6 @@
 import { postApi } from './api'
 import { emitDataChanged } from './events'
 import { fmtKcal } from './format'
-import { recomputeFrom } from './recompute'
 import type { Person } from './people'
 import type { ToastAction } from './toast'
 import type { Favorite, Meal, Slot } from './types'
@@ -15,6 +14,25 @@ const PORTIONS: [string, number][] = PORTION_FACTORS.filter((f) => f !== 1).map(
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Não consegui gravar. Tenta outra vez.'
+}
+
+// Chave de idempotência (H6) para registar uma favorita ou repetir uma
+// refeição: um segundo toque depois de uma resposta perdida (rede fraca) leva a
+// mesma chave e o servidor devolve a refeição que já gravou, em vez de outra.
+// A chave dura 2 min por alvo e sai quando a resposta chega.
+const KEY_TTL_MS = 2 * 60_000
+const pendingKeys = new Map<string, { key: string; at: number }>()
+
+export function idempotencyKey(target: string, now = Date.now()): string {
+  const found = pendingKeys.get(target)
+  if (found && now - found.at < KEY_TTL_MS) return found.key
+  const key = crypto.randomUUID()
+  pendingKeys.set(target, { key, at: now })
+  return key
+}
+
+export function settleKey(target: string) {
+  pendingKeys.delete(target)
 }
 
 async function undoInsert(meal: Meal, toast: ShowToast) {
@@ -38,13 +56,16 @@ export async function logFavorite(
   whenText: string | null = null,
   factor = 1,
 ): Promise<boolean> {
+  const target = `favorita:${favorite.id}:${date ?? ''}:${slot ?? ''}:${factor}`
   try {
     const { meal } = await postApi<{ meal: Meal }>('/api/meal/log-favorite', {
       favorite_id: favorite.id,
+      client_id: idempotencyKey(target),
       ...(date ? { date } : {}),
       ...(slot ? { slot } : {}),
       ...(factor !== 1 ? { factor } : {}),
     })
+    settleKey(target)
     emitDataChanged()
     showRegistered(meal, `Registado · ${favorite.name}${whenText ? ` · ${whenText}` : ''}`, toast)
     return true
@@ -93,12 +114,15 @@ export async function repeatMeal(
   toast: ShowToast,
   slot: Slot | null = null,
 ): Promise<boolean> {
+  const target = `repetir:${mealId}:${date ?? ''}:${slot ?? ''}`
   try {
     const { meal } = await postApi<{ meal: Meal }>('/api/meal/repeat', {
       meal_id: mealId,
+      client_id: idempotencyKey(target),
       ...(date ? { date } : {}),
       ...(slot ? { slot } : {}),
     })
+    settleKey(target)
     emitDataChanged()
     toast(text, [{ label: 'Anular', run: () => undoInsert(meal, toast) }])
     return true
@@ -171,7 +195,7 @@ export async function changePortion(o: {
   toast: ShowToast
   onUndone?: () => void
 }): Promise<PortionAnswer | null> {
-  const { meal, factor, mealIds = [], withShared = false, today, toast } = o
+  const { meal, factor, mealIds = [], withShared = false, toast } = o
   try {
     const result = await postApi<PortionAnswer>('/api/meal/portion', {
       meal_id: meal.id,
@@ -180,7 +204,6 @@ export async function changePortion(o: {
       ...(withShared ? { with_shared: true } : {}),
     })
     emitDataChanged()
-    recomputeFrom(meal.date, today)
     const copies = result.previous.filter((p) => p.copy).length
     const text = portionToast(
       {
@@ -202,7 +225,6 @@ export async function changePortion(o: {
                 try {
                   await postApi('/api/meal/portion-undo', { changes: result.previous })
                   emitDataChanged()
-                  recomputeFrom(meal.date, today)
                   o.onUndone?.()
                 } catch (err) {
                   toast(errorText(err))
@@ -244,7 +266,7 @@ export async function shareMeals(o: {
   toast: ShowToast
   onUndone?: () => void
 }): Promise<ShareAnswer | null> {
-  const { meal, person, mealIds = [], split, me, today, toast } = o
+  const { meal, person, mealIds = [], split, me, toast } = o
   try {
     const result = await postApi<ShareAnswer>('/api/meal/share', {
       meal_id: meal.id,
@@ -253,7 +275,6 @@ export async function shareMeals(o: {
       ...(split != null ? { split } : {}),
     })
     emitDataChanged()
-    if (result.meals.length) recomputeFrom(meal.date, today)
     const text = shareToast(
       {
         to: result.to,
@@ -276,7 +297,6 @@ export async function shareMeals(o: {
                 try {
                   await postApi('/api/meal/share-undo', undo)
                   emitDataChanged()
-                  if (undo.changes.length) recomputeFrom(meal.date, today)
                   o.onUndone?.()
                 } catch (err) {
                   toast(errorText(err))

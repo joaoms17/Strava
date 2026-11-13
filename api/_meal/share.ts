@@ -15,6 +15,7 @@ import {
   isSplit,
   liveCopies,
   sameFactor,
+  resplitFactors,
   splitFactors,
   splitFor,
   type FactorChange,
@@ -197,7 +198,13 @@ export async function share(req: VercelRequest, res: VercelResponse) {
 
     // As refeições têm de ser de quem partilha (RLS) e estar analisadas.
     const ids = [...new Set([meal_id, ...(body.data.meal_ids ?? [])])]
-    const { data: rows } = await db.from('meals_counted').select('*').in('id', ids)
+    // De `meals` com o filtro da vista (a vista pode não ter leftover_kcal até à L14).
+    const { data: rows } = await db
+      .from('meals')
+      .select('*')
+      .in('id', ids)
+      .is('deleted_at', null)
+      .in('status', ['ok', 'por_rever'])
     const found = (rows ?? []) as Record<string, unknown>[]
     const main = found.find((m) => m.id === meal_id)
     if (!main) throw new HttpError(404, 'Refeição não encontrada.')
@@ -215,6 +222,18 @@ export async function share(req: VercelRequest, res: VercelResponse) {
 
     const toName = await personName(admin, to_user_id)
     const fromName = await personName(admin, user.id)
+    // Refeições que já foram divididas com esta pessoa e cuja cópia ela apagou
+    // (M12): não se divide a parte de quem partilha outra vez.
+    const { data: deletedCopies } =
+      split != null
+        ? await admin
+            .from('meals')
+            .select('source_meal_id')
+            .eq('user_id', to_user_id)
+            .in('source_meal_id', sources.map((m) => m.id as string))
+            .not('deleted_at', 'is', null)
+        : { data: [] }
+    const splitBefore = new Set((deletedCopies ?? []).map((r) => r.source_meal_id as string))
     const copies: string[] = []
     const copiedFrom: string[] = []
     const changes: FactorChange[] = []
@@ -222,7 +241,9 @@ export async function share(req: VercelRequest, res: VercelResponse) {
     let already = 0
     let kcalDelta = 0
     for (const source of sources) {
-      const factors = splitFactors(factorOf(source.portion_factor), split)
+      const current = factorOf(source.portion_factor)
+      const resplit = splitBefore.has(source.id as string) && !sameFactor(current, 1)
+      const factors = resplit ? resplitFactors(current, split) : splitFactors(current, split)
       const copied = await copyMealTo(admin, source, to_user_id, fromName, factors.copy)
       if (copied.already || !copied.id) {
         // Já partilhada: não se divide outra vez (muda-se pela porção).
@@ -320,6 +341,9 @@ export async function shareAfterAnalysis(
   if (!meal || pending.length === 0) return meal
   if (meal.status !== 'ok' && meal.status !== 'por_rever') return meal
   let result: Record<string, unknown> = meal
+  // Quem não recebeu a cópia (erro): a marca fica para essas pessoas e a folha
+  // da refeição diz que não foi (M13), em vez de a partilha se perder calada.
+  const failed: string[] = []
   try {
     const { data: source } = await admin
       .from('meals')
@@ -336,8 +360,13 @@ export async function shareAfterAnalysis(
       const factors = splitFactors(factorOf(source.portion_factor), split)
       let copied = false
       for (const to of targets) {
-        const { data: target } = await admin.from('profile').select('user_id').eq('user_id', to).maybeSingle()
-        if (target && !(await copyMealTo(admin, source, to, fromName, factors.copy)).already) copied = true
+        try {
+          const { data: target } = await admin.from('profile').select('user_id').eq('user_id', to).maybeSingle()
+          if (target && !(await copyMealTo(admin, source, to, fromName, factors.copy)).already) copied = true
+        } catch (err) {
+          console.error('Partilhar com', to, 'falhou:', err)
+          failed.push(to)
+        }
       }
       // A parte de quem registou, só quando a cópia acabou de ser feita.
       if (copied && split != null) {
@@ -347,10 +376,14 @@ export async function shareAfterAnalysis(
     }
   } catch (err) {
     console.error('Partilhar depois da análise falhou:', err)
+    // Antes das cópias (leitura da refeição): ninguém a recebeu.
+    if (failed.length === 0) failed.push(...pending)
   } finally {
-    // Uma vez só: uma análise depois desta (juntar foto) já não partilha nem divide.
-    const done = 'share_split' in meal ? { share_with: [], share_split: null } : { share_with: [] }
+    // Uma vez só: uma análise depois desta (juntar foto) já não partilha nem
+    // divide. Quem falhou fica na marca, para a folha o dizer.
+    const done = 'share_split' in meal ? { share_with: failed, share_split: null } : { share_with: failed }
     await admin.from('meals').update(done).eq('id', meal.id as string)
+    if (failed.length) result = { ...result, share_with: failed }
   }
   return result
 }
