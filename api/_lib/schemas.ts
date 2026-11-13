@@ -264,3 +264,29 @@ export const WorkoutShotSchema = z.object({
 })
 
 export type WorkoutShot = z.infer<typeof WorkoutShotSchema>
+
+// O que se pede à IA desde o workout-shot.v2 (T18): sem as voltas, o efeito
+// anaeróbio, a potência normalizada, a potência máxima e a cadência máxima —
+// eram lidos e nunca mostrados. As leituras guardadas continuam com a forma
+// completa (`WorkoutShot`): `fullShot` põe esses campos vazios.
+const SHOT_AI_OMIT = { np_w: true, max_power_w: true, max_cadence: true, anaerobic_te: true, laps: true } as const
+export const SHOT_AI_FIELDS = SHOT_FIELDS.filter((f) => f !== 'np_w' && f !== 'max_cadence')
+export const WorkoutShotAiSchema = WorkoutShotSchema.extend({
+  activity: WorkoutShotSchema.shape.activity.omit(SHOT_AI_OMIT),
+  field_confidence: z.array(
+    z.object({
+      field: z.enum(SHOT_AI_FIELDS as [string, ...string[]]),
+      confidence: z.enum(['alta', 'media', 'baixa']),
+      image_index: z.number().int().nullable(),
+    }),
+  ),
+})
+export type WorkoutShotAi = z.infer<typeof WorkoutShotAiSchema>
+
+export function fullShot(shot: WorkoutShotAi): WorkoutShot {
+  return {
+    ...shot,
+    activity: { ...shot.activity, np_w: null, max_power_w: null, max_cadence: null, anaerobic_te: null, laps: [] },
+    field_confidence: shot.field_confidence as WorkoutShot['field_confidence'],
+  }
+}
