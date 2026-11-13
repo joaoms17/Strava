@@ -3,7 +3,7 @@ import { supabase } from './supabase'
 import { ApiError, postApi, isNetworkError } from './api'
 import { emitDataChanged } from './events'
 import { STORES, inStore } from './idb'
-import { prepareImage, sha256Hex } from './image'
+import { prepareImage, sha256Hex, tinyThumb } from './image'
 import { activeUserId } from './scoped'
 import { failureText, isTransientFailure } from '../../api/_lib/rules/falhas'
 import { RETRY_TEXT, afterFailure, ownCapture, sendableCapture } from '../../api/_lib/rules/fila'
@@ -258,6 +258,30 @@ export function onDuplicate(listener: (meal: { id: string; date: string }) => vo
   return () => window.removeEventListener(DUPLICATE_EVENT, handler)
 }
 
+// As miniaturas da fila, uma por captura e feitas uma vez (P6): antes cada
+// evento criava um URL do original de 12 MP para uma imagem de 48 px. Saem
+// (revokeObjectURL) quando a captura sai da fila.
+const previews = new Map<string, Promise<string | null>>()
+
+function previewFor(entry: CaptureEntry): Promise<string | null> {
+  const file = entry.files[0]
+  if (!file) return Promise.resolve(null)
+  let preview = previews.get(entry.client_id)
+  if (!preview) {
+    preview = tinyThumb(file).then((thumb) => URL.createObjectURL(thumb ?? file))
+    previews.set(entry.client_id, preview)
+  }
+  return preview
+}
+
+function forgetPreviews(keep: Set<string>) {
+  for (const [id, preview] of previews) {
+    if (keep.has(id)) continue
+    previews.delete(id)
+    void preview.then((url) => url && URL.revokeObjectURL(url))
+  }
+}
+
 // As capturas por enviar, com uma pré-visualização local da primeira foto.
 export function useCaptures(): (CaptureEntry & { preview: string | null })[] {
   const [entries, setEntries] = useState<(CaptureEntry & { preview: string | null })[]>([])
@@ -265,11 +289,11 @@ export function useCaptures(): (CaptureEntry & { preview: string | null })[] {
     const {
       data: { session },
     } = await supabase.auth.getSession()
-    const list = (await listCaptures()).filter((e) => ownCapture(e, session?.user.id ?? null))
-    setEntries((previous) => {
-      for (const old of previous) if (old.preview) URL.revokeObjectURL(old.preview)
-      return list.map((e) => ({ ...e, preview: e.files[0] ? URL.createObjectURL(e.files[0]) : null }))
-    })
+    const all = await listCaptures()
+    forgetPreviews(new Set(all.map((e) => e.client_id)))
+    const list = all.filter((e) => ownCapture(e, session?.user.id ?? null))
+    const withPreviews = await Promise.all(list.map(async (e) => ({ ...e, preview: await previewFor(e) })))
+    setEntries(withPreviews)
   }, [])
   useEffect(() => {
     void refresh()

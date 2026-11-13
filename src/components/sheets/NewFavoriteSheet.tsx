@@ -294,7 +294,7 @@ export default function NewFavoriteSheet() {
             <div className="flex gap-3">
               <label className="relative flex h-24 w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-dashed border-line text-[13px] text-dim">
                 {photo ? (
-                  <img src={photo.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={photo.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   <>
                     <Icon name="camera" size={26} />

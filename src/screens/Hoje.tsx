@@ -783,6 +783,8 @@ export default function Hoje() {
               <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
               {thumb ? (
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={thumb}
                   alt=""
                   className={`h-12 w-12 shrink-0 rounded-xl object-cover ${pending ? 'animate-pulse' : ''} ${failed ? 'opacity-60' : ''}`}
@@ -868,7 +870,7 @@ export default function Hoje() {
             {timeOf(capture.taken_at ?? capture.created_at)}
           </span>
           {capture.preview ? (
-            <img src={capture.preview} alt="" className="h-12 w-12 shrink-0 animate-pulse rounded-xl object-cover" />
+            <img loading="lazy" decoding="async" src={capture.preview} alt="" className="h-12 w-12 shrink-0 animate-pulse rounded-xl object-cover" />
           ) : (
             <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-surface2 text-dim">
               <Icon name="pencil" />

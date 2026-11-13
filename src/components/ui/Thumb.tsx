@@ -15,7 +15,7 @@ export default function Thumb({
 }) {
   const box = fill ? undefined : { width: size, height: size }
   return url ? (
-    <img src={url} alt="" style={box} className={`shrink-0 rounded-xl object-cover ${className}`} />
+    <img loading="lazy" decoding="async" src={url} alt="" style={box} className={`shrink-0 rounded-xl object-cover ${className}`} />
   ) : (
     <span style={box} className={`flex shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim ${className}`} aria-hidden>
       <Icon name="plate" size={Math.round(Math.min(size, 64) * 0.45)} />
