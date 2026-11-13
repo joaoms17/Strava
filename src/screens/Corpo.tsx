@@ -70,6 +70,8 @@ export default function Corpo() {
   const sections: Section[] = [
     { id: 'peso', label: 'Peso' },
     { id: 'medidas', label: 'Medidas' },
+    // B17: a Evolução também tem botão na barra.
+    { id: 'evolucao', label: 'Evolução' },
     ...(hasTraining ? [{ id: 'treino', label: 'Treino' }] : []),
     ...(hasWatch ? [{ id: 'recuperacao', label: 'Recuperação' }] : []),
   ]
@@ -83,7 +85,6 @@ export default function Corpo() {
       <Ancoras
         sections={sections}
         track={['peso', 'medidas', 'evolucao', ...(hasTraining ? ['treino'] : []), ...(hasWatch ? ['recuperacao'] : [])]}
-        alias={{ evolucao: 'medidas' }}
         period={hasCharts ? period : null}
         onPeriod={(p) => {
           setPeriod(p)
