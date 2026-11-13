@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useSearch } from 'wouter'
 import { useReadyProfile } from '../lib/profile'
 import { useDataVersion } from '../lib/events'
 import { nutritionalDay } from '../lib/day'
@@ -39,6 +40,13 @@ export default function Corpo() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [period, setPeriod] = useState<Period>(savedPeriod)
   const { data, loading, error } = useCorpoData(profile, today, period, version)
+  // ?ver=recuperacao (a ligação do Balanço; B17): vai direto à secção.
+  const jump = new URLSearchParams(useSearch()).get('ver')
+  const ready = data != null
+  useEffect(() => {
+    if (!ready || !jump) return
+    document.getElementById(jump)?.scrollIntoView({ block: 'start' })
+  }, [ready, jump])
 
   if (!data) {
     return (

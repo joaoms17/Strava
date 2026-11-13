@@ -214,9 +214,6 @@ export interface WeekData {
   workouts: WorkoutRow[]
   rate: number | null
   completeDays: number // dias completos até ao fim desta semana (numa semana passada, os de então)
-  steps: number | null
-  sleep: number | null
-  sleepScore: number | null
   expenditure: ExpenditureContext
   firstDate: string | null
   review: string | null
@@ -297,7 +294,6 @@ export function weekFrom(profile: Profile, rows: BalancoRows, monday: string, to
       weeklyGaps.push(measuredVsFormula(Number(tdee), Number(formula), avg))
     }
   }
-  const health = rows.health.filter((h) => inWeek(h.date))
   const reviewOf = (week: string) => rows.reviews.find((r) => r.week_start === week)?.text ?? null
   const end = sunday < today ? sunday : today
   // Média do que se comeu nos últimos 7 dias completos (até ao fim desta semana, sem hoje).
@@ -317,9 +313,6 @@ export function weekFrom(profile: Profile, rows: BalancoRows, monday: string, to
       end,
     ),
     completeDays: rows.completeBefore + rows.days.filter((d) => d.is_complete === true && d.date <= sunday).length,
-    steps: avgOf(health.map((h) => h.steps)),
-    sleep: avgOf(health.map((h) => h.sleep_minutes)),
-    sleepScore: avgOf(health.map((h) => h.sleep_score ?? null)),
     expenditure,
     firstDate: rows.firstDate,
     review: reviewOf(monday),

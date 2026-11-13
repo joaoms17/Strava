@@ -13,7 +13,7 @@ import { scopedKey } from '../lib/scoped'
 import { useBalanco } from '../lib/balanco'
 import { capLabel, weekCoherence, weekFrom } from '../lib/balanco-semana'
 import { weekAgo } from '../lib/projecao'
-import { daysEarlier, moveNote, project, projectionLine } from '../../api/_lib/rules/projecao'
+import { daysEarlier, moveNote, project } from '../../api/_lib/rules/projecao'
 import { dayResult, isAbove, isOnTarget, weekAction, weekFacts } from '../../api/_lib/rules/balanco-graficos'
 import SemanaChart from '../components/balanco/SemanaChart'
 import SemanaASemana from '../components/balanco/SemanaASemana'
@@ -35,6 +35,7 @@ import { belowFloor, countedDays, leftOutDates, weekAverages } from '../../api/_
 import BalancoMes from '../components/BalancoMes'
 import { previousMonth } from '../../api/_lib/rules/mes'
 import ContaGordura from '../components/ContaGordura'
+import Projecao from '../components/Projecao'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
 import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
 
@@ -241,7 +242,9 @@ export default function Balanco() {
       protein: data.protein,
       perMeal: profile.protein_per_meal_g,
       weighings7: new Set(longo.weights.filter((w) => w.date >= since).map((w) => w.date)).size,
-      projection: projectionLine(p, input.targetKg, null, today),
+      // A data da projeção está no cartão «Projeção» logo a seguir (B17):
+      // aqui não se repete.
+      projection: null,
       projectionKind: p.status === 'ok' ? p.weight.kind : null,
     })
   })()
@@ -320,6 +323,9 @@ export default function Balanco() {
   // B16: «Para esta semana» e a proteína não dependem das refeições desta
   // semana: aparecem também à segunda de manhã, antes da primeira refeição.
   const actionCard = action ? <ParaEstaSemana action={action} onOpenDay={openDay} /> : null
+  // B17: a projeção completa (a data, o leque e o «E se…») no Balanço e no
+  // Corpo; na semana de hoje, a seguir a «Para esta semana».
+  const projectionCard = thisWeek && longo ? <Projecao today={today} data={longo.projection} /> : null
 
   return (
     <div className="space-y-4 pt-1">
@@ -343,6 +349,7 @@ export default function Balanco() {
             )}
           </div>
           {actionCard}
+          {projectionCard}
           {suggestionCard}
           {lastWeekCard}
           {reviewCard}
@@ -400,6 +407,7 @@ export default function Balanco() {
 
           {/* Ideia 14: «Para esta semana» logo a seguir à frase do topo. */}
           {actionCard}
+          {projectionCard}
           {suggestionCard}
 
           {lastWeekCard}
@@ -520,17 +528,7 @@ export default function Balanco() {
                   </span>
                 </label>
               )}
-              {(data.steps != null || data.sleep != null) && (
-                <p className="text-dim">
-                  {[
-                    data.steps != null ? `Passos: ${fmtInt(data.steps)} por dia` : null,
-                    data.sleep != null ? `Sono: ${fmt1(data.sleep / 60)}${NBSP}h` : null,
-                    data.sleepScore != null ? `qualidade ${Math.round(data.sleepScore)}` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
-              )}
+              {/* B17: passos e sono só no Hoje e no Corpo › Recuperação. */}
             </section>
           )}
         </>
