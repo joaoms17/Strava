@@ -1,0 +1,21 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "api/*.ts",
+    "api/cron/*.ts",
+    "api/health/*.ts",
+    "scripts/*.mjs",
+    "tests/**/*.test.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "src/**/*.css",
+    "api/**/*.ts",
+    "scripts/**/*.mjs",
+    "tests/**/*.ts"
+  ],
+  "ignore": [
+    "archive/**"
+  ],
+  "ignoreExportsUsedInFile": true
+}
