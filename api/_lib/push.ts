@@ -1,5 +1,4 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import webpush from 'web-push'
 import { HttpError } from './supabase.js'
 import {
   PUSH_TTL_S,
@@ -49,6 +48,12 @@ function isKeys(value: unknown): value is VapidKeys {
   return typeof v?.publicKey === 'string' && typeof v?.privateKey === 'string' && v.publicKey.length > 20 && v.privateKey.length > 20
 }
 
+// O web-push só se carrega quando é preciso (P7: arranque a frio mais curto
+// nas funções que nunca mandam notificações).
+async function webPush() {
+  return (await import('web-push')).default
+}
+
 let cached: VapidKeys | null = null
 
 export async function vapidKeys(admin: SupabaseClient): Promise<VapidKeys> {
@@ -65,7 +70,7 @@ export async function vapidKeys(admin: SupabaseClient): Promise<VapidKeys> {
   if (value == null) {
     // Só se cria se não houver nenhuma; se dois pedidos chegarem juntos,
     // fica a primeira que entrou e ambos usam essa.
-    const { error } = await admin.from('app_secrets').insert({ key: 'vapid', value: webpush.generateVAPIDKeys() })
+    const { error } = await admin.from('app_secrets').insert({ key: 'vapid', value: (await webPush()).generateVAPIDKeys() })
     if (error && error.code !== '23505') throw new Error(error.message)
     value = await read()
   }
@@ -85,8 +90,10 @@ export async function deliver(
   const wanted = rows.filter((row) => wantsPush(row.prefs, kind))
   if (!wanted.length) return 0
   let keys: VapidKeys
+  let webpush: Awaited<ReturnType<typeof webPush>>
   try {
     keys = await vapidKeys(admin)
+    webpush = await webPush()
   } catch (err) {
     console.error('Notificações sem chaves:', err)
     return 0

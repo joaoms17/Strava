@@ -112,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const visionModel = provider === 'gemini' ? geminiModels('vision', process.env)[0]! : MODELS.vision
   async function modelExists(model: string): Promise<undefined> {
     if (provider === 'anthropic') {
-      await anthropic().models.retrieve(model, {}, aiOptions)
+      await (await anthropic()).models.retrieve(model, {}, aiOptions)
       return undefined
     }
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}`, {

@@ -16,7 +16,6 @@ import {
 } from './rules/intervals.js'
 import type { WorkoutType } from './rules/targets.js'
 import { ciqExtras, hasCiq, type CiqExtras } from './rules/ciq.js'
-import { fitDeveloperFields } from './fit.js'
 import { isDeletedWeighing } from './rules/weight.js'
 import { gymPaceFor, weightNear } from './kcal-context.js'
 
@@ -82,6 +81,7 @@ async function readCiq(key: string, activityId: string, timeoutMs: number): Prom
   let lastDownloaded = false
   for (const kind of ['file', 'fit-file'] as const) {
     try {
+      const { fitDeveloperFields } = await import('./fit.js') // P7: o SDK do FIT só quando é preciso
       const fields = fitDeveloperFields(await icuFile(key, activityId, kind, timeoutMs))
       lastDownloaded = true
       if (fields) return ciqExtras(fields)
