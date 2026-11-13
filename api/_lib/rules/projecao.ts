@@ -99,20 +99,31 @@ export function projectionBasis(input: ProjInput): Basis | { missing: string; co
   const span = weighDates.length ? dayDiff(weighDates[0]!, weighDates[weighDates.length - 1]!) + 1 : 0
   const tdees = days.filter((d) => d.tdee_est != null)
   const tdee = tdees.length ? Number(tdees[tdees.length - 1]!.tdee_est) : null
-  const missingParts: string[] = []
-  if (good.length < PROJ_MIN_DAYS) missingParts.push(`${PROJ_MIN_DAYS - good.length} dias completos`)
+  // B10/K15: «Falta 1 dia completo», «Faltam 3 dias completos», «Falta o gasto medido».
+  const missingParts: { text: string; plural: boolean }[] = []
+  const missDays = PROJ_MIN_DAYS - good.length
+  if (missDays > 0) missingParts.push({ text: `${missDays} ${missDays === 1 ? 'dia completo' : 'dias completos'}`, plural: missDays > 1 })
   if (weighDates.length < PROJ_MIN_WEIGHINGS || span < PROJ_MIN_DAYS) {
-    missingParts.push(`pesagens em ${Math.max(PROJ_MIN_DAYS - span, PROJ_MIN_WEIGHINGS - weighDates.length, 1)} dias`)
+    const n = Math.max(PROJ_MIN_DAYS - span, PROJ_MIN_WEIGHINGS - weighDates.length, 1)
+    missingParts.push({ text: `pesagens em ${n} ${n === 1 ? 'dia' : 'dias'}`, plural: true })
   }
-  if (!missingParts.length && tdee == null) missingParts.push('o gasto medido')
+  if (!missingParts.length && tdee == null) missingParts.push({ text: 'o gasto medido', plural: false })
   if (missingParts.length) {
-    return { missing: `Faltam ${missingParts.join(' e ')}.`, countedDays: good.length, weighingDays: weighDates.length }
+    const verb = missingParts.length > 1 || missingParts[0]!.plural ? 'Faltam' : 'Falta'
+    return {
+      missing: `${verb} ${missingParts.map((p) => p.text).join(' e ')}.`,
+      countedDays: good.length,
+      weighingDays: weighDates.length,
+    }
   }
 
   const intake = mean(good.map((d) => d.kcal_in))!
   const wd = good.filter((d) => !isWeekend(d.date)).map((d) => d.kcal_in)
   const we = good.filter((d) => isWeekend(d.date)).map((d) => d.kcal_in)
-  const trend = trend7(weights)
+  // K6: a média móvel calcula-se sobre todas as pesagens (as de antes da
+  // janela também) e só depois se corta à janela; cortar antes tirava o
+  // atraso da média aos primeiros pontos e achatava o declive.
+  const trend = trend7(input.weights.filter((w) => w.date <= input.asOf)).filter((p) => p.date >= from)
   const clean = input.waterDay ? trend.filter((p) => !input.waterDay!(p.date)) : trend
   const slopeOn = clean.length >= PROJ_MIN_WEIGHINGS ? clean : trend
   const observed = linearSlope(slopeOn)
@@ -220,7 +231,9 @@ export const SCENARIO_LABEL: Record<Scenario, string> = {
   menos100: '−100 kcal/dia',
   menos200: '−200 kcal/dia',
   menos300: '−300 kcal/dia',
-  treino: '+1 treino/semana',
+  // K8: a regra 2 manda comer as kcal do treino; o cenário só adianta a data
+  // se não se comerem.
+  treino: '+1 treino/semana sem comer as kcal do treino',
   fds: 'Fins de semana como a semana',
 }
 
@@ -329,7 +342,8 @@ export function projectionLine(p: Projection, targetKg: number | null, targetWai
   const parts: string[] = []
   const w = p.weight
   if (w.kind === 'reached') parts.push(`${kg1(targetKg)} kg atingido`)
-  else if (w.kind === 'never') parts.push(`${kg1(targetKg)} kg: a este ritmo não chega`)
+  // B10: antes «A este ritmo: 80 kg: a este ritmo não chega».
+  else if (w.kind === 'never') parts.push(`não chega aos ${kg1(targetKg)} kg`)
   else parts.push(`${kg1(targetKg)} kg a ${fmtDayMon(w.date, asOf)}`)
   if (p.waist && targetWaistCm != null) {
     const cm = Math.round(targetWaistCm)

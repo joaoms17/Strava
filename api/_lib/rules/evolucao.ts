@@ -1,7 +1,7 @@
 // Análise da evolução pela IA (Corpo › Evolução): o resumo dos dados que vai
 // para o modelo e a limpeza do que ele devolve. Sem supabase nem node.
 import { shiftDate } from './nutritional-day.js'
-import { trend7, weeklyRate } from './weight.js'
+import { trend7, weeklyRateAsOf } from './weight.js'
 import { cleanWellness, type WellnessRow } from './plano.js'
 import { isDayComplete } from './day-close.js'
 import {
@@ -147,7 +147,9 @@ export function weightSummary(weights: { date: string; kg: number }[], today: st
   return {
     ultimo: { data: last.date, kg: last.value },
     media_7_dias: { hoje: at(today), ha_30_dias: at(shiftDate(today, -30)), ha_90_dias: at(shiftDate(today, -90)) },
-    ritmo_kg_semana: weeklyRate(series),
+    // B2: o ritmo de hoje só com uma pesagem recente (a 4 dias ou menos):
+    // três semanas sem pesar não dão «a descer 1,1 kg por semana».
+    ritmo_kg_semana: weeklyRateAsOf(series, today),
     pesagens_90_dias: series.filter((w) => w.date > shiftDate(today, -90)).length,
   }
 }

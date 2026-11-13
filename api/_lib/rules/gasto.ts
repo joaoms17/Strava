@@ -82,18 +82,28 @@ export function limitWeeklyBase(
 }
 
 // As marcas do gasto medido num dia fechado (em `days.flags`, sem migração):
-// limitado a +15 % ou −15 % da fórmula, a acompanhar o peso (100 kcal por
+// limitado a +15 % ou −15 % da fórmula (primeiras 6 semanas), limitado a
+// ±400 da fórmula (depois disso, K4), a acompanhar o peso (100 kcal por
 // semana) ou na fase de água (esses dias não contam).
-export const MEASURED_FLAGS = ['gasto_teto', 'gasto_piso', 'gasto_ritmo', 'gasto_agua'] as const
+export const MEASURED_FLAGS = [
+  'gasto_teto',
+  'gasto_piso',
+  'gasto_teto400',
+  'gasto_piso400',
+  'gasto_ritmo',
+  'gasto_agua',
+] as const
 
 export function measuredFlags(input: {
-  limit: 'teto' | 'piso' | 'ritmo' | null
+  limit: 'teto' | 'piso' | 'teto400' | 'piso400' | 'ritmo' | null
   excluded: boolean
   baseLimited: boolean
 }): string[] {
   const out: string[] = []
   if (input.limit === 'teto') out.push('gasto_teto')
   if (input.limit === 'piso') out.push('gasto_piso')
+  if (input.limit === 'teto400') out.push('gasto_teto400')
+  if (input.limit === 'piso400') out.push('gasto_piso400')
   if (input.limit === 'ritmo' || input.baseLimited) out.push('gasto_ritmo')
   if (input.excluded) out.push('gasto_agua')
   return out
@@ -109,6 +119,8 @@ export function measuredNote(flags: string[] | null | undefined): string | null 
   const f = flags ?? []
   if (f.includes('gasto_teto')) return 'O gasto medido ainda reflete as primeiras semanas; está limitado a +15 % da fórmula.'
   if (f.includes('gasto_piso')) return 'O gasto medido ainda tem poucas semanas; não desce mais de 15 % abaixo da fórmula.'
+  if (f.includes('gasto_teto400')) return 'O gasto medido está limitado a +400 kcal da fórmula: só pelo peso dava mais.'
+  if (f.includes('gasto_piso400')) return 'O gasto medido está limitado a −400 kcal da fórmula: só pelo peso dava menos.'
   if (f.includes('gasto_ritmo')) return 'O gasto medido ainda está a acompanhar o peso: muda no máximo 100 kcal por semana.'
   if (f.includes('gasto_agua'))
     return 'As 2 primeiras semanas da dieta (ou depois de uma pausa) são sobretudo água: não contam para o gasto medido.'
@@ -121,6 +133,56 @@ export function measuredNoteFromDays(days: { tdee_est: number | null; flags?: st
     .reverse()
     .find((d) => d.tdee_est != null || (d.flags ?? []).some((f) => (MEASURED_FLAGS as readonly string[]).includes(f)))
   return last ? measuredNote(last.flags) : null
+}
+
+// Porque é que «só pelo peso» dá outro número que o gasto usado (Balanço ›
+// Ver detalhes). A água do início só explica a diferença enquanto o limite é
+// o das primeiras semanas (+15 %); depois, o que a explica é o limite de
+// +400 da fórmula (decisão 175, K4) ou o ritmo de 100 kcal por semana.
+export function rawGapReason(raw: number, used: number, flags: string[] | null | undefined): string {
+  const f = flags ?? []
+  if (raw > used) {
+    if (f.includes('gasto_teto400')) return 'está limitado a +400 kcal da fórmula.'
+    if (f.includes('gasto_teto') || f.includes('gasto_agua'))
+      return 'no início, ou depois de uma pausa, o peso desce depressa com água.'
+    if (f.includes('gasto_ritmo')) return 'o gasto usado sobe no máximo 100 kcal por semana.'
+    return 'o gasto usado muda devagar.'
+  }
+  if (f.includes('gasto_piso400')) return 'está limitado a −400 kcal da fórmula.'
+  if (f.includes('gasto_ritmo')) return 'o gasto usado desce no máximo 100 kcal por semana.'
+  return 'a água e o sal às vezes escondem a descida do peso.'
+}
+
+// Um só estado do gasto, igual em todos os ecrãs (K1, ideia 1 da auditoria):
+// «medido» quando a base usa o gasto medido pelo peso; «a aprender» quando
+// faltam dias completos ou pesagens (com quantos faltam); «fórmula» quando
+// não há pesagens nenhumas para aprender. Pesagens: os dias com pesagem nas
+// últimas 4 semanas.
+export type MeasuredState =
+  | { kind: 'medido' }
+  | { kind: 'a_aprender'; missingDays: number; missingWeighings: number }
+  | { kind: 'formula' }
+
+export function measuredState(input: {
+  learning: boolean
+  completeDays: number
+  missingWeighings: number
+  weighingDays: number
+}): MeasuredState {
+  if (!input.learning) return { kind: 'medido' }
+  const missingDays = Math.max(0, MIN_COMPLETE_DAYS_FOR_MEASURED - input.completeDays)
+  if (input.weighingDays === 0) return { kind: 'formula' }
+  return { kind: 'a_aprender', missingDays, missingWeighings: input.missingWeighings }
+}
+
+export function measuredStateLabel(state: MeasuredState): string {
+  if (state.kind === 'medido') return 'medido'
+  if (state.kind === 'formula') return 'fórmula'
+  const n = state.missingWeighings
+  if (n > 0) return `a aprender (${n === 1 ? 'falta 1 pesagem' : `faltam ${n} pesagens`})`
+  const d = state.missingDays
+  if (d > 0) return `a aprender (${d === 1 ? 'falta 1 dia completo' : `faltam ${d} dias completos`})`
+  return 'a aprender'
 }
 
 export function kcalOut(base: number, exerciseKcal: number): number {
@@ -146,17 +208,24 @@ function fmtKg(n: number): string {
 }
 
 // Frase da semana: comer contra gasto (média dos dias completos) e o peso.
-export function weekSentence(avgEaten: number, avgOut: number, rateKgWeek: number | null): string {
+// Numa semana que já passou (`current` falso), «Nessa semana…» e o peso no
+// passado (B10: antes dizia «Esta semana comeste…» numa semana de há um mês).
+export function weekSentence(avgEaten: number, avgOut: number, rateKgWeek: number | null, current = true): string {
   const diff = round10(avgEaten - avgOut)
+  const lead = current ? 'Esta semana' : 'Nessa semana'
   const first =
     Math.abs(diff) < 50
-      ? 'Esta semana comeste cerca do que gastaste.'
-      : `Esta semana comeste cerca de ${fmtThousands(Math.abs(diff))} kcal por dia ${diff < 0 ? 'menos' : 'mais'} do que gastaste.`
+      ? `${lead} comeste cerca do que gastaste.`
+      : `${lead} comeste cerca de ${fmtThousands(Math.abs(diff))} kcal por dia ${diff < 0 ? 'menos' : 'mais'} do que gastaste.`
   if (rateKgWeek == null) return first
   const second =
     Math.abs(rateKgWeek) < 0.05
-      ? 'O peso médio está estável.'
-      : `O peso médio está a ${rateKgWeek < 0 ? 'descer' : 'subir'} ${fmtKg(rateKgWeek)} kg por semana.`
+      ? current
+        ? 'O peso médio está estável.'
+        : 'O peso médio esteve estável.'
+      : current
+        ? `O peso médio está a ${rateKgWeek < 0 ? 'descer' : 'subir'} ${fmtKg(rateKgWeek)} kg por semana.`
+        : `O peso médio estava a ${rateKgWeek < 0 ? 'descer' : 'subir'} ${fmtKg(rateKgWeek)} kg por semana.`
   return `${first} ${second}`
 }
 

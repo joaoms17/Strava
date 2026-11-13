@@ -38,6 +38,11 @@ describe('maintenanceTarget', () => {
     expect(maintenanceTarget(2135.4)).toBe(2135)
     expect(maintenanceTarget(null)).toBe(2000)
   })
+
+  it('K5: sem gasto medido, a fórmula da pessoa mais o treino médio', () => {
+    expect(maintenanceTarget(null, 1580.4)).toBe(1580)
+    expect(maintenanceTarget(2135.4, 1580)).toBe(2135)
+  })
 })
 
 // 2026-09-07 é segunda: semanas 0–2 (dias 0–20) e, depois da manutenção

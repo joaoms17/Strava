@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  adaptiveDay,
+  missingWeighings,
+  weighingsDrop,
   dayTdee,
   paceKgPerWeek,
   shouldAdjustBase,
@@ -114,5 +117,74 @@ describe('dayTdee', () => {
   it('sem dados para medir, um dia completo fica com o valor anterior', () => {
     expect(dayTdee({ complete: true, previous: 2430, raw: null, reference }).value).toBe(2430)
     expect(dayTdee({ complete: true, previous: null, raw: null, reference }).value).toBeNull()
+  })
+})
+
+// K1: o gasto medido só com pesagens reais suficientes (4 dias de pesagem a
+// cobrir 10 dias ou mais), medido entre as pesagens e não entre dias que
+// carregam a média.
+describe('gasto medido com pesagens reais (K1)', () => {
+  const days = (n: number, kcal: number, trend: number | null = 84) =>
+    Array.from({ length: n }, (_, i) => ({
+      date: shiftDate('2026-09-01', i),
+      kcal_in: kcal,
+      weight_trend: trend,
+      kcal_exercise: 0,
+      formula_base: 1900,
+    }))
+
+  it('faltam pesagens: pelo número e pelo espaço entre elas', () => {
+    expect(missingWeighings([])).toBe(4)
+    expect(missingWeighings(['2026-09-05', '2026-09-06'])).toBe(2)
+    expect(missingWeighings(['2026-09-01', '2026-09-02', '2026-09-03', '2026-09-04'])).toBe(1)
+    expect(missingWeighings(['2026-09-01', '2026-09-08', '2026-09-15', '2026-09-22'])).toBe(0)
+    expect(missingWeighings(['2026-09-01', '2026-09-04', '2026-09-08', '2026-09-11'])).toBe(0)
+  })
+
+  it('duas pesagens no mesmo fim de semana não dão «peso estável» (gasto = o que comeu)', () => {
+    // Antes: o peso médio guardado carregava a mesma média 7 dias e o gasto saía 1 600.
+    const window = days(14, 1600, 84)
+    expect(tdeeRaw(window)).toBeCloseTo(1600, 0)
+    const weighings = [
+      { date: '2026-09-05', kg: 84.2 },
+      { date: '2026-09-06', kg: 83.8 },
+    ]
+    expect(tdeeRaw(window, { weighings })).toBeNull()
+  })
+
+  it('com pesagens semanais (4 em 3 semanas) mede pela reta das pesagens', () => {
+    const window = days(22, 1600, null)
+    const weighings = [0, 7, 14, 21].map((d, i) => ({ date: shiftDate('2026-09-01', d), kg: 85 - 0.6 * i }))
+    // 0,6 kg por semana = 660 kcal por dia acima do que comeu.
+    expect(tdeeRaw(window, { weighings })).toBeCloseTo(1600 + (0.6 * 7700) / 7, 0)
+  })
+
+  it('a regressão por troços não atravessa a fase de água', () => {
+    const ws = [
+      { date: '2026-09-01', kg: 85 },
+      { date: '2026-09-05', kg: 84.6 },
+      { date: '2026-09-20', kg: 82 },
+      { date: '2026-09-24', kg: 81.6 },
+    ]
+    const r = weighingsDrop(ws, (a, b) => a === '2026-09-05' && b === '2026-09-20')
+    expect(r.span).toBe(8)
+    expect(r.drop).toBeCloseTo(0.8, 5)
+  })
+
+  it('uma pesagem só: sem gasto medido e o estado diz quantas faltam', () => {
+    const rows = days(30, 1600, 84)
+    const r = adaptiveDay({
+      date: rows[rows.length - 1]!.date,
+      complete: true,
+      rows,
+      weighings: [{ date: '2026-09-20', kg: 84 }],
+      anchor: null,
+      maintenanceEnabled: false,
+      previous: null,
+      weekStart: null,
+    })
+    expect(r.raw).toBeNull()
+    expect(r.tdee).toBeNull()
+    expect(r.missingWeighings).toBe(3)
   })
 })

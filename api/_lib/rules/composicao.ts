@@ -113,6 +113,10 @@ export function isPlausible(pct: number | null): boolean {
   return pct != null && pct >= LIMITS.bodyFatPct[0] && pct <= LIMITS.bodyFatPct[1]
 }
 
+// Fora disto a fórmula não está a medir uma pessoa (gordura essencial ~2 %).
+export const MIN_PHYSICAL_FAT_PCT = 2
+export const MAX_PHYSICAL_FAT_PCT = 70
+
 export function roundHalf(kg: number): number {
   return Math.round(kg * 2) / 2
 }
@@ -132,7 +136,9 @@ export function composition(
   sex: string | null = 'm',
 ): Composition | null {
   const pct = navyBodyFat(heightCm, m.neck_cm, m.waist_cm, m.hips_cm ?? null, sex)
-  if (pct == null) return null
+  // K14: medidas absurdas mas dentro dos limites (pescoço 45, cintura 60)
+  // davam gordura negativa, que os cartões desenhavam.
+  if (pct == null || pct < MIN_PHYSICAL_FAT_PCT || pct > MAX_PHYSICAL_FAT_PCT) return null
   const fatKg = (m.weight_used_kg * pct) / 100
   const leanKg = m.weight_used_kg - fatKg
   const low = Math.max(0, pct - METHOD_ERROR_PP)
@@ -368,12 +374,19 @@ export function earlyDietWeeks(dietStart: string | null, today: string): boolean
   return days != null && days >= 0 && days < 21
 }
 
-// Balança de bioimpedância: série à parte, suavizada (EWMA α 0,1).
+// Balança de bioimpedância: série à parte, suavizada (EWMA α 0,1), com a
+// correção do início (K13): a média pesa cada leitura por (1 − α)^idade e
+// divide pela soma dos pesos, em vez de partir da primeira leitura como se
+// ela valesse por todas as de antes ([25, 22, 22, 22, 22] dava 24,0).
 export function scaleFatAverage(values: number[], alpha = 0.1): number | null {
   if (!values.length) return null
-  let avg = values[0]!
-  for (const v of values.slice(1)) avg = avg + alpha * (v - avg)
-  return round1(avg)
+  let sum = 0
+  let weights = 0
+  for (const v of values) {
+    sum = sum * (1 - alpha) + v
+    weights = weights * (1 - alpha) + 1
+  }
+  return round1(sum / weights)
 }
 
 // Categorias da % de gordura (Corpo): seis faixas, diferentes para homens e

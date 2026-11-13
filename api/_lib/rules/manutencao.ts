@@ -1,5 +1,5 @@
 // Regra 7: semana de manutenção a cada 6 semanas — kcal_target = tdee_est
-// (ou 2000 sem estimativa). As semanas contam-se em semanas de calendário
+// (sem estimativa, a fórmula da pessoa mais o treino médio; K5). As semanas contam-se em semanas de calendário
 // (segunda a domingo) desde a semana do primeiro dia registado.
 import { shiftDate } from './nutritional-day.js'
 
@@ -18,8 +18,12 @@ export function isMaintenanceWeek(anchorDate: string, date: string): boolean {
   return week % 6 === 5
 }
 
-export function maintenanceTarget(tdeeEst: number | null): number {
-  return tdeeEst != null ? Math.round(tdeeEst) : 2000
+// Sem gasto medido, `fallback` (a fórmula da pessoa mais o treino médio,
+// K5); 2 000 só quando nem isso se sabe. Antes era 2 000 para toda a gente:
+// ~420 kcal acima do gasto de uma mulher de 62 kg.
+export function maintenanceTarget(tdeeEst: number | null, fallback: number | null = null): number {
+  if (tdeeEst != null) return Math.round(tdeeEst)
+  return fallback != null && fallback > 0 ? Math.round(fallback) : 2000
 }
 
 // Água e glicogénio: nas primeiras 3 semanas da dieta e nas 3 depois de cada

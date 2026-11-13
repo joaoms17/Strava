@@ -21,15 +21,7 @@ export async function generateWeeklyReview(
   weekStart: string, // segunda-feira da semana a resumir
 ): Promise<boolean> {
   const weekEnd = shiftDate(weekStart, 6)
-  const [
-    { data: existing },
-    { data: days },
-    { data: meals },
-    { data: workouts },
-    { data: health },
-    { data: profile },
-    { data: weights },
-  ] = await Promise.all([
+  const results = await Promise.all([
     admin
       .from('weekly_reviews')
       .select('data')
@@ -69,7 +61,19 @@ export async function generateWeeklyReview(
       .gte('date', shiftDate(weekEnd, -REVIEW_WEIGHT_DAYS))
       .lte('date', weekEnd)
       .order('date'),
-  ])
+  ] as const)
+  // S2: uma leitura que falhe não reescreve um resumo bom com «0 dias»; a
+  // cron tenta outra vez na noite seguinte.
+  for (const r of results) if (r.error) throw new Error(`resumo (${weekStart}): ${r.error.message}`)
+  const [
+    { data: existing },
+    { data: days },
+    { data: meals },
+    { data: workouts },
+    { data: health },
+    { data: profile },
+    { data: weights },
+  ] = results
 
   const complete = (days ?? []).filter((d) => d.is_complete)
   // Sem dados nenhuns, não há resumo a escrever.

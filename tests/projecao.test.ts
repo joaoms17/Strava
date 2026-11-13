@@ -153,3 +153,27 @@ describe('nota da semana', () => {
     expect(note!.text).toMatch(/^adiantou \d+ dias: o gasto medido subiu 400 kcal\/dia$/)
   })
 })
+
+describe('projeção: K6, K8, K15 e frases (B10)', () => {
+  it('K6: com pesagens de antes da janela, o declive é o real (0,7 kg/semana)', () => {
+    const p = project(input({ kgDay: -0.7 / 7, days: 40 }))
+    expect(p.status).toBe('ok')
+    if (p.status === 'ok') expect(p.basis.observedKgDay * 7).toBeCloseTo(-0.7, 2)
+  })
+
+  it('K15: «Falta o gasto medido.» e plurais certos', () => {
+    const noTdee = input()
+    noTdee.days = noTdee.days.map((d) => ({ ...d, tdee_est: null }))
+    const p = project(noTdee)
+    expect(p.status === 'insuficiente' && p.missing).toBe('Falta o gasto medido.')
+    const few = input()
+    few.days = few.days.map((d, i) => ({ ...d, is_complete: i >= few.days.length - 13 }))
+    const q = project(few)
+    expect(q.status === 'insuficiente' && q.missing).toBe('Falta 1 dia completo.')
+  })
+
+  it('B10: a frase de quem não chega ao alvo', () => {
+    const p = project(input({ kgDay: 0.1 / 7, tdee: 2000 }))
+    expect(projectionLine(p, 78, null, AS_OF)).toBe('A este ritmo: não chega aos 78 kg')
+  })
+})

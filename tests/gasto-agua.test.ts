@@ -13,6 +13,9 @@ import {
   measuredFlags,
   measuredNote,
   measuredNoteFromDays,
+  measuredState,
+  measuredStateLabel,
+  rawGapReason,
   trustedTdee,
   withMeasuredFlags,
 } from '../api/_lib/rules/gasto'
@@ -184,6 +187,8 @@ describe('o gasto do João', () => {
           date,
           complete: true,
           rows: stored,
+          // Pesa-se todos os dias (a balança segue o peso médio).
+          weighings: stored.map((s) => ({ date: s.date, kg: s.weight_trend! })),
           anchor,
           maintenanceEnabled: true,
           previous: lastBefore(date, 'tdee_est'),
@@ -196,18 +201,24 @@ describe('o gasto do João', () => {
     return { stored, base26: baseFor('2026-10-26') }
   }
 
-  it('as 2 primeiras semanas não contam e a base de 26/10 fica entre 2 350 e 2 450 (era 2 524)', () => {
+  // K1: o gasto medido só começa com pesagens a cobrir 10 dias fora da fase
+  // de água (a 22/10); a base de 19/10 ainda é a fórmula e a de 26/10 sobe no
+  // máximo 100 a partir dela (antes deste limite era 2 350–2 450; antes da
+  // decisão 304, 2 524).
+  it('as 2 primeiras semanas não contam e a base de 26/10 fica a 100 da fórmula (era 2 524)', () => {
     const { stored, base26 } = simulate('2026-09-28')
     // Nas 2 primeiras semanas não há gasto medido: a base é a fórmula.
     expect(stored.filter((r) => r.date < '2026-10-12').every((r) => r.tdee_est == null && r.flags.includes('gasto_agua'))).toBe(true)
     const weekBase = (monday: string) => stored.find((r) => r.date === monday)!.daily_base_est
     expect(weekBase('2026-10-12')).toBe(formula(trend('2026-10-12')))
+    // A 19/10 as pesagens fora da fase de água cobrem só 7 dias: ainda a fórmula.
+    expect(stored.filter((r) => r.date < '2026-10-22').every((r) => r.tdee_est == null)).toBe(true)
+    expect(weekBase('2026-10-19')).toBe(formula(trend('2026-10-19')))
     // Depois, no máximo 100 por semana.
-    expect(weekBase('2026-10-19') - weekBase('2026-10-12')).toBeLessThanOrEqual(100)
     expect(base26.base - weekBase('2026-10-19')).toBeLessThanOrEqual(100)
     expect(base26.learning).toBe(false)
-    expect(base26.base).toBeGreaterThanOrEqual(2350)
-    expect(base26.base).toBeLessThanOrEqual(2450)
+    expect(base26.base).toBeGreaterThan(weekBase('2026-10-19'))
+    expect(base26.base).toBeLessThan(2450)
     // O peso ainda diz mais do que +15 % da fórmula: a nota diz que está limitado.
     expect(measuredNoteFromDays(stored)).toBe('O gasto medido ainda reflete as primeiras semanas; está limitado a +15 % da fórmula.')
     // O gasto medido nunca passa os +15 % da fórmula (mais o treino).
@@ -218,7 +229,66 @@ describe('o gasto do João', () => {
     // Âncora a 1/6: a semana de 28/9 seria de pausa e as 2 a seguir fase de água; nada disso entra.
     const { stored, base26 } = simulate('2026-06-01')
     expect(stored.filter((r) => r.date <= '2026-10-18').every((r) => r.flags.includes('gasto_agua'))).toBe(true)
-    expect(stored.find((r) => r.date === '2026-10-25')!.tdee_est).not.toBeNull()
+    // K1: a 25/10 as pesagens depois da fase de água cobrem só 7 dias: ainda sem gasto medido.
+    expect(stored.find((r) => r.date === '2026-10-25')!.tdee_est).toBeNull()
+    expect(base26.learning).toBe(true)
     expect(base26.base).toBeLessThan(2450)
+  })
+})
+
+// K4: depois das 6 semanas o limite de ±400 da fórmula fica à vista, e a
+// explicação da água só vale enquanto o limite é o das primeiras semanas.
+describe('limite de ±400 à vista (K4)', () => {
+  it('as marcas e a nota do limite de +400', () => {
+    expect(measuredFlags({ limit: 'teto400', excluded: false, baseLimited: false })).toEqual(['gasto_teto400'])
+    expect(measuredNote(['gasto_teto400'])).toBe('O gasto medido está limitado a +400 kcal da fórmula: só pelo peso dava mais.')
+    expect(withMeasuredFlags(['dia_fechado', 'gasto_teto400'], [])).toEqual(['dia_fechado'])
+  })
+
+  it('a razão da diferença «só pelo peso» já não fala de água ao fim de meses', () => {
+    expect(rawGapReason(2900, 2500, ['gasto_teto400'])).toBe('está limitado a +400 kcal da fórmula.')
+    expect(rawGapReason(2900, 2500, ['gasto_teto'])).toMatch(/água/)
+    expect(rawGapReason(2600, 2500, [])).not.toMatch(/água/)
+    expect(rawGapReason(2300, 2500, [])).toMatch(/sal/)
+  })
+
+  it('adaptiveDay marca teto400 com 6 semanas de dados', () => {
+    // 60 dias completos a comer 2 600 com o peso parado e a fórmula a 1 900: o peso diz 2 600, o limite 2 300.
+    const rows = Array.from({ length: 60 }, (_, i) => ({
+      date: shiftDate('2026-06-01', i),
+      kcal_in: 2600,
+      weight_trend: 80,
+      kcal_exercise: 0,
+      formula_base: 1900,
+    }))
+    const weighings = rows.filter((_, i) => i % 2 === 0).map((r) => ({ date: r.date, kg: 80 }))
+    const r = adaptiveDay({
+      date: rows[59]!.date,
+      complete: true,
+      rows,
+      weighings,
+      anchor: null,
+      maintenanceEnabled: false,
+      previous: 2300,
+      weekStart: 2300,
+    })
+    expect(r.stable).toBe(true)
+    expect(r.raw).toBeCloseTo(2600, 0)
+    expect(r.tdee).toBe(2300)
+    expect(r.limit).toBe('teto400')
+  })
+})
+
+// K1 / ideia 1: um só estado do gasto, para todos os ecrãs.
+describe('estado do gasto', () => {
+  it('medido, a aprender (com o que falta) ou fórmula', () => {
+    expect(measuredState({ learning: false, completeDays: 30, missingWeighings: 3, weighingDays: 1 })).toEqual({ kind: 'medido' })
+    expect(measuredState({ learning: true, completeDays: 30, missingWeighings: 0, weighingDays: 0 })).toEqual({ kind: 'formula' })
+    const s = measuredState({ learning: true, completeDays: 12, missingWeighings: 2, weighingDays: 2 })
+    expect(s).toEqual({ kind: 'a_aprender', missingDays: 0, missingWeighings: 2 })
+    expect(measuredStateLabel(s)).toBe('a aprender (faltam 2 pesagens)')
+    expect(measuredStateLabel({ kind: 'a_aprender', missingDays: 0, missingWeighings: 1 })).toBe('a aprender (falta 1 pesagem)')
+    expect(measuredStateLabel({ kind: 'a_aprender', missingDays: 4, missingWeighings: 0 })).toBe('a aprender (faltam 4 dias completos)')
+    expect(measuredStateLabel({ kind: 'formula' })).toBe('fórmula')
   })
 })
