@@ -57,7 +57,7 @@ export interface ShoppingItem {
   name: string
   grams: number | null
 }
-export const MAX_ITEM_GRAMS = 10_000
+export const MAX_SHOPPING_GRAMS = 10_000
 
 // Junta à lista sem repetir nomes (sem maiúsculas): as gramas somam-se.
 export function mergeShopping(current: ShoppingItem[], added: ShoppingItem[]): ShoppingItem[] {
@@ -68,7 +68,7 @@ export function mergeShopping(current: ShoppingItem[], added: ShoppingItem[]): S
     const key = name.toLocaleLowerCase('pt')
     const same = out.find((i) => i.name.toLocaleLowerCase('pt') === key)
     if (!same) out.push({ name, grams: item.grams })
-    else if (item.grams != null) same.grams = Math.min(MAX_ITEM_GRAMS, (same.grams ?? 0) + item.grams)
+    else if (item.grams != null) same.grams = Math.min(MAX_SHOPPING_GRAMS, (same.grams ?? 0) + item.grams)
   }
   return out
 }

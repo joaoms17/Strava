@@ -4,7 +4,7 @@
 // ficam de fora (não se sabe o que se comeu) e contam-se à parte.
 import { shiftDate } from './nutritional-day.js'
 import { trend7 } from './weight.js'
-import { KCAL_PER_KG } from './gasto.js'
+import { KCAL_PER_KG, round1 as round1Comum } from './comum.js'
 
 export interface TallyDay {
   date: string
@@ -28,7 +28,8 @@ export interface FatTally {
   diasCalendario: number
 }
 
-const round1 = (n: number) => Math.round(n * 10) / 10 || 0
+// Sem «-0» quando o défice é zero.
+const round1 = (n: number) => round1Comum(n) || 0
 
 export function fatTally(days: TallyDay[], weights: { date: string; kg: number }[], since: string, today: string): FatTally {
   const yesterday = shiftDate(today, -1)

@@ -9,6 +9,7 @@ import { scaleItems } from './favoritos.js'
 import type { Confidence } from './analise.js'
 import { SLOT_LABEL, type Slot } from './momentos.js'
 import { shiftDate } from './nutritional-day.js'
+import { fold } from './comum.js'
 
 // ---------------------------------------------------------------------
 // A resposta da IA → itens comidos
@@ -40,13 +41,6 @@ export interface EatenShare {
   fraction: number
   confidence: Confidence | null // null: a IA não disse nada deste item
 }
-
-const fold = (name: string) =>
-  name
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
 
 // A que item da refeição se refere uma linha da resposta. Manda o NOME, não
 // o índice: a IA copia o nome que recebeu, mas o índice às vezes vem contado

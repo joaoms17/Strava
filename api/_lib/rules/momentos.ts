@@ -75,6 +75,13 @@ function offsetMinutes(instant: Date, timeZone: string): number {
 }
 
 // Instante de uma hora local de Lisboa (com ou sem hora de verão).
+// L20: o dia de calendário em Lisboa de um instante — o único «dia em
+// Lisboa» do servidor (o Balanço, o Atalho e o recálculo usam este). O dia
+// nutricional (com a hora de corte) é outra coisa: rules/nutritional-day.ts.
+export function lisbonDay(instant: Date = new Date()): string {
+  return lisbonClock(instant).date
+}
+
 export function lisbonInstant(date: string, time: string, timeZone = TIME_ZONE): Date {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number]
   const [hh, mm] = time.split(':').map(Number) as [number, number]

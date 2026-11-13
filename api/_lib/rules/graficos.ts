@@ -4,6 +4,7 @@
 // o telemóvel corre tudo isto.
 import { shiftDate } from './nutritional-day.js'
 import { mondayOf } from './manutencao.js'
+import { lisbonDay } from './momentos.js'
 
 // --- Período (um para a página toda) -------------------------------------
 
@@ -30,12 +31,9 @@ export function periodFrom(period: Period, today: string, first: string | null):
 
 // --- A semana (1S): os últimos 7 dias pelo dia de Lisboa ------------------
 
-const LISBON = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' })
-
-// O dia de calendário em Lisboa de um instante (o «hoje» da semana).
-export function lisbonDay(instant: Date): string {
-  return LISBON.format(instant)
-}
+// O dia de calendário em Lisboa de um instante (o «hoje» da semana): o de
+// rules/momentos.ts, reexportado para quem já o lia daqui.
+export { lisbonDay }
 
 export interface WeekWindow {
   from: string // hoje − 6

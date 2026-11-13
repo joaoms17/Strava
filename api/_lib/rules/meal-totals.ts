@@ -1,3 +1,5 @@
+import { round1 } from './comum.js'
+
 export interface MealItem {
   name: string
   grams: number
@@ -18,9 +20,7 @@ export interface MealTotals {
   fat: number
 }
 
-export function round1(n: number): number {
-  return Math.round(n * 10) / 10
-}
+export { round1 }
 
 // Os macros de cada item já vêm em valores absolutos (para os gramas do item).
 export function mealTotals(items: MealItem[]): MealTotals {
