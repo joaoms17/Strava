@@ -43,7 +43,7 @@ Estado de cada achado de [`auditoria-2026-11.md`](auditoria-2026-11.md) depois d
 | Código | Estado | Nota |
 | --- | --- | --- |
 | S1–S9 | feito | crons sem paragem num erro, `cron_runs`, retenção, health com prompts vivos |
-| G1 | em parte | `requireUser` exige perfil ou `HOUSE_EMAILS`; **confirmar no painel do Supabase que o registo de contas está desligado e o «Max rows»** |
+| G1 | em parte | `requireUser` exige perfil ou `HOUSE_EMAILS`; **confirmar no painel do Supabase que o registo de contas está desligado** («Max rows» confirmado: 1 000 — todas as leituras que podem passar disso já paginam) |
 | G2, G3, G5 | feito | fotos só da pasta do dono, push só pelo servidor, limites nos buckets |
 | G4 | em parte | segredos em tempo constante; **o token do Atalho não expira nem se revoga por pessoa (decisão do dono)** |
 | G6 | decisão do dono | no painel: ligar a proteção contra palavras-passe expostas; `(select auth.uid())` nas políticas é opcional |
@@ -113,5 +113,5 @@ Estado de cada achado de [`auditoria-2026-11.md`](auditoria-2026-11.md) depois d
 ## Pendente do dono
 
 - **Aplicar** `supabase/oneoff/20261113_bicicletas_kcal_relogio.sql` (D1) e, uns dias depois de publicar o código novo e com cópia de segurança, `supabase/migrations/20261113000050_limpeza.sql` (L11, L12; irreversível).
-- **Painel do Supabase:** registo de contas desligado e «Max rows» (G1); proteção contra palavras-passe expostas (G6).
+- **Painel do Supabase:** registo de contas desligado (G1; «Max rows» = 1 000, confirmado a 13 nov); proteção contra palavras-passe expostas (G6).
 - **Decisões:** M20 atómico; token do Atalho sem expirar nem revogar (G4); texto em px contra o Dynamic Type (H16); as cinco maneiras de mexer na quantidade (H11); pedido único do Hoje (P1); miniaturas das favoritas e URLs assinados (P6); Recharts no precache (P2); dividir o `ConfirmWorkoutSheet` (T17); passos, sono e projeção repetidos (B17).
