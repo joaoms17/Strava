@@ -183,14 +183,14 @@ export default function MealSheet() {
   if (meal === undefined) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
   if (meal === null) {
     return (
       <BottomSheet title="Refeição" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Esta refeição já não existe.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Esta refeição já não existe.</p>
       </BottomSheet>
     )
   }
@@ -474,8 +474,8 @@ export default function MealSheet() {
     sheet.close()
   }
 
-  const primary = 'min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40'
-  const secondary = 'min-h-12 rounded-xl bg-surface2 text-[15px] disabled:opacity-40'
+  const primary = 'min-h-14 w-full rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg disabled:opacity-40'
+  const secondary = 'min-h-12 rounded-xl bg-surface2 text-[0.9375rem] disabled:opacity-40'
 
   let footer = null
   if (current.deleted_at != null) {
@@ -544,7 +544,7 @@ export default function MealSheet() {
               sheet.close()
               void runBusy('A apagar…', () => deleteMeal(current.id, toast))
             }}
-            className="min-h-11 px-4 text-[15px] text-pain"
+            className="min-h-11 px-4 text-[0.9375rem] text-pain"
           >
             Apagar refeição
           </button>
@@ -578,7 +578,7 @@ export default function MealSheet() {
     >
       <div className="space-y-4 pb-2">
         {current.deleted_at && (
-          <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-dim">Apagada — não conta para as contas.</p>
+          <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem] text-dim">Apagada — não conta para as contas.</p>
         )}
         {photos.length > 0 && (
           <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4">
@@ -593,17 +593,17 @@ export default function MealSheet() {
           </div>
         )}
         {current.raw_text && current.input_type !== 'favorite' && (
-          <p className="text-[15px] text-dim">«{current.raw_text}»</p>
+          <p className="text-[0.9375rem] text-dim">«{current.raw_text}»</p>
         )}
-        {current.note && <p className="text-[15px]">Nota: {current.note}</p>}
+        {current.note && <p className="text-[0.9375rem]">Nota: {current.note}</p>}
 
         {(retryingNow || (current.status === 'a_analisar' && !stuck)) && (
           <div className="space-y-3">
-            <p className="animate-pulse text-[17px]">A analisar…</p>
-            <p className="text-[13px] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
+            <p className="animate-pulse text-[1.0625rem]">A analisar…</p>
+            <p className="text-[0.8125rem] text-dim">Os números chegam sozinhos. Podes fechar e continuar.</p>
             <AvisarAnalise className="-mt-2" />
             {goingTo.length > 0 && (
-              <p className="text-[13px] text-dim">
+              <p className="text-[0.8125rem] text-dim">
                 Depois vai também para {joinNames(goingTo.map((p) => p.name))}
                 {goingSplit ? ` · ${goingSplit}` : ''}.
               </p>
@@ -622,10 +622,10 @@ export default function MealSheet() {
                 fallback={stuck ? 'A análise parou a meio.' : 'Não consegui analisar esta refeição.'}
               />
             ) : (
-              <p className="text-[17px]">Chegaste ao limite da IA que definiste. A foto está guardada.</p>
+              <p className="text-[1.0625rem]">Chegaste ao limite da IA que definiste. A foto está guardada.</p>
             )}
             {goingTo.length > 0 && (
-              <p className="text-[13px] text-dim">
+              <p className="text-[0.8125rem] text-dim">
                 Vai para {goingTo.map((p) => p.name).join(' e ')} quando for analisada.
               </p>
             )}
@@ -673,7 +673,7 @@ export default function MealSheet() {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   placeholder="Ex.: bitoque com batata frita e ovo"
-                  className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+                  className="w-full rounded-xl border border-line bg-bg px-3 py-2 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none"
                 />
                 <div className="grid grid-cols-[1fr_2fr] gap-2">
                   <button
@@ -697,157 +697,131 @@ export default function MealSheet() {
         {analysed && (
           <>
             <div>
-              <p className="num text-[32px]">
+              <p className="num text-[2rem]">
                 {current.is_estimate ? '≈ ' : ''}
                 {fmtKcal(totals.kcal)} kcal
               </p>
-              <p className="text-[15px] text-dim tabular-nums">
+              <p className="text-[0.9375rem] text-dim tabular-nums">
                 <span className={proteinOk ? 'text-protein' : ''}>Proteína {fmtInt(totals.protein)} g</span> · Hidratos{' '}
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
-            {mode === 'view' && !dirty && !reanalysing && !splitPending && canChangePortion(current) && (
-              <div className="space-y-2">
-                {orderPeople != null && (
-                  <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-2">
-                    <p className="text-[15px]">
-                      <span className="font-semibold">Pedido para {orderPeople}</span> ·{' '}
-                      {orderPeople === 2 ? 'divide em ½' : 'escolhe a tua porção'}
-                    </p>
-                    {halfWith && (
-                      <button
-                        onClick={() => {
-                          setSharing(halfWith)
-                          setMode('share')
-                        }}
-                        className="min-h-11 text-[15px] text-eat"
-                      >
-                        ou partilha a meias ›
-                      </button>
-                    )}
-                  </div>
-                )}
-                {(scopeToggle || copyPeople.length > 0) && (
-                  <div className="flex flex-wrap gap-2">
-                    {scopeToggle}
-                    {copyPeople.length > 0 && (
-                      <ScopeToggle on={alsoCopies} onChange={setAlsoCopies}>
-                        Também {copyCount > 1 ? 'nas' : 'na'} de {joinNames(copyPeople.map((p) => p.name))}
-                      </ScopeToggle>
-                    )}
-                  </div>
-                )}
-                <PortionRow value={factor} onPick={pickPortion} />
-              </div>
-            )}
-            <LeftoversNote meal={current} />
-
             {current.model_reserve && current.deleted_at == null && !reanalysing && (
               <div className="space-y-2 rounded-xl bg-surface2 px-3 py-2">
-                <p className="text-[14px] text-dim">
+                <p className="text-[0.875rem] text-dim">
                   A IA principal não respondeu a tempo ou chegou ao limite de hoje; esta foto foi lida por outra que
                   acerta menos nas porções. Confirma as quantidades ou analisa outra vez mais logo.
                 </p>
-                <button onClick={() => void rereadPhoto()} className="min-h-11 text-[15px] text-eat">
+                <button onClick={() => void rereadPhoto()} className="min-h-11 text-[0.9375rem] text-eat">
                   Analisar outra vez
                 </button>
               </div>
             )}
             {current.analysis_error && (current.photo_paths?.length ?? 0) > 0 && current.deleted_at == null && (
-              <p className="text-[14px] text-attn">
+              <p className="text-[0.875rem] text-attn">
                 A foto nova não foi analisada. {splitStoredError(current.analysis_error).message} Junta o que faltava
                 em «Corrigir por texto».
               </p>
             )}
 
             {shareStuck && current.deleted_at == null && (
-              <p className="text-[14px] text-attn">
+              <p className="text-[0.875rem] text-attn">
                 Não consegui partilhar com {joinNames(goingTo.map((p) => p.name))}. Toca em «Partilhar com …» para tentar
                 outra vez.
               </p>
             )}
 
-            <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
-
-            {current.deleted_at == null && (
-              <>
-                {suggest && mode === 'view' && (
-                  <div className="space-y-2 rounded-2xl border border-line p-3">
-                    <p className="text-[15px]">Registas isto muitas vezes. Guardar como favorita?</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setMode('favorite')} className="min-h-11 flex-1 rounded-xl bg-eat font-semibold text-bg">
-                        Guardar
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSuggest(false)
-                          void update({ dismissed_hints: [...(profile.dismissed_hints ?? []), patternKey(current.items)] })
-                        }}
-                        className="min-h-11 px-3 text-[15px] text-dim"
-                      >
-                        Não voltar a perguntar
-                      </button>
+            {/* Quantidade (H11): as maneiras de mexer no quanto comeste num só
+                bloco — a porção e as gramas de cada item; corrigir por texto,
+                o que sobrou e a divisão ao partilhar como ações secundárias. */}
+            <section aria-label="Quantidade" className="space-y-3">
+              <p className="label">Quantidade</p>
+              {mode === 'view' && !dirty && !reanalysing && !splitPending && canChangePortion(current) && (
+                <div className="space-y-2">
+                  {orderPeople != null && (
+                    <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-2">
+                      <p className="text-[0.9375rem]">
+                        <span className="font-semibold">Pedido para {orderPeople}</span> ·{' '}
+                        {orderPeople === 2 ? 'divide em ½' : 'escolhe a tua porção'}
+                      </p>
+                      {halfWith && (
+                        <button
+                          onClick={() => {
+                            setSharing(halfWith)
+                            setMode('share')
+                          }}
+                          className="min-h-11 text-[0.9375rem] text-eat"
+                        >
+                          ou partilha a meias ›
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )}
-
-                {mode === 'share' && sharing && (
-                  <div ref={chooser} className="scroll-mb-4">
-                    <ShareChooser
-                      me={me}
-                      other={sharing.name}
-                      scope={scopeToggle}
-                      onPick={(split) => shareTo(sharing, split)}
-                      onCancel={() => {
-                        setSharing(null)
-                        setMode('view')
-                      }}
-                    />
-                  </div>
-                )}
-                {mode === 'correct' ? (
-                  <div className="space-y-2">
-                    <input
-                      autoFocus
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      placeholder="Ex.: o arroz era metade, sem queijo"
-                      enterKeyHint="send"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && text.trim()) void runBusy('A corrigir…', () => correct(text.trim()))
-                      }}
-                      className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
-                    />
-                    <div className="grid grid-cols-[1fr_2fr] gap-2">
-                      <button
-                        onClick={() => {
-                          setText('')
+                  )}
+                  {(scopeToggle || copyPeople.length > 0) && (
+                    <div className="flex flex-wrap gap-2">
+                      {scopeToggle}
+                      {copyPeople.length > 0 && (
+                        <ScopeToggle on={alsoCopies} onChange={setAlsoCopies}>
+                          Também {copyCount > 1 ? 'nas' : 'na'} de {joinNames(copyPeople.map((p) => p.name))}
+                        </ScopeToggle>
+                      )}
+                    </div>
+                  )}
+                  <PortionRow value={factor} onPick={pickPortion} />
+                </div>
+              )}
+              <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
+              <LeftoversNote meal={current} />
+              {current.deleted_at == null && (
+                <>
+                  {mode === 'share' && sharing && (
+                    <div ref={chooser} className="scroll-mb-4">
+                      <ShareChooser
+                        me={me}
+                        other={sharing.name}
+                        scope={scopeToggle}
+                        onPick={(split) => shareTo(sharing, split)}
+                        onCancel={() => {
+                          setSharing(null)
                           setMode('view')
                         }}
-                        className={secondary}
-                      >
-                        Cancelar
-                      </button>
-                      <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
-                        Corrigir
-                      </BusyButton>
+                      />
                     </div>
-                  </div>
-                ) : (
-                  mode === 'view' && (
-                    // As ações que ficaram (decisão 174) em botões de 44 px, 2 por linha.
-                    <div className="grid grid-cols-2 gap-2 text-[15px] [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:justify-center [&>*]:rounded-xl [&>*]:border [&>*]:border-line [&>*]:px-3 [&>*]:text-center [&>*]:leading-tight">
+                  )}
+                  {mode === 'correct' && (
+                    <div className="space-y-2">
+                      <input
+                        autoFocus
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Ex.: o arroz era metade, sem queijo"
+                        enterKeyHint="send"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && text.trim()) void runBusy('A corrigir…', () => correct(text.trim()))
+                        }}
+                        className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none"
+                      />
+                      <div className="grid grid-cols-[1fr_2fr] gap-2">
+                        <button
+                          onClick={() => {
+                            setText('')
+                            setMode('view')
+                          }}
+                          className={secondary}
+                        >
+                          Cancelar
+                        </button>
+                        <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
+                          Corrigir
+                        </BusyButton>
+                      </div>
+                    </div>
+                  )}
+                  {mode === 'view' && (
+                    <div className="grid grid-cols-2 gap-2 text-[0.9375rem] [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:justify-center [&>*]:rounded-xl [&>*]:border [&>*]:border-line [&>*]:px-3 [&>*]:text-center [&>*]:leading-tight">
                       <button onClick={() => setMode('correct')} className="text-eat">
                         Corrigir por texto
                       </button>
-                      <button onClick={() => setMode('when')} className="text-eat">
-                        Mudar dia ou refeição
-                      </button>
-                      {(current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
-                        <AttachPhotoButton meal={current} onDone={() => void load()} className="text-eat">
-                          Juntar foto
-                        </AttachPhotoButton>
-                      )}
                       <LeftoversButton meal={current} onDone={() => void load()} className="text-eat" />
                       {people.map((p) =>
                         // Uma cópia não se partilha de volta com quem a partilhou.
@@ -872,7 +846,44 @@ export default function MealSheet() {
                         ),
                       )}
                     </div>
-                  )
+                  )}
+                </>
+              )}
+            </section>
+
+            {current.deleted_at == null && (
+              <>
+                {suggest && mode === 'view' && (
+                  <div className="space-y-2 rounded-2xl border border-line p-3">
+                    <p className="text-[0.9375rem]">Registas isto muitas vezes. Guardar como favorita?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setMode('favorite')} className="min-h-11 flex-1 rounded-xl bg-eat font-semibold text-bg">
+                        Guardar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSuggest(false)
+                          void update({ dismissed_hints: [...(profile.dismissed_hints ?? []), patternKey(current.items)] })
+                        }}
+                        className="min-h-11 px-3 text-[0.9375rem] text-dim"
+                      >
+                        Não voltar a perguntar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {mode === 'view' && (
+                  // As ações que ficaram (decisão 174) em botões de 44 px, 2 por linha.
+                  <div className="grid grid-cols-2 gap-2 text-[0.9375rem] [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:justify-center [&>*]:rounded-xl [&>*]:border [&>*]:border-line [&>*]:px-3 [&>*]:text-center [&>*]:leading-tight">
+                    <button onClick={() => setMode('when')} className="text-eat">
+                      Mudar dia ou refeição
+                    </button>
+                    {(current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
+                      <AttachPhotoButton meal={current} onDone={() => void load()} className="text-eat">
+                        Juntar foto
+                      </AttachPhotoButton>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -882,7 +893,7 @@ export default function MealSheet() {
         {mode === 'favorite' && (
           <div className="space-y-3">
             <label className="block space-y-1">
-              <span className="text-[13px] text-dim">Nome da favorita</span>
+              <span className="text-[0.8125rem] text-dim">Nome da favorita</span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -944,7 +955,7 @@ function PickWhen({
       <WhenPicker today={today} value={when} onChange={setWhen} />
       <div className={onCancel ? 'grid grid-cols-[1fr_2fr] gap-2' : ''}>
         {onCancel && (
-          <button onClick={onCancel} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+          <button onClick={onCancel} className="min-h-12 rounded-xl bg-surface2 text-[0.9375rem]">
             Cancelar
           </button>
         )}

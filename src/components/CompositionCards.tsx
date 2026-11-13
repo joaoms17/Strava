@@ -42,7 +42,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
     return (
       <section className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
         <p className="label">Gordura e massa magra</p>
-        <p className="text-[15px]">
+        <p className="text-[0.9375rem]">
           Mede {female ? 'a cintura, a anca e o pescoço' : 'a cintura e o pescoço'}: 2 minutos com uma fita métrica chegam
           para estimar a gordura e a massa magra.
         </p>
@@ -50,7 +50,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
           <button onClick={() => sheet.open('medidas')} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
             Medir agora
           </button>
-          <button onClick={() => sheet.open('como-medir')} className="min-h-12 rounded-xl border border-line text-[15px]">
+          <button onClick={() => sheet.open('como-medir')} className="min-h-12 rounded-xl border border-line text-[0.9375rem]">
             Como medir
           </button>
         </div>
@@ -100,7 +100,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
     <section className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
       <div className="flex items-baseline justify-between">
         <p className="label">Gordura e massa magra</p>
-        <p className="text-[13px] text-dim">{days === 0 ? 'medido hoje' : `medido há ${days} ${days === 1 ? 'dia' : 'dias'}`}</p>
+        <p className="text-[0.8125rem] text-dim">{days === 0 ? 'medido hoje' : `medido há ${days} ${days === 1 ? 'dia' : 'dias'}`}</p>
       </div>
       <div className="flex h-4 overflow-hidden rounded-md" role="img" aria-label="massa magra e gordura">
         <div className="bg-ink/80" style={{ width: `${100 - last.c.pct}%` }} />
@@ -108,52 +108,52 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
       </div>
       <FatScale pct={last.c.pct} sex={profile.sex} />
       {female && wrongWaistSite(last.m, profile.sex) && (
-        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[14px] text-attn">
+        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[0.875rem] text-attn">
           Esta medição tem a cintura no umbigo, o que dá gordura a mais. Nas mulheres mede-se na parte mais estreita:
           mede outra vez (vê «Como medir»).
         </p>
       )}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <p className="num text-[34px] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>
-          <p className="text-[14px] text-dim">gordura · cerca de {fmt1(last.c.pct)}&nbsp;% {/* B11: a mesma casa decimal do gráfico da %G */}</p>
+          <p className="num text-[2.125rem] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>
+          <p className="text-[0.875rem] text-dim">gordura · cerca de {fmt1(last.c.pct)}&nbsp;% {/* B11: a mesma casa decimal do gráfico da %G */}</p>
         </div>
         <div>
-          <p className="num text-[34px] leading-none font-extrabold">{fmt1(last.c.shown.leanKg)} kg</p>
-          <p className="text-[14px] text-dim">massa magra (músculo, água, osso, órgãos)</p>
+          <p className="num text-[2.125rem] leading-none font-extrabold">{fmt1(last.c.shown.leanKg)} kg</p>
+          <p className="text-[0.875rem] text-dim">massa magra (músculo, água, osso, órgãos)</p>
         </div>
       </div>
       {last.usual != null && (
-        <p className="text-[14px] text-dim">
+        <p className="text-[0.875rem] text-dim">
           {usualNeckLabel(last.usual).replace(/^c/, 'C')}: o pescoço da última medição ({fmtCm(last.measuredNeck ?? last.usual)}&nbsp;cm) fugiu do
           habitual. Se estiver certo, aceita-o no gráfico da %G ou no histórico.
         </p>
       )}
       {change && firstOne ? (
-        <p className="text-[15px]">
+        <p className="text-[0.9375rem]">
           Desde {fmtDayMonth(firstOne.m.date)}: {merged ?? changeSentence(change)} ·{' '}
           <span className={change.confirmed ? '' : 'text-dim'}>{confirmationSentence(change)}</span>
         </p>
       ) : (
-        <p className="text-[14px] text-dim">Na próxima medição mostro o que mudou.</p>
+        <p className="text-[0.875rem] text-dim">Na próxima medição mostro o que mudou.</p>
       )}
       {quality && quality.weightKg < 0 && firstOne && !merged && (
-        <p className="text-[15px]">
+        <p className="text-[0.9375rem]">
           Dos {fmt1(Math.abs(quality.weightKg))}&nbsp;kg que perdeste desde {fmtDayMonth(firstOne.m.date)}, cerca de{' '}
           {Math.max(0, Math.min(100, quality.fatShare))}&nbsp;% foram gordura.
         </p>
       )}
       {earlyDietWeeks(profile.maintenance_anchor ?? null, today) && (
-        <p className="text-[14px] text-dim">Nas primeiras semanas perdes água e glicogénio, não músculo.</p>
+        <p className="text-[0.875rem] text-dim">Nas primeiras semanas perdes água e glicogénio, não músculo.</p>
       )}
       {profile.scale_has_bodyfat && scaleAvg != null && (
-        <p className="text-[14px] text-dim">Balança: cerca de {Math.round(scaleAvg)}&nbsp;% (média) · outra forma de medir, não se mistura.</p>
+        <p className="text-[0.875rem] text-dim">Balança: cerca de {Math.round(scaleAvg)}&nbsp;% (média) · outra forma de medir, não se mistura.</p>
       )}
-      <button onClick={() => setDetails(!details)} className="flex items-center gap-1 text-[14px] text-dim">
+      <button onClick={() => setDetails(!details)} className="flex items-center gap-1 text-[0.875rem] text-dim">
         <Icon name="info" size={18} /> Como é calculado?
       </button>
       {details && (
-        <div className="space-y-2 rounded-xl bg-surface2 p-3 text-[14px]">
+        <div className="space-y-2 rounded-xl bg-surface2 p-3 text-[0.875rem]">
           <p>
             Método da fita (Marinha dos EUA): pescoço,{' '}
             {female ? 'cintura na parte mais estreita, anca' : 'cintura no umbigo'} e a tua altura ({height} cm), com o

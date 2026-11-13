@@ -46,8 +46,8 @@ export default function WeekStrip({
               }`}
               aria-current={isSelected ? 'date' : undefined}
             >
-              <span className="text-[12px] font-semibold tracking-[0.1em] opacity-80">{weekdayLetter(date)}</span>
-              <span className="text-[20px] leading-none font-bold tabular-nums">{Number(date.slice(8))}</span>
+              <span className="text-[0.75rem] font-semibold tracking-[0.1em] opacity-80">{weekdayLetter(date)}</span>
+              <span className="text-[1.25rem] leading-none font-bold tabular-nums">{Number(date.slice(8))}</span>
             </button>
           )
         })}

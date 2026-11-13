@@ -5,7 +5,7 @@ import { useToast } from '../lib/toast'
 import { BusyButton, BusyLabel, runBusy, useBusyKey } from '../lib/busy'
 import { emitDataChanged, useDataVersion } from '../lib/events'
 import { signedUrls, useSignedUrls } from '../lib/photos'
-import { setFavoritePhoto, uploadFavoritePhoto } from '../lib/favorites'
+import { setFavoritePhoto, uploadFavoritePhoto, favoriteThumb } from '../lib/favorites'
 import Thumb from '../components/ui/Thumb'
 import DietTab from '../components/DietTab'
 import { fmtInt, fmtKcal } from '../lib/format'
@@ -90,7 +90,7 @@ export default function Favoritos() {
     const list = (favRows ?? []) as Favorite[]
     setFavorites(list)
     setFoods((foodRows ?? []) as Food[])
-    setPhotos(await signedUrls(list.map((f) => f.photo_path).filter((p): p is string => !!p)))
+    setPhotos(await signedUrls(list.map(favoriteThumb).filter((p): p is string => !!p)))
   }, [])
 
   useEffect(() => {
@@ -137,7 +137,7 @@ export default function Favoritos() {
 
   return (
     <div className="space-y-4 pt-1">
-      <div className={`grid grid-cols-5 ${SEGMENT_TRACK} text-[14px]`}>
+      <div className={`grid grid-cols-5 ${SEGMENT_TRACK} text-[0.875rem]`}>
         {(
           [
             ['refeicoes', 'Refeições'],
@@ -162,13 +162,13 @@ export default function Favoritos() {
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => sheet.open('nova-favorita')}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem]"
           >
             <Icon name="plus" size={18} /> Nova favorita
           </button>
           <button
             onClick={() => sheet.open('nova-favorita', { modo: 'receita' })}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+            className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem]"
           >
             Importar receita
           </button>
@@ -179,16 +179,16 @@ export default function Favoritos() {
 
       {segment === 'refeicoes' &&
         (favorites == null ? (
-          <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
+          <p className="pt-6 text-center text-[0.9375rem] text-dim">A carregar…</p>
         ) : favorites.length === 0 ? (
-          <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
+          <p className="rounded-2xl border border-line p-5 text-center text-[0.9375rem] text-dim">
             Cria uma em «Nova favorita» (escrita, com foto, de uma receita ou a partir de uma refeição) ou toca na
             ☆ de uma refeição. Depois registas com 1 toque, sempre com a foto dela.
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
             {favorites.map((favorite) => {
-              const photo = favorite.photo_path ? photos[favorite.photo_path] : null
+              const photo = photos[favoriteThumb(favorite) ?? ''] ?? null
               return (
                 <div key={favorite.id} className="overflow-hidden rounded-2xl bg-surface">
                   {/* H17: aqui gere-se; tocar abre a favorita (registar fica lá dentro). */}
@@ -205,8 +205,8 @@ export default function Favoritos() {
                       </div>
                     )}
                     <div className="space-y-0.5 px-3 pt-2">
-                      <p className="line-clamp-2 text-[15px] leading-snug">{favorite.name}</p>
-                      <p className="text-[13px] text-dim tabular-nums">
+                      <p className="line-clamp-2 text-[0.9375rem] leading-snug">{favorite.name}</p>
+                      <p className="text-[0.8125rem] text-dim tabular-nums">
                         {fmtKcal(favorite.kcal)} kcal · {fmtInt(Number(favorite.protein))} g proteína
                       </p>
                     </div>
@@ -222,7 +222,7 @@ export default function Favoritos() {
           <button
             onClick={() => setShowArchived((v) => !v)}
             aria-expanded={showArchived}
-            className="flex min-h-11 w-full items-center justify-between px-1 text-[15px] text-dim"
+            className="flex min-h-11 w-full items-center justify-between px-1 text-[0.9375rem] text-dim"
           >
             Arquivadas ({archived.length}) <span aria-hidden>{showArchived ? '▴' : '▾'}</span>
           </button>
@@ -230,8 +230,8 @@ export default function Favoritos() {
             <ul className="divide-y divide-line rounded-2xl bg-surface">
               {archived.map((favorite) => (
                 <li key={favorite.id} className="flex items-center gap-3 px-4 py-1">
-                  <span className="min-w-0 flex-1 truncate text-[15px]">{favorite.name}</span>
-                  <BusyButton busy="A repor…" onClick={() => restore(favorite)} className="min-h-11 shrink-0 px-2 text-[15px] text-eat">
+                  <span className="min-w-0 flex-1 truncate text-[0.9375rem]">{favorite.name}</span>
+                  <BusyButton busy="A repor…" onClick={() => restore(favorite)} className="min-h-11 shrink-0 px-2 text-[0.9375rem] text-eat">
                     Repor
                   </BusyButton>
                 </li>
@@ -245,12 +245,12 @@ export default function Favoritos() {
         <div className="space-y-2">
           <button
             onClick={() => sheet.open('meu-treino')}
-            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem]"
           >
             <Icon name="plus" size={18} /> Novo treino
           </button>
           {workoutFavs.length === 0 && (
-            <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
+            <p className="rounded-2xl border border-line p-5 text-center text-[0.9375rem] text-dim">
               Define os teus treinos (ginásio com os exercícios, corrida, padel…) para os registares com um toque.
             </p>
           )}
@@ -260,8 +260,8 @@ export default function Favoritos() {
                 <Icon name={favorite.workout?.type === 'bike' ? 'bike' : favorite.workout?.type === 'strength' ? 'dumbbell' : 'walk'} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-semibold">{favorite.name}</span>
-                <span className="block text-[14px] text-dim tabular-nums">
+                <span className="block truncate text-[1rem] font-semibold">{favorite.name}</span>
+                <span className="block text-[0.875rem] text-dim tabular-nums">
                   {favorite.workout?.type === 'strength'
                     ? `${favorite.workout.exercises?.length ?? 0} exercícios · `
                     : ''}
@@ -282,7 +282,7 @@ export default function Favoritos() {
               </button>
               <button
                 onClick={() => sheet.open('meu-treino', { id: favorite.id })}
-                className="min-h-11 min-w-11 px-2 text-[17px] text-dim"
+                className="min-h-11 min-w-11 px-2 text-[1.0625rem] text-dim"
                 aria-label={`Editar ${favorite.name}`}
               >
                 ⋯
@@ -296,12 +296,12 @@ export default function Favoritos() {
 
       {segment === 'alimentos' && (
         <div className="space-y-2">
-          <p className="text-[13px] text-dim">
+          <p className="text-[0.8125rem] text-dim">
             Os alimentos que a app aprendeu contigo, com a porção habitual. Entram nas contas das
             refeições por texto.
           </p>
           {foods.length === 0 && (
-            <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
+            <p className="rounded-2xl border border-line p-5 text-center text-[0.9375rem] text-dim">
               Ainda sem alimentos. Aparecem quando registas refeições por texto ou por código de barras.
             </p>
           )}
@@ -312,8 +312,8 @@ export default function Favoritos() {
                   onClick={() => setEditingFood(food)}
                   className="flex w-full items-baseline justify-between gap-3 px-4 py-3 text-left"
                 >
-                  <span className="min-w-0 truncate text-[15px]">{food.name}</span>
-                  <span className="shrink-0 text-[13px] text-dim tabular-nums">
+                  <span className="min-w-0 truncate text-[0.9375rem]">{food.name}</span>
+                  <span className="shrink-0 text-[0.8125rem] text-dim tabular-nums">
                     {food.default_portion_g != null && `${fmtInt(Number(food.default_portion_g))} g · `}
                     {fmtInt(Number(food.kcal_100g))} kcal/100 g
                   </span>
@@ -390,7 +390,7 @@ function EditFavorite({
       closeOnBack
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
-          <BusyButton busy="A arquivar…" onClick={onArchive} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-dim">
+          <BusyButton busy="A arquivar…" onClick={onArchive} className="min-h-14 rounded-2xl bg-surface2 text-[0.9375rem] text-dim">
             Arquivar
           </BusyButton>
           <BusyButton busy="A guardar…" onClick={save} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50">
@@ -400,13 +400,13 @@ function EditFavorite({
       }
     >
       <div className="space-y-4 pb-2">
-        <BusyButton busy="A registar…" onClick={onLog} className="min-h-12 w-full rounded-xl border border-line text-[15px] font-semibold">
+        <BusyButton busy="A registar…" onClick={onLog} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem] font-semibold">
           Registar agora
         </BusyButton>
         <div className="flex items-center gap-3">
           <Thumb url={photoPath ? urls[photoPath] : null} size={88} />
           <div className="flex flex-col items-start gap-1">
-            <label className={`flex min-h-11 cursor-pointer items-center text-[15px] text-eat ${busy ? 'pointer-events-none' : ''}`}>
+            <label className={`flex min-h-11 cursor-pointer items-center text-[0.9375rem] text-eat ${busy ? 'pointer-events-none' : ''}`}>
               {busy ? <BusyLabel text="A enviar a foto…" /> : photoPath ? 'Mudar a foto' : 'Juntar foto'}
               <input
                 type="file"
@@ -421,15 +421,15 @@ function EditFavorite({
               />
             </label>
             {photoPath && (
-              <BusyButton busy="A tirar a foto…" onClick={() => changePhoto(null)} className="min-h-11 text-[15px] text-dim">
+              <BusyButton busy="A tirar a foto…" onClick={() => changePhoto(null)} className="min-h-11 text-[0.9375rem] text-dim">
                 Tirar a foto
               </BusyButton>
             )}
-            <span className="text-[13px] text-dim">Aparece sempre que registares esta refeição.</span>
+            <span className="text-[0.8125rem] text-dim">Aparece sempre que registares esta refeição.</span>
           </div>
         </div>
         <label className="block space-y-1">
-          <span className="text-[13px] text-dim">Nome</span>
+          <span className="text-[0.8125rem] text-dim">Nome</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -437,7 +437,7 @@ function EditFavorite({
           />
         </label>
         <div className="space-y-2">
-          <p className="text-[13px] text-dim">Refeição habitual</p>
+          <p className="text-[0.8125rem] text-dim">Refeição habitual</p>
           <div className="flex flex-wrap gap-2">
             {SLOTS.map((s) => (
               <button
@@ -450,7 +450,7 @@ function EditFavorite({
             ))}
           </div>
         </div>
-        <ul className="divide-y divide-line rounded-2xl bg-surface2 text-[15px]">
+        <ul className="divide-y divide-line rounded-2xl bg-surface2 text-[0.9375rem]">
           {favorite.items.map((item, i) => (
             <li key={i} className="flex justify-between gap-3 px-3 py-2.5">
               <span className="min-w-0 truncate">
@@ -460,7 +460,7 @@ function EditFavorite({
             </li>
           ))}
         </ul>
-        <p className="text-[13px] text-dim tabular-nums">
+        <p className="text-[0.8125rem] text-dim tabular-nums">
           {fmtKcal(favorite.kcal)} kcal · Proteína {fmtInt(Number(favorite.protein))} g · Hidratos{' '}
           {fmtInt(Number(favorite.carbs))} g · Gordura {fmtInt(Number(favorite.fat))} g
         </p>
@@ -508,7 +508,7 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
       closeOnBack
       footer={
         <div className="grid grid-cols-[1fr_2fr] gap-2">
-          <BusyButton busy="A apagar…" onClick={remove} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-pain">
+          <BusyButton busy="A apagar…" onClick={remove} className="min-h-14 rounded-2xl bg-surface2 text-[0.9375rem] text-pain">
             Apagar
           </BusyButton>
           <BusyButton busy="A guardar…" onClick={save} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg disabled:opacity-50">
@@ -519,7 +519,7 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
     >
       <div className="space-y-4 pb-2">
         <label className="block space-y-1">
-          <span className="text-[13px] text-dim">Nome</span>
+          <span className="text-[0.8125rem] text-dim">Nome</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -527,7 +527,7 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-[13px] text-dim">Porção habitual (g)</span>
+          <span className="text-[0.8125rem] text-dim">Porção habitual (g)</span>
           <input
             inputMode="decimal"
             value={portion}
@@ -535,12 +535,12 @@ function EditFood({ food, onClose }: { food: Food; onClose: () => void }) {
             className="h-12 w-full rounded-xl border border-line bg-bg px-3 tabular-nums focus:border-eat focus:outline-none"
           />
         </label>
-        <p className="text-[13px] text-dim tabular-nums">
+        <p className="text-[0.8125rem] text-dim tabular-nums">
           Por 100 g: {fmtInt(Number(food.kcal_100g))} kcal · Proteína {fmtInt(Number(food.protein_100g))} g ·
           Hidratos {fmtInt(Number(food.carbs_100g))} g · Gordura {fmtInt(Number(food.fat_100g))} g
         </p>
-        {foodExtrasText(food) && <p className="-mt-2 text-[13px] text-dim tabular-nums">{foodExtrasText(food)}</p>}
-        {food.source === 'off' && <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>}
+        {foodExtrasText(food) && <p className="-mt-2 text-[0.8125rem] text-dim tabular-nums">{foodExtrasText(food)}</p>}
+        {food.source === 'off' && <p className="text-[0.75rem] text-dim">Dados: Open Food Facts (ODbL)</p>}
       </div>
     </BottomSheet>
   )

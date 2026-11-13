@@ -45,7 +45,7 @@ export default function AiCheck({ compact = false }: { compact?: boolean }) {
       {compact ? (
         // Na folha de uma refeição com erro: um link discreto, não um botão a
         // competir com «Tentar outra vez» (o diagnóstico é para quem gere a IA).
-        <button disabled={busy} onClick={() => void run()} className="min-h-11 text-left text-[14px] text-dim disabled:opacity-60">
+        <button disabled={busy} onClick={() => void run()} className="min-h-11 text-left text-[0.875rem] text-dim disabled:opacity-60">
           {busy ? (
             'A verificar…'
           ) : (
@@ -58,17 +58,17 @@ export default function AiCheck({ compact = false }: { compact?: boolean }) {
         <button
           disabled={busy}
           onClick={() => void run()}
-          className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[15px] disabled:opacity-60"
+          className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[0.9375rem] disabled:opacity-60"
         >
           <Icon name="check" size={18} />
           {busy ? 'A verificar…' : 'Verificar a IA'}
         </button>
       )}
-      {error && <p className="text-[14px] text-eat">{error}</p>}
+      {error && <p className="text-[0.875rem] text-eat">{error}</p>}
       {result && (
-        <div className="space-y-1.5 rounded-xl bg-surface2 p-3 text-[14px]">
+        <div className="space-y-1.5 rounded-xl bg-surface2 p-3 text-[0.875rem]">
           <p className={`font-semibold ${result.ok ? 'text-burn' : 'text-eat'}`}>{result.resumo}</p>
-          {result.provider && <p className="text-[13px] text-dim">IA em uso: {result.provider}</p>}
+          {result.provider && <p className="text-[0.8125rem] text-dim">IA em uso: {result.provider}</p>}
           {result.models.map((m) => (
             <div key={m.model}>
               <p className="flex justify-between gap-2">
@@ -80,13 +80,13 @@ export default function AiCheck({ compact = false }: { compact?: boolean }) {
               {!m.ok && (
                 <>
                   <p className="text-eat">{m.message}</p>
-                  {m.detail && <p className="font-mono text-[12px] break-words text-dim select-text">{m.detail}</p>}
+                  {m.detail && <p className="font-mono text-[0.75rem] break-words text-dim select-text">{m.detail}</p>}
                 </>
               )}
             </div>
           ))}
           {result.key && result.key_shape && !result.ok && (
-            <p className="text-[13px] text-dim">Chave no Vercel: {result.key_shape}</p>
+            <p className="text-[0.8125rem] text-dim">Chave no Vercel: {result.key_shape}</p>
           )}
         </div>
       )}

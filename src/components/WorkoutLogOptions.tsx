@@ -38,14 +38,14 @@ export default function WorkoutLogOptions({ date, inSheet = false }: { date?: st
     f.workout?.type === 'strength' ? gym(`fav=${f.id}`) : sheet.open('registar-treino', { fav: f.id, ...dateParams })
 
   const box =
-    'flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-2xl border border-line bg-surface px-1.5 py-2 text-center font-display text-[15px] leading-tight font-bold tracking-[0.04em] uppercase'
+    'flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-2xl border border-line bg-surface px-1.5 py-2 text-center font-display text-[0.9375rem] leading-tight font-bold tracking-[0.04em] uppercase'
   const icon = (name: IconName) => (
     <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface2 text-burn">
       <Icon name={name} size={22} />
     </span>
   )
-  const hint = 'block font-sans text-[13px] font-normal tracking-normal text-dim normal-case'
-  const pill = 'min-h-11 rounded-full border border-line px-3 text-[15px]'
+  const hint = 'block font-sans text-[0.8125rem] font-normal tracking-normal text-dim normal-case'
+  const pill = 'min-h-11 rounded-full border border-line px-3 text-[0.9375rem]'
   return (
     <section className="space-y-2" aria-label="Registar treino">
       <p className="label">Registar treino</p>

@@ -185,11 +185,11 @@ const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as co
 // Os botões dos cartões (próximo passo e pessoa nova), sempre do mesmo
 // tamanho e letra: o principal é laranja nos passos da comida (bg-eat) e
 // preto nos outros (bg-cta), como na decisão 93; «Agora não»/«Saltar» é texto.
-const STEP_PRIMARY = 'flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-[16px] font-semibold'
+const STEP_PRIMARY = 'flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-[1rem] font-semibold'
 const STEP_EAT = `${STEP_PRIMARY} bg-eat text-bg`
 const STEP_CTA = `${STEP_PRIMARY} bg-cta text-on-cta`
-const STEP_SECONDARY = 'flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface2 px-3 text-[15px]'
-const STEP_LATER = 'min-h-11 px-3 text-[15px] text-dim'
+const STEP_SECONDARY = 'flex min-h-12 items-center justify-center gap-2 rounded-xl bg-surface2 px-3 text-[0.9375rem]'
+const STEP_LATER = 'min-h-11 px-3 text-[0.9375rem] text-dim'
 const GAP_SLOTS: Slot[] = ['pequeno_almoco', 'almoco', 'jantar']
 
 // A foto da refeição; registada de uma favorita sem foto (a foto foi junta
@@ -490,7 +490,7 @@ export default function Hoje() {
     return (
       <div className="space-y-4 pt-1">
         <WeekStrip selected={date} today={today} onPick={pickDay} />
-        <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="pt-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </div>
     )
   }
@@ -679,15 +679,15 @@ export default function Hoje() {
       key: 'sono',
       node: (
         <div className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 opacity-80">
-          <span className="w-12 shrink-0 font-display text-[15px] font-semibold tracking-[0.04em] text-dim uppercase">
+          <span className="w-12 shrink-0 font-display text-[0.9375rem] font-semibold tracking-[0.04em] text-dim uppercase">
             Noite
           </span>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-[1.5px] border-dashed border-line text-dim">
             <Icon name="moon" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-semibold">Sem registo esta noite</span>
-            <span className="block truncate text-[14px] text-dim">
+            <span className="block text-[1rem] font-semibold">Sem registo esta noite</span>
+            <span className="block truncate text-[0.875rem] text-dim">
               Última: {last.date === shiftDate(date, -1) ? 'ontem' : weekdayShort(last.date)}
               {last.sleep_minutes != null ? ` · ${fmtSleep(last.sleep_minutes)}` : ''}
               {sleepDetail(last) ? ` · ${sleepDetail(last)}` : ''}
@@ -705,20 +705,20 @@ export default function Hoje() {
       key: 'sono',
       node: (
         <div className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2">
-          <span className="w-12 shrink-0 font-display text-[15px] font-semibold tracking-[0.04em] text-dim uppercase">
+          <span className="w-12 shrink-0 font-display text-[0.9375rem] font-semibold tracking-[0.04em] text-dim uppercase">
             Noite
           </span>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim">
             <Icon name="moon" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-semibold">Sono</span>
-            <span className={`block truncate text-[14px] ${poorNight(night) ? 'text-attn' : 'text-dim'}`}>
+            <span className="block text-[1rem] font-semibold">Sono</span>
+            <span className={`block truncate text-[0.875rem] ${poorNight(night) ? 'text-attn' : 'text-dim'}`}>
               {sleepDetail(night) || 'do relógio'}
             </span>
           </span>
           {night.sleep_minutes != null && (
-            <span className="num shrink-0 text-[22px]">{fmtSleep(night.sleep_minutes)}</span>
+            <span className="num shrink-0 text-[1.375rem]">{fmtSleep(night.sleep_minutes)}</span>
           )}
         </div>
       ),
@@ -732,21 +732,21 @@ export default function Hoje() {
       key: 'passos',
       node: (
         <div className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2">
-          <span className="w-12 shrink-0 font-display text-[15px] font-semibold tracking-[0.04em] text-dim uppercase">
+          <span className="w-12 shrink-0 font-display text-[0.9375rem] font-semibold tracking-[0.04em] text-dim uppercase">
             Dia
           </span>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 text-dim">
             <Icon name="walk" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[16px] font-semibold">Passos</span>
-            <span className="block truncate text-[14px] text-dim">
+            <span className="block text-[1rem] font-semibold">Passos</span>
+            <span className="block truncate text-[0.875rem] text-dim">
               {[isToday ? 'até agora' : null, avg != null ? `média ${fmtInt(avg)}` : null]
                 .filter(Boolean)
                 .join(' · ') || 'do relógio'}
             </span>
           </span>
-          <span className="num shrink-0 text-[22px]">{fmtInt(steps)}</span>
+          <span className="num shrink-0 text-[1.375rem]">{fmtInt(steps)}</span>
         </div>
       ),
     })
@@ -761,12 +761,12 @@ export default function Hoje() {
           onClick={() => sheet.open('peso', { data: w.date, valor: fmt1(w.kg) })}
           className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
         >
-          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(at)}</span>
+          <span className="w-12 shrink-0 font-display text-[1.0625rem] font-semibold text-dim tabular-nums">{timeOf(at)}</span>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface2 text-body">
             <Icon name="scale" />
           </span>
-          <span className="flex-1 text-[16px] font-semibold">Peso</span>
-          <span className="num text-[22px] text-body">
+          <span className="flex-1 text-[1rem] font-semibold">Peso</span>
+          <span className="num text-[1.375rem] text-body">
             {profile.calm_mode ? '✓' : `${fmt1(w.kg)} kg`}
           </span>
         </button>
@@ -817,7 +817,7 @@ export default function Hoje() {
               onClick={() => sheet.open('refeicao', { id: meal.id })}
               className="flex min-h-14 min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1 text-left"
             >
-              <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
+              <span className="w-12 shrink-0 font-display text-[1.0625rem] font-semibold text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
               {thumb ? (
                 <img
                   loading="lazy"
@@ -836,18 +836,18 @@ export default function Hoje() {
                 </span>
               )}
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[16px] font-semibold">
+                <span className="block truncate text-[1rem] font-semibold">
                   {title}
                   {meal.favorite_id && <span className="ml-1 text-attn">★</span>}
                 </span>
                 <span
-                  className={`block truncate text-[14px] ${failed ? 'text-eat' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
+                  className={`block truncate text-[0.875rem] ${failed ? 'text-eat' : meal.status === 'sem_analise' ? 'text-attn' : 'text-dim'}`}
                 >
                   {subtitle}
                 </span>
               </span>
               {analysed && (
-                <span className="num flex shrink-0 items-center gap-1.5 text-[22px]">
+                <span className="num flex shrink-0 items-center gap-1.5 text-[1.375rem]">
                   {meal.status === 'por_rever' && (
                     <span className="h-2 w-2 rounded-full bg-attn" aria-label="por confirmar" />
                   )}
@@ -860,7 +860,7 @@ export default function Hoje() {
               <button
                 onClick={() => void retry(meal.id)}
                 aria-label="Tentar outra vez"
-                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-eat/50 px-3 font-display text-[15px] font-semibold tracking-[0.04em] text-eat uppercase"
+                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-eat/50 px-3 font-display text-[0.9375rem] font-semibold tracking-[0.04em] text-eat uppercase"
               >
                 <Icon name="retry" size={18} />
                 Tentar
@@ -869,7 +869,7 @@ export default function Hoje() {
             {pending && !isRetrying && (
               <button
                 onClick={() => sheet.open('nota', { id: meal.id })}
-                className="min-h-11 shrink-0 rounded-xl px-3 text-[13px] text-eat"
+                className="min-h-11 shrink-0 rounded-xl px-3 text-[0.8125rem] text-eat"
               >
                 ＋ Nota
               </button>
@@ -878,13 +878,13 @@ export default function Hoje() {
           {from && meal.status === 'por_rever' && (
             <button
               onClick={() => sheet.open('rever', { id: meal.id })}
-              className="-my-1.5 ml-[72px] flex min-h-11 items-center text-[14px] text-eat"
+              className="-my-1.5 ml-[72px] flex min-h-11 items-center text-[0.875rem] text-eat"
             >
               Confirma a tua porção ›
             </button>
           )}
           {fresh && analysed && (
-            <p className="pl-[72px] text-[13px] text-dim">
+            <p className="pl-[72px] text-[0.8125rem] text-dim">
               acabado de registar ·{' '}
               <button
                 className="inline-flex min-h-11 items-center text-eat"
@@ -906,7 +906,7 @@ export default function Hoje() {
       key: `c-${capture.client_id}`,
       node: (
         <div className="flex min-h-14 items-center gap-3 px-2 py-1">
-          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">
+          <span className="w-12 shrink-0 font-display text-[1.0625rem] font-semibold text-dim tabular-nums">
             {timeOf(capture.taken_at ?? capture.created_at)}
           </span>
           {capture.preview ? (
@@ -917,8 +917,8 @@ export default function Hoje() {
             </span>
           )}
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-[16px] font-semibold">{capture.text ?? 'Foto'}</span>
-            <span className={`block truncate text-[14px] ${capture.state === 'erro' ? 'text-eat' : 'text-dim'}`}>
+            <span className="block truncate text-[1rem] font-semibold">{capture.text ?? 'Foto'}</span>
+            <span className={`block truncate text-[0.875rem] ${capture.state === 'erro' ? 'text-eat' : 'text-dim'}`}>
               {capture.state === 'erro'
                 ? (capture.error ?? 'Não consegui enviar.')
                 : !navigator.onLine
@@ -930,10 +930,10 @@ export default function Hoje() {
           </span>
           {(capture.state === 'erro' || (capture.attempts ?? 0) > 0) && (
             <span className="flex shrink-0 gap-1">
-              <button onClick={() => void retryCapture(capture.client_id)} className="min-h-11 px-2 text-[13px] text-eat">
+              <button onClick={() => void retryCapture(capture.client_id)} className="min-h-11 px-2 text-[0.8125rem] text-eat">
                 Tentar
               </button>
-              <button onClick={() => void discard(capture)} className="min-h-11 px-2 text-[13px] text-dim">
+              <button onClick={() => void discard(capture)} className="min-h-11 px-2 text-[0.8125rem] text-dim">
                 Descartar
               </button>
             </span>
@@ -956,19 +956,19 @@ export default function Hoje() {
           }
           className="flex min-h-14 w-full items-center gap-3 rounded-2xl px-2 text-left"
         >
-          <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">
+          <span className="w-12 shrink-0 font-display text-[1.0625rem] font-semibold text-dim tabular-nums">
             {timeOf(workout.started_at ?? workout.created_at)}
           </span>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-burn text-bg">
             <Icon name={WORKOUT_ICON[workout.type]} size={26} />
           </span>
-          <span className="flex-1 text-[16px] font-semibold">
+          <span className="flex-1 text-[1rem] font-semibold">
             {workoutTitle(workout)}
             {workout.minutes != null && ` · ${workout.minutes} min`}
             {workout.distance_km != null && ` · ${String(workout.distance_km).replace('.', ',')} km`}
           </span>
           {kcal > 0 && (
-            <span className="num shrink-0 text-[22px] text-burn">
+            <span className="num shrink-0 text-[1.375rem] text-burn">
               {workout.kcal_estimated ? '≈ ' : ''}+{fmtKcal(kcal)}
             </span>
           )}
@@ -1002,7 +1002,7 @@ export default function Hoje() {
 
       {data.offline && (
         <div
-          className="flex items-center gap-2 rounded-xl border border-attn/50 bg-attn/10 py-1 pr-1 pl-3 text-[15px]"
+          className="flex items-center gap-2 rounded-xl border border-attn/50 bg-attn/10 py-1 pr-1 pl-3 text-[0.9375rem]"
           role="status"
         >
           <p className="flex-1 py-1">
@@ -1020,7 +1020,7 @@ export default function Hoje() {
       )}
       {/* H2: um pedido falhou ao atualizar; fica o que se tinha (não um dia vazio). */}
       {refreshFailed && !data.offline && (
-        <div className="flex items-center gap-2 text-[15px] text-dim" role="status">
+        <div className="flex items-center gap-2 text-[0.9375rem] text-dim" role="status">
           <p className="flex-1">Não consegui atualizar</p>
           <button
             onClick={() => void runBusy('A atualizar…', () => load(true))}
@@ -1064,11 +1064,11 @@ export default function Hoje() {
             className={`num leading-[0.92] ${
               // Sem rede, um traço (mais pequeno: a 96 px parecia uma barra).
               unknown
-                ? 'text-[64px] font-semibold text-dim'
+                ? 'text-[4rem] font-semibold text-dim'
                 : inMargin && (isToday || dayComplete)
                   ? // Até 100 kcal acima: o número sem alarme, mais pequeno.
-                    'text-[64px] font-semibold text-ink'
-                  : `text-[96px] font-extrabold ${over && (isToday || dayComplete) ? (grave ? 'text-pain' : 'text-attn') : !isToday ? 'text-ink' : 'text-eat'}`
+                    'text-[4rem] font-semibold text-ink'
+                  : `text-[6rem] font-extrabold ${over && (isToday || dayComplete) ? (grave ? 'text-pain' : 'text-attn') : !isToday ? 'text-ink' : 'text-eat'}`
             } ${isToday && stillCounting && !unknown ? 'opacity-80' : ''}`}
           >
             {unknown
@@ -1079,22 +1079,22 @@ export default function Hoje() {
                   ? `+${fmtKcal(-leftShown)}`
                   : fmtKcal(leftShown)}
           </span>
-          <span className="num text-[22px] text-dim">
+          <span className="num text-[1.375rem] text-dim">
             {inMargin && !unknown && (isToday || dayComplete) ? 'KCAL · DENTRO DA MARGEM' : 'KCAL'}
           </span>
         </p>
         {isToday && inMargin && !unknown && (
-          <p className="mt-1 text-[15px] text-dim">Até 100 kcal acima do plano, o dia conta como no alvo.</p>
+          <p className="mt-1 text-[0.9375rem] text-dim">Até 100 kcal acima do plano, o dia conta como no alvo.</p>
         )}
         {isToday && over && (
-          <p className="mt-1 text-[15px] text-dim">
+          <p className="mt-1 text-[0.9375rem] text-dim">
             {underSpend
               ? 'Mas continuas a comer menos do que gastas.'
               : `A semana conta mais do que o dia.${weekText ? ` Com hoje, a semana está ${weekText}.` : ''}`}
           </p>
         )}
         {stillCounting > 0 && (
-          <p className="mt-1 text-[14px] text-dim">
+          <p className="mt-1 text-[0.875rem] text-dim">
             ainda a contar {stillCounting} {stillCounting === 1 ? 'foto' : 'fotos'}
           </p>
         )}
@@ -1113,33 +1113,33 @@ export default function Hoje() {
           {!isToday && !dayComplete && !unknown ? (
             // O comido já é o número grande: aqui fica que o dia não conta (ainda).
             <div>
-              <p className="label text-[12px]">Dia</p>
-              <p className="pt-1 text-[17px] leading-tight text-dim">
+              <p className="label text-[0.75rem]">Dia</p>
+              <p className="pt-1 text-[1.0625rem] leading-tight text-dim">
                 {data.flags.includes('faltou_algo') ? 'faltou algo' : 'incompleto'}
               </p>
             </div>
           ) : (
             <div>
-              <p className="label text-[12px]">Comido</p>
-              <p className={`num text-[26px] leading-tight ${unknown ? 'text-dim' : ''}`}>{unknown ? '—' : fmtKcal(kcalIn)}</p>
+              <p className="label text-[0.75rem]">Comido</p>
+              <p className={`num text-[1.625rem] leading-tight ${unknown ? 'text-dim' : ''}`}>{unknown ? '—' : fmtKcal(kcalIn)}</p>
             </div>
           )}
           <div>
-            <p className="label text-[12px]">Treino</p>
+            <p className="label text-[0.75rem]">Treino</p>
             <p
-              className={`num text-[26px] leading-tight ${kcalExercise > 0 && !maintenance && !unknown ? 'text-burn' : 'text-dim'}`}
+              className={`num text-[1.625rem] leading-tight ${kcalExercise > 0 && !maintenance && !unknown ? 'text-burn' : 'text-dim'}`}
             >
               {kcalExercise > 0 && !maintenance && !unknown ? `+${fmtKcal(kcalExercise)}` : '—'}
             </p>
           </div>
           <div>
-            <p className="label text-[12px]">Plano</p>
-            <p className="num text-[26px] leading-tight">{fmtKcal(plan)}</p>
+            <p className="label text-[0.75rem]">Plano</p>
+            <p className="num text-[1.625rem] leading-tight">{fmtKcal(plan)}</p>
           </div>
         </div>
         <div className="mt-3.5 flex items-baseline justify-between">
-          <p className="label text-[12px]">Proteína</p>
-          <p className="num text-[18px]">
+          <p className="label text-[0.75rem]">Proteína</p>
+          <p className="num text-[1.125rem]">
             {unknown ? '—' : fmtInt(proteinIn)} <span className="text-dim">/ {fmtInt(profile.protein_g)} g</span>
             {proteinOk && !unknown && <span className="text-ok"> ✓</span>}
           </p>
@@ -1158,7 +1158,7 @@ export default function Hoje() {
           </div>
         )}
         {maintenance && (
-          <span className="mt-3 inline-block rounded-lg border border-line px-3 py-1 font-display text-[13px] font-semibold tracking-[0.1em] text-burn uppercase">
+          <span className="mt-3 inline-block rounded-lg border border-line px-3 py-1 font-display text-[0.8125rem] font-semibold tracking-[0.1em] text-burn uppercase">
             Semana de pausa da dieta
           </span>
         )}
@@ -1166,7 +1166,7 @@ export default function Hoje() {
 
       {actionCard === 'foi_tudo' && (
         <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             Registaste {counted.length} {counted.length === 1 ? 'refeição' : 'refeições'} ({fmtKcal(kcalIn)}&nbsp;kcal). Foi
             tudo a {fmtDayShort(date)}?
           </p>
@@ -1188,8 +1188,8 @@ export default function Hoje() {
         <div className="space-y-3 rounded-2xl border border-line p-4">
           {actionCard === 'primeira_pesagem' ? (
             <>
-              <p className="text-[17px] font-semibold">Pesa-te</p>
-              <p className="text-[15px] text-dim">
+              <p className="text-[1.0625rem] font-semibold">Pesa-te</p>
+              <p className="text-[0.9375rem] text-dim">
                 De manhã, antes de comer.
               </p>
               <div className="flex gap-2">
@@ -1204,8 +1204,8 @@ export default function Hoje() {
             </>
           ) : (
             <>
-              <p className="text-[17px] font-semibold">Fotografa a próxima refeição</p>
-              <p className="text-[15px] text-dim">Toca em + e tira uma foto ao prato. Eu faço as contas.</p>
+              <p className="text-[1.0625rem] font-semibold">Fotografa a próxima refeição</p>
+              <p className="text-[0.9375rem] text-dim">Toca em + e tira uma foto ao prato. Eu faço as contas.</p>
               <div className="-mt-1 flex justify-end">
                 <button onClick={() => void dismissHint('primeira_foto')} className={STEP_LATER}>
                   Saltar
@@ -1274,7 +1274,7 @@ export default function Hoje() {
       )}
       {empty && data.offline && !isToday ? null : empty ? (
         <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             {data.offline
               ? data.loadError === 'erro'
                 ? 'Não consegui carregar o dia. O que registares no ＋ fica guardado.'
@@ -1287,13 +1287,13 @@ export default function Hoje() {
             <>
               <PhotoButton
                 source="camera"
-                className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-eat text-[17px] font-semibold text-bg"
+                className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg"
               >
                 Fotografar
               </PhotoButton>
               {/* Pesar precisa de rede (grava logo no servidor). */}
               {!data.weighedToday && !data.offline && (
-                <button onClick={() => sheet.open('peso')} className="min-h-11 text-[15px] text-eat">
+                <button onClick={() => sheet.open('peso')} className="min-h-11 text-[0.9375rem] text-eat">
                   Ou pesa-te primeiro
                 </button>
               )}
@@ -1315,7 +1315,7 @@ export default function Hoje() {
       )}
 
       {gapFavorite && (
-        <div className="flex items-center gap-2 rounded-2xl border border-dashed border-line px-3 py-2 text-[15px]">
+        <div className="flex items-center gap-2 rounded-2xl border border-dashed border-line px-3 py-2 text-[0.9375rem]">
           <span className="flex-1 text-dim">Ainda sem {SLOT_LABEL[nowSlot].toLowerCase()}</span>
           <button
             onClick={() => void runBusy('A registar…', () => logFavorite(gapFavorite, null, toast))}
@@ -1326,7 +1326,7 @@ export default function Hoje() {
           <PhotoButton source="camera" className="flex min-h-11 items-center rounded-full bg-surface2 px-3" aria-label="Fotografar">
             <Icon name="camera" size={20} />
           </PhotoButton>
-          <button onClick={() => void dismissHint('lacuna')} className="min-h-11 min-w-11 text-[13px] text-dim" aria-label="Não mostrar isto">
+          <button onClick={() => void dismissHint('lacuna')} className="min-h-11 min-w-11 text-[0.8125rem] text-dim" aria-label="Não mostrar isto">
             ✕
           </button>
         </div>
@@ -1334,12 +1334,12 @@ export default function Hoje() {
 
       {data.deleted.length > 0 && (
         <div className="space-y-2">
-          <button onClick={() => setShowDeleted(!showDeleted)} className="min-h-11 text-[13px] text-dim" aria-expanded={showDeleted}>
+          <button onClick={() => setShowDeleted(!showDeleted)} className="min-h-11 text-[0.8125rem] text-dim" aria-expanded={showDeleted}>
             Apagados ({data.deleted.length}) {showDeleted ? '▾' : '›'}
           </button>
           {showDeleted &&
             data.deleted.map((meal) => (
-              <div key={meal.id} className="flex items-center justify-between rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+              <div key={meal.id} className="flex items-center justify-between rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem]">
                 <span className="min-w-0 truncate text-dim">
                   {timeOf(meal.logged_at)} · {meal.items.map((i) => i.name).join(', ') || 'Refeição'}
                 </span>
@@ -1365,10 +1365,10 @@ export default function Hoje() {
 
       {planOpen && (
         <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)} closeOnBack>
-          <div className="space-y-4 pb-2 text-[15px]">
+          <div className="space-y-4 pb-2 text-[0.9375rem]">
             {outToday != null && (
               <div className="space-y-1">
-                <p className="text-[17px]">
+                <p className="text-[1.0625rem]">
                   Gastas cerca de {fmtKcal(round10(outToday))}&nbsp;kcal {isToday ? 'hoje' : 'nesse dia'}
                   {data.expenditure?.learning ? ' (a aprender)' : ''}.
                 </p>
@@ -1518,7 +1518,7 @@ function NextStepCard({
   const chips = favorites.length > 0 && (
     <div className="flex flex-wrap gap-2">
       {favorites.map((fav) => (
-        <button key={fav.id} onClick={() => onFavorite(fav)} className="min-h-11 rounded-full bg-surface2 px-3 text-[15px]">
+        <button key={fav.id} onClick={() => onFavorite(fav)} className="min-h-11 rounded-full bg-surface2 px-3 text-[0.9375rem]">
           {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g prot.</span>
         </button>
       ))}
@@ -1533,12 +1533,12 @@ function NextStepCard({
     >
       {id === 'erro' && errorMeal && (
         <>
-          <p className="font-display text-[12px] font-bold tracking-[0.16em] text-eat uppercase">
+          <p className="font-display text-[0.75rem] font-bold tracking-[0.16em] text-eat uppercase">
             {errorMeals.length > 1 ? `${errorMeals.length} refeições por analisar` : 'Não consegui analisar'}
           </p>
           <div className="-mt-2">
-            <p className="text-[17px] font-medium">A refeição das {timeOf(errorMeal.logged_at)} ficou sem números.</p>
-            <p className="text-[14px] text-dim">
+            <p className="text-[1.0625rem] font-medium">A refeição das {timeOf(errorMeal.logged_at)} ficou sem números.</p>
+            <p className="text-[0.875rem] text-dim">
               {splitStoredError(errorMeal.analysis_error).message ??
                 (errorMeal.status === 'erro' ? 'A análise falhou.' : 'A análise parou a meio.')}
             </p>
@@ -1564,7 +1564,7 @@ function NextStepCard({
       )}
       {id === 'treino' && (
         <>
-          <p className="text-[17px]">Li o print do relógio. Falta confirmar o treino.</p>
+          <p className="text-[1.0625rem]">Li o print do relógio. Falta confirmar o treino.</p>
           <button onClick={onConfirmWorkout} className={`${STEP_CTA} w-full`}>
             Confirmar treino
           </button>
@@ -1572,7 +1572,7 @@ function NextStepCard({
       )}
       {id === 'limite' && limitMeal && (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             Chegaste ao limite da IA que definiste. A foto das {timeOf(limitMeal.logged_at)} está guardada.
           </p>
           <button
@@ -1594,7 +1594,7 @@ function NextStepCard({
       )}
       {id === 'rever' && (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             {reviewCount} {reviewCount === 1 ? 'refeição por confirmar' : 'refeições por confirmar'}. Já contam; confirmar é
             opcional.
           </p>
@@ -1608,7 +1608,7 @@ function NextStepCard({
       )}
       {id === 'medir' && (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             {measureDaysSince == null
               ? `Mede ${female ? 'a cintura, a anca e o pescoço' : 'a cintura e o pescoço'}: 2 minutos com uma fita métrica chegam para estimar a gordura e a massa magra.`
               : `Medições: há ${measureDaysSince} dias · 2 minutos.`}
@@ -1623,7 +1623,7 @@ function NextStepCard({
       )}
       {id === 'pesar' && (
         <>
-          <p className="text-[17px]">Bom dia. Pesa-te?</p>
+          <p className="text-[1.0625rem]">Bom dia. Pesa-te?</p>
           <div className="flex items-center gap-2">
             <button onClick={onWeigh} className={`${STEP_CTA} flex-1`}>
               Pesar
@@ -1634,34 +1634,34 @@ function NextStepCard({
       )}
       {id === 'ontem' && yesterdayUncounted.length > 0 && (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             {yesterdayUncounted.length === 1
               ? 'Ontem ficou uma refeição sem números.'
               : `Ontem ficaram ${yesterdayUncounted.length} refeições sem números.`}
           </p>
-          <p className="-mt-2 text-[14px] text-dim">Até ter números, ontem fica fora das contas do gasto.</p>
+          <p className="-mt-2 text-[0.875rem] text-dim">Até ter números, ontem fica fora das contas do gasto.</p>
           <div className="divide-y divide-line/60">
             {yesterdayUncounted.map((meal) => {
               const analysing =
                 retrying.has(meal.id) || (meal.status === 'a_analisar' && !analysisStuck(meal, Date.now(), retryContext(meal.id)))
               return (
                 <div key={meal.id} className="flex min-h-12 items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[15px]">
+                  <span className="min-w-0 flex-1 truncate text-[0.9375rem]">
                     {timeOf(meal.logged_at)} · {SLOT_LABEL[meal.slot ?? slotOf(new Date(meal.logged_at))]}
                   </span>
                   {analysing ? (
-                    <span className="text-[14px] text-dim">A analisar…</span>
+                    <span className="text-[0.875rem] text-dim">A analisar…</span>
                   ) : (
                     <>
                       <button
                         onClick={() =>
                           meal.status === 'sem_analise' ? void onAnalyse(meal.id, { force: true }) : onRetry(meal.id)
                         }
-                        className="min-h-11 rounded-xl border border-eat/50 px-3 text-[14px] font-semibold text-eat"
+                        className="min-h-11 rounded-xl border border-eat/50 px-3 text-[0.875rem] font-semibold text-eat"
                       >
                         {meal.status === 'sem_analise' ? 'Analisar' : 'Tentar'}
                       </button>
-                      <button onClick={() => onOpenMeal(meal.id)} className="min-h-11 rounded-xl bg-surface2 px-3 text-[14px]">
+                      <button onClick={() => onOpenMeal(meal.id)} className="min-h-11 rounded-xl bg-surface2 px-3 text-[0.875rem]">
                         Escrever
                       </button>
                     </>
@@ -1675,7 +1675,7 @@ function NextStepCard({
       )}
       {id === 'ontem' && yesterdayUncounted.length === 0 && (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             Ontem registaste {yesterdayMeals} {yesterdayMeals === 1 ? 'refeição' : 'refeições'} ({fmtKcal(yesterdayKcal)}
             &nbsp;kcal). Foi tudo?
           </p>
@@ -1684,14 +1684,14 @@ function NextStepCard({
       )}
       {id === 'pouco' && (
         <>
-          <p className="text-[17px]">Hoje comeste pouco. Um lanche com proteína ajuda a manter o músculo.</p>
+          <p className="text-[1.0625rem]">Hoje comeste pouco. Um lanche com proteína ajuda a manter o músculo.</p>
           {chips}
           <div className="flex justify-end">{later}</div>
         </>
       )}
       {id === 'proteina' && (
         <>
-          <p className="text-[17px]">
+          <p className="text-[1.0625rem]">
             {gap.kcal > 0
               ? `Faltam ${fmtInt(gap.protein)} g de proteína e cabem ${fmtKcal(gap.kcal)} kcal.`
               : `Faltam ${fmtInt(gap.protein)} g de proteína e as calorias de hoje já chegaram: escolhe algo leve.`}

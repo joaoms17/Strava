@@ -137,17 +137,17 @@ export default function Avancado() {
     <div className="space-y-6 pt-1 pb-4">
       <AvisoNoite />
       <section className="space-y-2 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">A IA está a funcionar?</h2>
-        <p className="text-[14px] text-dim">
+        <h2 className="text-[0.9375rem] font-semibold">A IA está a funcionar?</h2>
+        <p className="text-[0.875rem] text-dim">
           Faz uma chamada mínima a cada modelo com a chave que está no Vercel (menos de 0,1 cêntimo).
         </p>
         <AiCheck />
       </section>
 
       <section className="space-y-2 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">{euros ? 'Custos da IA' : 'Uso da IA'}</h2>
+        <h2 className="text-[0.9375rem] font-semibold">{euros ? 'Custos da IA' : 'Uso da IA'}</h2>
         {usage && (
-          <p className="text-[15px] tabular-nums">
+          <p className="text-[0.9375rem] tabular-nums">
             Pedidos à IA hoje:{' '}
             {usage.sharedDaily
               ? `casa ${fmtInt(usage.today.house)} (fotos ${fmtInt(usage.today.housePhotos)}) · tu ${fmtInt(usage.today.mine)} (fotos ${fmtInt(usage.today.minePhotos)})`
@@ -155,7 +155,7 @@ export default function Avancado() {
           </p>
         )}
         {usage?.sharedDaily && (
-          <p className="text-[13px] text-dim">
+          <p className="text-[0.8125rem] text-dim">
             Com o Gemini (plano gratuito) a chave é uma só para a casa: não há custos, mas os pedidos de todos contam para
             o mesmo limite diário da Google. Quando o modelo das fotos chega ao limite, as fotos são lidas pelo de reserva
             e a refeição avisa.
@@ -164,33 +164,33 @@ export default function Avancado() {
         {costs ? (
           <>
             {euros && (
-              <p className="text-[15px] tabular-nums">
+              <p className="text-[0.9375rem] tabular-nums">
                 Este mês: cerca de {costs.eur.toFixed(2).replace('.', ',')} €
               </p>
             )}
-            <p className="text-[13px] text-dim">
+            <p className="text-[0.8125rem] text-dim">
               {euros ? '' : 'Este mês: '}
               {Object.entries(costs.byKind)
                 .map(([label, n]) => `${fmtInt(n)} ${kindLabel(label, n)}`)
                 .join(' · ') || 'Nenhuma chamada este mês.'}
             </p>
             {euros && nearMonthlyCap(costs.usd, Number(profile.ai_monthly_cap_eur ?? 10)) && (
-              <p className="text-[13px] text-attn">Estás perto do limite mensal que definiste.</p>
+              <p className="text-[0.8125rem] text-attn">Estás perto do limite mensal que definiste.</p>
             )}
           </>
         ) : (
-          <p className="text-[15px] text-dim">A carregar…</p>
+          <p className="text-[0.9375rem] text-dim">A carregar…</p>
         )}
       </section>
 
       <section className="space-y-3 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">Limites da IA</h2>
-        <p className="text-[13px] text-dim">
+        <h2 className="text-[0.9375rem] font-semibold">Limites da IA</h2>
+        <p className="text-[0.8125rem] text-dim">
           Ao chegar ao limite, as fotos ficam guardadas sem análise e podes analisá-las à mesma. Nunca pergunto antes de
           cada foto.
         </p>
         {euros && (
-          <label className="flex items-center justify-between gap-3 text-[15px]">
+          <label className="flex items-center justify-between gap-3 text-[0.9375rem]">
             <span>Limite mensal (€)</span>
             <input
               inputMode="decimal"
@@ -200,7 +200,7 @@ export default function Avancado() {
             />
           </label>
         )}
-        <label className="flex items-center justify-between gap-3 text-[15px]">
+        <label className="flex items-center justify-between gap-3 text-[0.9375rem]">
           <span>{usage?.sharedDaily ? 'Análises de fotos por dia (a casa toda)' : 'Análises de fotos por dia'}</span>
           <input
             inputMode="numeric"
@@ -229,8 +229,8 @@ export default function Avancado() {
       </section>
 
       <section className="space-y-3 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">Mínimo da semana</h2>
-        <p className="text-[13px] text-dim">
+        <h2 className="text-[0.9375rem] font-semibold">Mínimo da semana</h2>
+        <p className="text-[0.8125rem] text-dim">
           Se a média da semana ficar abaixo deste valor, o Balanço avisa para comeres um pouco mais.
         </p>
         <div className="flex gap-2">
@@ -258,11 +258,11 @@ export default function Avancado() {
       </section>
 
       <section className="space-y-2 rounded-2xl bg-surface p-4">
-        <h2 className="text-[15px] font-semibold">Repetições por exercício</h2>
-        <p className="text-[13px] text-dim">As repetições (mínimo e máximo) que o ginásio propõe nos teus exercícios.</p>
+        <h2 className="text-[0.9375rem] font-semibold">Repetições por exercício</h2>
+        <p className="text-[0.8125rem] text-dim">As repetições (mínimo e máximo) que o ginásio propõe nos teus exercícios.</p>
         {catalog.map((exercise) => (
           <div key={exercise.id} className="flex items-center gap-2 border-t border-line py-2 first:border-t-0">
-            <span className="min-w-0 flex-1 truncate text-[15px]">
+            <span className="min-w-0 flex-1 truncate text-[0.9375rem]">
               {exercise.name}
             </span>
             <input
@@ -272,7 +272,7 @@ export default function Avancado() {
               className={field}
               aria-label="repetições mínimas"
             />
-            <span className="text-[13px] text-dim">–</span>
+            <span className="text-[0.8125rem] text-dim">–</span>
             <input
               inputMode="numeric"
               value={exercise.rep_max ?? ''}
@@ -292,8 +292,8 @@ export default function Avancado() {
         </BusyButton>
       </section>
 
-      <section className="space-y-2 rounded-2xl bg-surface p-4 text-[13px] text-dim">
-        <h2 className="text-[15px] font-semibold text-ink">Versão</h2>
+      <section className="space-y-2 rounded-2xl bg-surface p-4 text-[0.8125rem] text-dim">
+        <h2 className="text-[0.9375rem] font-semibold text-ink">Versão</h2>
         <p>Daily Track · 6 funções no Vercel</p>
         {/* Ideia 6: com a tabela schema_version, as migrações que faltam (não param a app). */}
         {pendingMigrations.length > 0 && (

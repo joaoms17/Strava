@@ -34,13 +34,13 @@ export default function MesPronto({ today }: { today: string }) {
 
   return (
     <section className="flex items-center gap-3 rounded-[18px] border border-line bg-surface p-4">
-      <p className="min-w-0 flex-1 text-[15px] font-semibold">O teu mês de {monthName(month)} está pronto</p>
+      <p className="min-w-0 flex-1 text-[0.9375rem] font-semibold">O teu mês de {monthName(month)} está pronto</p>
       <button
         onClick={() => {
           sheet.open('mes', { mes: month })
           void dismiss()
         }}
-        className="min-h-11 rounded-xl border border-line px-3 text-[15px] font-semibold"
+        className="min-h-11 rounded-xl border border-line px-3 text-[0.9375rem] font-semibold"
       >
         Ver
       </button>
@@ -57,7 +57,7 @@ export default function MesPronto({ today }: { today: string }) {
             toast((err as Error)?.name === 'NotAllowedError' ? 'A imagem está pronta: toca outra vez em Partilhar.' : 'Não consegui criar a imagem.')
           }
         }}
-        className="min-h-11 rounded-xl bg-cta px-3 text-[15px] font-semibold text-on-cta"
+        className="min-h-11 rounded-xl bg-cta px-3 text-[0.9375rem] font-semibold text-on-cta"
       >
         Partilhar
       </BusyButton>

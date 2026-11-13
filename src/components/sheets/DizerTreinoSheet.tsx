@@ -225,7 +225,7 @@ export default function DizerTreinoSheet() {
       : sheet.open('registar-treino', { fav: f.id, ...(sheet.params.get('data') ? { data: sheet.params.get('data')! } : {}) })
 
   const primary =
-    'min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40'
+    'min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40'
 
   return (
     <BottomSheet
@@ -266,29 +266,29 @@ export default function DizerTreinoSheet() {
               rows={4}
               disabled={phase !== 'input'}
               placeholder={'Ex.: «Ginásio 50 min: supino 3×10 a 60 kg, remada 3×12 a 45 kg»\nou «45 min de bicicleta a 140 W, FC média 128»'}
-              className="w-full rounded-2xl border border-line bg-bg p-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+              className="w-full rounded-2xl border border-line bg-bg p-3 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none"
               aria-label="O que fizeste no treino"
             />
             {canRecord() && phase === 'input' && (
               <button
                 onClick={() => void record()}
-                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface2 font-display text-[18px] font-bold tracking-[0.06em] uppercase"
+                className="flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl border border-line bg-surface2 font-display text-[1.125rem] font-bold tracking-[0.06em] uppercase"
               >
                 <Icon name="mic" size={20} /> Gravar áudio
               </button>
             )}
             {phase === 'recording' && (
-              <p className="text-center text-[15px] text-dim">
+              <p className="text-center text-[0.9375rem] text-dim">
                 A gravar… diz o que fizeste (até {MAX_AUDIO_SECONDS} s) e carrega em Parar.
               </p>
             )}
             {error && (
               <div className="space-y-2">
-                <p className="text-[15px] text-pain">{error}</p>
+                <p className="text-[0.9375rem] text-pain">{error}</p>
                 {/* Se a IA falhar, regista-se na mesma, sem ela (T12). */}
                 <button
                   onClick={() => sheet.open('ja-fiz', dateParam ? { data: dateParam } : {})}
-                  className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+                  className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]"
                 >
                   Preencher à mão
                 </button>
@@ -302,7 +302,7 @@ export default function DizerTreinoSheet() {
                     <button
                       key={f.id}
                       onClick={() => openFavorite(f)}
-                      className="min-h-10 rounded-full border border-line px-3 text-[15px]"
+                      className="min-h-10 rounded-full border border-line px-3 text-[0.9375rem]"
                     >
                       {f.name}
                     </button>
@@ -320,11 +320,11 @@ export default function DizerTreinoSheet() {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Nome do treino"
                   aria-label="Nome do treino"
-                  className="w-full bg-transparent text-[18px] font-semibold placeholder:text-dim focus:outline-none"
+                  className="w-full bg-transparent text-[1.125rem] font-semibold placeholder:text-dim focus:outline-none"
                 />
-                <p className="text-[14px] text-dim">{saidSummary(said, (s) => SPORT_LABEL[s])}</p>
+                <p className="text-[0.875rem] text-dim">{saidSummary(said, (s) => SPORT_LABEL[s])}</p>
                 {said.exercises.length > 0 && (
-                  <ul className="space-y-1 text-[15px]">
+                  <ul className="space-y-1 text-[0.9375rem]">
                     {said.exercises.map((e, i) => (
                       <li key={`${e.name}-${i}`} className="flex justify-between gap-3">
                         <span className="min-w-0 truncate">{e.name}</span>
@@ -339,15 +339,15 @@ export default function DizerTreinoSheet() {
                     ))}
                   </ul>
                 )}
-                {said.note && <p className="text-[14px] text-dim">{said.note}</p>}
+                {said.note && <p className="text-[0.875rem] text-dim">{said.note}</p>}
               </div>
-              {said.transcript && <p className="text-[14px] text-dim italic">Ouvi: «{said.transcript}»</p>}
+              {said.transcript && <p className="text-[0.875rem] text-dim italic">Ouvi: «{said.transcript}»</p>}
 
               <div className="space-y-2">
                 <p className="label">Quando</p>
                 <DayChips today={today} value={day} onChange={setDay} tone="cta" />
               </div>
-              <label className="flex items-center gap-3 text-[16px]">
+              <label className="flex items-center gap-3 text-[1rem]">
                 Duração
                 <input
                   inputMode="numeric"
@@ -355,11 +355,11 @@ export default function DizerTreinoSheet() {
                   onChange={(e) => setMinutes(e.target.value.replace(/\D/g, ''))}
                   placeholder="min"
                   aria-label="Duração em minutos"
-                  className="h-11 w-24 rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none"
+                  className="h-11 w-24 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none"
                 />
                 <span className="text-dim">min</span>
               </label>
-              <label className="flex min-h-11 items-center gap-3 text-[16px]">
+              <label className="flex min-h-11 items-center gap-3 text-[1rem]">
                 <input
                   type="checkbox"
                   checked={keep}
@@ -368,8 +368,8 @@ export default function DizerTreinoSheet() {
                 />
                 Guardar nos meus treinos
               </label>
-              {keep && !title.trim() && <p className="text-[14px] text-attn">Dá-lhe um nome para o guardar.</p>}
-              <button onClick={() => setPhase('input')} className="min-h-11 text-[15px] text-dim">
+              {keep && !title.trim() && <p className="text-[0.875rem] text-attn">Dá-lhe um nome para o guardar.</p>}
+              <button onClick={() => setPhase('input')} className="min-h-11 text-[0.9375rem] text-dim">
                 Não é isto: corrigir
               </button>
             </>

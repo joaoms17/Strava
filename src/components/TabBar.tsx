@@ -32,7 +32,7 @@ export default function TabBar() {
             <Link
               key={tab.href}
               href={tab.href}
-              className={`flex flex-1 flex-col items-center gap-1 pt-2.5 pb-2 font-display text-[13px] tracking-[0.1em] uppercase ${
+              className={`flex flex-1 flex-col items-center gap-1 pt-2.5 pb-2 font-display text-[0.8125rem] tracking-[0.1em] uppercase ${
                 location.startsWith(tab.href) ? 'font-bold text-cta' : 'font-semibold text-dim'
               }`}
               aria-current={location.startsWith(tab.href) ? 'page' : undefined}

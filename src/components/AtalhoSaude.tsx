@@ -63,7 +63,7 @@ export default function AtalhoSaude() {
 
   return (
     <div className="space-y-3">
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         Para quem tem Apple Watch: um Atalho do iPhone manda todas as noites os passos e as horas de sono do Saúde
         para esta conta. Cada pessoa usa o seu token.
       </p>
@@ -71,7 +71,7 @@ export default function AtalhoSaude() {
         <button
           disabled={busy}
           onClick={() => void show()}
-          className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] disabled:opacity-50"
+          className="min-h-12 w-full rounded-xl bg-surface2 text-[0.9375rem] disabled:opacity-50"
         >
           {busy ? 'A obter…' : 'Mostrar endereço e token'}
         </button>
@@ -86,17 +86,17 @@ export default function AtalhoSaude() {
             <div key={label} className="space-y-1">
               <p className="label">{label}</p>
               <div className="flex items-center gap-2">
-                <code className="min-w-0 flex-1 rounded-lg bg-surface2 px-3 py-2 text-[12px] break-all select-all">
+                <code className="min-w-0 flex-1 rounded-lg bg-surface2 px-3 py-2 text-[0.75rem] break-all select-all">
                   {value}
                 </code>
-                <button onClick={() => void copy(value, label)} className="min-h-11 shrink-0 px-2 text-[14px] text-eat">
+                <button onClick={() => void copy(value, label)} className="min-h-11 shrink-0 px-2 text-[0.875rem] text-eat">
                   Copiar
                 </button>
               </div>
             </div>
           ))}
-          <p className="text-[13px] text-dim">{createdLabel(data.created_at)}</p>
-          <ol className="list-decimal space-y-1 pl-5 text-[13px] text-dim">
+          <p className="text-[0.8125rem] text-dim">{createdLabel(data.created_at)}</p>
+          <ol className="list-decimal space-y-1 pl-5 text-[0.8125rem] text-dim">
             <li>Atalhos › novo atalho: «Procurar amostras de saúde» de Passos de hoje e «Calcular estatísticas» › Soma.</li>
             <li>
               Outra vez para Análise do sono, desde ontem às 18:00, só «A dormir»; soma da duração em minutos.
@@ -112,27 +112,27 @@ export default function AtalhoSaude() {
               <button
                 disabled={busy}
                 onClick={() => setConfirming(true)}
-                className="min-h-11 w-full rounded-xl bg-surface2 text-[15px] disabled:opacity-50"
+                className="min-h-11 w-full rounded-xl bg-surface2 text-[0.9375rem] disabled:opacity-50"
               >
                 Gerar novo token
               </button>
             ) : (
               <div className="space-y-2 rounded-xl bg-surface2 p-3">
-                <p className="text-[14px]">
+                <p className="text-[0.875rem]">
                   O token atual deixa de funcionar: o Atalho só volta a mandar os dados quando lhe puseres o novo.
                 </p>
                 <div className="flex gap-2">
                   <button
                     disabled={busy}
                     onClick={() => void rotate()}
-                    className="min-h-11 flex-1 rounded-xl bg-cta text-[15px] font-semibold text-on-cta disabled:opacity-50"
+                    className="min-h-11 flex-1 rounded-xl bg-cta text-[0.9375rem] font-semibold text-on-cta disabled:opacity-50"
                   >
                     {busy ? 'A gerar…' : 'Gerar'}
                   </button>
                   <button
                     disabled={busy}
                     onClick={() => setConfirming(false)}
-                    className="min-h-11 flex-1 rounded-xl text-[15px] text-dim"
+                    className="min-h-11 flex-1 rounded-xl text-[0.9375rem] text-dim"
                   >
                     Cancelar
                   </button>

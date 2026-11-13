@@ -27,14 +27,14 @@ export default function FatScale({ pct, sex }: { pct: number; sex: string | null
           ))}
         </div>
       </div>
-      <div className="relative h-4 text-[11px] text-dim tabular-nums">
+      <div className="relative h-4 text-[0.6875rem] text-dim tabular-nums">
         {fatCuts(sex).map((cut) => (
           <span key={cut} className="absolute -translate-x-1/2" style={{ left: `${at(cut)}%` }}>
             {cut}
           </span>
         ))}
       </div>
-      <p className="text-[15px]">
+      <p className="text-[0.9375rem]">
         <span className="font-semibold">{label}</span>
         <span className="text-dim"> · cerca de {Math.round(pct)} % ({sex === 'f' ? 'escala de mulher' : 'escala de homem'})</span>
       </p>

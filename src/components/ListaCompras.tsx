@@ -90,16 +90,16 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
 
   return (
     <div className="space-y-4">
-      <p className="text-[14px] text-dim">
+      <p className="text-[0.875rem] text-dim">
         Quantas vezes vais comer cada favorita? Começa com a dieta ativa para 7 dias.
       </p>
       <ul className="divide-y divide-line rounded-2xl bg-surface">
         {favorites.map((f) => (
           <li key={f.id} className="flex items-center gap-2 px-3 py-2">
-            <span className="min-w-0 flex-1 truncate text-[15px]">{f.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[0.9375rem]">{f.name}</span>
             <button
               onClick={() => setTimes({ ...times, [f.id]: Math.max(0, (times[f.id] ?? 0) - 1) })}
-              className="h-10 w-10 rounded-lg bg-surface2 text-[17px]"
+              className="h-10 w-10 rounded-lg bg-surface2 text-[1.0625rem]"
               aria-label={`menos ${f.name}`}
             >
               −
@@ -107,7 +107,7 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
             <span className="w-7 text-center tabular-nums">{times[f.id] ?? 0}</span>
             <button
               onClick={() => setTimes({ ...times, [f.id]: (times[f.id] ?? 0) + 1 })}
-              className="h-10 w-10 rounded-lg bg-surface2 text-[17px]"
+              className="h-10 w-10 rounded-lg bg-surface2 text-[1.0625rem]"
               aria-label={`mais ${f.name}`}
             >
               +
@@ -126,7 +126,7 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
                   setChecked([])
                   writeScoped(localStorage, CHECKED_KEY, null)
                 }}
-                className="text-[13px] text-dim"
+                className="text-[0.8125rem] text-dim"
               >
                 Limpar riscados
               </button>
@@ -137,7 +137,7 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
               const done = checked.includes(l.name)
               return (
                 <li key={l.name}>
-                  <label className="flex min-h-10 items-center gap-3 text-[15px]">
+                  <label className="flex min-h-10 items-center gap-3 text-[0.9375rem]">
                     <input type="checkbox" checked={done} onChange={() => toggle(l.name)} className="h-5 w-5 accent-cta" />
                     <span className={`flex-1 ${done ? 'text-dim line-through' : ''}`}>{l.name}</span>
                     <span className="text-dim tabular-nums">
@@ -149,21 +149,21 @@ export default function ListaCompras({ favorites }: { favorites: Favorite[] }) {
             })}
           </ul>
           {extra.length > 0 && (
-            <p className="flex items-center justify-between gap-3 text-[13px] text-dim">
+            <p className="flex items-center justify-between gap-3 text-[0.8125rem] text-dim">
               <span>
                 {extra.length === 1 ? '1 coisa juntada' : `${extra.length} coisas juntadas`} pela «Pergunta à app»
               </span>
-              <button onClick={clearExtra} className="shrink-0 px-1 py-1 text-[13px] text-dim underline">
+              <button onClick={clearExtra} className="shrink-0 px-1 py-1 text-[0.8125rem] text-dim underline">
                 Tirar
               </button>
             </p>
           )}
-          <button onClick={() => void share()} className="min-h-12 w-full rounded-xl bg-surface2 text-[15px] font-semibold">
+          <button onClick={() => void share()} className="min-h-12 w-full rounded-xl bg-surface2 text-[0.9375rem] font-semibold">
             Partilhar a lista
           </button>
         </section>
       ) : (
-        <p className="text-center text-[14px] text-dim">Escolhe pelo menos uma favorita.</p>
+        <p className="text-center text-[0.875rem] text-dim">Escolhe pelo menos uma favorita.</p>
       )}
     </div>
   )

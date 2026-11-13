@@ -38,7 +38,7 @@ export default function PersonSheet() {
   }
 
   const field =
-    'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none'
+    'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none'
   const segment = (m: Mode, label: string) => (
     <button
       onClick={() => {
@@ -61,18 +61,18 @@ export default function PersonSheet() {
           busy={mode === 'nova' ? 'A criar a conta…' : 'A entrar…'}
           disabled={!canSubmit || leaving}
           onClick={submit}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[18px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.125rem] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-40"
         >
           {leaving ? 'A mudar…' : mode === 'nova' ? 'Criar conta e mudar' : 'Entrar e mudar'}
         </BusyButton>
       }
     >
       <div className="space-y-4 pb-2">
-        <div className={`grid grid-cols-2 ${SEGMENT_TRACK} text-[15px]`}>
+        <div className={`grid grid-cols-2 ${SEGMENT_TRACK} text-[0.9375rem]`}>
           {segment('nova', 'Conta nova')}
           {segment('existente', 'Já tem conta')}
         </div>
-        <p className="text-[14px] text-dim">
+        <p className="text-[0.875rem] text-dim">
           Cada pessoa tem os seus registos (comida, peso, medidas, treinos) e trocas no separador do topo. Também pode
           entrar no telemóvel dela com o mesmo email.
         </p>
@@ -99,7 +99,7 @@ export default function PersonSheet() {
             className={field}
           />
         </label>
-        {error && <p className="text-[14px] text-eat">{error}</p>}
+        {error && <p className="text-[0.875rem] text-eat">{error}</p>}
       </div>
     </BottomSheet>
   )

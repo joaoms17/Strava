@@ -17,6 +17,7 @@ import { needsSlot, slotForRanking, whenApi, whenFromParams, whenLabel, type Whe
 import { rankFavorites } from '../../../api/_lib/rules/favoritos'
 import { slotOf } from '../../../api/_lib/rules/momentos'
 import type { Favorite } from '../../lib/types'
+import { favoriteThumb } from '../../lib/favorites'
 
 const FAVORITES_SHOWN = 6
 
@@ -34,7 +35,7 @@ export default function RepeatSheet() {
   const [allFavorites, setAllFavorites] = useState(false)
   const label = whenLabel(when, today)
   const ranked = useMemo(() => rankFavorites(favorites ?? [], slotForRanking(when, now)), [favorites, when, now])
-  const favUrls = useSignedUrls(ranked.map((f) => f.photo_path))
+  const favUrls = useSignedUrls(ranked.map(favoriteThumb))
 
   useEffect(() => {
     let alive = true
@@ -94,16 +95,16 @@ export default function RepeatSheet() {
               onClick={() => pickFavorite(favorite)}
               className="flex min-h-14 items-center gap-2 rounded-xl bg-surface2 p-1.5 pr-3 text-left"
             >
-              <Thumb url={favorite.photo_path ? favUrls[favorite.photo_path] : null} size={42} />
+              <Thumb url={favUrls[favoriteThumb(favorite) ?? ''] ?? null} size={42} />
               <span className="min-w-0">
-                <span className="line-clamp-2 text-[15px] leading-tight">{favorite.name}</span>
-                <span className="block text-[13px] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
+                <span className="line-clamp-2 text-[0.9375rem] leading-tight">{favorite.name}</span>
+                <span className="block text-[0.8125rem] text-dim tabular-nums">{fmtKcal(favorite.kcal)} kcal</span>
               </span>
             </button>
           ))}
         </div>
         {!searching && !allFavorites && found.length > FAVORITES_SHOWN && (
-          <button onClick={() => setAllFavorites(true)} className="min-h-11 w-full text-[15px] text-eat">
+          <button onClick={() => setAllFavorites(true)} className="min-h-11 w-full text-[0.9375rem] text-eat">
             Ver as {found.length} favoritas
           </button>
         )}

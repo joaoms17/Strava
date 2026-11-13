@@ -116,7 +116,7 @@ export default function IntervalsSettings() {
 
   if (!status?.connected) {
     return (
-      <div className="space-y-3 text-[15px]">
+      <div className="space-y-3 text-[0.9375rem]">
         <p>Em 5 minutos os treinos e o sono do teu relógio (Garmin, Amazfit…) passam a entrar sozinhos.</p>
         <ol className="list-decimal space-y-1.5 pl-5 text-dim">
           <li>Cria uma conta grátis em intervals.icu.</li>
@@ -132,7 +132,7 @@ export default function IntervalsSettings() {
           autoComplete="off"
           autoCapitalize="none"
           spellCheck={false}
-          className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
+          className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none"
         />
         <button
           disabled={busy || key.trim().length < 8}
@@ -149,22 +149,22 @@ export default function IntervalsSettings() {
         >
           {busy ? <BusyLabel text="A testar…" /> : 'Testar e ligar'}
         </button>
-        {status?.last_error && <p className="text-[14px] text-pain">{status.last_error}</p>}
+        {status?.last_error && <p className="text-[0.875rem] text-pain">{status.last_error}</p>}
       </div>
     )
   }
 
   return (
-    <div className="space-y-3 text-[15px]">
+    <div className="space-y-3 text-[0.9375rem]">
       <p>
         Ligado{status.athlete ? ` · ${status.athlete}` : ''}
         {status.last_sync_at ? ` · sincronizado ${syncedAgo(status.last_sync_at, new Date())}` : ''}
       </p>
-      {status.last_error && <p className="text-[14px] text-pain">{status.last_error}</p>}
+      {status.last_error && <p className="text-[0.875rem] text-pain">{status.last_error}</p>}
       {status.wellness_error && (
-        <p className="text-[14px] text-attn">Não consegui ler o sono: {status.wellness_error}</p>
+        <p className="text-[0.875rem] text-attn">Não consegui ler o sono: {status.wellness_error}</p>
       )}
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         As pesagens do intervals.icu só entram nos dias sem pesagem tua. Os treinos juntam-se à Bicicleta habitual ou ao
         print quando são a mesma sessão.
       </p>
@@ -183,7 +183,7 @@ export default function IntervalsSettings() {
       </div>
       {paused && !busy && (
         <div className="space-y-2 rounded-xl bg-surface2 p-3">
-          <p className="text-[14px]">
+          <p className="text-[0.875rem]">
             A importação do histórico parou em {fmtDayMonth(paused.nextNewest)} {paused.nextNewest.slice(0, 4)}. O que
             já entrou está guardado.
           </p>
@@ -203,7 +203,7 @@ export default function IntervalsSettings() {
                 }
                 setPaused(null)
               }}
-              className="min-h-11 rounded-lg border border-line text-[14px]"
+              className="min-h-11 rounded-lg border border-line text-[0.875rem]"
             >
               Esquecer
             </button>
@@ -212,7 +212,7 @@ export default function IntervalsSettings() {
       )}
       {choosing && !busy && (
         <div className="space-y-2 rounded-xl bg-surface2 p-3">
-          <p className="text-[14px] text-dim">
+          <p className="text-[0.875rem] text-dim">
             Treinos, pesos, sono e passos que o intervals.icu tem do teu relógio. Os treinos que já registaste juntam-se;
             as tuas pesagens nunca são substituídas.
           </p>
@@ -221,7 +221,7 @@ export default function IntervalsSettings() {
               <button
                 key={r.label}
                 onClick={() => void runHistory(r.days)}
-                className="min-h-11 rounded-lg border border-line text-[14px]"
+                className="min-h-11 rounded-lg border border-line text-[0.875rem]"
               >
                 {r.label}
               </button>
@@ -231,14 +231,14 @@ export default function IntervalsSettings() {
       )}
       {history && (
         <div className="space-y-2 rounded-xl bg-surface2 p-3" role="status">
-          <p className="text-[14px]">
+          <p className="text-[0.875rem]">
             A importar {history.label}…{' '}
             {history.open
               ? `(${history.done} ${history.done === 1 ? 'mês feito' : 'meses feitos'})`
               : `(${history.done} de ${history.total})`}
           </p>
           {history.open ? (
-            <p className="text-[13px] text-dim">Pára sozinho quando passar um ano sem dados. Deixa a app aberta.</p>
+            <p className="text-[0.8125rem] text-dim">Pára sozinho quando passar um ano sem dados. Deixa a app aberta.</p>
           ) : (
             <div className="h-2 overflow-hidden rounded-full bg-line">
               <div
@@ -247,7 +247,7 @@ export default function IntervalsSettings() {
               />
             </div>
           )}
-          <button onClick={() => (stop.current = true)} className="text-[14px] text-dim underline underline-offset-2">
+          <button onClick={() => (stop.current = true)} className="text-[0.875rem] text-dim underline underline-offset-2">
             Parar
           </button>
         </div>
@@ -259,7 +259,7 @@ export default function IntervalsSettings() {
             run('desligar', async () => (await postApi('/api/workout/disconnect', {}), 'Desligado.')),
           )
         }
-        className="text-[14px] text-pain"
+        className="text-[0.875rem] text-pain"
       >
         Desligar
       </button>

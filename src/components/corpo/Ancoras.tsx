@@ -110,7 +110,7 @@ export default function Ancoras({
                   go(s.id)
                 }}
                 aria-current={active === s.id ? 'location' : undefined}
-                className={`flex min-h-11 shrink-0 items-center rounded-lg px-2 text-[14px] whitespace-nowrap ${
+                className={`flex min-h-11 shrink-0 items-center rounded-lg px-2 text-[0.875rem] whitespace-nowrap ${
                   active === s.id ? 'bg-surface2 font-semibold text-ink' : 'text-dim'
                 }`}
               >
@@ -119,7 +119,7 @@ export default function Ancoras({
             ))}
           </div>
           {period != null && (
-            <label className="relative flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface pr-2.5 pl-3 text-[14px] font-semibold text-ink">
+            <label className="relative flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface pr-2.5 pl-3 text-[0.875rem] font-semibold text-ink">
               <span className="sr-only">Período dos gráficos</span>
               <span aria-hidden>{period}</span>
               <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden className="text-dim">
@@ -130,7 +130,7 @@ export default function Ancoras({
                 value={period}
                 onChange={(e) => onPeriod(e.target.value as Period)}
                 // 16 px: com menos, o Safari do iPhone faz zoom à página ao tocar.
-                className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-[16px] opacity-0"
+                className="absolute inset-0 h-full w-full cursor-pointer appearance-none text-[1rem] opacity-0"
               >
                 {PERIODS.map((p) => (
                   <option key={p} value={p}>

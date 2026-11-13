@@ -15,11 +15,11 @@ export default function ProteinaRefeicao({ rows, perMeal }: { rows: ProteinRow[]
     <section className="space-y-3 rounded-[18px] border border-line bg-surface p-4" aria-label="Proteína por refeição">
       <div className="flex items-baseline justify-between">
         <p className="label">Proteína por refeição</p>
-        <p className="text-[13px] text-dim">média de 14 dias</p>
+        <p className="text-[0.8125rem] text-dim">média de 14 dias</p>
       </div>
       <div className="space-y-2">
         {ordered.map((r) => (
-          <div key={r.slot} className="grid grid-cols-[7.5rem_1fr_3rem] items-center gap-2 text-[14px]">
+          <div key={r.slot} className="grid grid-cols-[7.5rem_1fr_3rem] items-center gap-2 text-[0.875rem]">
             <span className={r === weakest && r.avg < perMeal ? 'font-semibold text-attn' : ''}>{SLOT_LABEL[r.slot]}</span>
             <div className="relative h-2 rounded-full bg-surface2">
               <div
@@ -33,7 +33,7 @@ export default function ProteinaRefeicao({ rows, perMeal }: { rows: ProteinRow[]
         ))}
       </div>
       {weakest && weakest.avg < perMeal && (
-        <p className="text-[14px] text-dim">
+        <p className="text-[0.875rem] text-dim">
           É no {SLOT_LABEL[weakest.slot].toLowerCase()} que falta: {weakest.avg} g em média, o alvo é {perMeal} g por refeição.
         </p>
       )}

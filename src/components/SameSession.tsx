@@ -20,7 +20,7 @@ export default function SameSession({
   const origin = workout.source === 'intervals' || workout.external_id ? ', do relógio' : ''
   return (
     <div className="space-y-2">
-      <p className="text-[16px]">
+      <p className="text-[1rem]">
         Já tens registado neste dia: {workoutTitle(workout)}
         {when} ({workout.minutes ?? '?'}&nbsp;min{origin}). É este treino?
       </p>
@@ -28,15 +28,15 @@ export default function SameSession({
         <BusyButton
           busy="A guardar…"
           onClick={onMerge}
-          className="min-h-14 rounded-2xl bg-cta font-display text-[17px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+          className="min-h-14 rounded-2xl bg-cta font-display text-[1.0625rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
           Sim, é esse
         </BusyButton>
-        <BusyButton busy="A guardar…" onClick={onNew} className="min-h-14 rounded-2xl border border-line text-[15px] disabled:opacity-40">
+        <BusyButton busy="A guardar…" onClick={onNew} className="min-h-14 rounded-2xl border border-line text-[0.9375rem] disabled:opacity-40">
           Não, é outro
         </BusyButton>
       </div>
-      <p className="text-[13px] text-dim">Se for, junto os dois num só treino e não conta duas vezes.</p>
+      <p className="text-[0.8125rem] text-dim">Se for, junto os dois num só treino e não conta duas vezes.</p>
     </div>
   )
 }

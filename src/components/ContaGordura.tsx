@@ -96,22 +96,22 @@ export default function ContaGordura({ today }: { today: string }) {
 
   return (
     <section className="space-y-2 rounded-[18px] border border-line bg-surface p-5" aria-label="Conta da gordura">
-      <p className="font-display text-[12px] font-bold tracking-[0.16em] text-burn uppercase">Conta da gordura</p>
-      <p className="text-[19px] leading-snug font-semibold">{headline}</p>
+      <p className="font-display text-[0.75rem] font-bold tracking-[0.16em] text-burn uppercase">Conta da gordura</p>
+      <p className="text-[1.1875rem] leading-snug font-semibold">{headline}</p>
       {tally.diasContados > 0 && (
-        <p className="text-[14px] text-dim">
+        <p className="text-[0.875rem] text-dim">
           {tally.defice >= 0 ? 'Défice' : 'Excedente'} de {fmtInt(Math.abs(tally.defice))} kcal em {tally.diasContados}{' '}
           {tally.diasContados === 1 ? 'dia completo' : 'dias completos'} desde {fmtDayMonth(tally.desde)} (7 700 kcal ≈ 1 kg).
         </p>
       )}
       {realKg != null && (
-        <p className="text-[15px]">
+        <p className="text-[0.9375rem]">
           A balança: {realKg === 0 ? 'peso médio igual' : `${realKg > 0 ? '−' : '+'}${fmt1(Math.abs(realKg))} kg no peso médio`}.
           {note && <span className="text-dim"> {note}</span>}
         </p>
       )}
       {tally.diasFora > 0 && (
-        <p className="text-[13px] text-dim">
+        <p className="text-[0.8125rem] text-dim">
           {tally.diasFora} {tally.diasFora === 1 ? 'dia ficou' : 'dias ficaram'} de fora (incompletos ou com «faltou algo»).
           {tally.diasContados > 0 &&
             ` Se ${tally.diasFora === 1 ? 'fosse igual' : 'fossem iguais'} aos contados: cerca de ${fmt1(Math.abs(tally.previstoTodosKg))} kg ${tally.previstoTodosKg >= 0 ? 'perdidos' : 'ganhos'}.`}
@@ -119,15 +119,15 @@ export default function ContaGordura({ today }: { today: string }) {
       )}
       {confirm ? (
         <div className="grid grid-cols-2 gap-2 pt-1">
-          <BusyButton busy="A guardar…" onClick={restart} className="min-h-11 rounded-xl bg-surface2 text-[15px]">
+          <BusyButton busy="A guardar…" onClick={restart} className="min-h-11 rounded-xl bg-surface2 text-[0.9375rem]">
             Recomeçar hoje
           </BusyButton>
-          <button onClick={() => setConfirm(false)} className="min-h-11 rounded-xl text-[15px] text-dim">
+          <button onClick={() => setConfirm(false)} className="min-h-11 rounded-xl text-[0.9375rem] text-dim">
             Cancelar
           </button>
         </div>
       ) : (
-        <button onClick={() => setConfirm(true)} className="min-h-11 text-[14px] text-eat">
+        <button onClick={() => setConfirm(true)} className="min-h-11 text-[0.875rem] text-eat">
           Recomeçar a contagem
         </button>
       )}

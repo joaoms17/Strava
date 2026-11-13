@@ -63,7 +63,7 @@ export default function Duplicado({
 
   return (
     <div className={compact ? 'space-y-2' : 'space-y-3 rounded-[18px] border border-attn/50 bg-attn/10 p-4'}>
-      <p className="text-[16px]">
+      <p className="text-[1rem]">
         {!compact && <span className="block font-semibold">Possível duplicado</span>}
         {workoutTitle(a)} ({describe(a)}) e {workoutTitle(b).toLowerCase()} ({describe(b)}). É o mesmo treino?
       </p>
@@ -71,15 +71,15 @@ export default function Duplicado({
         <BusyButton
           busy="A juntar…"
           onClick={join}
-          className="min-h-12 rounded-xl bg-cta font-display text-[16px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-40"
+          className="min-h-12 rounded-xl bg-cta font-display text-[1rem] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-40"
         >
           Juntar os dois
         </BusyButton>
-        <BusyButton busy="A guardar…" onClick={separate} className="min-h-12 rounded-xl border border-line text-[15px] disabled:opacity-40">
+        <BusyButton busy="A guardar…" onClick={separate} className="min-h-12 rounded-xl border border-line text-[0.9375rem] disabled:opacity-40">
           São dois
         </BusyButton>
       </div>
-      <p className="text-[13px] text-dim">Juntos contam uma vez. Podes anular a seguir.</p>
+      <p className="text-[0.8125rem] text-dim">Juntos contam uma vez. Podes anular a seguir.</p>
     </div>
   )
 }

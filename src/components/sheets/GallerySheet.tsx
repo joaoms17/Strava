@@ -149,14 +149,14 @@ export default function GallerySheet() {
   if (photos == null) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A ler as fotos…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A ler as fotos…</p>
       </BottomSheet>
     )
   }
   if (photos.length === 0) {
     return (
       <BottomSheet title="Fotos da galeria" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Escolhe as fotos outra vez no botão (+) › Galeria.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Escolhe as fotos outra vez no botão (+) › Galeria.</p>
       </BottomSheet>
     )
   }
@@ -170,7 +170,7 @@ export default function GallerySheet() {
           busy="A guardar as fotos…"
           disabled={missingWhen}
           onClick={analyse}
-          className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg disabled:opacity-40"
         >
           {missingWhen ? 'Diz quando foi cada foto sem hora' : `Analisar (${groups.length})`}
         </BusyButton>
@@ -178,7 +178,7 @@ export default function GallerySheet() {
     >
       <div className="space-y-4 pb-2">
         {leftOut > 0 && (
-          <p role="status" className="rounded-xl bg-attn/10 px-3 py-2 text-[14px] text-attn">
+          <p role="status" className="rounded-xl bg-attn/10 px-3 py-2 text-[0.875rem] text-attn">
             Só cabem {GALLERY_MAX} fotos de cada vez: {leftOut === 1 ? 'ficou 1 de fora' : `ficaram ${leftOut} de fora`}. Depois de
             analisar estas, escolhe as outras na Galeria.
           </p>
@@ -196,13 +196,13 @@ export default function GallerySheet() {
                 ))}
               </div>
               {at ? (
-                <p className="text-[15px]">
+                <p className="text-[0.9375rem]">
                   {SLOT_LABEL[slotOf(at)]} · <span className="tabular-nums">{timeOf(at.toISOString())}</span>
                   {day !== today && <span className="text-dim"> · {fmtDayShort(day!)}</span>}
                   {group.length > 1 && (
                     <button
                       onClick={() => setSplit((prev) => new Set(prev).add(key))}
-                      className="ml-1 min-h-11 px-2 text-[13px] text-eat"
+                      className="ml-1 min-h-11 px-2 text-[0.8125rem] text-eat"
                     >
                       Separar
                     </button>
@@ -210,13 +210,13 @@ export default function GallerySheet() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-[15px] font-semibold">
+                  <p className="text-[0.9375rem] font-semibold">
                     Quando foi?
                     {/* As capturas de ecrã sem hora vêm juntas (o mesmo pedido). */}
                     {group.length > 1 && (
                       <button
                         onClick={() => setSplit((prev) => new Set(prev).add(key))}
-                        className="ml-3 text-[13px] font-normal text-eat"
+                        className="ml-3 text-[0.8125rem] font-normal text-eat"
                       >
                         Separar
                       </button>
@@ -257,7 +257,7 @@ export default function GallerySheet() {
                 onChange={(e) => patch(key, { note: e.target.value })}
                 placeholder="Nota (ex.: comi metade, com azeite)"
                 enterKeyHint="done"
-                className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[15px] placeholder:text-dim focus:border-eat focus:outline-none"
+                className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[0.9375rem] placeholder:text-dim focus:border-eat focus:outline-none"
               />
             </section>
           )

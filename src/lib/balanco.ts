@@ -36,6 +36,8 @@ export interface BalancoLongo {
   weights: { date: string; value: number }[]
   health: HealthRow[]
   projection: ProjectionData
+  // O primeiro dia com comida (L15: os dias de antes vêm do histórico do relógio).
+  firstDate: string | null
 }
 
 const WORKOUT_COLUMNS = 'id,date,started_at,type,sport,minutes,elapsed_s,watts,kcal_est,calories:raw->calories'
@@ -124,7 +126,7 @@ export function longoFrom(profile: Profile, rows: BalancoRows, today: string): B
     workouts: rows.workouts.filter((x) => x.date >= recent).map((w) => ({ date: w.date, minutes: w.minutes, kcal_est: w.kcal_est })),
     measurements: [],
   })
-  return { from: rows.daysFrom, days, weights, health: rows.health, projection }
+  return { from: rows.daysFrom, days, weights, health: rows.health, projection, firstDate: rows.firstDate }
 }
 
 // As linhas da página (16 semanas) e, para uma semana mais antiga, o bloco

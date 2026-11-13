@@ -32,9 +32,9 @@ export default function RecoverPassword({ onDone }: { onDone: () => void }) {
   }, [])
 
   const box = 'w-full max-w-sm space-y-4'
-  const title = <h1 className="font-display text-[28px] font-bold tracking-[0.02em] uppercase">Nova palavra-passe</h1>
+  const title = <h1 className="font-display text-[1.75rem] font-bold tracking-[0.02em] uppercase">Nova palavra-passe</h1>
   const back = (
-    <button onClick={onDone} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+    <button onClick={onDone} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem]">
       Voltar ao ecrã de entrada
     </button>
   )
@@ -44,13 +44,13 @@ export default function RecoverPassword({ onDone }: { onDone: () => void }) {
     body = (
       <div className={box}>
         {title}
-        <p className="text-[17px]">Palavra-passe mudada.</p>
-        <p className="text-[15px] text-dim">
+        <p className="text-[1.0625rem]">Palavra-passe mudada.</p>
+        <p className="text-[0.9375rem] text-dim">
           Se usas a app instalada no ecrã principal, abre-a e entra com a nova palavra-passe.
         </p>
         <button
           onClick={onDone}
-          className="min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase"
+          className="min-h-12 w-full rounded-xl bg-cta font-display text-[1.0625rem] font-bold tracking-[0.04em] text-on-cta uppercase"
         >
           Continuar
         </button>
@@ -60,7 +60,7 @@ export default function RecoverPassword({ onDone }: { onDone: () => void }) {
     body = (
       <div className={box}>
         {title}
-        <p className="text-[15px] text-dim">{session.user.email}</p>
+        <p className="text-[0.9375rem] text-dim">{session.user.email}</p>
         <NewPasswordForm email={session.user.email ?? null} submitLabel="Guardar" onDone={() => setDone(true)} />
       </div>
     )
@@ -68,12 +68,12 @@ export default function RecoverPassword({ onDone }: { onDone: () => void }) {
     body = (
       <div className={box}>
         {title}
-        <p className="text-[17px] text-eat">{linkError ?? 'O link expirou ou já foi usado. Pede outro no ecrã de entrada.'}</p>
+        <p className="text-[1.0625rem] text-eat">{linkError ?? 'O link expirou ou já foi usado. Pede outro no ecrã de entrada.'}</p>
         {back}
       </div>
     )
   } else {
-    body = <p className="animate-pulse text-[15px] text-dim">A abrir o link…</p>
+    body = <p className="animate-pulse text-[0.9375rem] text-dim">A abrir o link…</p>
   }
 
   return <div className="flex min-h-dvh items-center justify-center bg-bg p-6 text-ink">{body}</div>

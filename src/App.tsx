@@ -99,7 +99,7 @@ if (typeof window !== 'undefined') installNavIndex()
 function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bg p-6">
-      <div className="max-w-sm space-y-3 text-center text-[15px] text-dim">{children}</div>
+      <div className="max-w-sm space-y-3 text-center text-[0.9375rem] text-dim">{children}</div>
     </div>
   )
 }
@@ -148,7 +148,7 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
             // H12: recua (Favoritas volta às Definições se veio de lá); só sem
             // histórico da app (aberta por um link) é que vai para o pai.
             onClick={() => (canGoBackInApp() ? window.history.back() : navigate(parent, { replace: true }))}
-            className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink"
+            className="-ml-3 min-h-11 px-3 text-[1.0625rem] font-medium text-ink"
           >
             ‹ Voltar
           </button>
@@ -156,14 +156,14 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
         {!parent && (
           <div className="min-w-0">
             {location.startsWith('/hoje') && <p className="label">{hojeDate === today ? 'Hoje' : 'A ver o dia'}</p>}
-            <h1 className="truncate font-display text-[34px] leading-none font-extrabold uppercase">{title}</h1>
+            <h1 className="truncate font-display text-[2.125rem] leading-none font-extrabold uppercase">{title}</h1>
           </div>
         )}
       </div>
-      {parent && <h1 className="truncate font-display text-[22px] font-bold uppercase">{title}</h1>}
+      {parent && <h1 className="truncate font-display text-[1.375rem] font-bold uppercase">{title}</h1>}
       <div className="flex shrink-0 items-center gap-3">
         {queued.count > 0 && (
-          <span className={`rounded-full bg-surface2 px-2.5 py-1 text-[13px] ${queued.failed > 0 ? 'text-eat' : 'text-dim'}`}>
+          <span className={`rounded-full bg-surface2 px-2.5 py-1 text-[0.8125rem] ${queued.failed > 0 ? 'text-eat' : 'text-dim'}`}>
             {!navigator.onLine
               ? `${queued.count} à espera de rede`
               : queued.failed > 0
@@ -175,7 +175,7 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
         {location.startsWith('/hoje') && hojeDate !== today && (
           <button
             onClick={() => navigate('/hoje')}
-            className="flex h-11 items-center rounded-xl border border-line bg-surface px-3 text-[15px] whitespace-nowrap text-eat"
+            className="flex h-11 items-center rounded-xl border border-line bg-surface px-3 text-[0.9375rem] whitespace-nowrap text-eat"
           >
             Voltar a hoje ›
           </button>
@@ -307,13 +307,13 @@ function Shell() {
   if (status === 'needs-migration') {
     return (
       <Centered>
-        <p className="text-[17px] font-semibold text-ink">A app precisa de uma atualização</p>
+        <p className="text-[1.0625rem] font-semibold text-ink">A app precisa de uma atualização</p>
         <p>
           Esta versão precisa de uma atualização dos dados que ainda não foi feita. Avisa quem gere a app e
           tenta outra vez depois.
         </p>
         {/* H13: o pormenor técnico fica escondido, para quem gere a app. */}
-        <details className="text-left text-[13px]">
+        <details className="text-left text-[0.8125rem]">
           <summary className="min-h-11 cursor-pointer py-2">Detalhes técnicos</summary>
           <p>No SQL Editor do Supabase, correr por esta ordem:</p>
           <ul className="space-y-1">
@@ -341,7 +341,7 @@ function Shell() {
     )
   }
 
-  const loading = <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+  const loading = <p className="pt-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
   return (
     <div className="min-h-dvh bg-bg">
       <PeopleSwitcher />

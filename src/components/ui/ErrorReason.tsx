@@ -8,12 +8,12 @@ export default function ErrorReason({ stored, fallback }: { stored: string | nul
   const [open, setOpen] = useState(false)
   return (
     <div className="space-y-1">
-      <p className="text-[17px]">{message ?? fallback}</p>
+      <p className="text-[1.0625rem]">{message ?? fallback}</p>
       {detail &&
         (open ? (
-          <p className="rounded-lg bg-surface2 p-2 font-mono text-[12px] break-words text-dim select-text">{detail}</p>
+          <p className="rounded-lg bg-surface2 p-2 font-mono text-[0.75rem] break-words text-dim select-text">{detail}</p>
         ) : (
-          <button onClick={() => setOpen(true)} className="text-[13px] text-dim underline underline-offset-2">
+          <button onClick={() => setOpen(true)} className="text-[0.8125rem] text-dim underline underline-offset-2">
             Ver detalhe
           </button>
         ))}

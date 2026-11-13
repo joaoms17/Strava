@@ -398,3 +398,20 @@ describe('K11 e B3', () => {
     expect(weekAction({ ...base, projectionKind: 'date' }).kind).toBe('manter')
   })
 })
+
+describe('L15 · os dias antes do primeiro registo de comida', () => {
+  it('não aparecem como «sem registos» no calendário', () => {
+    // O histórico do relógio criou dias sem comida antes de 28 de setembro.
+    const old = [{ date: '2026-09-10', kcal_in: 0, kcal_target: 2000, is_complete: false, flags: [] }]
+    const cal = monthCalendar('2026-09', old, '2026-11-13', '2026-09-28')
+    const cells = cal.weeks.flat().filter((c) => c != null)
+    expect(cells.map((c) => c!.date)).toEqual(['2026-09-28', '2026-09-29', '2026-09-30'])
+    // As semanas só de antes do começo não se desenham.
+    expect(cal.weeks).toHaveLength(1)
+  })
+
+  it('sem começo conhecido fica como antes', () => {
+    expect(monthCalendar('2026-09', [], '2026-11-13').weeks.flat().filter((c) => c != null)).toHaveLength(30)
+    expect(monthCalendar('2026-09', [], '2026-11-13', null).weeks.flat().filter((c) => c != null)).toHaveLength(30)
+  })
+})

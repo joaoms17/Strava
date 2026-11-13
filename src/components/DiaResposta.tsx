@@ -26,19 +26,19 @@ export function DayAnswerButtons({
         <BusyButton
           busy="A guardar…"
           onClick={() => run('dia_fechado')}
-          className="min-h-12 rounded-xl bg-cta text-[15px] font-semibold text-on-cta"
+          className="min-h-12 rounded-xl bg-cta text-[0.9375rem] font-semibold text-on-cta"
         >
           Sim, foi tudo
         </BusyButton>
         <BusyButton
           busy="A guardar…"
           onClick={() => run('faltou_algo')}
-          className="min-h-12 rounded-xl border border-line text-[15px] text-dim"
+          className="min-h-12 rounded-xl border border-line text-[0.9375rem] text-dim"
         >
           Faltou algo
         </BusyButton>
       </div>
-      <p className="text-[13px] text-dim">{ANSWER_HINT}</p>
+      <p className="text-[0.8125rem] text-dim">{ANSWER_HINT}</p>
     </div>
   )
 }
@@ -50,13 +50,13 @@ export function MissingNote({ date, today, compact = false }: { date: string; to
   return (
     <div className={`flex items-center justify-between gap-3 ${compact ? '' : 'rounded-[18px] border border-line bg-surface p-4'}`}>
       <div className="min-w-0">
-        <p className="text-[15px] font-semibold">Marcado como «faltou algo»</p>
-        <p className="text-[13px] text-dim">Este dia fica fora das contas.</p>
+        <p className="text-[0.9375rem] font-semibold">Marcado como «faltou algo»</p>
+        <p className="text-[0.8125rem] text-dim">Este dia fica fora das contas.</p>
       </div>
       <BusyButton
         busy="A guardar…"
         onClick={() => clearMissing(date, today, toast)}
-        className="min-h-11 shrink-0 rounded-xl border border-eat/50 px-3 text-[14px] font-semibold text-eat"
+        className="min-h-11 shrink-0 rounded-xl border border-eat/50 px-3 text-[0.875rem] font-semibold text-eat"
       >
         Afinal foi tudo
       </BusyButton>

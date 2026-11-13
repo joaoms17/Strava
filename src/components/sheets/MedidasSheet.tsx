@@ -307,7 +307,7 @@ export default function MedidasSheet() {
   if (!loaded) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
@@ -368,7 +368,7 @@ export default function MedidasSheet() {
             // T5: navegar a substituir a entrada da folha; um sheet.close()
             // (history.back() assíncrono) antes desfazia a navegação.
             onClick={() => navigate('/corpo', { replace: true })}
-            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase"
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase"
           >
             Ver no Corpo
           </button>
@@ -380,32 +380,32 @@ export default function MedidasSheet() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="label">Gordura</p>
-                  <p className="num text-[36px] leading-none font-extrabold text-body">{fmt1(c.shown.fatKg)} kg</p>
-                  <p className="text-[14px] text-dim">cerca de {c.shown.pct} %</p>
-                  {usualUsed != null && <p className="text-[13px] leading-snug text-dim">{usualNeckLabel(usualUsed)}</p>}
+                  <p className="num text-[2.25rem] leading-none font-extrabold text-body">{fmt1(c.shown.fatKg)} kg</p>
+                  <p className="text-[0.875rem] text-dim">cerca de {c.shown.pct} %</p>
+                  {usualUsed != null && <p className="text-[0.8125rem] leading-snug text-dim">{usualNeckLabel(usualUsed)}</p>}
                 </div>
                 <div>
                   <p className="label">Massa magra</p>
-                  <p className="num text-[36px] leading-none font-extrabold">{fmt1(c.shown.leanKg)} kg</p>
-                  <p className="text-[14px] text-dim">músculo, água, osso, órgãos</p>
+                  <p className="num text-[2.25rem] leading-none font-extrabold">{fmt1(c.shown.leanKg)} kg</p>
+                  <p className="text-[0.875rem] text-dim">músculo, água, osso, órgãos</p>
                 </div>
               </div>
-              <p className="text-[15px]">
+              <p className="text-[0.9375rem]">
                 Cintura {fmt1(Number(saved.waist_cm))} cm
                 {savedTarget != null && <> · alvo cerca de {Math.round(savedTarget)} cm</>}
               </p>
               {change && previous ? (
-                <p className="text-[15px]">
+                <p className="text-[0.9375rem]">
                   Desde {fmtDayMonth(previous.date)}: {changeSentence(change)} · {confirmationSentence(change)}
                 </p>
               ) : previous && !sameSiteBefore ? (
-                <p className="text-[15px] text-dim">
+                <p className="text-[0.9375rem] text-dim">
                   A anterior tinha a cintura{' '}
                   {measuredWaistSite(previous.readings) === 'umbigo' ? 'no umbigo' : 'na parte mais estreita'}: mostro o que
                   mudou a partir da próxima medição.
                 </p>
               ) : (
-                <p className="text-[15px] text-dim">Na próxima medição mostro o que mudou.</p>
+                <p className="text-[0.9375rem] text-dim">Na próxima medição mostro o que mudou.</p>
               )}
               {why && (
                 <div className="rounded-xl border border-line px-3 py-2.5">
@@ -415,10 +415,10 @@ export default function MedidasSheet() {
               )}
             </>
           ) : (
-            <p className="text-[15px]">Guardado.</p>
+            <p className="text-[0.9375rem]">Guardado.</p>
           )}
           {saved.flags.filter((f) => !(f === 'pescoco_mudou' && why)).map((f) => (
-            <p key={f} className="rounded-xl bg-attn/15 px-3 py-2 text-[14px] text-attn">
+            <p key={f} className="rounded-xl bg-attn/15 px-3 py-2 text-[0.875rem] text-attn">
               {FLAG_TEXT[f as MeasureFlag] ?? f}
             </p>
           ))}
@@ -447,7 +447,7 @@ export default function MedidasSheet() {
                 ? ` (${profile.thigh_landmark_cm ?? 15} cm acima da rótula)`
                 : ''}
           </span>
-          {last != null && <span className="text-[13px] text-dim">última: {fmt1(Number(last))}</span>}
+          {last != null && <span className="text-[0.8125rem] text-dim">última: {fmt1(Number(last))}</span>}
         </div>
         <div className="flex gap-2">
           {Array.from({ length: count }, (_, i) => (
@@ -460,14 +460,14 @@ export default function MedidasSheet() {
               onChange={(e) => setReading(zone, i, e.target.value)}
               placeholder={count > 1 ? `${i + 1}.ª leitura` : essential ? 'cm' : 'cm (opcional)'}
               aria-label={`${ZONE_LABEL[zone]}${count > 1 ? `, ${i + 1}.ª leitura` : ''}`}
-              className={`h-12 w-full rounded-xl border bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:outline-none ${
+              className={`h-12 w-full rounded-xl border bg-bg px-3 text-[1.0625rem] tabular-nums placeholder:text-dim focus:outline-none ${
                 warning ? 'border-attn' : 'border-line focus:border-eat'
               }`}
             />
           ))}
         </div>
-        {count === 3 && <p className="text-[13px] text-dim">As duas leituras diferem mais de 1 cm: mede uma 3.ª vez.</p>}
-        {warning && <p className="text-[13px] text-attn">{warning}</p>}
+        {count === 3 && <p className="text-[0.8125rem] text-dim">As duas leituras diferem mais de 1 cm: mede uma 3.ª vez.</p>}
+        {warning && <p className="text-[0.8125rem] text-attn">{warning}</p>}
       </div>
     )
   }
@@ -479,8 +479,8 @@ export default function MedidasSheet() {
       footer={
         neckAsk && neckCheck?.outlier ? (
           <div className="space-y-2" role="group" aria-label="O pescoço mudou">
-            <p className="text-[15px] font-semibold">{neckQuestion(neckCheck)}</p>
-            <p className="text-[14px] text-dim">
+            <p className="text-[0.9375rem] font-semibold">{neckQuestion(neckCheck)}</p>
+            <p className="text-[0.875rem] text-dim">
               O pescoço quase não muda, e na fórmula {fmtCm(Math.abs(neckCheck.change ?? 0))} cm de pescoço pesam tanto como {fmtCm(Math.abs(neckCheck.change ?? 0))} cm de cintura. Mede outra vez, logo abaixo{' '}
               {profile.sex === 'f' ? 'da laringe' : 'da maçã de Adão'}.
             </p>
@@ -495,10 +495,10 @@ export default function MedidasSheet() {
               Medir outra vez
             </button>
             <div className="grid grid-cols-2 gap-2">
-              <BusyButton busy="A guardar…" onClick={() => save(true, 'confirmado', true)} className="min-h-12 rounded-xl border border-line px-2 text-[15px]">
+              <BusyButton busy="A guardar…" onClick={() => save(true, 'confirmado', true)} className="min-h-12 rounded-xl border border-line px-2 text-[0.9375rem]">
                 Está certo
               </BusyButton>
-              <BusyButton busy="A guardar…" onClick={() => save(true, 'habitual', true)} className="min-h-12 rounded-xl border border-line px-2 text-[15px] leading-tight">
+              <BusyButton busy="A guardar…" onClick={() => save(true, 'habitual', true)} className="min-h-12 rounded-xl border border-line px-2 text-[0.9375rem] leading-tight">
                 Usar o pescoço habitual ({neckCheck.usual != null ? fmtCm(neckCheck.usual) : ''})
               </BusyButton>
             </div>
@@ -506,7 +506,7 @@ export default function MedidasSheet() {
         ) : odd ? (
           <div className="space-y-2" role="group" aria-label="Confirmar a medição">
             {odd.map((w) => (
-              <p key={w} className="text-[15px] text-attn">
+              <p key={w} className="text-[0.9375rem] text-attn">
                 {w}
               </p>
             ))}
@@ -514,14 +514,14 @@ export default function MedidasSheet() {
               <button onClick={() => setOdd(null)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
                 Corrigir
               </button>
-              <BusyButton busy="A guardar…" onClick={() => save(false, keptChoice, true)} className="min-h-12 rounded-xl border border-line px-2 text-[15px]">
+              <BusyButton busy="A guardar…" onClick={() => save(false, keptChoice, true)} className="min-h-12 rounded-xl border border-line px-2 text-[0.9375rem]">
                 Está certo, guardar
               </BusyButton>
             </div>
           </div>
         ) : confirmReplace ? (
           <div className="space-y-2">
-            <p className="text-[15px]">Já mediste {date === today ? 'hoje' : 'nesse dia'}. Substituir a medição?</p>
+            <p className="text-[0.9375rem]">Já mediste {date === today ? 'hoje' : 'nesse dia'}. Substituir a medição?</p>
             <div className="grid grid-cols-2 gap-2">
               <BusyButton busy="A guardar…" onClick={() => save(true, keptChoice, true)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
                 Substituir
@@ -536,7 +536,7 @@ export default function MedidasSheet() {
             busy="A guardar…"
             disabled={!canSave}
             onClick={() => save()}
-            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
             Guardar
           </BusyButton>
@@ -545,14 +545,14 @@ export default function MedidasSheet() {
     >
       <div className="space-y-5 pb-2">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[14px] text-dim">
+          <p className="text-[0.875rem] text-dim">
             {previous
               ? 'Essenciais (1 min).'
               : needsHips
                 ? 'Chegam a cintura, a anca e o pescoço. A altura já está no perfil.'
                 : 'Chegam a cintura e o pescoço. A altura já está no perfil.'}
           </p>
-          <button onClick={() => sheet.open('como-medir')} className="flex shrink-0 items-center gap-1 text-[14px] text-dim">
+          <button onClick={() => sheet.open('como-medir')} className="flex shrink-0 items-center gap-1 text-[0.875rem] text-dim">
             <Icon name="info" size={18} /> Como medir
           </button>
         </div>
@@ -567,14 +567,14 @@ export default function MedidasSheet() {
                 key={d}
                 aria-pressed={date === d}
                 onClick={() => setDate(d!)}
-                className={`min-h-11 rounded-xl border text-[15px] ${date === d ? 'border-ink font-semibold' : 'border-line text-dim'}`}
+                className={`min-h-11 rounded-xl border text-[0.9375rem] ${date === d ? 'border-ink font-semibold' : 'border-line text-dim'}`}
               >
                 {label}
               </button>
             ))}
           </div>
         )}
-        <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
+        <label className="flex min-h-11 items-center justify-between gap-3 text-[0.9375rem]">
           Medir 2 vezes (mais rigor)
           <input type="checkbox" checked={twice} onChange={(e) => setTwice(e.target.checked)} className="h-5 w-5 accent-cta" />
         </label>
@@ -589,7 +589,7 @@ export default function MedidasSheet() {
               value={weightText}
               onChange={(e) => setWeightText(e.target.value.replace(/[^\d,.]/g, ''))}
               placeholder="kg"
-              className={`h-12 w-full rounded-xl border bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:outline-none ${
+              className={`h-12 w-full rounded-xl border bg-bg px-3 text-[1.0625rem] tabular-nums placeholder:text-dim focus:outline-none ${
                 typedCheck && typedCheck.kind !== 'ok' ? 'border-attn' : 'border-line focus:border-eat'
               }`}
             />
@@ -597,32 +597,32 @@ export default function MedidasSheet() {
             {typedCheck?.kind === 'suggest' && (
               <button
                 onClick={() => setWeightText(String(typedCheck.value).replace('.', ','))}
-                className="min-h-11 rounded-xl border border-attn px-3 text-[15px] text-attn"
+                className="min-h-11 rounded-xl border border-attn px-3 text-[0.9375rem] text-attn"
               >
                 Queres dizer {fmt1(typedCheck.value)} kg?
               </button>
             )}
-            <span className="block text-[13px] text-dim">Não há pesagem nos últimos 7 dias; fica também como pesagem.</span>
+            <span className="block text-[0.8125rem] text-dim">Não há pesagem nos últimos 7 dias; fica também como pesagem.</span>
           </label>
         )}
         {reference != null && (
-          <p className="text-[13px] text-dim">Peso usado: {fmt1(reference)} kg (o teu peso médio nesse dia).</p>
+          <p className="text-[0.8125rem] text-dim">Peso usado: {fmt1(reference)} kg (o teu peso médio nesse dia).</p>
         )}
 
         {liveComposition && (
-          <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+          <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem]">
             Gordura {fmt1(liveComposition.shown.fatKg)}&nbsp;kg (cerca de {liveComposition.shown.pct}&nbsp;%) · Massa magra{' '}
             {fmt1(liveComposition.shown.leanKg)}&nbsp;kg
           </p>
         )}
 
-        <button onClick={() => setShowOptional(!showOptional)} className="min-h-11 text-[15px] text-dim">
+        <button onClick={() => setShowOptional(!showOptional)} className="min-h-11 text-[0.9375rem] text-dim">
           Opcionais: {needsHips ? 'peito, braço, coxa, gémeo' : 'peito, anca, braço, coxa, gémeo'} {showOptional ? '▾' : '›'}
         </button>
         {showOptional && OPTIONAL.map((z) => zoneInput(z, false))}
 
         {editId && existing && (
-          <BusyButton busy="A apagar…" onClick={remove} className="min-h-12 w-full rounded-xl border border-line text-[15px] text-pain">
+          <BusyButton busy="A apagar…" onClick={remove} className="min-h-12 w-full rounded-xl border border-line text-[0.9375rem] text-pain">
             Apagar esta medição
           </BusyButton>
         )}
@@ -638,7 +638,7 @@ export function ComoMedirSheet() {
   const female = useReadyProfile().sex === 'f'
   return (
     <BottomSheet title="Como medir" onClose={sheet.close}>
-      <div className="space-y-4 pb-2 text-[15px]">
+      <div className="space-y-4 pb-2 text-[0.9375rem]">
         <p>
           De manhã, em jejum, depois de ires à casa de banho e antes de treinar. De pé, pés juntos, sem t-shirt. Fita
           encostada à pele, sem apertar.

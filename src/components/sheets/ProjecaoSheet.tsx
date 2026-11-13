@@ -70,13 +70,13 @@ export default function ProjecaoSheet() {
   }
 
   let body
-  if (data === null) body = <p className="py-6 text-center text-[15px] text-dim">A carregar…</p>
-  else if (data === 'erro' || !base) body = <p className="py-6 text-center text-[15px] text-dim">Não consegui ler os dados.</p>
+  if (data === null) body = <p className="py-6 text-center text-[0.9375rem] text-dim">A carregar…</p>
+  else if (data === 'erro' || !base) body = <p className="py-6 text-center text-[0.9375rem] text-dim">Não consegui ler os dados.</p>
   else if (base.status === 'insuficiente') {
     body = (
       <div className="space-y-2 pb-2">
-        <p className="text-[15px]">Dados insuficientes. {base.missing}</p>
-        <p className="text-[13px] text-dim">
+        <p className="text-[0.9375rem]">Dados insuficientes. {base.missing}</p>
+        <p className="text-[0.8125rem] text-dim">
           A data sai do que comes (dias completos), do gasto medido pelo peso e do peso médio. Com menos de 14 dias,
           a água e o sal pesam mais do que a gordura.
         </p>
@@ -96,24 +96,24 @@ export default function ProjecaoSheet() {
       <div className="space-y-4 pb-2">
         {base.status === 'sem_alvo' || editTarget ? (
           <div className="space-y-2">
-            <p className="text-[15px]">Peso alvo</p>
+            <p className="text-[0.9375rem]">Peso alvo</p>
             <TargetInput onDone={() => setEditTarget(false)} />
           </div>
         ) : (
           <div className="space-y-1">
-            <p className="text-[19px] font-semibold">{projectionLine(p, targetKg, targetWaistCm, today)}</p>
+            <p className="text-[1.1875rem] font-semibold">{projectionLine(p, targetKg, targetWaistCm, today)}</p>
             {p.status === 'ok' && rangeText(p.weight, today) && (
-              <p className="text-[15px] text-dim">Peso {rangeText(p.weight, today)}</p>
+              <p className="text-[0.9375rem] text-dim">Peso {rangeText(p.weight, today)}</p>
             )}
             {changed && gain != null && gain !== 0 && (
-              <p className="text-[15px] font-semibold text-eat">
+              <p className="text-[0.9375rem] font-semibold text-eat">
                 {/* B10: «1 dia mais cedo», não «1 dias». */}
                 {Math.abs(gain)} {Math.abs(gain) === 1 ? 'dia' : 'dias'} {gain > 0 ? 'mais cedo' : 'mais tarde'} ({fmtInt(Math.abs(sim!.delta))} kcal/dia)
               </p>
             )}
-            {changed && before == null && after && <p className="text-[15px] font-semibold text-eat">Assim já chegas lá.</p>}
-            {!changed && note && <p className="text-[13px] text-dim">Desde a semana passada: {note.text}.</p>}
-            <button onClick={() => setEditTarget(true)} className="min-h-11 text-[14px] text-dim underline">
+            {changed && before == null && after && <p className="text-[0.9375rem] font-semibold text-eat">Assim já chegas lá.</p>}
+            {!changed && note && <p className="text-[0.8125rem] text-dim">Desde a semana passada: {note.text}.</p>}
+            <button onClick={() => setEditTarget(true)} className="min-h-11 text-[0.875rem] text-dim underline">
               Mudar o peso alvo
             </button>
           </div>
@@ -140,7 +140,7 @@ export default function ProjecaoSheet() {
           </div>
         </div>
 
-        <div className="space-y-1 rounded-2xl bg-surface2 p-3 text-[15px] tabular-nums">
+        <div className="space-y-1 rounded-2xl bg-surface2 p-3 text-[0.9375rem] tabular-nums">
           <p className="label pb-1">De onde vem a data (últimas 4 semanas)</p>
           <p>Comes {fmtInt(b.intake)} kcal/dia ({b.countedDays} dias completos)</p>
           {b.weekday != null && b.weekend != null && (
@@ -153,7 +153,7 @@ export default function ProjecaoSheet() {
             {fmtInt(b.tdee)} kcal/dia
             {exp && !exp.learning && capLabel(exp.flags) ? ` · ${capLabel(exp.flags)}` : ''}
           </p>
-          {gastoNote && <p className="text-[13px] text-dim">{gastoNote}</p>}
+          {gastoNote && <p className="text-[0.8125rem] text-dim">{gastoNote}</p>}
           <p className="text-dim">
             pelas contas {perWeek(b.energyKgDay)} · pelo peso médio {perWeek(b.observedKgDay)}
           </p>
@@ -170,7 +170,7 @@ export default function ProjecaoSheet() {
             {b.workoutKcal != null ? ` · ${fmtInt(b.workoutKcal)} kcal cada` : ''}
           </p>
         </div>
-        <p className="text-[13px] text-dim">
+        <p className="text-[0.8125rem] text-dim">
           A data é a meio entre o ritmo das contas e o do peso médio; o intervalo é a distância entre os dois. Usa o
           peso médio, não a pesagem do dia{data.input.waterDay ? ', e não conta a semana de água do ciclo' : ''}.
         </p>

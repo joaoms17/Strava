@@ -15,7 +15,7 @@ export function PortionRow({ value, onPick, label = 'Porção' }: { value: numbe
   const row = portionRow(value)
   return (
     <div className="flex items-center gap-3">
-      <span className="shrink-0 text-[15px] text-dim">{label}</span>
+      <span className="shrink-0 text-[0.9375rem] text-dim">{label}</span>
       <div role="group" aria-label={label} className={`grid flex-1 gap-2 ${row.length > 4 ? 'grid-cols-5' : 'grid-cols-4'}`}>
         {row.map((f) => {
           const on = sameFactor(f, value)
@@ -26,7 +26,7 @@ export function PortionRow({ value, onPick, label = 'Porção' }: { value: numbe
               busy="A mudar a porção…"
               aria-pressed={on}
               onClick={() => onPick(f)}
-              className={`min-h-11 rounded-xl border text-[17px] font-semibold tabular-nums ${
+              className={`min-h-11 rounded-xl border text-[1.0625rem] font-semibold tabular-nums ${
                 on ? 'border-eat bg-eat text-bg' : 'border-line'
               }`}
             >
@@ -55,7 +55,7 @@ export function ScopeToggle({ on, onChange, children }: { on: boolean; onChange:
   )
 }
 
-const option = 'min-h-11 rounded-xl border border-line px-2 text-[15px] leading-tight disabled:opacity-40'
+const option = 'min-h-11 rounded-xl border border-line px-2 text-[0.9375rem] leading-tight disabled:opacity-40'
 
 // Folha da refeição: como comeram o que se partilha. «A meias» primeiro (o
 // prato pedido para os dois); cada escolha partilha logo.
@@ -75,14 +75,14 @@ export function ShareChooser({
   const [more, setMore] = useState(false)
   return (
     <div className="space-y-2 rounded-2xl border border-line p-3">
-      <p className="text-[15px]">
+      <p className="text-[0.9375rem]">
         Partilhar com {other} · <span className="text-dim">como comeram?</span>
       </p>
       {scope && <div className="flex flex-wrap gap-2">{scope}</div>}
       <BusyButton
         busy="A partilhar…"
         onClick={() => onPick(HALF_SPLIT)}
-        className="min-h-12 w-full rounded-xl bg-eat text-[17px] font-semibold text-bg"
+        className="min-h-12 w-full rounded-xl bg-eat text-[1.0625rem] font-semibold text-bg"
       >
         A meias
       </BusyButton>
@@ -107,7 +107,7 @@ export function ShareChooser({
           ))}
         </div>
       )}
-      <button onClick={onCancel} className="min-h-11 w-full text-[15px] text-dim">
+      <button onClick={onCancel} className="min-h-11 w-full text-[0.9375rem] text-dim">
         Cancelar
       </button>
     </div>

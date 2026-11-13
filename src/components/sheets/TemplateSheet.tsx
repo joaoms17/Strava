@@ -140,9 +140,9 @@ export default function TemplateSheet() {
   }
 
   const field =
-    'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
+    'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
   const small =
-    'h-11 w-12 shrink-0 rounded-lg border border-line bg-bg text-center text-[16px] text-ink tabular-nums focus:border-eat focus:outline-none'
+    'h-11 w-12 shrink-0 rounded-lg border border-line bg-bg text-center text-[1rem] text-ink tabular-nums focus:border-eat focus:outline-none'
   // Um campo inteiro do exercício i: o texto fica enquanto se escreve; o
   // número só muda quando é válido.
   const intField = (i: number, e: TemplateExercise, field: 'sets' | 'rep_min' | 'rep_max', max: number, label: string) => {
@@ -177,14 +177,14 @@ export default function TemplateSheet() {
           busy="A guardar…"
           disabled={!canSave || !loaded}
           onClick={save}
-          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
         >
           Guardar treino
         </BusyButton>
       }
     >
       {!loaded ? (
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       ) : (
         <div className="space-y-5 pb-2">
           <label className="block space-y-1">
@@ -218,7 +218,7 @@ export default function TemplateSheet() {
                 </button>
               ))}
               {/* Outra duração: com o aspeto de escolhida quando não é nenhuma das de cima. */}
-              <label className="flex items-center gap-1.5 text-[15px] text-dim">
+              <label className="flex items-center gap-1.5 text-[0.9375rem] text-dim">
                 <input
                   inputMode="numeric"
                   aria-label="Outra duração em minutos"
@@ -228,7 +228,7 @@ export default function TemplateSheet() {
                     const n = Number.parseInt(e.target.value.replace(/\D/g, ''), 10)
                     if (Number.isFinite(n) && n > 0) setMinutes(Math.min(n, 600))
                   }}
-                  className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                  className={`h-11 w-20 rounded-full border px-3 text-[0.9375rem] tabular-nums placeholder:text-dim ${
                     DURATIONS.includes(minutes) ? 'border-line bg-transparent text-ink' : 'border-cta bg-cta text-on-cta'
                   }`}
                 />
@@ -246,7 +246,7 @@ export default function TemplateSheet() {
                     {w} W
                   </button>
                 ))}
-                <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                <label className="flex items-center gap-1.5 text-[0.9375rem] text-dim">
                   <input
                     inputMode="numeric"
                     aria-label="Outra potência em watts"
@@ -256,7 +256,7 @@ export default function TemplateSheet() {
                       const n = Number.parseInt(e.target.value.replace(/\D/g, '').slice(0, 3), 10)
                       setWatts(Number.isFinite(n) && n > 0 ? n : null)
                     }}
-                    className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                    className={`h-11 w-20 rounded-full border px-3 text-[0.9375rem] tabular-nums placeholder:text-dim ${
                       watts != null && !wattsOptions.includes(watts) ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
                     }`}
                   />
@@ -270,12 +270,12 @@ export default function TemplateSheet() {
             <div className="space-y-2">
               <p className="label">Exercícios</p>
               {exercises.length === 0 && (
-                <p className="text-[14px] text-dim">Junta os exercícios deste treino, pela ordem em que os fazes.</p>
+                <p className="text-[0.875rem] text-dim">Junta os exercícios deste treino, pela ordem em que os fazes.</p>
               )}
               {exercises.map((e, i) => (
                 <div key={`${e.name}-${i}`} className="space-y-2 rounded-xl border border-line p-3">
                   <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[16px] font-semibold">{e.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-[1rem] font-semibold">{e.name}</span>
                     <button onClick={() => move(i, -1)} aria-label="Subir" className="h-11 w-11 shrink-0 rounded-lg text-dim">
                       ↑
                     </button>
@@ -294,7 +294,7 @@ export default function TemplateSheet() {
                     </button>
                   </div>
                   {/* Duas linhas fixas: as séries e as repetições; a carga, com «kg» ao lado. */}
-                  <div className="flex items-center gap-1.5 text-[14px] text-dim">
+                  <div className="flex items-center gap-1.5 text-[0.875rem] text-dim">
                     {intField(i, e, 'sets', 10, `Séries de ${e.name}`)}
                     séries ×
                     {intField(i, e, 'rep_min', 100, `Repetições mínimas de ${e.name}`)}
@@ -302,7 +302,7 @@ export default function TemplateSheet() {
                     {intField(i, e, 'rep_max', 100, `Repetições máximas de ${e.name}`)}
                     repetições
                   </div>
-                  <label className="flex items-center gap-1.5 text-[14px] text-dim">
+                  <label className="flex items-center gap-1.5 text-[0.875rem] text-dim">
                     Carga
                     <input
                       inputMode="decimal"
@@ -335,7 +335,7 @@ export default function TemplateSheet() {
               ) : (
                 <button
                   onClick={() => setPicking(true)}
-                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem]"
                 >
                   <Icon name="plus" size={18} /> Exercício
                 </button>
@@ -344,7 +344,7 @@ export default function TemplateSheet() {
           )}
 
           {id && (
-            <BusyButton busy="A apagar…" onClick={remove} className="min-h-11 w-full text-[15px] text-pain">
+            <BusyButton busy="A apagar…" onClick={remove} className="min-h-11 w-full text-[0.9375rem] text-pain">
               Apagar este treino
             </BusyButton>
           )}
