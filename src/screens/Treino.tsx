@@ -25,6 +25,7 @@ import Duplicado from '../components/Duplicado'
 import { useGymQueue } from '../lib/ginasio-fila'
 import { workoutOrigin } from '../lib/treino-origem'
 import { usesBikePower, wattsChoices } from '../lib/bicicleta'
+import { OLDER_PAGE, WORKOUT_LIST_COLUMNS, fromListRows } from '../lib/treino-lista'
 
 
 interface TreinoData {
@@ -45,8 +46,11 @@ export default function Treino() {
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [data, setData] = useState<TreinoData | null>(null)
   const [showAll, setShowAll] = useState(false)
-  // Treinos com mais de 12 semanas (histórico importado): só a pedido.
+  // Treinos com mais de 12 semanas (histórico importado): só a pedido, de
+  // 100 em 100 (P5; antes vinham até 500 completos de uma vez e mais nada).
   const [older, setOlder] = useState<Workout[] | null>(null)
+  const [olderMore, setOlderMore] = useState(false)
+  const [olderBusy, setOlderBusy] = useState(false)
   const [, navigate] = useLocation()
   // Os treinos não se leram (sem rede): diz-se, em vez de «Ainda sem treinos» (T11).
   const [failed, setFailed] = useState(false)
@@ -57,7 +61,8 @@ export default function Treino() {
     const [{ data: workouts, error }, { data: favorites }, { data: pending }, { data: logs }, { data: health }] = await Promise.all([
       supabase
         .from('workouts_active')
-        .select('*')
+        // Só as colunas usadas, sem os JSON em bruto (P5).
+        .select(WORKOUT_LIST_COLUMNS)
         .gte('date', shiftDate(today, -83))
         .order('date', { ascending: true })
         .order('created_at', { ascending: true }),
@@ -87,7 +92,7 @@ export default function Treino() {
     }
     setFailed(false)
     setData({
-      workouts: (workouts ?? []) as Workout[],
+      workouts: fromListRows(workouts),
       favorites: (favorites ?? []) as Favorite[],
       // Os prints lidos ficam até serem guardados ou descartados (nunca contam
       // sozinhos); os que estão a ler ou deram erro, só os da última semana.
@@ -228,13 +233,21 @@ export default function Treino() {
 
   const history = [...sessions.slice().reverse(), ...mergeSessions(older ?? []).reverse()]
   async function loadOlder() {
-    const { data: rows } = await supabase
+    const from = older?.length ?? 0
+    setOlderBusy(true)
+    const { data: rows, error } = await supabase
       .from('workouts_active')
-      .select('*')
+      .select(WORKOUT_LIST_COLUMNS)
       .lt('date', shiftDate(today, -83))
       .order('date', { ascending: false })
-      .limit(500)
-    setOlder((rows ?? []) as Workout[])
+      .order('created_at', { ascending: false })
+      .range(from, from + OLDER_PAGE - 1)
+    setOlderBusy(false)
+    if (error) return
+    const page = fromListRows(rows)
+    setOlder([...(older ?? []), ...page])
+    setOlderMore(page.length === OLDER_PAGE)
+    setShowAll(true)
   }
   const shown = showAll ? history : history.slice(0, 8)
 
@@ -265,7 +278,8 @@ export default function Treino() {
         </button>
       ))}
 
-      <QualFoi today={today} />
+      {/* Os treinos que já se leram servem ao «Qual foi?» (sem outra consulta; P5). */}
+      <QualFoi today={today} workouts={workouts} />
 
       {pairs.map(([a, b]) => (
         <Duplicado key={`${a.id}+${b.id}`} a={a} b={b} />
@@ -373,9 +387,13 @@ export default function Treino() {
               Ver mais ({history.length - shown.length})
             </button>
           )}
-          {history.length <= shown.length && older == null && (
-            <button onClick={() => void loadOlder()} className="mt-2 text-[15px] text-dim">
-              Ver treinos mais antigos
+          {history.length <= shown.length && (older == null || olderMore) && (
+            <button
+              onClick={() => void loadOlder()}
+              disabled={olderBusy}
+              className="mt-2 min-h-11 text-[15px] text-dim disabled:opacity-60"
+            >
+              {olderBusy ? 'A carregar…' : older == null ? 'Ver treinos mais antigos' : 'Mais'}
             </button>
           )}
           {older != null && older.length === 0 && (

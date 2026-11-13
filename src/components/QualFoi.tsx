@@ -19,6 +19,7 @@ import {
 } from '../../api/_lib/rules/plano-treino'
 import { OTHER_SPORTS, SPORT_LABEL, type OtherSport } from '../../api/_lib/rules/targets'
 import type { Workout } from '../lib/types'
+import { WORKOUT_LIST_COLUMNS, fromListRows } from '../lib/treino-lista'
 import { chip } from './ui/Chips'
 import Icon from './ui/Icon'
 import { dayTone } from './plano/PlanoViews'
@@ -122,36 +123,42 @@ export function QualFoiQuestion({ workout: w, onDone }: { workout: Workout; onDo
 // ainda não têm resposta, o mais recente primeiro (até 3; no Hoje, 1).
 // O Hoje escolhe um só cartão de ação (H9): `onCount` diz-lhe quantos há e
 // `hidden` mantém a contagem sem mostrar nada.
+// `workouts`: os treinos que o ecrã já leu (o Treino lê 12 semanas); com eles
+// não se faz outra consulta (P5). Sem eles (o Hoje), lê só os últimos 7 dias.
 export default function QualFoi({
   today,
   max = 3,
   hidden = false,
   onCount,
+  workouts: given,
 }: {
   today: string
   max?: number
   hidden?: boolean
   onCount?: (count: number) => void
+  workouts?: Workout[]
 }) {
   const plan = usePlanoTreino()
   const version = useDataVersion()
-  const [workouts, setWorkouts] = useState<Workout[]>([])
+  const [fetched, setFetched] = useState<Workout[]>([])
 
   const load = useCallback(async () => {
+    if (given) return
     const { data } = await supabase
       .from('workouts_active')
-      .select('*')
+      .select(WORKOUT_LIST_COLUMNS)
       .gte('date', shiftDate(today, -(QUAL_FOI_DAYS - 1)))
       .in('type', ['strength', 'other'])
       .is('favorite_id', null)
       .order('date', { ascending: false })
-    setWorkouts((data ?? []) as Workout[])
-  }, [today])
+    setFetched(fromListRows(data))
+  }, [today, !given])
 
   useEffect(() => {
     if (plan) void load()
   }, [load, version, !!plan])
 
+  const workouts = given ?? fetched
   const all = plan ? askWhichWorkout(workouts, today) : []
   const count = all.length
   useEffect(() => {
