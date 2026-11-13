@@ -80,7 +80,7 @@ function MergedDetail({ ids }: { ids: string[] }) {
       .select('*')
       .in('id', ids)
       .then(({ data }) => setRows((data ?? []) as Workout[]))
-  }, [ids.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ids.join(',')])
 
   if (!rows) {
     return (
@@ -179,7 +179,7 @@ function Thumbs({ paths }: { paths: string[] }) {
     void signedUrls(paths, 'workout-shots').then((map) =>
       setUrls(paths.map((p) => map[p]).filter((u): u is string => !!u)),
     )
-  }, [paths.join('|')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paths.join('|')])
   if (!urls.length) return null
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
@@ -287,7 +287,6 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
     const filled = { ...next, ...edited }
     setPresent(new Set((Object.keys(filled) as (keyof Draft)[]).filter((k) => filled[k] !== '' && filled[k] != null)))
     setDraft(filled)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row, draft, today, profile.nutrition_day_cutoff_hour])
 
   // Sem watts no print, propõe os últimos confirmados (≈, não contam para subir).
@@ -344,7 +343,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       })
     // Sem a duração nas dependências: apagar um dígito não faz a folha mudar
     // de forma (aparecer e desaparecer o «Juntar»; T17).
-  }, [draft?.day, draft?.kind, draft?.time]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft?.day, draft?.kind, draft?.time])
   // Sem calorias do relógio, o ritmo no ginásio e o peso desse dia (como o servidor).
   const context = useKcalContext(draft?.day ?? today, today, draft ? type : null)
 

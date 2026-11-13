@@ -37,7 +37,6 @@ const ENV_VARS = [
   'ANTHROPIC_API_KEY',
   'GEMINI_API_KEY',
   'CRON_SECRET',
-  'ICS_TOKEN',
   'HEALTH_INGEST_TOKEN',
   'HOUSE_EMAILS',
 ] as const

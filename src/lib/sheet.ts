@@ -7,7 +7,6 @@ export type SheetName =
   | 'peso'
   | 'refeicao'
   | 'galeria'
-  | 'escrever'
   | 'repetir'
   | 'nova-favorita'
   | 'dieta'

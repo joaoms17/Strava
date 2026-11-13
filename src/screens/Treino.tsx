@@ -123,7 +123,6 @@ export default function Treino() {
       if (!document.hidden) void load()
     }, 3000)
     return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reading.map((r) => r.id).join(','), load])
 
   const queueBanner = gymQueue.queued.length > 0 && (

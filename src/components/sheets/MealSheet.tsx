@@ -148,7 +148,6 @@ export default function MealSheet() {
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   // Enquanto analisa, os números chegam sozinhos.
@@ -172,7 +171,6 @@ export default function MealSheet() {
       if (!document.hidden) void load()
     }, 3000)
     return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysing, splitPending, id])
   // Parada (o servidor soltou-a depois de a IA demorar): pede outra tentativa
   // sozinha, uma de cada vez com o Hoje (lib/analise-auto.ts).

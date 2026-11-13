@@ -150,7 +150,6 @@ export default function QualFoi({
 
   useEffect(() => {
     if (plan) void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, version, !!plan])
 
   const all = plan ? askWhichWorkout(workouts, today) : []

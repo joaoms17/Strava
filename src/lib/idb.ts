@@ -1,8 +1,9 @@
-// Base local (IndexedDB) da app: a fila antiga de refeições de texto, a fila
-// das capturas (fotos e textos) que ainda não chegaram ao servidor e o
+// Base local (IndexedDB) da app: a fila das capturas (fotos e textos) que ainda não chegaram ao servidor e o
 // rascunho do Registar (a foto antes de «Registar»).
 const DB_NAME = 'regresso'
 const VERSION = 3
+// meal_queue era a fila antiga das refeições de texto (L8): já ninguém a
+// enche nem a lê, mas continua a ser criada para não mexer na versão da base.
 export const STORES = { meals: 'meal_queue', captures: 'captures', drafts: 'drafts' } as const
 
 export function openDb(): Promise<IDBDatabase> {

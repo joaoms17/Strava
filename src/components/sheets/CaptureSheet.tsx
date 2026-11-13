@@ -52,7 +52,7 @@ import type { Diet, Favorite, Slot } from '../../lib/types'
 // As favoritas à vista no ＋; as outras estão em «Procurar».
 const QUICK_FAVORITES = 4
 
-export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
+export default function CaptureSheet() {
   const profile = useReadyProfile()
   const sheet = useSheet()
   const toast = useToast()
@@ -102,10 +102,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   const hasContent = text.trim().length > 0 || photos.length > 0
   const reviewing = photos.length > 0
 
-  useEffect(() => {
-    if (focus) textBox.current?.focus()
-  }, [focus])
-
   useEffect(() => clearPendingCamera(), [])
 
   useEffect(() => {
@@ -123,7 +119,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // O rascunho acompanha o que se escreve e as fotos (e grava-se ao fechar).

@@ -147,7 +147,6 @@ export function ProfileProvider({ children, token }: { children: ReactNode; toke
     const again = () => void reload()
     window.addEventListener('online', again)
     return () => window.removeEventListener('online', again)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, offline])
 
   return (
