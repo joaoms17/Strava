@@ -134,4 +134,92 @@ describe('guardas do deploy', () => {
     ].filter((d) => d.startsWith('/api/'))
     expect(targets.filter((t) => !routes.has(t))).toEqual([])
   })
+
+  it('cada ação dos routers tem quem a chame: o cliente ou um script (ideia 5)', () => {
+    const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')) as {
+      rewrites: { source: string; destination: string }[]
+    }
+    // Só texto entre aspas (ou depois de ${base}); um comentário não chama nada.
+    const callerFiles = [
+      ...walk(path.join(ROOT, 'src')).filter((f) => /\.tsx?$/.test(f)),
+      ...walk(path.join(ROOT, 'scripts')).filter((f) => /\.m?[jt]s$/.test(f)),
+    ]
+    const called = new Set<string>()
+    for (const file of callerFiles) {
+      const source = fs.readFileSync(file, 'utf8')
+      for (const m of source.matchAll(/(?:['"`]|\})(\/api\/[a-z]+\/[a-z-]+)/g)) called.add(m[1]!)
+    }
+    // Os caminhos com outro nome (rewrite com ?action=… fixo), como /api/food/barcode/:ean.
+    for (const r of vercel.rewrites) {
+      const action = /^\/api\/([a-z]+)\?action=([a-z-]+)/.exec(r.destination)
+      const prefix = r.source.split('/:')[0]!
+      if (action && [...called].some((c) => c === prefix || c.startsWith(prefix + '/'))) {
+        called.add(`/api/${action[1]}/${action[2]}`)
+      }
+    }
+    const orphans: string[] = []
+    for (const router of ['meal', 'workout', 'day']) {
+      const source = fs.readFileSync(path.join(API, `${router}.ts`), 'utf8')
+      for (const m of source.matchAll(/^\s+'?([a-z-]+)'?: \(\) => import\(/gm)) {
+        const route = `/api/${router}/${m[1]!}`
+        if (!called.has(route)) orphans.push(route)
+      }
+    }
+    expect(called.size).toBeGreaterThan(20)
+    expect(orphans).toEqual([])
+  })
+
+  it('cada prompt referenciado tem ficheiro e cada ficheiro de prompts/ é carregado (ideia 5)', () => {
+    const constants = fs.readFileSync(path.join(API, '_lib', 'prompts.ts'), 'utf8')
+    const declared = new Map(
+      [...constants.matchAll(/export const (PROMPT_[A-Z0-9_]+) = '([^']+\.md)'/g)].map((m) => [m[1]!, m[2]!]),
+    )
+    expect(declared.size).toBeGreaterThan(5)
+    const others = apiFiles
+      .filter((f) => !f.endsWith(path.join('_lib', 'prompts.ts')))
+      .map((f) => fs.readFileSync(f, 'utf8'))
+      .join('\n')
+    // Cada constante é usada fora de prompts.ts (senão o ficheiro não é carregado).
+    const unused = [...declared.keys()].filter((name) => !new RegExp(`\\b${name}\\b`).test(others))
+    expect(unused).toEqual([])
+    // Nomes escritos à mão em readPrompt('…') também contam.
+    const literal = [...others.matchAll(/readPrompt\('([^']+\.md)'\)/g)].map((m) => m[1]!)
+    const referenced = new Set([...declared.values(), ...literal])
+    const files = fs.readdirSync(path.join(ROOT, 'prompts')).filter((f) => f.endsWith('.md') && f !== 'README.md')
+    expect([...referenced].filter((f) => !files.includes(f))).toEqual([])
+    expect(files.filter((f) => !referenced.has(f))).toEqual([])
+  })
+
+  it('cada função tem configuração no vercel.json e as que leem prompts levam-nos (L16)', () => {
+    const vercel = JSON.parse(fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8')) as {
+      functions: Record<string, { includeFiles?: string }>
+    }
+    const keys = Object.keys(vercel.functions)
+    const names = functions.map((f) => path.relative(ROOT, f).split(path.sep).join('/'))
+    expect(keys.filter((k) => !names.includes(k))).toEqual([])
+    expect(names.filter((n) => !keys.includes(n))).toEqual([])
+
+    // Segue os imports relativos (estáticos e import()) a partir de cada função.
+    function readsPrompts(entry: string): boolean {
+      const seen = new Set<string>()
+      const stack = [entry]
+      while (stack.length) {
+        const file = stack.pop()!
+        if (seen.has(file) || !fs.existsSync(file)) continue
+        seen.add(file)
+        const source = fs.readFileSync(file, 'utf8')
+        if (/\breadPrompt\(/.test(source) && !file.endsWith(path.join('_lib', 'prompts.ts'))) return true
+        for (const m of source.matchAll(/(?:from\s+|import\(\s*)'(\.{1,2}\/[^']+)'/g)) {
+          stack.push(path.resolve(path.dirname(file), m[1]!.replace(/\.js$/, '.ts')))
+        }
+      }
+      return false
+    }
+    const wrong = names.filter((name) => {
+      const needs = readsPrompts(path.join(ROOT, name))
+      const has = vercel.functions[name]?.includeFiles?.startsWith('prompts/') ?? false
+      return needs !== has
+    })
+    expect(wrong).toEqual([])
+  })
 })
