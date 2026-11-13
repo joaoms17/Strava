@@ -282,7 +282,18 @@ export default function DizerTreinoSheet() {
                 A gravar… diz o que fizeste (até {MAX_AUDIO_SECONDS} s) e carrega em Parar.
               </p>
             )}
-            {error && <p className="text-[15px] text-pain">{error}</p>}
+            {error && (
+              <div className="space-y-2">
+                <p className="text-[15px] text-pain">{error}</p>
+                {/* Se a IA falhar, regista-se na mesma, sem ela (T12). */}
+                <button
+                  onClick={() => sheet.open('ja-fiz', dateParam ? { data: dateParam } : {})}
+                  className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+                >
+                  Preencher à mão
+                </button>
+              </div>
+            )}
             {phase === 'input' && favorites.length > 0 && (
               <div className="space-y-2">
                 <p className="label">Os meus treinos</p>

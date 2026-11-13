@@ -223,7 +223,7 @@ export default function Treino() {
       {workouts.length === 0 && (
         <p className="rounded-[18px] border border-line bg-surface p-4 text-[15px] text-dim">
           <span className="block font-semibold text-ink">Ainda sem treinos.</span>
-          Uma caminhada ou uma aula registam-se com «Dizer ou escrever».
+          Uma caminhada ou uma aula registam-se com «Dizer» ou «À mão».
           {!profile.integration_status?.intervals?.connected &&
             ' Os do relógio chegam sozinhos se ligares o intervals.icu nas Definições.'}
         </p>

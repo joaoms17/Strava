@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'wouter'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
@@ -37,10 +38,12 @@ const toInt = (text: string): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
-// «Já fiz»: um treino à mão em poucos toques, em qualquer dia, com o tipo,
-// a duração e os watts da última vez já escolhidos.
+// «À mão» (antes «Já fiz»): um treino sem IA em poucos toques, em qualquer
+// dia, com o tipo, a duração e os watts da última vez já escolhidos. No
+// ginásio, as séries registam-se no Ginásio (T12).
 export default function JaFizSheet() {
   const sheet = useSheet()
+  const [, navigate] = useLocation()
   const toast = useToast()
   const profile = useReadyProfile()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
@@ -164,7 +167,7 @@ export default function JaFizSheet() {
 
   return (
     <BottomSheet
-      title="Já fiz"
+      title="Registar à mão"
       onClose={sheet.close}
       footer={
         match ? (
@@ -189,6 +192,17 @@ export default function JaFizSheet() {
             </button>
           ))}
         </div>
+        {type === 'strength' && (
+          <button
+            onClick={() =>
+              // Substitui a entrada da folha (fechar e navegar desfazia a navegação, T5).
+              navigate(`/treino/ginasio${day !== today ? `?data=${day}` : ''}`, { replace: true })
+            }
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+          >
+            Registar as séries no Ginásio
+          </button>
+        )}
 
         <div className="space-y-2">
           <p className="label">Quando</p>
