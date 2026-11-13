@@ -231,7 +231,7 @@ export default function JaFizSheet() {
                   setOtherMinutes(e.target.value.replace(/\D/g, ''))
                   setMinutes(null)
                 }}
-                className={`h-9 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
                   otherMinutes ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
                 }`}
                 aria-label="Outra duração em minutos"

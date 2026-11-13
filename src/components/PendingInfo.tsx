@@ -76,7 +76,7 @@ export default function PendingInfo({ workouts, today }: { workouts: Workout[]; 
       <div className="flex items-center justify-between gap-2">
         <p className="label">Falta informação</p>
         {connected && (
-          <button disabled={fetching} onClick={() => void fetchAgain()} className="min-h-10 text-[15px] text-eat disabled:opacity-50">
+          <button disabled={fetching} onClick={() => void fetchAgain()} className="min-h-11 text-[15px] text-eat disabled:opacity-50">
             {fetching ? 'A ir buscar…' : 'Ir buscar ao relógio'}
           </button>
         )}

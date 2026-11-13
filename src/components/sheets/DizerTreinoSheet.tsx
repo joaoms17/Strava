@@ -358,7 +358,7 @@ export default function DizerTreinoSheet() {
                 Guardar nos meus treinos
               </label>
               {keep && !title.trim() && <p className="text-[14px] text-attn">Dá-lhe um nome para o guardar.</p>}
-              <button onClick={() => setPhase('input')} className="min-h-10 text-[15px] text-dim">
+              <button onClick={() => setPhase('input')} className="min-h-11 text-[15px] text-dim">
                 Não é isto: corrigir
               </button>
             </>
