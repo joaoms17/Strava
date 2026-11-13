@@ -129,9 +129,11 @@ export default function Treino() {
       status: w.status,
       watts_source: w.watts_source ?? null,
       rpe: w.rpe ?? null,
+      date: w.date,
     })),
     profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150],
     { avgHr: profile.bike_hr_avg_cap, maxHr: profile.bike_hr_max_cap },
+    today,
   )
   const suggestion = bikeSuggestion(target)
   // A sugestão da bicicleta só para quem anda de bicicleta e não tem o plano

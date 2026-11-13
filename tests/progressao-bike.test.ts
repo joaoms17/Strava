@@ -101,3 +101,29 @@ describe('nextBikeTarget', () => {
     expect(nextBikeTarget(history, OPTIONS, CAPS)).toEqual({ watts: 140, minutes: 30, kind: 'validate-next-watts' })
   })
 })
+
+// T8: o nível é o W mais alto validado nas últimas semanas.
+describe('nível da bicicleta (T8)', () => {
+  const at = (watts: number, minutes: number, date: string, over: Partial<BikeSessionSummary> = {}) =>
+    session({ watts, minutes, date, ...over })
+
+  it('depois de uma sessão leve volta ao nível em vez de recomeçar', () => {
+    const history = [at(150, 60, '2026-11-01'), at(160, 60, '2026-11-03'), at(130, 30, '2026-11-05')]
+    expect(nextBikeTarget(history, [130, 140, 150, 160], CAPS, '2026-11-06')).toMatchObject({ watts: 160, minutes: 60 })
+  })
+
+  it('uma volta de estrada a 95 W também não baixa o nível', () => {
+    const history = [at(140, 45, '2026-11-01'), at(95, 90, '2026-11-04', { avg_hr: null, max_hr: null })]
+    expect(nextBikeTarget(history, OPTIONS, CAPS, '2026-11-06')).toMatchObject({ watts: 140, minutes: 60, kind: 'progress-time' })
+  })
+
+  it('fora das últimas semanas o nível não conta', () => {
+    const history = [at(150, 60, '2026-08-01'), at(130, 30, '2026-11-05')]
+    expect(nextBikeTarget(history, OPTIONS, CAPS, '2026-11-06')).toMatchObject({ watts: 130, minutes: 45 })
+  })
+
+  it('a validação a um W acima falhou os limites de FC: volta ao nível', () => {
+    const history = [at(140, 60, '2026-11-01'), at(140, 60, '2026-11-03'), at(150, 30, '2026-11-05', { avg_hr: 120, max_hr: 130 })]
+    expect(nextBikeTarget(history, OPTIONS, CAPS, '2026-11-06')).toEqual({ watts: 140, minutes: 60, kind: 'step-down' })
+  })
+})
