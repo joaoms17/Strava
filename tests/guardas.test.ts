@@ -77,6 +77,18 @@ describe('guardas do deploy', () => {
     expect(missing).toEqual([])
   })
 
+  it('cada bucket usado pela app tem limite de tamanho e de tipo (G5)', () => {
+    const used = new Set<string>()
+    const files = [...apiFiles, ...walk(path.join(ROOT, 'src')).filter((f) => /\.tsx?$/.test(f))]
+    for (const file of files) {
+      for (const match of fs.readFileSync(file, 'utf8').matchAll(/storage\s*\.from\('([a-z-]+)'\)/g)) used.add(match[1]!)
+    }
+    const sql = fs.readFileSync(path.join(ROOT, 'supabase/migrations/20261113000041_limites_buckets.sql'), 'utf8')
+    const limited = new Set([...sql.matchAll(/allowed_mime_types[\s\S]*?where id = '([a-z-]+)'/g)].map((m) => m[1]!))
+    expect(used.size).toBeGreaterThan(0)
+    expect([...used].filter((b) => !limited.has(b))).toEqual([])
+  })
+
   it('as regras de negócio são puras (sem Supabase nem node:)', () => {
     const rules = walk(path.join(API, '_lib', 'rules')).filter((f) => f.endsWith('.ts'))
     const offenders = rules.filter((file) =>
