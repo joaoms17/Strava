@@ -16,6 +16,13 @@ export function fmtKcal(n: number): string {
   return fmtInt(Math.round(n / 10) * 10)
 }
 
+// «Podes comer» no cartão do Hoje: o Plano e o Comido mostram-se já
+// arredondados a 10, e a diferença faz-se com esses números (K16): 1 504 −
+// 66 mostrava 1 500 − 70 = 1 440.
+export function kcalLeftShown(plan: number, eaten: number): number {
+  return Math.round(plan / 10) * 10 - Math.round(eaten / 10) * 10
+}
+
 export function fmt1(n: number): string {
   return (Math.round(n * 10) / 10).toFixed(1).replace('.', ',')
 }

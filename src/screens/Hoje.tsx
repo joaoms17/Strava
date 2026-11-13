@@ -13,7 +13,7 @@ import DietToday from '../components/DietToday'
 import Sequencia from '../components/Sequencia'
 import AvisarAnalise from '../components/AvisarAnalise'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
-import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
+import { fmt1, fmtDayShort, fmtInt, fmtKcal, kcalLeftShown, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
 import { retryContext, retryIfDue, useAutoRetrying } from '../lib/analise-auto'
 import { workoutTitle } from '../lib/workout-actions'
@@ -401,6 +401,8 @@ export default function Hoje() {
       )
     : dayBase + kcalExercise
   const left = plan - kcalIn
+  // O que se mostra: Plano − Comido com os números já arredondados (K16).
+  const leftShown = kcalLeftShown(plan, kcalIn)
   // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
   const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
   const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
@@ -884,8 +886,8 @@ export default function Hoje() {
               : !isToday && !dayComplete
                 ? fmtKcal(kcalIn)
                 : over || inMargin
-                  ? `+${fmtKcal(-left)}`
-                  : fmtKcal(left)}
+                  ? `+${fmtKcal(-leftShown)}`
+                  : fmtKcal(leftShown)}
           </span>
           <span className="num text-[22px] text-dim">
             {inMargin && !unknown && (isToday || dayComplete) ? 'KCAL · DENTRO DA MARGEM' : 'KCAL'}
@@ -1207,9 +1209,9 @@ export default function Hoje() {
             ) : (
               <p className="tabular-nums">
                 Comeste {fmtKcal(kcalIn)}&nbsp;kcal
-                {isToday && state === 'dentro' && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
-                {inMargin && <> · {fmtKcal(-left)}&nbsp;kcal acima do plano, no alvo</>}
-                {over && <> · Passaste {fmtKcal(-left)}&nbsp;kcal do plano</>}
+                {isToday && state === 'dentro' && <> · Podes comer mais {fmtKcal(leftShown)}&nbsp;kcal</>}
+                {inMargin && <> · {fmtKcal(-leftShown)}&nbsp;kcal acima do plano, no alvo</>}
+                {over && <> · Passaste {fmtKcal(-leftShown)}&nbsp;kcal do plano</>}
               </p>
             )}
             {week && weekText && (
