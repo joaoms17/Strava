@@ -20,6 +20,8 @@
   --color-attn: #f5b942;
   --color-pain: #ff6b61;
   --color-ok: #5bd68a;
+  /* B15: o verde em texto (números «a melhorar»), ≥ 4,5:1 nos dois temas */
+  --color-ok-text: #5bd68a;
   /* Botão principal neutro: lima no escuro, preto no claro */
   --color-cta: #c6f432;
   --color-on-cta: #0c110e;
@@ -59,6 +61,7 @@
     --color-attn: #80520a;
     --color-pain: #d14343;
     --color-ok: #1f9d55;
+    --color-ok-text: #0f6b38;
     --color-chart-bike: #2743f5;
     --color-chart-gym: #a21caf;
     --color-chart-health: #0d9488;
@@ -87,6 +90,7 @@
       --color-attn: #80520a;
       --color-pain: #d14343;
       --color-ok: #1f9d55;
+      --color-ok-text: #0f6b38;
       --color-chart-bike: #2743f5;
       --color-chart-gym: #a21caf;
       --color-chart-health: #0d9488;
