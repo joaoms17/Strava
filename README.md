@@ -51,12 +51,12 @@ npm run typecheck  # TypeScript
 
 ## Schema
 
-A fonte de verdade é o conjunto das migrações em [`supabase/migrations/`](supabase/migrations/), por ordem. RLS ativa em todas as tabelas; os dados são filtrados por `user_id = auth.uid()`; `integrations`, `app_secrets`, `off_searches` e `strava_tokens` não têm acesso nenhum do cliente.
+A fonte de verdade é o conjunto das migrações em [`supabase/migrations/`](supabase/migrations/), por ordem. RLS ativa em todas as tabelas; os dados são filtrados por `user_id = auth.uid()`; `integrations`, `app_secrets` e `off_searches` não têm acesso nenhum do cliente.
 
 ## Setup
 
 1. Criar projeto no Supabase e a primeira conta em Auth (email + password). **Desligar o registo livre:** Authentication › Sign In / Providers › «Allow new users to sign up» desligado — a «casa» é quem tem conta neste projeto. Confirmar sempre que se cria um projeto novo: vem ligado por omissão e, ligado, qualquer pessoa com a chave pública da app cria uma conta. As outras pessoas criam-se depois na app, em Definições › Pessoas. Para fechar também no servidor, definir `HOUSE_EMAILS` no Vercel (passo 3).
-2. Aplicar **todas** as migrações de `supabase/migrations/`, por ordem do nome (`supabase db push`, ou no SQL Editor: New query → colar o ficheiro inteiro → Run). Podem correr-se mais de uma vez; as do redesenho acabam com uma tabela que tem de vir vazia. A app avisa («Falta um passo no Supabase») da falta de algumas, mas não de todas: confere pela lista. Depois, os seeds de `supabase/seed/` por ordem, para a primeira conta.
+2. Aplicar **todas** as migrações de `supabase/migrations/`, por ordem do nome (`supabase db push`, ou no SQL Editor: New query → colar o ficheiro inteiro → Run). Podem correr-se mais de uma vez; as do redesenho acabam com uma tabela que tem de vir vazia. Com a tabela `schema_version` (migração `20261113000042`), Avançado lista as que faltam; sem ela, a app só avisa («A app precisa de uma atualização») da falta das mais antigas: confere pela lista. Depois, os seeds de `supabase/seed/` por ordem, para a primeira conta.
 
    | Migração | O que traz |
    | --- | --- |
@@ -74,7 +74,7 @@ A fonte de verdade é o conjunto das migrações em [`supabase/migrations/`](sup
    | `20261005000000_sono.sql` | pontuação do sono, HRV |
    | `20261006000000_dietas.sql` | dietas feitas com as favoritas (sem ela só o separador Dieta pede a migração) |
    | `20261007000000_evolucao.sql` | guardar a análise da evolução |
-   | `20261015000000_agua.sql` | água do dia (a coluna fica; a app já não a usa, decisão 286) |
+   | `20261015000000_agua.sql` | água do dia (a app já não a usa, decisão 286; a coluna sai na limpeza) |
    | `20261018110000_pesagens_apagadas.sql` | uma pesagem apagada não volta |
    | `20261018110001_forma_intervals.sql` | forma e VO2máx do intervals.icu |
    | `20261018130000_alimentos_marca.sql` | produtos de marca (fibra, açúcares, sal, Nutri-Score) e cache da pesquisa no Open Food Facts |
@@ -94,6 +94,7 @@ A fonte de verdade é o conjunto das migrações em [`supabase/migrations/`](sup
    | `20261113000040_nome_no_perfil.sql` | nome de cada pessoa guardado no perfil (`profile.display_name`) |
    | `20261113000041_limites_buckets.sql` | limites de tamanho e tipo nos buckets das fotos |
    | `20261113000042_schema_version.sql` | versão do schema (`schema_version`); correr depois da 40 e da 41 |
+   | `20261113000050_limpeza.sql` | **irreversível**: apaga as tabelas órfãs (`strava_tokens`, as cópias `*_bak` de setembro) e as colunas que o código já não lê. Só uns dias depois de publicar o código novo (o telemóvel guarda o perfil em cache) e com cópia de segurança; numa instalação nova pode correr-se logo |
 
 3. Importar o repo no Vercel. Env vars do projeto: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (só server), a chave da IA — `GEMINI_API_KEY` (Gemini, plano gratuito: criar em aistudio.google.com › Get API key) **ou** `ANTHROPIC_API_KEY` (Claude, pago) —, `CRON_SECRET` (protege as crons; sem ela não correm), `HEALTH_INGEST_TOKEN` (o Atalho do iPhone, passo 6), e para o cliente `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`. Opcionais: `HOUSE_EMAILS` (emails da casa separados por vírgulas: com ela, o servidor só aceita contas que estejam na lista ou já tenham perfil; sem ela, aceita qualquer conta do projeto, por isso o registo livre tem de estar desligado), `AI_PROVIDER`, `GEMINI_MODEL_VISION`/`GEMINI_MODEL_TEXT`, `VAPID_SUBJECT` (contacto `mailto:` das notificações; sem ela, o endereço da app) e `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` (sem elas, o servidor cria as chaves das notificações na primeira vez e guarda-as no Supabase; não as troques depois, senão cada telemóvel tem de ligar as notificações outra vez). Em dev local: copiar `.env.example` para `.env`.
 3b. **Recuperar a palavra-passe:** no Supabase, Authentication → URL Configuration → Site URL = `https://a-tua-app.vercel.app` e, em Redirect URLs, `https://a-tua-app.vercel.app/**`. Sem isto, o link do email «Esqueci-me da palavra-passe» abre `localhost`. O email sai pelo serviço do Supabase (poucos por hora; vê no lixo/spam).

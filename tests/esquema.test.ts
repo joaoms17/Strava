@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  DEFERRED_MIGRATIONS,
   MIGRATIONS,
   REQUIRED_SCHEMA_VERSION,
   SCHEMA_VERSION,
@@ -60,6 +61,13 @@ describe('migrações em falta no telemóvel (ideia 6)', () => {
   it('MIGRATIONS é a pasta supabase/migrations, por ordem', () => {
     const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()
     expect([...MIGRATIONS]).toEqual(files)
+  })
+
+  it('as migrações para correr mais tarde existem e escrevem schema_version', () => {
+    for (const file of Object.keys(DEFERRED_MIGRATIONS)) {
+      expect(MIGRATIONS).toContain(file)
+      expect(fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8')).toMatch(/insert into public\.schema_version/)
+    }
   })
 
   it('sem a tabela schema_version não se sabe: null (ficam os marcadores)', () => {

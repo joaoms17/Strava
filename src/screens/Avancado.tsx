@@ -6,6 +6,7 @@ import { BusyButton } from '../lib/busy'
 import { useReadyProfile, useProfile } from '../lib/profile'
 import { fmtInt } from '../lib/format'
 import { USD_TO_EUR, kindLabel, nearMonthlyCap } from '../../api/_lib/rules/custos'
+import { DEFERRED_MIGRATIONS } from '../../api/_lib/rules/esquema'
 import type { CatalogExercise } from '../lib/types'
 import AiCheck from '../components/AiCheck'
 import AvisoNoite from '../components/AvisoNoite'
@@ -302,6 +303,7 @@ export default function Avancado() {
               {pendingMigrations.map((file) => (
                 <li key={file}>
                   <code className="break-all text-ink">supabase/migrations/{file}</code>
+                  {DEFERRED_MIGRATIONS[file] && <span> — {DEFERRED_MIGRATIONS[file]}</span>}
                 </li>
               ))}
             </ul>
