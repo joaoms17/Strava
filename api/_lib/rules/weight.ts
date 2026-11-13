@@ -22,18 +22,24 @@ function round2(n: number): number {
 }
 
 // Para cada dia com pesagem, média das pesagens na janela [dia-6, dia].
-// Dias sem pesagem não entram na média (não são zeros).
+// Dias sem pesagem não entram na média (não são zeros). Janela deslizante
+// sobre a lista ordenada (P4): cada data converte-se uma vez e a janela só
+// anda para a frente; a soma faz-se pela mesma ordem de antes.
 export function trend7(weights: DatedValue[]): DatedValue[] {
   const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date))
-  return sorted.map((entry) => {
-    const day = dayNumber(entry.date)
-    const window = sorted.filter((w) => {
-      const d = dayNumber(w.date)
-      return d >= day - 6 && d <= day
-    })
-    const mean = window.reduce((acc, w) => acc + w.value, 0) / window.length
-    return { date: entry.date, value: round2(mean) }
-  })
+  const days = sorted.map((w) => dayNumber(w.date))
+  const out: DatedValue[] = []
+  let lo = 0
+  let hi = 0
+  for (let i = 0; i < sorted.length; i++) {
+    const day = days[i]!
+    while (hi < sorted.length && days[hi]! <= day) hi++
+    while (days[lo]! < day - 6) lo++
+    let sum = 0
+    for (let k = lo; k < hi; k++) sum += sorted[k]!.value
+    out.push({ date: sorted[i]!.date, value: round2(sum / (hi - lo)) })
+  }
+  return out
 }
 
 // Declive (kg/dia) por regressão linear simples sobre pontos datados.
