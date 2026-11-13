@@ -33,6 +33,7 @@ import { useAccounts } from '../../lib/accounts'
 import { PortionRow, ScopeToggle, ShareChooser } from '../Porcao'
 import { favoriteName, patternKey, similarCount, SIMILAR_MIN_COUNT } from '../../../api/_lib/rules/favoritos'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
+import { proteinMealOk } from '../../../api/_lib/rules/targets'
 import { SLOTS, SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
 import { canChangePortion, factorOf, joinNames, sameFactor, slotScope, slotScopeLabel, splitText } from '../../../api/_lib/rules/porcoes'
 import { orderSplitHint } from '../../../api/_lib/rules/pedido'
@@ -202,7 +203,7 @@ export default function MealSheet() {
   const failed = current.status === 'erro' || stuck
   const dirty = JSON.stringify(items) !== JSON.stringify(current.items)
   const totals = mealTotals(items)
-  const proteinOk = MAIN_SLOTS.includes(mealSlot) && totals.protein >= profile.protein_per_meal_g
+  const proteinOk = MAIN_SLOTS.includes(mealSlot) && proteinMealOk(totals.protein, profile.protein_per_meal_g)
   // «Também para …» do ＋, à espera do fim da análise.
   const shareWith = current.share_with ?? []
   const goingTo = people.filter((p) => shareWith.includes(p.user_id) && !p.shared)

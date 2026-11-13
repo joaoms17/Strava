@@ -8,6 +8,10 @@ export type WattsSource = 'device' | 'console' | 'manual' | 'favorite' | 'prefil
 // sessões antigas, que não se reescrevem (decisão 64).
 export type KcalRule = 'watts' | 'watts_prefill' | 'strength_flat' | 'device' | 'device_x0.7' | 'met' | StrengthRule
 
+// Os últimos watts confirmados contam só se forem dos 30 dias antes do
+// treino (servidor e folha de confirmar usam a mesma janela; L20).
+export const LAST_WATTS_WINDOW_DAYS = 30
+
 // Regra 2 revista: os watts vêm, por ordem, do dispositivo, da foto da
 // consola, do valor à mão, do favorito e, por fim, dos últimos watts
 // confirmados (suposto, «≈ com 140 W da última sessão»). Com as calorias do
