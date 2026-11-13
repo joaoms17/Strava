@@ -185,6 +185,7 @@ export function ChartCard({
   table,
   className = '',
   dimmed = false,
+  interactive = false,
 }: {
   id?: string
   kicker: string
@@ -196,6 +197,9 @@ export function ChartCard({
   table?: ReactNode
   className?: string
   dimmed?: boolean // a carregar outro período: fica o anterior, mais claro (sem saltos)
+  // B14: com botões lá dentro (os dias, o calendário), um grupo e não uma
+  // imagem — um role="img" esconde os filhos ao VoiceOver.
+  interactive?: boolean
 }) {
   return (
     // Sem m-0: o preflight já tira a margem da <figure>, e um m-0 ganhava ao
@@ -206,7 +210,7 @@ export function ChartCard({
         <p className="text-[17px] leading-snug font-semibold">{reading}</p>
       </figcaption>
       {aside}
-      <div role="img" aria-label={`${kicker}: ${reading}`} className={`transition-opacity ${dimmed ? 'opacity-50' : ''}`}>
+      <div role={interactive ? 'group' : 'img'} aria-label={`${kicker}: ${reading}`} className={`transition-opacity ${dimmed ? 'opacity-50' : ''}`}>
         {children}
       </div>
       {legend}

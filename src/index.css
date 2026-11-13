@@ -62,8 +62,8 @@
     --color-pain: #d14343;
     --color-ok: #1f9d55;
     --color-ok-text: #0f6b38;
-    --color-chart-bike: #2743f5;
-    --color-chart-gym: #a21caf;
+    --color-chart-bike: #5c7a0a; /* B15: não é o azul do gasto */
+    --color-chart-gym: #6d28d9; /* B15: não é o magenta do peso */
     --color-chart-health: #0d9488;
     --color-cta: #121212;
     --color-on-cta: #f1eee7;
@@ -91,8 +91,8 @@
       --color-pain: #d14343;
       --color-ok: #1f9d55;
       --color-ok-text: #0f6b38;
-      --color-chart-bike: #2743f5;
-      --color-chart-gym: #a21caf;
+      --color-chart-bike: #5c7a0a; /* B15: não é o azul do gasto */
+      --color-chart-gym: #6d28d9; /* B15: não é o magenta do peso */
       --color-chart-health: #0d9488;
       --color-cta: #121212;
       --color-on-cta: #f1eee7;

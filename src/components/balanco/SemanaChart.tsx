@@ -90,6 +90,7 @@ export default function SemanaChart({
   return (
     <ChartCard
       id="semana-grafico"
+      interactive
       kicker="Comer contra o alvo, dia a dia"
       reading={reading}
       note={note ?? undefined}
@@ -208,7 +209,7 @@ export default function SemanaChart({
                 <MissingNote date={selected.date} today={today} compact />
               </div>
             )}
-            <button onClick={() => onOpenDay(selected.date)} className="min-h-9 text-[15px] font-semibold text-eat">
+            <button onClick={() => onOpenDay(selected.date)} className="min-h-11 text-[15px] font-semibold text-eat">
               Abrir o dia ›
             </button>
           </div>
