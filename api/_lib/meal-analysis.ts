@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MODELS, NO_THINKING, REQUEST_TEXT, REQUEST_VISION, aiProvider, structuredCall } from './anthropic.js'
-import { AiError, describeAiError, errorForStorage } from './rules/resposta-ia.js'
+import { AiError, AiQuotaError, describeAiError, errorForStorage } from './rules/resposta-ia.js'
 import { MealAnalysisSchema, MealPhotoAnalysisSchema, type MealAnalysis, type MealPhotoAnalysis } from './schemas.js'
 import {
   PROMPT_MEAL_CORRECT,
@@ -175,6 +175,8 @@ export async function correctItems(
   // O que já está aplicado nos itens (a nota e as etiquetas de antes): a
   // correção aplica só a diferença (M4).
   applied: string | null = null,
+  // «Mesmo assim» (acima do limite): a reserva da quota não recusa (M20).
+  force = false,
 ): Promise<{ items: MealItem[]; title: string; confidence: MealAnalysis['meal_confidence'] }> {
   const { refs, forPrompt } = await foodLibrary(admin, userId)
   const byFood = new Map(Object.entries(refs).map(([ref, id]) => [id, ref]))
@@ -195,7 +197,7 @@ export async function correctItems(
   })
   const { output: parsed } = await structuredCall(
     admin,
-    { userId, kind: 'meal_correct', request },
+    { userId, kind: 'meal_correct', request, force },
     {
       model: MODELS.text,
       max_tokens: 4096,
@@ -230,6 +232,9 @@ type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot
 // análise, mesmo com itens; os itens de antes só voltam se falhar.
 export interface AnalyseOptions {
   reread?: boolean
+  // «Analisar esta mesmo assim» (acima do limite): a chamada fica registada
+  // (conta), mas a reserva da quota não a recusa (M20).
+  force?: boolean
 }
 
 // O teto da chamada dentro do que falta à função (`deadline`, em ms desde
@@ -246,6 +251,7 @@ async function runModel(
   meal: ModelInput,
   deadline?: number,
   reread = false,
+  force = false,
 ): Promise<{
   analysis: MealAnalysis
   order: Order | null
@@ -287,7 +293,7 @@ async function runModel(
   if (photos.length > 0) {
     const images = await photoContent(admin, photos.slice(0, 4), meal.user_id)
     // O tempo de descarregar as fotos já conta.
-    const meta = { userId: meal.user_id, kind: 'meal_photo', request: within(REQUEST_VISION, deadline) }
+    const meta = { userId: meal.user_id, kind: 'meal_photo', request: within(REQUEST_VISION, deadline), force }
     const params = {
       model: MODELS.vision,
       max_tokens: 4096,
@@ -321,7 +327,7 @@ async function runModel(
 
   const { output: analysis, cost, model } = await structuredCall(
     admin,
-    { userId: meal.user_id, kind: 'meal_text', request: within(REQUEST_TEXT, deadline) },
+    { userId: meal.user_id, kind: 'meal_text', request: within(REQUEST_TEXT, deadline), force },
     {
       model: MODELS.text,
       max_tokens: 4096,
@@ -373,7 +379,7 @@ export async function analyseClaimed(
   // volta logo a «por rever» com eles (M3).
   const keepsItems = reread || addingToItems(meal)
   try {
-    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline, reread)
+    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline, reread, options.force === true)
     let analysed = toMealItems(analysis.items, refs)
     const adding = !reread && addingToItems(meal)
     const factor = factorOf(meal.portion_factor)
@@ -469,7 +475,7 @@ export async function analyseClaimed(
       correct: async (current, correction, applied) => {
         const request = requestWithin(REQUEST_TEXT, deadline - Date.now(), ANALYSIS_WRITE_MARGIN_MS)
         if (!request) throw new AiError('A IA demorou demasiado a responder.', 'sem tempo para a correção da nota', true)
-        return (await correctItems(admin, meal.user_id, current, correction, request, applied)).items
+        return (await correctItems(admin, meal.user_id, current, correction, request, applied, options.force === true)).items
       },
     })
     // Foto lida pelo modelo de reserva: a folha da refeição diz porquê. À
@@ -494,8 +500,14 @@ export async function analyseClaimed(
     // motivo e o botão «Tentar outra vez».
     // A juntar fotos a uma refeição com itens, a falha não a tira das contas:
     // volta a «por rever» com os itens que tinha e o motivo à vista.
+    // M20: a reserva da quota recusada (outra foto chegou primeiro ao
+    // limite) fica como as de acima do limite: «sem análise», com o motivo.
     const retry = !keepsItems && describeAiError(err).transient && meal.analysis_attempts < 3
-    const failed = keepsItems ? { status: 'por_rever', analysis_started_at: null } : { status: 'erro' }
+    const failed = keepsItems
+      ? { status: 'por_rever', analysis_started_at: null }
+      : err instanceof AiQuotaError
+        ? { status: 'sem_analise', analysis_started_at: null }
+        : { status: 'erro' }
     await admin
       .from('meals')
       .update({

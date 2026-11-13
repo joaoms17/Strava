@@ -151,6 +151,18 @@ export class AiError extends Error {
   }
 }
 
+// M20: a reserva da quota foi recusada (limite diário ou teto do mês). Não
+// é passageiro: tentar outra vez já não adianta. A app recebe 429.
+export class AiQuotaError extends AiError {
+  constructor(
+    message: string,
+    readonly reason: 'diario' | 'mensal',
+  ) {
+    super(message, `quota: ${reason}`)
+    this.name = 'AiQuotaError'
+  }
+}
+
 export const AI_FORMAT_ERROR = 'A resposta da IA veio num formato inesperado.'
 
 // Lê o texto da resposta: JSON → arrumar → validar com o schema Zod.
