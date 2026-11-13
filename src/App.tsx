@@ -27,23 +27,11 @@ import WeighSheet from './components/sheets/WeighSheet'
 import MealSheet from './components/sheets/MealSheet'
 import GallerySheet from './components/sheets/GallerySheet'
 import RepeatSheet from './components/sheets/RepeatSheet'
-import NewFavoriteSheet from './components/sheets/NewFavoriteSheet'
-import DietSheet from './components/sheets/DietSheet'
-import PersonSheet from './components/sheets/PersonSheet'
 import NoteSheet from './components/sheets/NoteSheet'
-import BarcodeSheet from './components/sheets/BarcodeSheet'
-import MenuSheet from './components/sheets/MenuSheet'
-import ReviewSheet from './components/sheets/ReviewSheet'
 import TreinoSheet from './components/sheets/TreinoSheet'
 import LogWorkoutSheet from './components/sheets/LogWorkoutSheet'
 import JaFizSheet from './components/sheets/JaFizSheet'
-import TemplateSheet from './components/sheets/TemplateSheet'
-import PlanoSheet from './components/sheets/PlanoSheet'
-import DizerTreinoSheet from './components/sheets/DizerTreinoSheet'
 import ConfirmWorkoutSheet from './components/sheets/ConfirmWorkoutSheet'
-import MedidasSheet, { ComoMedirSheet } from './components/sheets/MedidasSheet'
-import ProjecaoSheet from './components/sheets/ProjecaoSheet'
-import MesSheet from './components/sheets/MesSheet'
 import Hoje from './screens/Hoje'
 import Favoritos from './screens/Favoritos'
 import Definicoes from './screens/Definicoes'
@@ -88,6 +76,21 @@ const Ginasio = screen(() => import('./screens/Ginasio'))
 const PlanoTreino = screen(() => import('./screens/PlanoTreino'))
 // A «Pergunta à app» (e a validação das ações) só carrega quando se abre.
 const PerguntaSheet = screen(() => import('./components/sheets/PerguntaSheet'))
+// As folhas de uso raro também (P2): o chunk principal fica mais leve. As do
+// registo de todos os dias (＋, peso, refeição, treino) ficam no principal.
+const NewFavoriteSheet = screen(() => import('./components/sheets/NewFavoriteSheet'))
+const DietSheet = screen(() => import('./components/sheets/DietSheet'))
+const PersonSheet = screen(() => import('./components/sheets/PersonSheet'))
+const BarcodeSheet = screen(() => import('./components/sheets/BarcodeSheet'))
+const MenuSheet = screen(() => import('./components/sheets/MenuSheet'))
+const ReviewSheet = screen(() => import('./components/sheets/ReviewSheet'))
+const TemplateSheet = screen(() => import('./components/sheets/TemplateSheet'))
+const PlanoSheet = screen(() => import('./components/sheets/PlanoSheet'))
+const DizerTreinoSheet = screen(() => import('./components/sheets/DizerTreinoSheet'))
+const ProjecaoSheet = screen(() => import('./components/sheets/ProjecaoSheet'))
+const MesSheet = screen(() => import('./components/sheets/MesSheet'))
+const MedidasSheet = screen(() => import('./components/sheets/MedidasSheet'))
+const ComoMedirSheet = screen(() => import('./components/sheets/MedidasSheet').then((m) => ({ default: m.ComoMedirSheet })))
 
 function Centered({ children }: { children: ReactNode }) {
   return (
@@ -200,6 +203,11 @@ function AskButton() {
 
 function Sheets() {
   const sheet = useSheet()
+  const open = SheetFor(sheet)
+  return open ? <Suspense fallback={null}>{open}</Suspense> : null
+}
+
+function SheetFor(sheet: ReturnType<typeof useSheet>): ReactNode {
   if (sheet.name === 'registar') return <CaptureSheet key="registar" />
   if (sheet.name === 'peso') return <WeighSheet key={sheet.params.get('data') ?? ''} />
   if (sheet.name === 'refeicao' && sheet.params.get('id')) {
@@ -226,13 +234,7 @@ function Sheets() {
   if (sheet.name === 'plano') return <PlanoSheet key={sheet.params.get('dia') ?? ''} />
   if (sheet.name === 'projecao') return <ProjecaoSheet />
   if (sheet.name === 'mes') return <MesSheet key={sheet.params.get('mes') ?? ''} />
-  if (sheet.name === 'pergunta') {
-    return (
-      <Suspense fallback={null}>
-        <PerguntaSheet />
-      </Suspense>
-    )
-  }
+  if (sheet.name === 'pergunta') return <PerguntaSheet />
   return null
 }
 
