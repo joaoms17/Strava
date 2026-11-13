@@ -1,10 +1,32 @@
 import type { VercelResponse } from '@vercel/node'
-import Anthropic from '@anthropic-ai/sdk'
 import { HttpError } from './supabase.js'
 import { AiError } from './rules/resposta-ia.js'
 
+// Os erros do SDK da Anthropic reconhecem-se pelo nome da classe (sem
+// importar o SDK aqui: P7, arranque a frio mais curto).
+function sdkError(err: unknown): Set<string> {
+  const names = new Set<string>()
+  let proto = err != null && typeof err === 'object' ? Object.getPrototypeOf(err) : null
+  while (proto && proto !== Object.prototype) {
+    const name = (proto.constructor as { name?: string } | undefined)?.name
+    if (name) names.add(name)
+    proto = Object.getPrototypeOf(proto)
+  }
+  return names
+}
+
+export const SERVER_ERROR = 'Erro no servidor. Tenta outra vez.'
+
 export function respondError(res: VercelResponse, err: unknown): void {
   if (err instanceof HttpError) {
+    // G5: um 500 traz quase sempre a mensagem crua do Postgres (nomes de
+    // tabelas e restrições): fica no registo e a app recebe uma frase genérica.
+    // Os outros (4xx, 502/503/504) são frases escritas para a app.
+    if (err.status === 500) {
+      console.error('Erro 500:', err.message)
+      res.status(500).json({ error: SERVER_ERROR })
+      return
+    }
     res.status(err.status).json({ error: err.message })
     return
   }
@@ -13,19 +35,20 @@ export function respondError(res: VercelResponse, err: unknown): void {
     res.status(502).json({ error: err.message })
     return
   }
-  if (err instanceof Anthropic.APIConnectionTimeoutError) {
+  const sdk = sdkError(err)
+  if (sdk.has('APIConnectionTimeoutError')) {
     res.status(504).json({ error: 'A IA demorou demasiado a responder. Tenta outra vez.' })
     return
   }
-  if (err instanceof Anthropic.RateLimitError) {
+  if (sdk.has('RateLimitError')) {
     res.status(503).json({ error: 'A IA está ocupada. Tenta daqui a um minuto.' })
     return
   }
-  if (err instanceof Anthropic.AuthenticationError) {
+  if (sdk.has('AuthenticationError')) {
     res.status(500).json({ error: 'A chave da Anthropic não é válida. Verifica a ANTHROPIC_API_KEY no Vercel.' })
     return
   }
-  if (err instanceof Anthropic.APIError) {
+  if (sdk.has('APIError')) {
     res.status(502).json({ error: 'A IA não respondeu. Tenta outra vez.' })
     return
   }

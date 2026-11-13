@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources/messages/messages'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { z } from 'zod'
@@ -31,9 +31,17 @@ function roleOf(model: string): AiRole {
   return model === MODELS.vision ? 'vision' : 'text'
 }
 
-let client: Anthropic | null = null
-export function anthropic(): Anthropic {
-  client ??= new Anthropic()
+// O SDK só se carrega quando a IA é o Claude (P7: ~50 ms a menos no arranque
+// a frio de cada função, e com o Gemini nunca se carrega).
+let client: Promise<Anthropic> | null = null
+export function anthropic(): Promise<Anthropic> {
+  client ??= import('@anthropic-ai/sdk').then(
+    ({ default: Sdk }) => new Sdk(),
+    (err: unknown) => {
+      client = null
+      throw err
+    },
+  )
   return client
 }
 
@@ -123,7 +131,7 @@ export async function structuredCall<T>(
 
   let response: Anthropic.Message
   try {
-    response = await anthropic().messages.create(
+    response = await (await anthropic()).messages.create(
       { ...params, output_config: { format: { type: 'json_schema', schema: json } } },
       meta.request,
     )

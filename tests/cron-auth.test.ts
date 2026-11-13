@@ -21,5 +21,8 @@ describe('cron protegida', () => {
     expect(sameSecret('abc', 'abc')).toBe(true)
     expect(sameSecret('abc', 'abcd')).toBe(false)
     expect(sameSecret('', 'abc')).toBe(false)
+    // G4: sem segredo definido nunca dá certo, nem com o vazio
+    expect(sameSecret('', '')).toBe(false)
+    expect(sameSecret('x'.repeat(1000), 'abc')).toBe(false)
   })
 })
