@@ -15,8 +15,18 @@ function sdkError(err: unknown): Set<string> {
   return names
 }
 
+export const SERVER_ERROR = 'Erro no servidor. Tenta outra vez.'
+
 export function respondError(res: VercelResponse, err: unknown): void {
   if (err instanceof HttpError) {
+    // G5: um 500 traz quase sempre a mensagem crua do Postgres (nomes de
+    // tabelas e restrições): fica no registo e a app recebe uma frase genérica.
+    // Os outros (4xx, 502/503/504) são frases escritas para a app.
+    if (err.status === 500) {
+      console.error('Erro 500:', err.message)
+      res.status(500).json({ error: SERVER_ERROR })
+      return
+    }
     res.status(err.status).json({ error: err.message })
     return
   }

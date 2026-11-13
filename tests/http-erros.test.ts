@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import Anthropic from '@anthropic-ai/sdk'
-import { respondError } from '../api/_lib/http'
+import { SERVER_ERROR, respondError } from '../api/_lib/http'
 import { HttpError } from '../api/_lib/supabase'
 
 // P7: os erros do SDK da Anthropic reconhecem-se sem o importar no servidor;
@@ -23,5 +23,7 @@ describe('respondError', () => {
   it('HttpError passa a mensagem; o resto fica genérico', () => {
     expect(capture(new HttpError(409, 'Já existe.'))).toEqual([409, { error: 'Já existe.' }])
     expect(capture(new Error('duplicate key value violates unique constraint "x"'))).toEqual([500, { error: 'Erro inesperado.' }])
+    expect(capture(new HttpError(500, 'relation "meals" violates check constraint'))).toEqual([500, { error: SERVER_ERROR }])
+    expect(capture(new HttpError(503, 'Falta um passo no Supabase.'))).toEqual([503, { error: 'Falta um passo no Supabase.' }])
   })
 })
