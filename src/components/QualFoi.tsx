@@ -119,8 +119,20 @@ export function QualFoiQuestion({ workout: w, onDone }: { workout: Workout; onDo
 }
 
 // No Hoje e no Treino: os treinos dos últimos 7 dias que chegaram sozinhos e
-// ainda não têm resposta, o mais recente primeiro (até 3).
-export default function QualFoi({ today }: { today: string }) {
+// ainda não têm resposta, o mais recente primeiro (até 3; no Hoje, 1).
+// O Hoje escolhe um só cartão de ação (H9): `onCount` diz-lhe quantos há e
+// `hidden` mantém a contagem sem mostrar nada.
+export default function QualFoi({
+  today,
+  max = 3,
+  hidden = false,
+  onCount,
+}: {
+  today: string
+  max?: number
+  hidden?: boolean
+  onCount?: (count: number) => void
+}) {
   const plan = usePlanoTreino()
   const version = useDataVersion()
   const [workouts, setWorkouts] = useState<Workout[]>([])
@@ -141,8 +153,14 @@ export default function QualFoi({ today }: { today: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, version, !!plan])
 
-  if (!plan) return null
-  const ask = askWhichWorkout(workouts, today).slice(0, 3)
+  const all = plan ? askWhichWorkout(workouts, today) : []
+  const count = all.length
+  useEffect(() => {
+    onCount?.(count)
+  }, [count, onCount])
+
+  if (!plan || hidden) return null
+  const ask = all.slice(0, max)
   if (ask.length === 0) return null
 
   return (
