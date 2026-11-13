@@ -24,6 +24,8 @@ import {
   weekTick,
 } from '../charts/kit'
 
+const total = (w: { bike: number; gym: number; other: number }) => w.bike + w.gym + w.other
+
 const MONTHS_LONG = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
 // As segundas-feiras de `from` a hoje.
@@ -33,8 +35,9 @@ function mondaysFrom(from: string, today: string): string[] {
   return list
 }
 
-// Corpo › Treino: minutos por semana (bicicleta e ginásio, a melhor semana
-// marcada) e a forma (carga de 42 dias) com a fadiga, o pico e o melhor mês.
+// Corpo › Treino: minutos por semana (bicicleta, ginásio e outros — as
+// caminhadas e as aulas também contam, decisão 147 revista na auditoria
+// T15 —, a melhor semana marcada) e a forma (carga de 42 dias) com a fadiga, o pico e o melhor mês.
 // No 1S (decisão 307): os minutos de cada um dos 7 dias e a forma dia a dia.
 export default function TreinoCharts({ data, period, from, today }: { data: CorpoData; period: Period; from: string; today: string }) {
   const colors = useChartColors()
@@ -43,13 +46,21 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
     // Para a frase, todas as semanas lidas (no 1M compara com as 4 antes).
     const loadedFrom = data.workouts[0]?.date ?? from
     const allMondays = mondaysFrom(loadedFrom < from ? loadedFrom : from, today)
-    const stats = weeklyStats(data.workouts, allMondays).map((w) => ({ monday: w.start, bike: w.bike.minutes, gym: w.gym.minutes, sessions: w.bike.sessions + w.gym.sessions }))
+    const stats = weeklyStats(data.workouts, allMondays).map((w) => ({
+      monday: w.start,
+      bike: w.bike.minutes,
+      gym: w.gym.minutes,
+      other: w.other.minutes,
+      sessions: w.bike.sessions + w.gym.sessions + w.other.sessions,
+    }))
+    // As leituras somam bicicleta + ginásio: os outros entram com o ginásio.
+    const forReading = <T extends { monday: string; bike: number; gym: number; other: number }>(w: T) => ({ ...w, gym: w.gym + w.other })
     const current = mondayOf(today)
     const weeks = stats.filter((w) => w.monday >= mondayOf(from))
-    const best = bestWeek(weeks.filter((w) => w.monday < current))
+    const best = bestWeek(weeks.filter((w) => w.monday < current).map(forReading))
     const bestMarks: Mark[] = best ? [{ id: 'melhor', date: best.monday, value: best.bike + best.gym, label: `${best.bike + best.gym} min · melhor semana`, priority: 3, prefer: 'above' }] : []
-    const reading = trainingReading(stats, current, period, from, today)
-    const yMax = Math.max(60, ...weeks.map((w) => w.bike + w.gym))
+    const reading = trainingReading(stats.map(forReading), current, period, from, today)
+    const yMax = Math.max(60, ...weeks.map(total))
     const yScale = niceScale(0, yMax, 4)
     // Espaço por cima das barras para o rótulo da melhor semana.
     const yTop = Math.max(yScale.domain[1], Math.ceil(yMax * 1.14))
@@ -72,19 +83,29 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
       .map((date) => {
         const on = data.workouts.filter((w) => w.date === date)
         const sum = (type: string) => on.filter((w) => w.type === type).reduce((a, w) => a + (w.minutes ?? 0), 0)
-        return { date, bike: sum('bike'), gym: sum('strength') }
+        return { date, bike: sum('bike'), gym: sum('strength'), other: sum('other') }
       })
     const [thisWeek, prevWeek] = weeklyStats(data.workouts, [win.from, win.prevFrom])
-    const weekMinutes = (w: typeof thisWeek) => (w ? w.bike.minutes + w.gym.minutes : 0)
+    const weekMinutes = (w: typeof thisWeek) => (w ? w.bike.minutes + w.gym.minutes + w.other.minutes : 0)
     const prevLoaded = (data.workouts[0]?.date ?? today) <= win.prevFrom
-    const weekReading = trainingWeekReading(weekMinutes(thisWeek), (thisWeek?.bike.sessions ?? 0) + (thisWeek?.gym.sessions ?? 0), prevLoaded ? weekMinutes(prevWeek) : null)
-    const dayMax = Math.max(30, ...dayRows.map((d) => d.bike + d.gym))
+    const weekReading = trainingWeekReading(
+      weekMinutes(thisWeek),
+      (thisWeek?.bike.sessions ?? 0) + (thisWeek?.gym.sessions ?? 0) + (thisWeek?.other.sessions ?? 0),
+      prevLoaded ? weekMinutes(prevWeek) : null,
+    )
+    const dayMax = Math.max(30, ...dayRows.map(total))
     const dayScale = niceScale(0, dayMax, 4)
     return {
       dayRows,
       weekReading,
       dayScale,
-      hasDays: dayRows.some((d) => d.bike + d.gym > 0),
+      hasDays: dayRows.some((d) => total(d) > 0),
+      // Só as séries que a pessoa faz aparecem na legenda e na tabela (T15).
+      shows: {
+        bike: (week ? dayRows : weeks).some((w) => w.bike > 0),
+        gym: (week ? dayRows : weeks).some((w) => w.gym > 0),
+        other: (week ? dayRows : weeks).some((w) => w.other > 0),
+      },
       weeks,
       current,
       axis: categoryTicks(weeks.map((w) => w.monday), 4),
@@ -101,7 +122,7 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
       month,
       source,
       vo2,
-      hasWeeks: weeks.some((w) => w.bike + w.gym > 0),
+      hasWeeks: weeks.some((w) => total(w) > 0),
       hasForm: formPts.some((p) => p.ctl > 0),
     }
   }, [data, period, from, today, week])
@@ -115,8 +136,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
           legend={
             model.hasDays && (
               <Legend>
-                <Key shape="bar" color={colors.bike} label="Bicicleta" />
-                <Key shape="bar" color={colors.gym} label="Ginásio" />
+                {model.shows.bike && <Key shape="bar" color={colors.bike} label="Bicicleta" />}
+                {model.shows.gym && <Key shape="bar" color={colors.gym} label="Ginásio" />}
+                {model.shows.other && <Key shape="bar" color={colors.health} label="Outros" />}
               </Legend>
             )
           }
@@ -127,8 +149,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                 <thead>
                   <tr className="text-left">
                     <th className="font-normal">Dia</th>
-                    <th className="text-right font-normal">Bicicleta</th>
-                    <th className="text-right font-normal">Ginásio</th>
+                    {model.shows.bike && <th className="text-right font-normal">Bicicleta</th>}
+                    {model.shows.gym && <th className="text-right font-normal">Ginásio</th>}
+                    {model.shows.other && <th className="text-right font-normal">Outros</th>}
                   </tr>
                 </thead>
                 <tbody className="text-ink">
@@ -138,8 +161,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                     .map((d) => (
                       <tr key={d.date}>
                         <td>{d.date === today ? 'hoje' : fmtDayShort(d.date)}</td>
-                        <td className="text-right">{d.bike} min</td>
-                        <td className="text-right">{d.gym} min</td>
+                        {model.shows.bike && <td className="text-right">{d.bike} min</td>}
+                        {model.shows.gym && <td className="text-right">{d.gym} min</td>}
+                        {model.shows.other && <td className="text-right">{d.other} min</td>}
                       </tr>
                     ))}
                 </tbody>
@@ -165,8 +189,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                         <TipBox
                           title={d.date === today ? 'Hoje (até agora)' : fmtDayShort(d.date)}
                           rows={[
-                            { label: 'bicicleta', value: `${d.bike} min`, color: colors.bike },
-                            { label: 'ginásio', value: `${d.gym} min`, color: colors.gym },
+                            ...(model.shows.bike ? [{ label: 'bicicleta', value: `${d.bike} min`, color: colors.bike }] : []),
+                            ...(model.shows.gym ? [{ label: 'ginásio', value: `${d.gym} min`, color: colors.gym }] : []),
+                            ...(model.shows.other ? [{ label: 'outros', value: `${d.other} min`, color: colors.health }] : []),
                           ]}
                           colors={colors}
                         />
@@ -178,7 +203,12 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                       <Cell key={d.date} fillOpacity={d.date === today ? 0.45 : 1} />
                     ))}
                   </Bar>
-                  <Bar dataKey="gym" stackId="t" fill={colors.gym} maxBarSize={28} stroke={colors.surface} strokeWidth={2} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  <Bar dataKey="gym" stackId="t" fill={colors.gym} maxBarSize={28} stroke={colors.surface} strokeWidth={2} isAnimationActive={false}>
+                    {model.dayRows.map((d) => (
+                      <Cell key={d.date} fillOpacity={d.date === today ? 0.45 : 1} />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="other" stackId="t" fill={colors.health} maxBarSize={28} stroke={colors.surface} strokeWidth={2} isAnimationActive={false}>
                     {model.dayRows.map((d) => (
                       <Cell key={d.date} fillOpacity={d.date === today ? 0.45 : 1} />
                     ))}
@@ -195,8 +225,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
           legend={
             model.hasWeeks && (
               <Legend>
-                <Key shape="bar" color={colors.bike} label="Bicicleta" />
-                <Key shape="bar" color={colors.gym} label="Ginásio" />
+                {model.shows.bike && <Key shape="bar" color={colors.bike} label="Bicicleta" />}
+                {model.shows.gym && <Key shape="bar" color={colors.gym} label="Ginásio" />}
+                {model.shows.other && <Key shape="bar" color={colors.health} label="Outros" />}
               </Legend>
             )
           }
@@ -207,8 +238,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                 <thead>
                   <tr className="text-left">
                     <th className="font-normal">Semana</th>
-                    <th className="text-right font-normal">Bicicleta</th>
-                    <th className="text-right font-normal">Ginásio</th>
+                    {model.shows.bike && <th className="text-right font-normal">Bicicleta</th>}
+                    {model.shows.gym && <th className="text-right font-normal">Ginásio</th>}
+                    {model.shows.other && <th className="text-right font-normal">Outros</th>}
                     <th className="text-right font-normal">Sessões</th>
                   </tr>
                 </thead>
@@ -219,8 +251,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                     .map((w) => (
                       <tr key={w.monday}>
                         <td>{fmtDayMonth(w.monday)}</td>
-                        <td className="text-right">{w.bike} min</td>
-                        <td className="text-right">{w.gym} min</td>
+                        {model.shows.bike && <td className="text-right">{w.bike} min</td>}
+                        {model.shows.gym && <td className="text-right">{w.gym} min</td>}
+                        {model.shows.other && <td className="text-right">{w.other} min</td>}
                         <td className="text-right">{w.sessions}</td>
                       </tr>
                     ))}
@@ -247,8 +280,9 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                         <TipBox
                           title={`Semana de ${fmtDayMonth(w.monday)}${w.monday === model.current ? ' (a meio)' : ''}`}
                           rows={[
-                            { label: 'bicicleta', value: `${w.bike} min`, color: colors.bike },
-                            { label: 'ginásio', value: `${w.gym} min`, color: colors.gym },
+                            ...(model.shows.bike ? [{ label: 'bicicleta', value: `${w.bike} min`, color: colors.bike }] : []),
+                            ...(model.shows.gym ? [{ label: 'ginásio', value: `${w.gym} min`, color: colors.gym }] : []),
+                            ...(model.shows.other ? [{ label: 'outros', value: `${w.other} min`, color: colors.health }] : []),
                             { label: w.sessions === 1 ? 'sessão' : 'sessões', value: String(w.sessions) },
                           ]}
                           colors={colors}
@@ -261,12 +295,17 @@ export default function TreinoCharts({ data, period, from, today }: { data: Corp
                       <Cell key={w.monday} fillOpacity={w.monday === model.current ? 0.45 : 1} />
                     ))}
                   </Bar>
-                  <Bar dataKey="gym" stackId="t" fill={colors.gym} maxBarSize={24} stroke={colors.surface} strokeWidth={model.weeks.length > 20 ? 0 : 2} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  <Bar dataKey="gym" stackId="t" fill={colors.gym} maxBarSize={24} stroke={colors.surface} strokeWidth={model.weeks.length > 20 ? 0 : 2} isAnimationActive={false}>
                     {model.weeks.map((w) => (
                       <Cell key={w.monday} fillOpacity={w.monday === model.current ? 0.45 : 1} />
                     ))}
                   </Bar>
-                  <Marks marks={model.bestMarks} color={colors.ink} colors={colors} x={(d) => d} avoid={model.weeks.map((w) => ({ date: w.monday, value: w.bike + w.gym }))} />
+                  <Bar dataKey="other" stackId="t" fill={colors.health} maxBarSize={24} stroke={colors.surface} strokeWidth={model.weeks.length > 20 ? 0 : 2} isAnimationActive={false}>
+                    {model.weeks.map((w) => (
+                      <Cell key={w.monday} fillOpacity={w.monday === model.current ? 0.45 : 1} />
+                    ))}
+                  </Bar>
+                  <Marks marks={model.bestMarks} color={colors.ink} colors={colors} x={(d) => d} avoid={model.weeks.map((w) => ({ date: w.monday, value: total(w) }))} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

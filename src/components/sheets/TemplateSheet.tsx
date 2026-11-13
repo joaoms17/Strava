@@ -3,14 +3,15 @@ import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton } from '../../lib/busy'
-import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, workoutKcal, type OtherSport } from '../../../api/_lib/rules/targets'
 import type { Favorite, FavoriteWorkout, TemplateExercise } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
 import ExercisePicker from '../ExercisePicker'
+import { useWattsChoices } from '../../lib/use-watts'
 import { chip } from '../ui/Chips'
+import { cleanDecimalText, decimalFromText, decimalText, intFromText } from '../../lib/campo-numero'
 
 type Kind = 'bike' | 'strength' | OtherSport
 
@@ -27,7 +28,6 @@ const DURATIONS = [30, 45, 60, 75, 90]
 export default function TemplateSheet() {
   const sheet = useSheet()
   const toast = useToast()
-  const profile = useReadyProfile()
   const id = sheet.params.get('id')
   const [loaded, setLoaded] = useState(!id)
   const [name, setName] = useState('')
@@ -36,17 +36,24 @@ export default function TemplateSheet() {
   const [watts, setWatts] = useState<number | null>(null)
   const [exercises, setExercises] = useState<TemplateExercise[]>([])
   const [picking, setPicking] = useState(false)
-  // A carga a ser escrita, por exercício (o nome é único): «17,» fica no campo
-  // até se escrever o 5, em vez de voltar logo a «17». Ao sair do campo
-  // mostra-se o número guardado, com vírgula.
-  const [loadDrafts, setLoadDrafts] = useState<Record<string, string>>({})
-  const dropDraft = (name: string) =>
-    setLoadDrafts((prev) => {
+  // O texto a ser escrito em cada campo, por exercício (o nome é único) e
+  // campo: «17,» fica até se escrever o 5, e apagar as séries deixa o campo
+  // vazio em vez de saltar para 1 (8 → apagar → 6 dava 16; T23). Ao sair do
+  // campo mostra-se o número guardado.
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const draftKey = (name: string, field: 'sets' | 'rep_min' | 'rep_max' | 'load') => `${name}|${field}`
+  const setDraft = (key: string, text: string) => setDrafts((prev) => ({ ...prev, [key]: text }))
+  const dropDraft = (key: string) =>
+    setDrafts((prev) => {
+      if (!(key in prev)) return prev
       const next = { ...prev }
-      delete next[name]
+      delete next[key]
       return next
     })
-  const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
+  const dropDrafts = (name: string) =>
+    setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${name}|`))))
+  // As tuas potências (Definições) ou as das últimas sessões; nunca fixas (T15).
+  const wattsOptions = useWattsChoices()
 
   useEffect(() => {
     if (!id) return
@@ -135,10 +142,30 @@ export default function TemplateSheet() {
   const field =
     'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
   const small =
-    'h-10 w-12 shrink-0 rounded-lg border border-line bg-bg text-center text-[16px] tabular-nums focus:border-eat focus:outline-none'
-  const num = (text: string) => {
-    const n = Number(text.replace(',', '.'))
-    return Number.isFinite(n) ? n : null
+    'h-11 w-12 shrink-0 rounded-lg border border-line bg-bg text-center text-[16px] text-ink tabular-nums focus:border-eat focus:outline-none'
+  // Um campo inteiro do exercício i: o texto fica enquanto se escreve; o
+  // número só muda quando é válido.
+  const intField = (i: number, e: TemplateExercise, field: 'sets' | 'rep_min' | 'rep_max', max: number, label: string) => {
+    const key = draftKey(e.name, field)
+    return (
+      <input
+        inputMode="numeric"
+        aria-label={label}
+        value={drafts[key] ?? String(e[field])}
+        onFocus={(ev) => ev.target.select()}
+        onChange={(ev) => {
+          const text = ev.target.value.replace(/\D/g, '').slice(0, 3)
+          setDraft(key, text)
+          const v = intFromText(text, 1, max)
+          if (v == null) return
+          if (field === 'rep_min') updateExercise(i, { rep_min: v, rep_max: Math.max(v, e.rep_max) })
+          else if (field === 'rep_max') updateExercise(i, { rep_max: v, rep_min: Math.min(v, e.rep_min) })
+          else updateExercise(i, { sets: v })
+        }}
+        onBlur={() => dropDraft(key)}
+        className={small}
+      />
+    )
   }
 
   return (
@@ -201,7 +228,7 @@ export default function TemplateSheet() {
                     const n = Number.parseInt(e.target.value.replace(/\D/g, ''), 10)
                     if (Number.isFinite(n) && n > 0) setMinutes(Math.min(n, 600))
                   }}
-                  className={`h-9 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                  className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
                     DURATIONS.includes(minutes) ? 'border-line bg-transparent text-ink' : 'border-cta bg-cta text-on-cta'
                   }`}
                 />
@@ -215,10 +242,26 @@ export default function TemplateSheet() {
               <p className="label">Potência</p>
               <div className="flex flex-wrap gap-2">
                 {wattsOptions.map((w) => (
-                  <button key={w} onClick={() => setWatts(w)} className={chip(watts === w, 'cta')}>
+                  <button key={w} onClick={() => setWatts(watts === w ? null : w)} className={chip(watts === w, 'cta')}>
                     {w} W
                   </button>
                 ))}
+                <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                  <input
+                    inputMode="numeric"
+                    aria-label="Outra potência em watts"
+                    value={watts != null && !wattsOptions.includes(watts) ? String(watts) : ''}
+                    placeholder="outra"
+                    onChange={(e) => {
+                      const n = Number.parseInt(e.target.value.replace(/\D/g, '').slice(0, 3), 10)
+                      setWatts(Number.isFinite(n) && n > 0 ? n : null)
+                    }}
+                    className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                      watts != null && !wattsOptions.includes(watts) ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
+                    }`}
+                  />
+                  W
+                </label>
               </div>
             </div>
           )}
@@ -242,7 +285,7 @@ export default function TemplateSheet() {
                     <button
                       onClick={() => {
                         setExercises(exercises.filter((_, j) => j !== i))
-                        dropDraft(e.name)
+                        dropDrafts(e.name)
                       }}
                       aria-label={`Tirar ${e.name}`}
                       className="-mr-2 flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-dim"
@@ -252,32 +295,11 @@ export default function TemplateSheet() {
                   </div>
                   {/* Duas linhas fixas: as séries e as repetições; a carga, com «kg» ao lado. */}
                   <div className="flex items-center gap-1.5 text-[14px] text-dim">
-                    <input
-                      inputMode="numeric"
-                      aria-label={`Séries de ${e.name}`}
-                      value={e.sets}
-                      onChange={(ev) => updateExercise(i, { sets: Math.max(1, Math.min(10, num(ev.target.value) ?? 1)) })}
-                      className={small}
-                    />
+                    {intField(i, e, 'sets', 10, `Séries de ${e.name}`)}
                     séries ×
-                    <input
-                      inputMode="numeric"
-                      aria-label={`Repetições mínimas de ${e.name}`}
-                      value={e.rep_min}
-                      onChange={(ev) => {
-                        const v = Math.max(1, Math.min(100, num(ev.target.value) ?? 1))
-                        updateExercise(i, { rep_min: v, rep_max: Math.max(v, e.rep_max) })
-                      }}
-                      className={small}
-                    />
+                    {intField(i, e, 'rep_min', 100, `Repetições mínimas de ${e.name}`)}
                     a
-                    <input
-                      inputMode="numeric"
-                      aria-label={`Repetições máximas de ${e.name}`}
-                      value={e.rep_max}
-                      onChange={(ev) => updateExercise(i, { rep_max: Math.max(1, Math.min(100, num(ev.target.value) ?? 1)) })}
-                      className={small}
-                    />
+                    {intField(i, e, 'rep_max', 100, `Repetições máximas de ${e.name}`)}
                     repetições
                   </div>
                   <label className="flex items-center gap-1.5 text-[14px] text-dim">
@@ -285,14 +307,16 @@ export default function TemplateSheet() {
                     <input
                       inputMode="decimal"
                       aria-label={`Carga de ${e.name} em kg`}
-                      value={loadDrafts[e.name] ?? (e.load_kg != null ? String(e.load_kg).replace('.', ',') : '')}
+                      value={drafts[draftKey(e.name, 'load')] ?? decimalText(e.load_kg)}
                       placeholder="—"
                       onChange={(ev) => {
-                        const text = ev.target.value.replace(/[^\d,.]/g, '')
-                        setLoadDrafts((prev) => ({ ...prev, [e.name]: text }))
-                        updateExercise(i, { load_kg: text.trim() ? num(text) : null })
+                        const text = cleanDecimalText(ev.target.value)
+                        setDraft(draftKey(e.name, 'load'), text)
+                        const load = decimalFromText(text, 0, 300)
+                        if (!text.trim()) updateExercise(i, { load_kg: null })
+                        else if (load != null) updateExercise(i, { load_kg: load })
                       }}
-                      onBlur={() => dropDraft(e.name)}
+                      onBlur={() => dropDraft(draftKey(e.name, 'load'))}
                       className={small}
                     />
                     kg

@@ -220,7 +220,8 @@ export default function DizerTreinoSheet() {
   const dateParam = sheet.params.get('data')
   const openFavorite = (f: Favorite) =>
     f.workout?.type === 'strength'
-      ? (sheet.close(), navigate(`/treino/ginasio?fav=${f.id}${dateParam && dateParam !== today ? `&data=${dateParam}` : ''}`))
+      ? // Substitui a entrada da folha (fechar e navegar desfazia a navegação, T5).
+        navigate(`/treino/ginasio?fav=${f.id}${dateParam && dateParam !== today ? `&data=${dateParam}` : ''}`, { replace: true })
       : sheet.open('registar-treino', { fav: f.id, ...(sheet.params.get('data') ? { data: sheet.params.get('data')! } : {}) })
 
   const primary =
@@ -281,7 +282,18 @@ export default function DizerTreinoSheet() {
                 A gravar… diz o que fizeste (até {MAX_AUDIO_SECONDS} s) e carrega em Parar.
               </p>
             )}
-            {error && <p className="text-[15px] text-pain">{error}</p>}
+            {error && (
+              <div className="space-y-2">
+                <p className="text-[15px] text-pain">{error}</p>
+                {/* Se a IA falhar, regista-se na mesma, sem ela (T12). */}
+                <button
+                  onClick={() => sheet.open('ja-fiz', dateParam ? { data: dateParam } : {})}
+                  className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+                >
+                  Preencher à mão
+                </button>
+              </div>
+            )}
             {phase === 'input' && favorites.length > 0 && (
               <div className="space-y-2">
                 <p className="label">Os meus treinos</p>
@@ -357,7 +369,7 @@ export default function DizerTreinoSheet() {
                 Guardar nos meus treinos
               </label>
               {keep && !title.trim() && <p className="text-[14px] text-attn">Dá-lhe um nome para o guardar.</p>}
-              <button onClick={() => setPhase('input')} className="min-h-10 text-[15px] text-dim">
+              <button onClick={() => setPhase('input')} className="min-h-11 text-[15px] text-dim">
                 Não é isto: corrigir
               </button>
             </>

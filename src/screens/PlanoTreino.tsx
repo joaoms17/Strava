@@ -1,7 +1,6 @@
 import { useLocation, useSearch } from 'wouter'
 import { BusyButton } from '../lib/busy'
-import { useToast } from '../lib/toast'
-import { ensurePlanFavorite, usePlanoTreino } from '../lib/plano-treino'
+import { planFavoriteOffline, usePlanoTreino } from '../lib/plano-treino'
 import { SEGMENT_TRACK, segment } from '../components/ui/Chips'
 import Icon from '../components/ui/Icon'
 import {
@@ -24,7 +23,6 @@ export default function PlanoTreino() {
   const plan = usePlanoTreino()
   const [, navigate] = useLocation()
   const ver = new URLSearchParams(useSearch()).get('ver') ?? ''
-  const toast = useToast()
 
   if (!plan) {
     return <p className="pt-8 text-center text-[15px] text-dim">Ainda não tens um plano de treino.</p>
@@ -34,13 +32,11 @@ export default function PlanoTreino() {
   const dayN = /^dia-(\d+)$/.exec(ver)?.[1]
   const day = dayN ? plan.dias.find((d) => d.n === Number(dayN)) : undefined
 
+  // Sem rede abre na mesma (T11): o teu treino da última vez ou, se nunca
+  // se abriu, o dia do plano (liga-se ao teu treino ao terminar).
   async function start(d: PlanoDia) {
-    try {
-      const id = await ensurePlanFavorite(d)
-      navigate(`/treino/ginasio?fav=${id}`)
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Não consegui abrir o treino.')
-    }
+    const id = await planFavoriteOffline(d)
+    navigate(id ? `/treino/ginasio?fav=${id}` : `/treino/ginasio?plano=${d.n}`)
   }
 
   const tabs: [string, string][] = [['', 'Índice'], ...plan.dias.map((d): [string, string] => [`dia-${d.n}`, `Dia ${d.n}`])]

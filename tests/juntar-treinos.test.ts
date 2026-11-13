@@ -7,7 +7,7 @@ import {
   pickWatts,
   wattsChain,
 } from '../api/_lib/rules/treino'
-import { possibleDuplicates } from '../api/_lib/rules/sessoes'
+import { duplicatePairs, possibleDuplicates } from '../api/_lib/rules/sessoes'
 import { syncMatch } from '../api/_lib/rules/intervals'
 import { saveClientId, saveDone } from '../src/lib/client-id'
 
@@ -42,6 +42,14 @@ describe('T1 · possível duplicado por sobreposição no tempo', () => {
     expect(possibleDuplicates([later, gymWatch]).size).toBe(0)
     expect(possibleDuplicates([{ ...gymApp, external_id: 'i8', source: 'intervals' }, gymWatch]).size).toBe(0)
     expect(possibleDuplicates([{ ...gymApp, raw: { outro_treino: true } }, gymWatch]).size).toBe(0)
+  })
+
+  it('«Juntar os dois»: os pares, com o do relógio em segundo', () => {
+    expect(duplicatePairs([gymWatch, gymApp]).map(([a, b]) => [a.id, b.id])).toEqual([['app', 'rel']])
+    const a = { ...base, id: 'p1', type: 'bike' as const, source: 'intervals', external_id: 'i1', started_at: '2026-11-10T07:00:00Z', minutes: 20 }
+    const b = { ...base, id: 'p2', type: 'bike' as const, source: 'intervals', external_id: 'i2', started_at: '2026-11-10T07:22:00Z', minutes: 25 }
+    const jaFiz = { ...base, id: 'mao', type: 'bike' as const, source: 'manual', external_id: null, started_at: '2026-11-10T20:15:00Z', minutes: 45, raw: { hora_estimada: true } }
+    expect(duplicatePairs([a, b, jaFiz]).map(([x, y]) => `${x.id}+${y.id}`)).toEqual(['mao+p1', 'mao+p2'])
   })
 
   it('«É este treino?» pergunta quando os intervalos se sobrepõem, mesmo com durações diferentes', () => {

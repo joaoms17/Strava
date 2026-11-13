@@ -104,6 +104,12 @@ describe('kcalExplanation', () => {
     ).toMatch(/a regra de antes/)
   })
 
+  it('bicicleta sem potência com as calorias do relógio: não diz que a bicicleta manda os watts (T15)', () => {
+    const text = kcalExplanation({ type: 'bike', minutes: 60, watts: null, kcal: 520, rule: 'device', deviceCalories: 520 })
+    expect(text).toBe('As 520 kcal do relógio: sem potência, são elas que contam.')
+    expect(text).not.toMatch(/manda/)
+  })
+
   it('sem potência pede a foto da consola', () => {
     expect(kcalExplanation({ type: 'bike', minutes: 45, watts: null, kcal: 0, rule: 'watts', deviceCalories: null })).toMatch(
       /foto da consola/,

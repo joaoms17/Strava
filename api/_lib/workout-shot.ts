@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from './anthropic.js'
 import { AiError, errorForStorage } from './rules/resposta-ia.js'
-import { WorkoutShotSchema, type WorkoutShot } from './schemas.js'
+import { WorkoutShotAiSchema, fullShot, type WorkoutShot } from './schemas.js'
 import { PROMPT_WORKOUT_SHOT, readPrompt } from './prompts.js'
 import { lisbonClock } from './rules/momentos.js'
 import { shiftDate } from './rules/nutritional-day.js'
@@ -84,7 +84,7 @@ async function readShot(admin: SupabaseClient, row: ImportRow): Promise<StoredSh
     valores_atuais: row.parsed?.activity ?? null,
     campos_editados: row.edited_fields ?? [],
   })
-  const { output: shot } = await structuredCall(
+  const { output } = await structuredCall(
     admin,
     { userId: row.user_id, kind: 'workout_shot', request: REQUEST_VISION },
     {
@@ -94,8 +94,9 @@ async function readShot(admin: SupabaseClient, row: ImportRow): Promise<StoredSh
       system: readPrompt(PROMPT_WORKOUT_SHOT),
       messages: [{ role: 'user', content: [...images, { type: 'text', text: payload }] }],
     },
-    WorkoutShotSchema,
+    WorkoutShotAiSchema,
   )
+  const shot = fullShot(output)
   if (shot.images.length > 0 && shot.images.every((i) => i.app === 'not_workout')) {
     throw new AiError('Isto não parece um treino.', 'todas as imagens: not_workout')
   }

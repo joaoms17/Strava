@@ -1,4 +1,5 @@
 import { shiftDate } from '../../lib/day'
+import { fmtDayShort } from '../../lib/format'
 import { SLOTS, SLOT_LABEL, SLOT_TIME } from '../../../api/_lib/rules/momentos'
 import type { Slot } from '../../lib/types'
 
@@ -15,7 +16,7 @@ export const TAG_LABEL: Record<string, string> = {
 // do botão principal (`cta`) nos treinos, no corpo e nas pessoas (decisão 93).
 export type ChipTone = 'eat' | 'cta'
 export const chip = (active: boolean, tone: ChipTone = 'eat') =>
-  `min-h-9 rounded-full border px-3 py-1.5 text-[15px] ${
+  `min-h-11 rounded-full border px-3 py-1.5 text-[15px] ${
     !active ? 'border-line bg-transparent' : tone === 'cta' ? 'border-cta bg-cta text-on-cta' : 'border-eat bg-eat text-bg'
   }`
 
@@ -25,7 +26,9 @@ export const chip = (active: boolean, tone: ChipTone = 'eat') =>
 export const SEGMENT_TRACK = 'rounded-xl bg-surface2 p-1'
 export const segment = (active: boolean) => (active ? 'bg-raised font-semibold text-ink shadow-sm' : 'text-dim')
 
-// Dia em chips: Hoje · Ontem · Anteontem.
+// Dia em chips: Hoje · Ontem · Anteontem. Um dia mais antigo (o «sábado»
+// dito na quinta, o print de há 5 dias) aparece num quarto chip, escolhido,
+// com a data («sáb 7 nov»): nunca se grava num dia que não se vê (T10).
 export function DayChips({
   today,
   value,
@@ -37,16 +40,20 @@ export function DayChips({
   onChange: (date: string) => void
   tone?: ChipTone
 }) {
+  const near = [0, -1, -2].map((back) => shiftDate(today, back))
+  const other = value && !near.includes(value) ? value : null
   return (
     <div className="flex flex-wrap gap-2">
-      {[0, -1, -2].map((back) => {
-        const date = shiftDate(today, back)
-        return (
-          <button key={back} onClick={() => onChange(date)} aria-pressed={date === value} className={chip(date === value, tone)}>
-            {back === 0 ? 'Hoje' : back === -1 ? 'Ontem' : 'Anteontem'}
-          </button>
-        )
-      })}
+      {near.map((date, i) => (
+        <button key={date} onClick={() => onChange(date)} aria-pressed={date === value} className={chip(date === value, tone)}>
+          {i === 0 ? 'Hoje' : i === 1 ? 'Ontem' : 'Anteontem'}
+        </button>
+      ))}
+      {other && (
+        <button onClick={() => onChange(other)} aria-pressed className={chip(true, tone)}>
+          {fmtDayShort(other)}
+        </button>
+      )}
     </div>
   )
 }
