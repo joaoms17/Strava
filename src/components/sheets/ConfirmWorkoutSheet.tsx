@@ -32,6 +32,7 @@ import ShotButton from '../ui/ShotButton'
 import Icon from '../ui/Icon'
 import { DayChips, chip } from '../ui/Chips'
 import ErrorReason from '../ui/ErrorReason'
+import { useWattsChoices } from '../../lib/use-watts'
 import { duplicatePairs, mergeSessions } from '../../../api/_lib/rules/sessoes'
 import Duplicado from '../Duplicado'
 
@@ -220,6 +221,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   const [present, setPresent] = useState<Set<keyof Draft>>(new Set())
   const [adding, setAdding] = useState(false)
   const kicked = useRef(false)
+  const wattsOptions = useWattsChoices()
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('workout_imports').select('*').eq('id', id).maybeSingle()
@@ -340,7 +342,9 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
           ),
         )
       })
-  }, [draft?.day, draft?.kind, draft?.minutes, draft?.time]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Sem a duração nas dependências: apagar um dígito não faz a folha mudar
+    // de forma (aparecer e desaparecer o «Juntar»; T17).
+  }, [draft?.day, draft?.kind, draft?.time]) // eslint-disable-line react-hooks/exhaustive-deps
   // Sem calorias do relógio, o ritmo no ginásio e o peso desse dia (como o servidor).
   const context = useKcalContext(draft?.day ?? today, today, draft ? type : null)
 
@@ -369,11 +373,25 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
     await load()
   }
 
+  // Descartar com Anular (T17): o print volta a ficar por confirmar.
   async function discard() {
     try {
       await postApi('/api/workout/discard', { import_id: id })
       emitDataChanged()
       sheet.close()
+      toast('Print descartado.', [
+        {
+          label: 'Anular',
+          run: async () => {
+            try {
+              await postApi('/api/workout/discard', { import_id: id, undo: true })
+              emitDataChanged()
+            } catch (err) {
+              toast(err instanceof Error ? `Não anulei: ${err.message}` : 'Não consegui anular.')
+            }
+          },
+        },
+      ])
     } catch {
       toast('Não consegui descartar.')
     }
@@ -478,7 +496,9 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
     weightKg: context.weightKg,
     gymPace: context.gymPace,
   })
-  const canSave = minutes != null && minutes > 0
+  // A juntar, a duração é a do treino que já lá está (um print sem tempo junta-se na mesma).
+  const savedMinutes = merging ? (minutes ?? candidate!.minutes) : minutes
+  const canSave = savedMinutes != null && savedMinutes > 0
   const set = (patch: Partial<Draft>) => {
     setDraft({ ...draft, ...patch })
     setEdited({ ...edited, ...patch })
@@ -524,7 +544,13 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
         <input
           inputMode="numeric"
           value={draft[key] as string}
-          onChange={(e) => set({ [key]: e.target.value.replace(/\D/g, '') } as Partial<Draft>)}
+          onChange={(e) =>
+            set({
+              [key]: e.target.value.replace(/\D/g, ''),
+              // Os watts escritos são teus: deixam de ser «≈ da última sessão» (T13).
+              ...(key === 'watts' ? { wattsSource: 'manual' as const } : {}),
+            } as Partial<Draft>)
+          }
           placeholder="— adicionar"
           className={`h-12 w-full rounded-xl border bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:outline-none ${
             low.has(lowKey) ? 'border-attn' : 'border-line focus:border-eat'
@@ -537,12 +563,12 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
   )
 
   async function save() {
-    if (!canSave || minutes == null || !draft) return
+    if (!canSave || savedMinutes == null || !draft) return
     const saved = await saveWorkout(
       {
         type,
         sport: type === 'other' ? draft.kind : null,
-        minutes,
+        minutes: savedMinutes,
         started_at: startedAt,
         started_at_estimated: !draft.time && startedAt != null,
         watts,
@@ -564,19 +590,14 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       title="Confirmar treino"
       onClose={sheet.close}
       footer={
-        <div className="flex gap-2">
-          <BusyButton
-            busy="A guardar…"
-            disabled={!canSave}
-            onClick={save}
-            className="min-h-14 flex-1 rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
-          >
-            {merging ? 'Juntar' : `Guardar${kcal.kcal > 0 ? ` · +${fmtKcal(kcal.kcal)}` : ''}`}
-          </BusyButton>
-          <BusyButton busy="A descartar…" onClick={discard} className="min-h-14 rounded-2xl border border-line px-4 text-[15px]">
-            Descartar
-          </BusyButton>
-        </div>
+        <BusyButton
+          busy="A guardar…"
+          disabled={!canSave}
+          onClick={save}
+          className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+        >
+          {merging ? `Juntar à ${workoutTitle(candidate!).toLowerCase()}` : `Guardar${kcal.kcal > 0 ? ` · +${fmtKcal(kcal.kcal)}` : ''}`}
+        </BusyButton>
       }
     >
       <div className="space-y-5 pb-2">
@@ -662,10 +683,19 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
           </div>
         )}
 
+        {/* A juntar, a duração e os watts são os do treino que já lá está:
+            não se mostram campos que seriam ignorados (T17). */}
+        {merging && (
+          <p className="text-[15px] text-dim">
+            Duração: {candidate!.minutes ?? '?'} min, a do treino que já lá está
+            {candidate!.watts != null ? ` · ${candidate!.watts} W` : ''}.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3">
-          {input('Duração', 'minutes', type === 'strength' ? 'total_time_s' : 'moving_time_s', 'min')}
+          {!merging && input('Duração', 'minutes', type === 'strength' ? 'total_time_s' : 'moving_time_s', 'min')}
           {/* Na bicicleta vem a potência ou as calorias do relógio; sem nenhuma, pedem-se as duas. */}
-          {type === 'bike' &&
+          {!merging &&
+            type === 'bike' &&
             (present.has('watts') || !present.has('kcalDevice')) &&
             input('Potência', 'watts', 'avg_power_w', 'W')}
           {present.has('avgHr') && input('Batimentos médios', 'avgHr', 'avg_hr', 'bpm')}
@@ -677,15 +707,18 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
             input('Calorias do relógio', 'kcalDevice', 'calories_device', 'kcal')}
         </div>
 
-        {type === 'bike' && draft.wattsSource === 'prefill' && (
+        {!merging && type === 'bike' && draft.wattsSource === 'prefill' && (
           <div className="space-y-2">
             <p className="text-[15px]">Qual era a potência na bicicleta?</p>
             <div className="flex flex-wrap gap-2">
-              {(profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]).map((w) => (
-                <button key={w} onClick={() => set({ watts: String(w), wattsSource: 'manual' })} className={chip(false)}>
-                  {w} W
-                </button>
-              ))}
+              {/* Confirmar os mesmos watts também conta (T13): deixam de ser «≈». */}
+              {[...new Set([Number(draft.watts), ...wattsOptions])]
+                .filter((w) => w > 0)
+                .map((w) => (
+                  <button key={w} onClick={() => set({ watts: String(w), wattsSource: 'manual' })} className={chip(false, 'cta')}>
+                    {String(w) === draft.watts ? `Sim, ${w} W` : `${w} W`}
+                  </button>
+                ))}
             </div>
             <p className="text-[13px] text-dim">
               ≈ {draft.watts} W da última sessão: conta nas calorias, mas não para subir a potência.
@@ -703,6 +736,10 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
             deviceCalories: toInt(draft.kcalDevice),
           })}
         </p>
+        {/* Longe do Guardar e com Anular (T17). */}
+        <BusyButton busy="A descartar…" onClick={discard} className="min-h-11 w-full text-[15px] text-pain">
+          Descartar este print
+        </BusyButton>
       </div>
     </BottomSheet>
   )
@@ -736,6 +773,8 @@ function WorkoutDetail({ id }: { id: string }) {
   const [watts, setWatts] = useState('')
   const [avgHr, setAvgHr] = useState('')
   const [maxHr, setMaxHr] = useState('')
+  // Corrigir as calorias do relógio de um treino guardado (T17).
+  const [kcalDevice, setKcalDevice] = useState('')
   // Corrigir o tipo, o dia e a hora (ex.: a elíptica que entrou como bicicleta).
   const [kind, setKind] = useState<Kind>('bike')
   const [day, setDay] = useState('')
@@ -745,7 +784,10 @@ function WorkoutDetail({ id }: { id: string }) {
   const [pair, setPair] = useState<[Workout, Workout] | null>(null)
   const plan = usePlanoTreino()
 
-  const load = useCallback(async () => {
+  // `keepEdits`: depois de um toque que grava logo («Qual dos teus treinos
+  // foi?», «Qual foi?»), o que estava a ser corrigido e ainda não foi
+  // guardado fica nos campos (antes voltava ao que estava; T17).
+  const load = useCallback(async (keepEdits = false) => {
     const [{ data }, { data: imports }, { data: favs }] = await Promise.all([
       supabase.from('workouts').select('*').eq('id', id).maybeSingle(),
       supabase.from('workout_imports').select('thumb_paths').eq('workout_id', id),
@@ -764,11 +806,12 @@ function WorkoutDetail({ id }: { id: string }) {
       const { data: sameDay } = await supabase.from('workouts_active').select('*').eq('date', w.date)
       setPair(duplicatePairs((sameDay ?? []) as Workout[]).find(([a, b]) => a.id === w.id || b.id === w.id) ?? null)
     }
-    if (w) {
+    if (w && !keepEdits) {
       setMinutes(str(w.minutes))
       setWatts(str(w.watts))
       setAvgHr(str(w.avg_hr))
       setMaxHr(str(w.max_hr))
+      setKcalDevice(str(w.kcal_device ?? w.raw?.calories ?? null))
       setKind(kindOf(w))
       setDay(w.date)
       setTime(clock(w))
@@ -797,12 +840,14 @@ function WorkoutDetail({ id }: { id: string }) {
   const w = workout
   const asked = plan != null && askWhichWorkout([w], today).length > 0
   const kindChanged = kind !== kindOf(w)
+  const kcalChanged = kcalDevice !== str(w.kcal_device ?? w.raw?.calories ?? null) && (toInt(kcalDevice) ?? 0) > 0
   const whenChanged = day !== w.date || time !== clock(w)
   const dirty =
     minutes !== str(w.minutes) ||
     watts !== str(w.watts) ||
     avgHr !== str(w.avg_hr) ||
     maxHr !== str(w.max_hr) ||
+    kcalChanged ||
     kindChanged ||
     whenChanged
   const type: Workout['type'] = kind === 'bike' || kind === 'strength' ? kind : 'other'
@@ -814,11 +859,11 @@ function WorkoutDetail({ id }: { id: string }) {
   const at = w.started_at ?? w.created_at
   const deviceCalories = w.kcal_device ?? w.raw?.calories ?? null
 
-  async function patch(body: Record<string, unknown>, message: string) {
+  async function patch(body: Record<string, unknown>, message: string, keepEdits = false) {
     try {
       await postApi('/api/workout/update', { workout_id: w.id, ...body })
       emitDataChanged()
-      await load()
+      await load(keepEdits)
       toast(message)
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui gravar.')
@@ -858,6 +903,7 @@ function WorkoutDetail({ id }: { id: string }) {
                   ...(type === 'bike' && (watts !== str(w.watts) || kindChanged) ? { watts: toInt(watts) } : {}),
                   avg_hr: toInt(avgHr),
                   max_hr: toInt(maxHr),
+                  ...(kcalChanged ? { kcal_device: toInt(kcalDevice) } : {}),
                   ...(kindChanged ? { type, sport: type === 'other' ? kind : null } : {}),
                   ...(whenChanged ? when() : {}),
                 },
@@ -911,7 +957,7 @@ function WorkoutDetail({ id }: { id: string }) {
         {asked && (
           <div className="space-y-2">
             <p className="label">Qual foi?</p>
-            <QualFoiQuestion workout={w} onDone={() => void load()} />
+            <QualFoiQuestion workout={w} onDone={() => void load(dirty)} />
           </div>
         )}
 
@@ -924,7 +970,11 @@ function WorkoutDetail({ id }: { id: string }) {
                   key={f.id}
                   onClick={() =>
                     void runBusy('A guardar…', () =>
-                      patch({ favorite_id: w.favorite_id === f.id ? null : f.id }, w.favorite_id === f.id ? 'Tirado.' : `Agora é «${f.name}».`),
+                      patch(
+                        { favorite_id: w.favorite_id === f.id ? null : f.id },
+                        w.favorite_id === f.id ? 'Tirado.' : `Agora é «${f.name}».`,
+                        dirty,
+                      ),
                     )
                   }
                   className={chip(w.favorite_id === f.id, 'cta')}
@@ -960,7 +1010,29 @@ function WorkoutDetail({ id }: { id: string }) {
               {/* Na bicicleta pedem-se sempre: sem os dois a potência não sobe. */}
               {(type === 'bike' || w.avg_hr != null) && numberField('Batimentos médios', avgHr, setAvgHr, 'bpm')}
               {(type === 'bike' || w.max_hr != null) && numberField('Batimentos máximos', maxHr, setMaxHr, 'bpm')}
+              {(deviceCalories != null || type !== 'bike') && numberField('Calorias do relógio', kcalDevice, setKcalDevice, 'kcal')}
             </div>
+            {/* Os watts supostos («≈ da última sessão») confirmam-se num toque,
+                sem ter de escrever outro número e voltar ao mesmo (T13). */}
+            {type === 'bike' && !kindChanged && w.watts_source === 'prefill' && w.watts != null && watts === str(w.watts) && (
+              <div className="space-y-1">
+                <BusyButton
+                  busy="A guardar…"
+                  onClick={() => patch({ watts: w.watts }, `Confirmado: ${w.watts} W.`, true)}
+                  className="min-h-12 w-full rounded-xl border border-line text-[15px]"
+                >
+                  Foi isso: confirmar {w.watts} W
+                </BusyButton>
+                <p className="text-[13px] text-dim">≈ {w.watts} W da última sessão: confirmados, contam para subir a potência.</p>
+              </div>
+            )}
+            {/* A nota que disseste ou escreveste («senti o ombro no fim»; T18). */}
+            {w.note && (
+              <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px]">
+                <span className="label mr-2">Nota</span>
+                {w.note}
+              </p>
+            )}
 
             <details className="text-[15px]">
               <summary className="cursor-pointer text-dim">Mudar o tipo, o dia ou a hora</summary>
@@ -1026,8 +1098,12 @@ function WorkoutDetail({ id }: { id: string }) {
               </button>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <ShotButton className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line text-[15px]">
-                <Icon name="watch" size={18} /> Juntar print
+              {/* O print junta-se a este treino, mesmo com outra duração (T14). */}
+              <ShotButton
+                target={w.id}
+                className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+              >
+                <Icon name="watch" size={18} /> Juntar print a este
               </ShotButton>
               <button
                 onClick={() => {
