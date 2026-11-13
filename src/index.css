@@ -52,15 +52,16 @@
     --color-line: #d6d1c6;
     --color-ink: #121212;
     --color-dim: #5a5750;
-    --color-eat: #d9480f;
+    /* H15: laranja, vermelho e verde escurecidos para lerem como texto (≥ 4,5:1 sobre o fundo e a superfície) */
+    --color-eat: #b93a0a;
     --color-burn: #2743f5;
     --color-protein: #121212;
     --color-body: #a21caf;
     --color-bodyfat: #f0abfc;
     /* Âmbar escuro: ≥ 4,5:1 também sobre os fundos âmbar claros (bg-attn/10–15) */
     --color-attn: #80520a;
-    --color-pain: #d14343;
-    --color-ok: #1f9d55;
+    --color-pain: #b42318;
+    --color-ok: #157a42;
     --color-ok-text: #0f6b38;
     --color-chart-bike: #5c7a0a; /* B15: não é o azul do gasto */
     --color-chart-gym: #6d28d9; /* B15: não é o magenta do peso */
@@ -82,14 +83,14 @@
       --color-line: #d6d1c6;
       --color-ink: #121212;
       --color-dim: #5a5750;
-      --color-eat: #d9480f;
+      --color-eat: #b93a0a;
       --color-burn: #2743f5;
       --color-protein: #121212;
       --color-body: #a21caf;
       --color-bodyfat: #f0abfc;
       --color-attn: #80520a;
-      --color-pain: #d14343;
-      --color-ok: #1f9d55;
+      --color-pain: #b42318;
+      --color-ok: #157a42;
       --color-ok-text: #0f6b38;
       --color-chart-bike: #5c7a0a; /* B15: não é o azul do gasto */
       --color-chart-gym: #6d28d9; /* B15: não é o magenta do peso */
