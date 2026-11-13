@@ -39,6 +39,37 @@ interface AiUsage {
   today: { house: number; mine: number; housePhotos: number; minePhotos: number }
 }
 
+// As chamadas do mês, por páginas de 1 000 (o máximo que a API devolve por
+// pedido; S3): sem `order` cada página seria arbitrária.
+const CALLS_PAGE = 1000
+async function monthCalls(from: string): Promise<{ kind: string; cost_usd: number | string }[]> {
+  const all: { kind: string; cost_usd: number | string }[] = []
+  for (let page = 0; page < 50; page++) {
+    const { data, error } = await supabase
+      .from('api_calls')
+      .select('kind,cost_usd')
+      .gte('created_at', from)
+      .order('created_at')
+      .order('id')
+      .range(page * CALLS_PAGE, page * CALLS_PAGE + CALLS_PAGE - 1)
+    if (error) break
+    all.push(...((data ?? []) as { kind: string; cost_usd: number | string }[]))
+    if ((data ?? []).length < CALLS_PAGE) break
+  }
+  return all
+}
+
+// A soma do mês na base de dados (S3; migração 20261113000022). Sem a
+// função (ou sem sessão), null: fica a soma das páginas.
+async function monthTotal(from: string): Promise<number | null> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session) return null
+  const { data, error } = await supabase.rpc('ai_cost_since', { p_user_id: session.user.id, p_from: from })
+  return !error && data != null && Number.isFinite(Number(data)) ? Number(data) : null
+}
+
 // O que é técnico ou pode causar ansiedade fica aqui, longe da vista.
 export default function Avancado() {
   const profile = useReadyProfile()
@@ -58,17 +89,20 @@ export default function Avancado() {
       const monthStart = new Date()
       monthStart.setUTCDate(1)
       monthStart.setUTCHours(0, 0, 0, 0)
-      const [{ data: calls }, { data: exercises }] = await Promise.all([
-        supabase.from('api_calls').select('kind,cost_usd').gte('created_at', monthStart.toISOString()),
+      const from = monthStart.toISOString()
+      const [total, calls, { data: exercises }] = await Promise.all([
+        monthTotal(from),
+        monthCalls(from),
         supabase.from('exercise_catalog').select('*').order('name'),
       ])
       const byKind: Record<string, number> = {}
-      let usd = 0
-      for (const call of calls ?? []) {
-        usd += Number(call.cost_usd)
-        const label = KIND_LABEL[call.kind as string] ?? (call.kind as string)
+      let summed = 0
+      for (const call of calls) {
+        summed += Number(call.cost_usd)
+        const label = KIND_LABEL[call.kind] ?? call.kind
         byKind[label] = (byKind[label] ?? 0) + 1
       }
+      const usd = total ?? summed
       setCosts({ eur: usd * USD_TO_EUR, usd, byKind })
       setCatalog((exercises ?? []) as CatalogExercise[])
     }

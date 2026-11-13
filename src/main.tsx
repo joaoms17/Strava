@@ -10,11 +10,19 @@ import '@fontsource/barlow-condensed/latin-800.css'
 import './index.css'
 import App from './App'
 import { applyStoredTheme } from './lib/theme'
-import { reloadWhenIdle } from './lib/update'
+import { checkForUpdates, reloadWhenIdle } from './lib/update'
 
 // Uma versão nova não recarrega a meio de um registo (a foto e o texto da
-// folha aberta perdiam-se): espera que não haja nada a meio.
-registerSW({ immediate: true, onNeedReload: reloadWhenIdle })
+// folha aberta perdiam-se): espera que não haja nada a meio. E procura-se
+// uma versão nova ao voltar à app (H7): uma PWA que fica dias em memória
+// só a via num arranque a frio.
+registerSW({
+  immediate: true,
+  onNeedReload: reloadWhenIdle,
+  onRegisteredSW: (_url, registration) => {
+    if (registration) checkForUpdates(registration)
+  },
+})
 applyStoredTheme()
 
 createRoot(document.getElementById('root')!).render(

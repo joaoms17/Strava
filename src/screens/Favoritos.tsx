@@ -166,7 +166,7 @@ export default function Favoritos() {
                     className="block w-full text-left"
                   >
                     {photo ? (
-                      <img src={photo} alt="" className="h-28 w-full object-cover" />
+                      <img loading="lazy" decoding="async" src={photo} alt="" className="h-28 w-full object-cover" />
                     ) : (
                       <div className="flex h-28 items-center justify-center bg-surface2 text-3xl" aria-hidden>
                         <Icon name="plate" />

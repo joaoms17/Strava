@@ -93,7 +93,7 @@ export default function NoteSheet() {
       <div className="space-y-4 pb-2">
         {meal && (
           <div className="flex items-center gap-3">
-            {thumb && <img src={thumb} alt="" className="h-14 w-14 rounded-xl object-cover" />}
+            {thumb && <img loading="lazy" decoding="async" src={thumb} alt="" className="h-14 w-14 rounded-xl object-cover" />}
             <p className="text-[15px] text-dim tabular-nums">{timeOf(meal.logged_at)}</p>
           </div>
         )}

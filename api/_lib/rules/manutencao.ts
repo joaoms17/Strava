@@ -26,6 +26,25 @@ export function maintenanceTarget(tdeeEst: number | null, fallback: number | nul
   return fallback != null && fallback > 0 ? Math.round(fallback) : 2000
 }
 
+// O `fallback` de maintenanceTarget a partir das linhas guardadas em `days`
+// (para quem não tem o cálculo do gasto à mão: a Pergunta e o menu): a
+// fórmula do último fecho antes de `before` mais o treino médio dos últimos
+// 14 dias completos. Sem fórmula guardada (antes da migração), null.
+type Stored = number | string | null | undefined
+export function maintenanceFallback(
+  days: { date: string; formula_base?: Stored; kcal_exercise?: Stored; is_complete?: boolean | null }[],
+  before: string,
+): number | null {
+  const past = days.filter((d) => d.date < before).sort((a, b) => b.date.localeCompare(a.date))
+  const formula = past.find((d) => d.formula_base != null && Number.isFinite(Number(d.formula_base)))?.formula_base
+  if (formula == null) return null
+  const complete = past.filter((d) => d.is_complete === true).slice(0, 14)
+  const training = complete.length
+    ? complete.reduce((a, d) => a + (Number(d.kcal_exercise ?? 0) || 0), 0) / complete.length
+    : 0
+  return Number(formula) + training
+}
+
 // Água e glicogénio: nas primeiras 3 semanas da dieta e nas 3 depois de cada
 // semana de manutenção, o peso cai depressa sem ser gordura (o primeiro quilo
 // vai logo). Nessas semanas não se avisa «a perder depressa». Sem semanas de

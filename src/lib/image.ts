@@ -54,6 +54,21 @@ export async function prepareImage(file: Blob, detail = false): Promise<{ full: 
   }
 }
 
+// Miniatura pequena para a lista (a fila mostra-a a 48 px): descodifica o
+// original uma vez só (P6). Sem conseguir, null.
+export async function tinyThumb(file: Blob, maxDim = 128): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+    try {
+      return await toJpegBlob(bitmap, maxDim, 0.7)
+    } finally {
+      bitmap.close()
+    }
+  } catch {
+    return null
+  }
+}
+
 export async function sha256Hex(blob: Blob): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
   return Array.from(new Uint8Array(digest))

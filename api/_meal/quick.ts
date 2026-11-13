@@ -45,6 +45,7 @@ const RepeatSchema = z.object({
   client_id: z.string().uuid().optional(), // chave de idempotência (H6)
   date: DATE.optional(), // sem ele, hoje
   slot: SLOT.optional(), // sem ela, a mesma hora do original
+  now: z.boolean().optional(), // «Agora» no telemóvel: fica a hora real (M18)
 })
 
 const PortionSchema = z.object({
@@ -233,8 +234,11 @@ export const repeat = post(async (db, userId, rawBody) => {
   const slot = body.data.slot
   // Hoje, na refeição desta hora («Agora»): fica a hora real, como numa
   // favorita, e não a hora habitual (às 21:30 ficava às 20:00, M18).
+  // O telemóvel diz «Agora» (`now`): a hora real mesmo que a refeição da
+  // hora mude entre o toque e o pedido (19:29 → 19:30).
+  const isToday = target === nutritionalDay(now, cutoff)
   const loggedAt =
-    slot && target === nutritionalDay(now, cutoff) && slot === slotOf(now)
+    isToday && (body.data.now === true || (slot && slot === slotOf(now)))
       ? now
       : loggedAtFor(target, slot ? SLOT_TIME[slot] : clockTime(new Date(source.logged_at)), cutoff, now)
   const meal = await insertMeal(db, {

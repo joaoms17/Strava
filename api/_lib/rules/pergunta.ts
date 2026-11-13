@@ -9,7 +9,7 @@ import { SLOTS, slotOf, type Slot } from './momentos.js'
 import { mealName, proteinPicks } from './favoritos.js'
 import type { ShoppingItem } from './extras.js'
 import { trend7, weeklyRateAsOf, type DatedValue } from './weight.js'
-import { inWaterPhase, isMaintenanceWeek, maintenanceTarget, mondayOf } from './manutencao.js'
+import { inWaterPhase, isMaintenanceWeek, maintenanceFallback, maintenanceTarget, mondayOf } from './manutencao.js'
 import { cleanStarts, cycleInfo, cycleOptions, waterWeekDuring } from './ciclo.js'
 import { storedExerciseKcal, type WorkoutType } from './targets.js'
 import { mergeSessions } from './sessoes.js'
@@ -54,6 +54,7 @@ export interface AskDay {
   tdee_est?: Num
   tdee_raw?: Num
   formula_base?: Num
+  kcal_exercise?: Num
 }
 
 export interface AskMeal {
@@ -149,7 +150,7 @@ export function trendAt(series: DatedValue[], date: string): number | null {
 
 // Regra 2 e 7 ao vivo, como no Hoje: o plano base de hoje mais o treino do
 // dia (um treino partido em dois conta como um) ou, na semana de pausa da
-// dieta, o gasto medido (ou 2000).
+// dieta, o gasto medido (sem ele, a fórmula mais o treino médio; K5).
 export function todayStatus(input: Pick<AskInput, 'today' | 'profile' | 'days' | 'meals' | 'workouts' | 'weights' | 'uncountedToday'>) {
   const { today, profile } = input
   const meals = input.meals.filter((m) => m.date === today)
@@ -171,7 +172,9 @@ export function todayStatus(input: Pick<AskInput, 'today' | 'profile' | 'days' |
   const latestTdee = [...input.days]
     .filter((d) => d.date < today && n(d.tdee_est) != null)
     .sort((a, b) => b.date.localeCompare(a.date))[0]
-  const plan = maintenance ? maintenanceTarget(n(latestTdee?.tdee_est)) : Number(profile.base_kcal) + exercise
+  const plan = maintenance
+    ? maintenanceTarget(n(latestTdee?.tdee_est), maintenanceFallback(input.days, today))
+    : Number(profile.base_kcal) + exercise
   const proteinGoal = n(profile.protein_g)
   return {
     plano_kcal: Math.round(plan),

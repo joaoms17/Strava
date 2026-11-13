@@ -155,6 +155,15 @@ describe('contexto da «Pergunta à app»', () => {
     expect(over.falta_kcal).toBe(-280)
   })
 
+  it('semana de pausa sem gasto medido: a fórmula guardada mais o treino médio, não 2 000 (K5)', () => {
+    const noTdee = days().map((d) => ({ ...d, tdee_est: null, formula_base: 1700, kcal_exercise: 150, is_complete: true }))
+    const status = todayStatus(
+      input({ days: noTdee, profile: { ...input().profile, maintenance_anchor: '2026-09-07' } }),
+    )
+    expect(status.semana_de_pausa).toBe(true)
+    expect(status.plano_kcal).toBe(1850)
+  })
+
   it('semanas: só os dias completos, o que dava pelas calorias e o que o peso fez', () => {
     const [current, previous] = weekSummaries(input())
     expect(current).toMatchObject({

@@ -81,11 +81,13 @@ export function dayLeft(input: {
   exerciseKcal: number
   maintenance: boolean
   tdee: number | null
+  // Sem gasto medido, a fórmula mais o treino médio (K5).
+  tdeeFallback?: number | null
   kcalIn: number
   proteinIn: number
   proteinTarget: number | null
 }): { kcal: number; protein: number | null } {
-  const target = input.maintenance ? maintenanceTarget(input.tdee) : kcalTarget(input.baseKcal, input.exerciseKcal)
+  const target = input.maintenance ? maintenanceTarget(input.tdee, input.tdeeFallback ?? null) : kcalTarget(input.baseKcal, input.exerciseKcal)
   return {
     kcal: Math.round(target - input.kcalIn),
     protein: input.proteinTarget != null ? Math.max(0, Math.round(input.proteinTarget - input.proteinIn)) : null,
