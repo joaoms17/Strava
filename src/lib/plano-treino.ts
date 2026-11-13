@@ -3,6 +3,7 @@ import { useReadyProfile } from './profile'
 import { emitDataChanged } from './events'
 import { parsePlanoTreino, planFavorite, type PlanoDia, type PlanoTreino } from '../../api/_lib/rules/plano-treino'
 import type { Favorite } from './types'
+import { cachedPlanFavorite, rememberPlanFavorite } from './ginasio-offline'
 
 // O plano de treino da pessoa (profile.goals.plano_treino; decisão 305). Vem
 // com o perfil, que fica guardado no telemóvel: lê-se no ginásio sem rede.
@@ -15,7 +16,23 @@ export function usePlanoTreino(): PlanoTreino | null {
 // «Começar Dia N»: o teu treino «Fase 1 · Dia N» (o mesmo nome e os mesmos
 // exercícios do SQL que o semeia). Se ainda não existir, cria-o — uma vez só:
 // procura-se pelo nome antes de criar. Devolve o id para abrir o Ginásio.
+// Sem rede (T11), o id da última vez que se abriu esse dia; sem ele, null (o
+// Ginásio abre o dia do plano e liga-o ao teu treino ao terminar).
 export async function ensurePlanFavorite(day: PlanoDia): Promise<string> {
+  const id = await findOrCreatePlanFavorite(day)
+  rememberPlanFavorite(day.favorito, id)
+  return id
+}
+
+export async function planFavoriteOffline(day: PlanoDia): Promise<string | null> {
+  try {
+    return await ensurePlanFavorite(day)
+  } catch {
+    return cachedPlanFavorite(day.favorito)
+  }
+}
+
+async function findOrCreatePlanFavorite(day: PlanoDia): Promise<string> {
   const { data: found, error } = await supabase
     .from('favorites')
     .select('id,name,workout')

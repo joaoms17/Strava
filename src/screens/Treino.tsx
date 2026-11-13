@@ -20,6 +20,7 @@ import PlanoTreinoCard from '../components/PlanoTreinoCard'
 import QualFoi from '../components/QualFoi'
 import PendingInfo from '../components/PendingInfo'
 import { mergeSessions, possibleDuplicates, zoneMinutes } from '../../api/_lib/rules/sessoes'
+import { useGymQueue } from '../lib/ginasio-fila'
 
 function origin(w: Workout): string {
   if ((w.merged_from?.length ?? 0) > 0 || w.source === 'screenshot') return 'print'
@@ -49,10 +50,13 @@ export default function Treino() {
   // Treinos com mais de 12 semanas (histórico importado): só a pedido.
   const [older, setOlder] = useState<Workout[] | null>(null)
   const [, navigate] = useLocation()
+  // Os treinos não se leram (sem rede): diz-se, em vez de «Ainda sem treinos» (T11).
+  const [failed, setFailed] = useState(false)
+  const gymQueue = useGymQueue()
   useAutoSync()
 
   const load = useCallback(async () => {
-    const [{ data: workouts }, { data: favorites }, { data: pending }, { data: logs }, { data: health }] = await Promise.all([
+    const [{ data: workouts, error }, { data: favorites }, { data: pending }, { data: logs }, { data: health }] = await Promise.all([
       supabase
         .from('workouts_active')
         .select('*')
@@ -79,6 +83,11 @@ export default function Treino() {
         .limit(600),
       supabase.from('health_daily').select('*').eq('date', today).maybeSingle(),
     ])
+    if (error) {
+      setFailed(true)
+      return
+    }
+    setFailed(false)
     setData({
       workouts: (workouts ?? []) as Workout[],
       favorites: (favorites ?? []) as Favorite[],
@@ -96,6 +105,46 @@ export default function Treino() {
     void load()
   }, [load, version])
 
+  const queueBanner = gymQueue.queued.length > 0 && (
+    <section className="space-y-2" aria-label="Por enviar">
+      {gymQueue.queued.map((q) => (
+        <div key={q.client_id} className="space-y-2 rounded-[18px] border border-attn/50 bg-attn/10 p-4">
+          <p className="text-[16px]">
+            <span className="font-semibold">{q.label}</span>
+            {q.error ? `: não foi aceite (${q.error})` : ': por enviar, vai sozinho quando houver rede.'}
+          </p>
+          {q.error && (
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => gymQueue.retry(q)} className="min-h-12 rounded-xl border border-line text-[15px]">
+                Tentar outra vez
+              </button>
+              <button onClick={() => gymQueue.discard(q)} className="min-h-12 rounded-xl border border-line text-[15px] text-pain">
+                Descartar
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </section>
+  )
+
+  if (failed && !data) {
+    return (
+      <div className="space-y-4 pt-1">
+        {queueBanner}
+        <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
+          <p className="text-[16px]">
+            <span className="block font-semibold">Não consegui ler os teus treinos.</span>
+            <span className="text-dim">Sem rede? Podes registar na mesma; aparecem quando houver rede.</span>
+          </p>
+          <button onClick={() => void load()} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+            Tentar outra vez
+          </button>
+        </div>
+        <WorkoutLogOptions />
+      </div>
+    )
+  }
   if (!data) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
 
   const { workouts, favorites, pending } = data
@@ -155,6 +204,12 @@ export default function Treino() {
 
   return (
     <div className="space-y-4 pt-1">
+      {queueBanner}
+      {failed && (
+        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[15px] text-attn">
+          Sem rede: estes são os treinos da última vez que li.
+        </p>
+      )}
       {pending.map((row) => (
         <button
           key={row.id}

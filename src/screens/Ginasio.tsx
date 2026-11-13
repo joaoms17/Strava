@@ -30,6 +30,11 @@ import { readScoped, writeScoped } from '../lib/scoped'
 import { kcalOfWorkout } from '../lib/workout-actions'
 import { workoutKcal } from '../../api/_lib/rules/targets'
 import { cleanDecimalText, decimalFromText, decimalText, intFromText } from '../lib/campo-numero'
+import { enqueueGym, keptDraft, readGymCache, writeGymCache } from '../lib/ginasio-offline'
+import { isNetworkError } from '../lib/api'
+import { ensurePlanFavorite } from '../lib/plano-treino'
+import { useGymQueue } from '../lib/ginasio-fila'
+import { planFavorite } from '../../api/_lib/rules/plano-treino'
 
 interface DraftSet {
   reps: number
@@ -49,6 +54,8 @@ interface Draft {
   exercises: DraftExercise[]
   day?: string | null // um dia passado (do ＋ nesse dia): sem cronómetro
   minutes?: number | null // a duração escrita; sem ela, o cronómetro
+  frozen?: boolean // de outra altura (a app esteve fechada): sem cronómetro
+  planName?: string | null // o dia do plano aberto sem rede: liga-se ao teu treino ao terminar
 }
 
 const MAX_MINUTES = 600
@@ -60,14 +67,14 @@ const MAX_LOAD_KG = 300
 const textKey = (exercise: string, set: number, field: 'reps' | 'load') => `${exercise}|${set}|${field}`
 
 const DRAFT_KEY = 'regresso.ginasio'
-const DRAFT_MAX_AGE_MS = 6 * 3600_000
 
+// Com séries feitas o rascunho não expira (T11): fechar a app e voltar de
+// manhã não perde nada; passadas 6 h deixa de contar pelo cronómetro.
 function readDraft(): Draft | null {
   try {
     const raw = readScoped(localStorage, DRAFT_KEY)
     if (!raw) return null
-    const draft = JSON.parse(raw) as Draft
-    return Date.now() - draft.startedAt < DRAFT_MAX_AGE_MS ? draft : null
+    return keptDraft(JSON.parse(raw) as Draft, Date.now())
   } catch {
     return null
   }
@@ -100,6 +107,14 @@ export default function Ginasio() {
   const [savedId, setSavedId] = useState<string | null>(null)
   const [favName, setFavName] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
+  // Os pedidos falharam (pouca rede): 'cache' usa o que se leu da última vez;
+  // 'none' não tem nada — a sessão diz que é por falta de rede, não
+  // «Primeira vez» (T11).
+  const [offline, setOffline] = useState<'cache' | 'none' | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const planParam = Number(params.get('plano')) || null
+  // Envia o que ficou na fila de uma sessão sem rede.
+  useGymQueue()
   const clientId = useRef(crypto.randomUUID())
   const [texts, setTexts] = useState<Record<string, string>>({})
   const setText = (key: string, text: string) => setTexts((prev) => ({ ...prev, [key]: text }))
@@ -119,7 +134,7 @@ export default function Ginasio() {
 
   useEffect(() => {
     void (async () => {
-      const [{ data: favs }, { data: logs }, { data: strengthWorkouts }] = await Promise.all([
+      const [favsResult, logsResult, workoutsResult] = await Promise.all([
         supabase
           .from('favorites')
           .select('*')
@@ -132,7 +147,20 @@ export default function Ginasio() {
           .order('created_at', { ascending: false })
           .limit(600),
         supabase.from('workouts_active').select('id,date').eq('type', 'strength'),
-      ])
+      ]).catch(() => [{ data: null, error: true }, { data: null, error: true }, { data: null, error: true }] as const)
+      let favs = favsResult.data as Favorite[] | null
+      let logs = logsResult.data as ExerciseLogRow[] | null
+      let strengthWorkouts = workoutsResult.data as { id: string; date: string }[] | null
+      if (favsResult.error || logsResult.error || workoutsResult.error) {
+        const cache = readGymCache<Favorite, ExerciseLogRow, { id: string; date: string }>()
+        favs = favs ?? cache?.favorites ?? null
+        logs = cache?.logs ?? null
+        strengthWorkouts = cache?.workouts ?? null
+        setOffline(cache ? 'cache' : 'none')
+      } else {
+        setOffline(null)
+        writeGymCache({ favorites: favs ?? [], logs: logs ?? [], workouts: strengthWorkouts ?? [], at: new Date().toISOString() })
+      }
       const strengthFavs = ((favs ?? []) as Favorite[]).filter((f) => f.workout?.type === 'strength')
       setFavorites(strengthFavs)
 
@@ -159,10 +187,16 @@ export default function Ginasio() {
       setHistory(hist)
 
       if (editId) {
-        const [{ data: w }, { data: sets }] = await Promise.all([
+        const [{ data: w, error: wError }, { data: sets, error: setsError }] = await Promise.all([
           supabase.from('workouts').select('*').eq('id', editId).maybeSingle(),
           supabase.from('exercise_log').select('*').eq('workout_id', editId).order('set_index'),
         ])
+        // Corrigir uma sessão guardada precisa de rede: sem ela, diz-se (não
+        // abre vazia como se não tivesse séries).
+        if (wError || setsError) {
+          setLoadFailed(true)
+          return
+        }
         const workout = (w ?? null) as Workout | null
         setEditing(workout)
         // Sessão sem séries (veio do relógio): começa com o teu treino.
@@ -193,10 +227,26 @@ export default function Ginasio() {
         return
       }
       const saved = readDraft()
+      const planDay = !favParam && planParam ? plan?.dias.find((d) => d.n === planParam) : undefined
       // A sessão a meio do mesmo treino (ex.: voltaste ao plano e tocaste outra
       // vez em «Começar») continua, em vez de recomeçar do zero.
-      if (saved && (!favParam || (saved.favoriteId === favParam && (saved.day ?? null) === pastDay))) {
+      const sameAsSaved = favParam
+        ? saved?.favoriteId === favParam && (saved?.day ?? null) === pastDay
+        : !planDay || saved?.planName === planDay.favorito
+      if (saved && sameAsSaved) {
         setDraft(saved)
+        return
+      }
+      // «Começar Dia N» sem rede nem o teu treino guardado: o dia do plano.
+      if (planDay) {
+        const template = planFavorite(planDay)
+        setDraft({
+          startedAt: Date.now(),
+          favoriteId: null,
+          planName: template.name,
+          exercises: template.workout.exercises.map((e) => newExercise(e, hist[exerciseKey(e.name)] ?? [])),
+          ...(pastDay ? { day: pastDay, minutes: template.workout.minutes } : {}),
+        })
         return
       }
       const fav = strengthFavs.find((f) => f.id === favParam)
@@ -209,7 +259,7 @@ export default function Ginasio() {
       })
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId, favParam, pastDay])
+  }, [editId, favParam, pastDay, planParam])
 
   // Guarda o rascunho a cada mudança (só sessões novas).
   useEffect(() => {
@@ -226,6 +276,16 @@ export default function Ginasio() {
     return out
   }, [draft?.exercises, history])
 
+  if (loadFailed) {
+    return (
+      <div className="space-y-3 pt-8 text-center">
+        <p className="text-[16px]">Sem rede: não consegui abrir esta sessão.</p>
+        <button onClick={() => window.location.reload()} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
+          Tentar outra vez
+        </button>
+      </div>
+    )
+  }
   if (!draft) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
 
   const d = draft
@@ -244,13 +304,19 @@ export default function Ginasio() {
     )
   // A duração escrita; sem ela, a guardada (ao corrigir) ou o cronómetro.
   const timerMinutes = Math.max(1, Math.round((now - d.startedAt) / 60_000))
-  const minutes = Math.max(1, Math.min(MAX_MINUTES, d.minutes ?? editing?.minutes ?? (d.day ? 60 : timerMinutes)))
+  // Um rascunho de outra altura (congelado) não conta as horas com a app fechada.
+  const minutes = Math.max(1, Math.min(MAX_MINUTES, d.minutes ?? editing?.minutes ?? (d.day || d.frozen ? 60 : timerMinutes)))
   const doneSets = d.exercises.reduce((a, ex) => a + ex.sets.filter((s) => s.done).length, 0)
+  // O dia que se vê: o passado escolhido ou o de um rascunho de outra altura.
+  const startedDay = d.frozen ? nutritionalDay(new Date(d.startedAt), profile.nutrition_day_cutoff_hour) : null
+  const shownDay = d.day ?? (startedDay && startedDay !== today ? startedDay : null)
 
   function startFrom(fav: Favorite) {
     setDraft({
       ...d,
       startedAt: Date.now(),
+      frozen: false,
+      planName: null,
       favoriteId: fav.id,
       exercises: (fav.workout?.exercises ?? []).map((e) => newExercise(e, history[exerciseKey(e.name)] ?? [])),
       ...(d.day ? { minutes: fav.workout?.minutes ?? d.minutes ?? 60 } : {}),
@@ -295,17 +361,25 @@ export default function Ginasio() {
         .filter((s) => s.done)
         .map((s, i) => ({ exercise: ex.name, set_index: i + 1, reps: s.reps, load_kg: s.load, rpe: ex.rpe })),
     )
+    // O dia do plano aberto sem rede: agora (com rede) liga-se ao teu treino.
+    let favoriteId = d.favoriteId
+    if (!favoriteId && d.planName) {
+      const planDay = plan?.dias.find((x) => x.favorito === d.planName)
+      if (planDay) favoriteId = await ensurePlanFavorite(planDay).catch(() => null)
+    }
+    const body = {
+      client_id: clientId.current,
+      workout_id: editId,
+      // Num dia passado, as 18:00 (hora suposta).
+      started_at: editId ? undefined : d.day ? lisbonInstant(d.day, '18:00').toISOString() : new Date(d.startedAt).toISOString(),
+      started_at_estimated: !editId && !!d.day,
+      minutes,
+      sets,
+      favorite_id: favoriteId,
+      ...(!favoriteId && d.planName ? { name: d.planName } : {}),
+    }
     try {
-      const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', {
-        client_id: clientId.current,
-        workout_id: editId,
-        // Num dia passado, as 18:00 (hora suposta).
-        started_at: editId ? undefined : d.day ? lisbonInstant(d.day, '18:00').toISOString() : new Date(d.startedAt).toISOString(),
-        started_at_estimated: !editId && !!d.day,
-        minutes,
-        sets,
-        favorite_id: d.favoriteId,
-      })
+      const { workout } = await postApi<{ workout: Workout }>('/api/workout/strength', body)
       writeDraft(null)
       emitDataChanged()
       setSavedId(workout.id)
@@ -317,8 +391,22 @@ export default function Ginasio() {
       // De um dos teus treinos ou a corrigir, o «Feito» não tem mais nada
       // (o aviso já diz as séries): volta logo ao Treino. Numa sessão livre
       // fica, para a guardar nos teus treinos.
-      if (editId || d.favoriteId) navigate('/treino')
+      if (editId || favoriteId) navigate('/treino')
     } catch (err) {
+      // Sem rede (T11): fica na fila do telemóvel, como as refeições, e vai
+      // sozinha quando houver rede (o client_id não deixa gravar a dobrar).
+      if (!editId && isNetworkError(err)) {
+        enqueueGym({
+          client_id: clientId.current,
+          body,
+          label: `Ginásio de ${fmtDayShort(shownDay ?? today)} · ${sets.length} séries`,
+          at: new Date().toISOString(),
+        })
+        writeDraft(null)
+        setSavedId('fila')
+        toast('Sem rede: a sessão fica no telemóvel e vai sozinha quando houver rede.')
+        return
+      }
       toast(err instanceof Error ? err.message : 'Não consegui guardar. Tenta outra vez.')
     }
   }
@@ -361,7 +449,10 @@ export default function Ginasio() {
         <p className="text-[15px] text-dim">
           {doneSets} séries · {minutes} min
         </p>
-        {!editId && !d.favoriteId && favName == null && (
+        {savedId === 'fila' && (
+          <p className="text-[15px] text-attn">Por enviar: fica no telemóvel e vai sozinha quando houver rede.</p>
+        )}
+        {savedId !== 'fila' && !editId && !d.favoriteId && !d.planName && favName == null && (
           <button onClick={() => setFavName('')} className="min-h-12 w-full rounded-xl border border-line text-[15px]">
             ☆ Guardar nos meus treinos
           </button>
@@ -398,7 +489,7 @@ export default function Ginasio() {
 
   const used = new Set(d.exercises.map((e) => e.name))
   // Uma sessão de um dia do plano de treino: «Ver plano» (decisão 305).
-  const planDay = planDayOfFavorite(plan, favorites.find((f) => f.id === d.favoriteId)?.name)
+  const planDay = planDayOfFavorite(plan, favorites.find((f) => f.id === d.favoriteId)?.name ?? d.planName ?? undefined)
   const step = 'flex h-11 w-11 items-center justify-center rounded-lg border border-line text-[20px] leading-none'
 
   return (
@@ -406,7 +497,7 @@ export default function Ginasio() {
       <div className="flex items-center justify-between">
         <p className="num text-[28px]">
           {minutes} min <span className="text-[16px] font-semibold text-dim">· {doneSets} séries</span>
-          {d.day && <span className="block text-[15px] font-semibold text-dim">Em {fmtDayShort(d.day)}</span>}
+          {shownDay && <span className="block text-[15px] font-semibold text-dim">Em {fmtDayShort(shownDay)}</span>}
         </p>
         {!editId && d.exercises.length > 0 && (
           <button onClick={restart} className="-mr-3 min-h-11 px-3 text-[14px] text-dim">
@@ -414,6 +505,14 @@ export default function Ginasio() {
           </button>
         )}
       </div>
+
+      {offline && (
+        <p className="rounded-xl bg-attn/15 px-3 py-2 text-[15px] text-attn">
+          {offline === 'cache'
+            ? 'Sem rede: as cargas da última vez são as que o telemóvel guardou. Podes treinar; o Terminar envia quando houver rede.'
+            : 'Sem rede: não consegui ler o teu histórico (as cargas da última vez não aparecem). Podes treinar; o Terminar envia quando houver rede.'}
+        </p>
+      )}
 
       {planDay && (
         <button
@@ -459,7 +558,9 @@ export default function Ginasio() {
                 <p className="text-[17px] font-semibold">{ex.name}</p>
                 {ex.note && <p className="text-[15px] font-semibold text-ink">{ex.note}</p>}
                 <p className="text-[14px] text-dim">
-                  {sug?.firstTime
+                  {sug?.firstTime && offline === 'none'
+                    ? 'Sem rede: sem as cargas da última vez.'
+                    : sug?.firstTime
                     ? timed
                       ? 'Primeira vez: os segundos de cada série.'
                       : `Primeira vez: escolhe um peso com que faças ${ex.repMax ?? FREE_REP_MAX} repetições com folga.`
