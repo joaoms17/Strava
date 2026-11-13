@@ -29,6 +29,7 @@ import Icon from '../components/ui/Icon'
 import { readScoped, writeScoped } from '../lib/scoped'
 import { kcalOfWorkout } from '../lib/workout-actions'
 import { workoutKcal } from '../../api/_lib/rules/targets'
+import { cleanDecimalText, decimalFromText, decimalText, intFromText } from '../lib/campo-numero'
 
 interface DraftSet {
   reps: number
@@ -52,6 +53,11 @@ interface Draft {
 
 const MAX_MINUTES = 600
 const MAX_REPS = 600
+const MAX_LOAD_KG = 300
+
+// O texto em edição de um campo de uma série (pelo nome do exercício, que é
+// único na sessão, e pelo número da série).
+const textKey = (exercise: string, set: number, field: 'reps' | 'load') => `${exercise}|${set}|${field}`
 
 const DRAFT_KEY = 'regresso.ginasio'
 const DRAFT_MAX_AGE_MS = 6 * 3600_000
@@ -95,6 +101,15 @@ export default function Ginasio() {
   const [favName, setFavName] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
   const clientId = useRef(crypto.randomUUID())
+  const [texts, setTexts] = useState<Record<string, string>>({})
+  const setText = (key: string, text: string) => setTexts((prev) => ({ ...prev, [key]: text }))
+  const dropText = (key: string) =>
+    setTexts((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
 
   // Cronómetro.
   useEffect(() => {
@@ -384,7 +399,7 @@ export default function Ginasio() {
   const used = new Set(d.exercises.map((e) => e.name))
   // Uma sessão de um dia do plano de treino: «Ver plano» (decisão 305).
   const planDay = planDayOfFavorite(plan, favorites.find((f) => f.id === d.favoriteId)?.name)
-  const step = 'flex h-10 w-10 items-center justify-center rounded-lg border border-line text-[20px] leading-none'
+  const step = 'flex h-11 w-11 items-center justify-center rounded-lg border border-line text-[20px] leading-none'
 
   return (
     <div className="space-y-4 pt-1 pb-24">
@@ -435,9 +450,8 @@ export default function Ginasio() {
 
       {d.exercises.map((ex, ei) => {
         const sug = suggestions[ex.name]
-        // Nos de tempo as repetições são segundos: de 5 em 5.
+        // Nos de tempo as repetições são segundos.
         const timed = isTimedExercise(ex.name)
-        const repStep = timed ? 5 : 1
         return (
           <section key={ex.name} className="space-y-2 rounded-[18px] border border-line bg-surface p-3">
             <div className="flex items-start justify-between gap-2">
@@ -486,48 +500,58 @@ export default function Ginasio() {
                 >
                   <Icon name="check" size={20} />
                 </button>
-                <div className="flex items-center gap-1">
-                  <button
-                    className={step}
-                    onClick={() => updateSet(ei, si, { reps: Math.max(0, s.reps - repStep) })}
-                    aria-label={timed ? 'menos 5 segundos' : 'menos uma repetição'}
-                  >
-                    −
-                  </button>
-                  <span className="num w-9 text-center text-[20px]">
-                    {s.reps}
-                    {timed && <span className="text-[13px] text-dim">s</span>}
-                  </span>
-                  <button
-                    className={step}
-                    onClick={() => updateSet(ei, si, { reps: Math.min(MAX_REPS, s.reps + repStep) })}
-                    aria-label={timed ? 'mais 5 segundos' : 'mais uma repetição'}
-                  >
-                    +
-                  </button>
-                </div>
+                {/* As repetições escrevem-se (60 s eram 12 toques no +; T23). */}
+                <label className="flex items-center gap-1 text-[14px] text-dim">
+                  <input
+                    inputMode="numeric"
+                    value={texts[textKey(ex.name, si, 'reps')] ?? String(s.reps)}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => {
+                      const text = e.target.value.replace(/\D/g, '').slice(0, 3)
+                      setText(textKey(ex.name, si, 'reps'), text)
+                      const reps = intFromText(text, 0, MAX_REPS)
+                      if (reps != null) updateSet(ei, si, { reps })
+                    }}
+                    onBlur={() => dropText(textKey(ex.name, si, 'reps'))}
+                    aria-label={`${timed ? 'Segundos' : 'Repetições'} da série ${si + 1}`}
+                    className="num h-11 w-14 rounded-lg border border-line bg-bg text-center text-[20px] text-ink"
+                  />
+                  {timed ? 's' : 'rep'}
+                </label>
                 <div className="ml-auto flex items-center gap-1">
                   <button
                     className={step}
-                    onClick={() => updateSet(ei, si, { load: Math.max(0, (s.load ?? 0) - loadStepDown(s.load ?? 0)) })}
+                    onClick={() => {
+                      dropText(textKey(ex.name, si, 'load'))
+                      updateSet(ei, si, { load: Math.max(0, (s.load ?? 0) - loadStepDown(s.load ?? 0)) })
+                    }}
                     aria-label={`menos ${loadStepDown(s.load ?? 0)} kg`}
                   >
                     −
                   </button>
+                  {/* O texto em edição fica no campo: «12,» espera pelo 5 (T6). */}
                   <input
                     inputMode="decimal"
-                    value={s.load == null ? '' : String(s.load).replace('.', ',')}
+                    value={texts[textKey(ex.name, si, 'load')] ?? decimalText(s.load)}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => {
-                      const v = Number(e.target.value.replace(',', '.'))
-                      updateSet(ei, si, { load: e.target.value === '' || !Number.isFinite(v) ? null : v })
+                      const text = cleanDecimalText(e.target.value)
+                      setText(textKey(ex.name, si, 'load'), text)
+                      const load = decimalFromText(text, 0, MAX_LOAD_KG)
+                      if (!text.trim()) updateSet(ei, si, { load: null })
+                      else if (load != null) updateSet(ei, si, { load })
                     }}
+                    onBlur={() => dropText(textKey(ex.name, si, 'load'))}
                     placeholder="kg"
-                    aria-label={`Carga da série ${si + 1}`}
-                    className="num h-10 w-14 rounded-lg border border-line bg-bg text-center text-[18px]"
+                    aria-label={`Carga da série ${si + 1} em kg`}
+                    className="num h-11 w-16 rounded-lg border border-line bg-bg text-center text-[18px]"
                   />
                   <button
                     className={step}
-                    onClick={() => updateSet(ei, si, { load: (s.load ?? 0) + loadStep(s.load ?? 0) })}
+                    onClick={() => {
+                      dropText(textKey(ex.name, si, 'load'))
+                      updateSet(ei, si, { load: (s.load ?? 0) + loadStep(s.load ?? 0) })
+                    }}
                     aria-label={`mais ${loadStep(s.load ?? 0)} kg`}
                   >
                     +
@@ -556,7 +580,7 @@ export default function Ginasio() {
                   onChange={(e) =>
                     setExercises(d.exercises.map((x, i) => (i === ei ? { ...x, rpe: e.target.value ? Number(e.target.value) : null } : x)))
                   }
-                  className="h-9 rounded-lg border border-line bg-bg px-2 text-ink"
+                  className="h-11 rounded-lg border border-line bg-bg px-2 text-ink"
                 >
                   <option value="">—</option>
                   {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
