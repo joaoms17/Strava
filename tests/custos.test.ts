@@ -41,6 +41,9 @@ describe('limites da IA', () => {
     expect(VISION_KINDS).toContain('workout_said_audio')
     expect(VISION_KINDS).toContain('menu_pick')
     expect(VISION_KINDS).toContain('meal_leftovers')
+    // S6: também vão para o modelo das fotos
+    expect(VISION_KINDS).toContain('evolution')
+    expect(VISION_KINDS).toContain('training_week')
     expect(VISION_KINDS).not.toContain('meal_text')
   })
 

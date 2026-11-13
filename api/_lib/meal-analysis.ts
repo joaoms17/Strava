@@ -102,8 +102,36 @@ export async function foodLibrary(admin: SupabaseClient, userId: string) {
   return { refs, forPrompt }
 }
 
+// O custo do mês em dólares, somado na base de dados (S3): a API devolve no
+// máximo 1 000 linhas por pedido, e a soma em JavaScript ficava cortada. Sem
+// a função (migração 20261113000022), soma por páginas. null quando não se
+// consegue ler: quem chama trata como «limite atingido».
+const COST_PAGE = 1000
+const COST_MAX_PAGES = 50
+
+export async function monthCostUsd(admin: SupabaseClient, userId: string, monthStart: string): Promise<number | null> {
+  const { data, error } = await admin.rpc('ai_cost_since', { p_user_id: userId, p_from: monthStart })
+  if (!error && data != null && Number.isFinite(Number(data))) return Number(data)
+  let total = 0
+  for (let page = 0; page < COST_MAX_PAGES; page++) {
+    const { data: rows, error: pageError } = await admin
+      .from('api_calls')
+      .select('cost_usd')
+      .eq('user_id', userId)
+      .gte('created_at', monthStart)
+      .order('created_at')
+      .order('id')
+      .range(page * COST_PAGE, page * COST_PAGE + COST_PAGE - 1)
+    if (pageError) return null
+    total += (rows ?? []).reduce((acc, c) => acc + Number(c.cost_usd), 0)
+    if ((rows ?? []).length < COST_PAGE) return total
+  }
+  return total
+}
+
 // Limites da IA: teto mensal em euros e limite diário de fotos (com o
-// Gemini, as fotos de toda a casa, que partilha a chave; sem euros).
+// Gemini, as fotos de toda a casa, que partilha a chave; sem euros). Uma
+// leitura que falhe conta como limite atingido (S3): sem ela não há teto.
 export async function aiLimitReached(
   admin: SupabaseClient,
   userId: string,
@@ -119,16 +147,18 @@ export async function aiLimitReached(
     .in('kind', VISION_KINDS)
     .gte('created_at', dayStart)
   if (!limits.sharedDaily) visionQuery = visionQuery.eq('user_id', userId)
-  const [{ data: profile }, { data: monthCalls }, { count: visionToday }] = await Promise.all([
+  const [{ data: profile }, monthUsd, vision] = await Promise.all([
     admin.from('profile').select('ai_monthly_cap_eur,ai_daily_vision_cap').eq('user_id', userId).maybeSingle(),
-    limits.monthlyEur
-      ? admin.from('api_calls').select('cost_usd').eq('user_id', userId).gte('created_at', monthStart)
-      : Promise.resolve({ data: [] as { cost_usd: number }[] }),
-    withPhotos ? visionQuery : Promise.resolve({ count: 0 }),
+    limits.monthlyEur ? monthCostUsd(admin, userId, monthStart) : Promise.resolve(0),
+    withPhotos ? visionQuery : Promise.resolve({ count: 0, error: null }),
   ])
-  const monthUsd = (monthCalls ?? []).reduce((acc, c) => acc + Number(c.cost_usd), 0)
-  if (limits.monthlyEur && monthlyCapReached(monthUsd, Number(profile?.ai_monthly_cap_eur ?? 10))) return true
-  return withPhotos && dailyVisionCapReached(visionToday ?? 0, Number(profile?.ai_daily_vision_cap ?? 40))
+  if (limits.monthlyEur) {
+    if (monthUsd == null) return true
+    if (monthlyCapReached(monthUsd, Number(profile?.ai_monthly_cap_eur ?? 10))) return true
+  }
+  if (!withPhotos) return false
+  if (vision.error) return true
+  return dailyVisionCapReached(vision.count ?? 0, Number(profile?.ai_daily_vision_cap ?? 40))
 }
 
 // Correção por texto (Haiku, sem imagem): «o arroz era metade», «comi metade».

@@ -442,7 +442,10 @@ export const correct = post(async ({ db, userId, body, res }) => {
   if (meal.status === 'a_analisar') throw new HttpError(409, 'Ainda a analisar. Junta uma nota em vez disso.')
   if (!meal.items?.length) throw new HttpError(422, 'Esta refeição ainda não tem itens.')
   const previous = { items: meal.items, status: meal.status }
-  const { items } = await correctItems(adminClient(), userId, meal.items, input.text)
+  const admin = adminClient()
+  // As correções também gastam IA: respeitam o teto do mês (M20).
+  if (await aiLimitReached(admin, userId, false)) throw new HttpError(429, 'Chegaste ao limite da IA (Definições › Avançado).')
+  const { items } = await correctItems(admin, userId, meal.items, input.text)
   const tags = (meal.tags ?? []) as string[]
   const { data, error } = await db
     .from('meals')
@@ -515,7 +518,12 @@ export const update = post(async ({ db, userId, body, res }) => {
   if (touched && !items && meal.status !== 'a_analisar' && meal.items?.length) {
     const correction = correctionText(applied, next)
     if (correction) {
-      items = (await correctItems(adminClient(), userId, meal.items, correction, undefined, appliedText(applied))).items
+      const admin = adminClient()
+      // As correções também gastam IA: respeitam o teto do mês (M20).
+      if (await aiLimitReached(admin, userId, false)) {
+        throw new HttpError(429, 'Chegaste ao limite da IA: a nota não foi aplicada. Acerta os gramas à mão.')
+      }
+      items = (await correctItems(admin, userId, meal.items, correction, undefined, appliedText(applied))).items
       corrected = true
       // A nota pode dizer como dividiram o pedido: sai o «Pedido para 2», para
       // a porção não ser cortada duas vezes (só com a migração 20261018220000).
