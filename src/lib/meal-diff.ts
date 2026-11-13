@@ -24,13 +24,30 @@ export function diffText(before: MealItem[], after: MealItem[]): string {
 // impossíveis não mexem.
 export const MAX_ITEM_GRAMS = 5000
 
+// O item de onde veio cada item escalado (M19): os − / + escalam sempre a
+// partir do original, e não do já arredondado, para o erro não acumular em
+// muitos toques.
+const ORIGIN = new WeakMap<MealItem, MealItem>()
+
 export function setItemGrams(item: MealItem, grams: number): MealItem {
   if (item.grams <= 0 || !Number.isFinite(grams) || grams <= 0) return item
   const next = Math.min(MAX_ITEM_GRAMS, Math.round(grams * 10) / 10)
   if (next === item.grams) return item
-  const k = next / item.grams
+  const origin = ORIGIN.get(item) ?? item
+  const k = next / origin.grams
   const r = (n: number) => Math.round(n * k * 10) / 10
-  return { ...item, grams: next, kcal: r(item.kcal), protein: r(item.protein), carbs: r(item.carbs), fat: r(item.fat), estimated: false, confidence: 'alta' }
+  const scaled: MealItem = {
+    ...item,
+    grams: next,
+    kcal: r(origin.kcal),
+    protein: r(origin.protein),
+    carbs: r(origin.carbs),
+    fat: r(origin.fat),
+    estimated: false,
+    confidence: 'alta',
+  }
+  ORIGIN.set(scaled, origin)
+  return scaled
 }
 
 // Passos de 10 g num item (nunca abaixo de 5 g).

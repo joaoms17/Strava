@@ -390,7 +390,9 @@ export const attach = post(async ({ db, userId, body, res }) => {
       analysis_attempts: 0,
       analysis_started_at: null,
       analysis_error: null,
-      confirmed_at: null,
+      // A confirmação de uma refeição «ok» fica: o que a foto junta de certo
+      // não a põe por rever; numa por rever, só «Está certo» a confirma (M10).
+      ...(keeping && meal.status === 'ok' ? {} : { confirmed_at: null }),
     })
     .eq('id', meal.id)
     .select()

@@ -307,7 +307,7 @@ async function runModel(
     const { order, ...output } = call.output
     // Taxas, gorjeta, saco, talheres ou totais nunca contam, mesmo que a IA os
     // deixe passar; e a mesma linha de duas capturas sobrepostas conta uma vez.
-    let items = dropNonFood(output.items)
+    let items = dropNonFood(output.items, order != null)
     if (order && images.length > 1) items = dedupeOrderLines(items)
     if (order) items = unlinkMultiples(items)
     const analysis: MealAnalysis = { ...output, items }
@@ -404,7 +404,10 @@ export async function analyseClaimed(
         // pode dizer como dividiram («comemos a meias»): aí não há dica, para
         // não cortar duas vezes.
         const split = sameInput(used, read) ? people : null
-        const status = split != null ? 'por_rever' : analysedStatus(finalItems, analysis.meal_confidence)
+        let status = split != null ? 'por_rever' : analysedStatus(finalItems, analysis.meal_confidence)
+        // Juntar uma foto (um rótulo, confiança alta) a uma refeição que ninguém
+        // confirmou não a dá por certa (M10): fica por rever até «Está certo».
+        if (adding && status === 'ok' && !(meal as MealRow & { confirmed_at?: string | null }).confirmed_at) status = 'por_rever'
         const patch: Record<string, unknown> = {
           items: finalItems,
           ...mealTotals(finalItems),
@@ -425,7 +428,13 @@ export async function analyseClaimed(
         // primeira análise: uma análise nova limpa o que a de antes disse.
         if (!adding && (split != null || 'order_people' in meal)) patch.order_people = split
         const run = (values: Record<string, unknown>) => {
-          let query = admin.from('meals').update(values).eq('id', meal.id).eq('analysis_started_at', claimedAt)
+          // Apagada a meio (M14): não grava nem avisa «Jantar analisado».
+          let query = admin
+            .from('meals')
+            .update(values)
+            .eq('id', meal.id)
+            .eq('analysis_started_at', claimedAt)
+            .is('deleted_at', null)
           query = used.note == null ? query.is('note', null) : query.eq('note', used.note)
           // As etiquetas também (M1): «Comi metade» tocado a meio da análise
           // não pode ficar com os números do prato inteiro.

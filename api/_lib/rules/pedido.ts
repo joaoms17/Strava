@@ -70,19 +70,23 @@ const PACKAGING = [
 
 const PACKAGING_MAX_KCAL = 10
 
-export function nonFoodLine(item: { name: string; grams: number; kcal: number }): boolean {
+// Fora de um pedido de entrega (M16), uma linha com nome de taxa ou total só
+// sai se não tiver nada para contar: «Total 0% Fage» e «Serviço de pão e
+// azeitonas» são comida.
+export function nonFoodLine(item: { name: string; grams: number; kcal: number }, order = true): boolean {
   const name = fold(item.name)
   if (!name) return true
-  if (NEVER_FOOD.some((re) => re.test(name))) return true
+  if (NEVER_FOOD.some((re) => re.test(name)) && (order || !(item.kcal >= PACKAGING_MAX_KCAL))) return true
   if (PACKAGING.some((re) => re.test(name)) && !(item.kcal >= PACKAGING_MAX_KCAL)) return true
   // Nada para contar: uma linha que a IA escreveu sem gramas nem kcal.
   return !(item.grams > 0) && !(item.kcal > 0)
 }
 
 // A guarda de todas as fotos (também a juntar e na Nova favorita): o que é
-// obviamente uma linha de taxa, gorjeta, saco ou total sai.
-export function dropNonFood<T extends { name: string; grams: number; kcal: number }>(items: readonly T[]): T[] {
-  return items.filter((item) => !nonFoodLine(item))
+// obviamente uma linha de taxa, gorjeta, saco ou total sai. Sem pedido de
+// entrega (`order` false), as de nome parecido só saem sem kcal (M16).
+export function dropNonFood<T extends { name: string; grams: number; kcal: number }>(items: readonly T[], order = true): T[] {
+  return items.filter((item) => !nonFoodLine(item, order))
 }
 
 // Duas capturas do mesmo pedido que se sobrepõem mostram a mesma linha duas
