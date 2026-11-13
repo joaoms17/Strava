@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { discard, parseShot, remove, restore, save, shot, shotAdd, strength, update } from './_workout/actions.js'
+import { discard, join, joinUndo, parseShot, remove, restore, save, shot, shotAdd, strength, update } from './_workout/actions.js'
 import { connect, disconnect, sync } from './_workout/intervals.js'
 import said from './_workout/said.js'
 
@@ -9,6 +9,8 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   save,
   strength,
   update,
+  join,
+  'join-undo': joinUndo,
   delete: remove,
   restore,
   shot,

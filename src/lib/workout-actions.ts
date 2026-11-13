@@ -1,6 +1,7 @@
 import { SPORT_LABEL as SPORT_LABELS } from '../../api/_lib/rules/targets'
 import { findMergeCandidate, startGuessed } from '../../api/_lib/rules/treino'
 import { postApi } from './api'
+import { saveClientId, saveDone } from './client-id'
 import { supabase } from './supabase'
 import { emitDataChanged } from './events'
 import { fmtKcal } from './format'
@@ -57,12 +58,18 @@ export interface SaveWorkoutBody {
 }
 
 // Guarda o treino e mostra «Bicicleta registada · +380 kcal do treino · Anular».
-export async function saveWorkout(body: SaveWorkoutBody, toast: ShowToast): Promise<Workout | null> {
+export async function saveWorkout(
+  body: SaveWorkoutBody & { client_id?: string },
+  toast: ShowToast,
+): Promise<Workout | null> {
+  const { client_id: given, ...rest } = body
+  const pending = given ? null : saveClientId(rest)
   try {
     const result = await postApi<{ workout: Workout; merged?: boolean }>('/api/workout/save', {
-      client_id: crypto.randomUUID(),
-      ...body,
+      ...rest,
+      client_id: given ?? pending!.id,
     })
+    if (pending) saveDone(pending.key)
     emitDataChanged()
     const w = result.workout
     if (result.merged) {
@@ -146,6 +153,41 @@ export async function deleteWorkout(w: Workout, toast: ShowToast): Promise<void>
     ])
   } catch (err) {
     toast(errorText(err))
+  }
+}
+
+// «Juntar os dois» (T1): o treino registado à mão (ou por print) e o mesmo
+// vindo do relógio passam a ser um só — fica o do relógio, com as séries do
+// ginásio, o teu treino e a nota do outro; as kcal e o dia refazem-se. A ordem
+// dos dois não importa (o servidor escolhe o do relógio).
+export async function joinWorkouts(a: Pick<Workout, 'id'>, b: Pick<Workout, 'id'>, toast: ShowToast): Promise<Workout | null> {
+  try {
+    const result = await postApi<{ workout: Workout; removed: Workout | null; moved_sets?: number }>('/api/workout/join', {
+      workout_id: a.id,
+      other_id: b.id,
+    })
+    emitDataChanged()
+    const w = result.workout
+    const removed = result.removed
+    toast(`Juntei os dois: fica ${workoutTitle(w).toLowerCase()} das ${timeOfStart(w)}${kcalOfWorkout(w)}.`, [
+      {
+        label: 'Anular',
+        run: async () => {
+          // Volta tudo a como estava: os dois treinos, as séries e as contas.
+          try {
+            await postApi('/api/workout/join-undo', { workout_id: w.id, other_id: removed?.id ?? (w.id === a.id ? b.id : a.id) })
+            emitDataChanged()
+            toast('Anulado: voltam a ser dois treinos.')
+          } catch (err) {
+            toast(errorText(err))
+          }
+        },
+      },
+    ])
+    return w
+  } catch (err) {
+    toast(errorText(err))
+    return null
   }
 }
 

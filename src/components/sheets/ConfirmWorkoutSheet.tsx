@@ -327,7 +327,14 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
         const sessions = ((data ?? []) as Workout[]).map((w) => ({ ...w, started_at: startGuessed(w) ? null : (w.started_at ?? null) }))
         setCandidate(
           findMergeCandidate(
-            { type, date: draft.day, minutes: toInt(draft.minutes), started_at: draft.time ? startedAt : null },
+            // Nos «outros», só o mesmo desporto (T4).
+            {
+              type,
+              date: draft.day,
+              minutes: toInt(draft.minutes),
+              started_at: draft.time ? startedAt : null,
+              ...(type === 'other' ? { sport: draft.kind } : {}),
+            },
             sessions,
           ),
         )

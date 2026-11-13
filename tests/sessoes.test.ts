@@ -109,7 +109,10 @@ describe('possível duplicado', () => {
     expect(possibleDuplicates([ride, print]).size).toBe(0) // print às 20:15, relógio às 07:02
     expect(possibleDuplicates([ride, { ...print, started_at: '2026-10-14T06:20:00Z' }]).size).toBe(2)
     expect(possibleDuplicates([ride, { ...jaFiz, date: '2026-10-15' }]).size).toBe(0)
-    expect(possibleDuplicates([ride, { ...jaFiz, minutes: 60 }]).size).toBe(0)
+    // Outra duração com hora conhecida e sem se sobreporem: não avisa…
+    expect(possibleDuplicates([ride, { ...jaFiz, minutes: 60, raw: null }]).size).toBe(0)
+    // …mas com a hora do «Já fiz» suposta pode ser o mesmo treino (T1).
+    expect(possibleDuplicates([ride, { ...jaFiz, minutes: 60 }]).size).toBe(2)
     const walk = { ...jaFiz, type: 'other' as const, sport: 'caminhada' }
     expect(possibleDuplicates([{ ...walk, id: 'w1' }, { ...walk, id: 'w2', sport: 'corrida' }]).size).toBe(0)
   })
