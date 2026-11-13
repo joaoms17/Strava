@@ -39,7 +39,9 @@ export default function TreinoSheet() {
                   key={f.id}
                   onClick={() =>
                     f.workout?.type === 'strength'
-                      ? (sheet.close(), navigate(`/treino/ginasio?fav=${f.id}${date ? `&data=${date}` : ''}`))
+                      ? // Substitui a entrada da folha: fechar (um history.back()
+                        // assíncrono) e navegar a seguir desfazia a navegação (T5).
+                        navigate(`/treino/ginasio?fav=${f.id}${date ? `&data=${date}` : ''}`, { replace: true })
                       : sheet.open('registar-treino', { fav: f.id, ...(date ? { data: date } : {}) })
                   }
                   className="min-h-10 rounded-full border border-line px-3 text-[15px]"

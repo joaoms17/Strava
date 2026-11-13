@@ -220,7 +220,8 @@ export default function DizerTreinoSheet() {
   const dateParam = sheet.params.get('data')
   const openFavorite = (f: Favorite) =>
     f.workout?.type === 'strength'
-      ? (sheet.close(), navigate(`/treino/ginasio?fav=${f.id}${dateParam && dateParam !== today ? `&data=${dateParam}` : ''}`))
+      ? // Substitui a entrada da folha (fechar e navegar desfazia a navegação, T5).
+        navigate(`/treino/ginasio?fav=${f.id}${dateParam && dateParam !== today ? `&data=${dateParam}` : ''}`, { replace: true })
       : sheet.open('registar-treino', { fav: f.id, ...(sheet.params.get('data') ? { data: sheet.params.get('data')! } : {}) })
 
   const primary =
