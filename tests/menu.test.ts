@@ -60,6 +60,8 @@ describe('dayLeft', () => {
   it('na semana de pausa, a meta é o gasto estimado', () => {
     expect(dayLeft({ ...base, maintenance: true })).toEqual({ kcal: 1500, protein: 80 })
     expect(dayLeft({ ...base, maintenance: true, tdee: null })).toEqual({ kcal: 1100, protein: 80 })
+    // K5: sem gasto medido, a fórmula da pessoa mais o treino médio (não 2 000).
+    expect(dayLeft({ ...base, maintenance: true, tdee: null, tdeeFallback: 1650 })).toEqual({ kcal: 750, protein: 80 })
   })
 
   it('passou o plano e já chegou à proteína', () => {

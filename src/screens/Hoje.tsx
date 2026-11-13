@@ -372,7 +372,7 @@ export default function Hoje() {
     data.meals.filter((m) => m.status === 'a_analisar' && !stuckNow(m)).length +
     localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
-  // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa. Um dia passado
+  // pausa da dieta, a meta é o gasto estimado (ou a fórmula + treino), fixa. Um dia passado
   // usa o plano base desse dia (mudar o plano não reescreve os dias antigos).
   // Um treino partido em dois pelo relógio aparece (e conta) como um.
   const workoutKcals = mergeSessions(data.workouts).map((w) => ({
@@ -393,7 +393,13 @@ export default function Hoje() {
     profile.maintenance_anchor != null &&
     isMaintenanceWeek(profile.maintenance_anchor, date)
   const dayBase = isToday ? profile.base_kcal : (data.dayBase ?? profile.base_kcal)
-  const plan = maintenance ? maintenanceTarget(data.latestTdee) : dayBase + kcalExercise
+  // Sem gasto medido, a fórmula da pessoa mais o treino médio (K5), como no fecho.
+  const plan = maintenance
+    ? maintenanceTarget(
+        data.latestTdee,
+        data.expenditure ? data.expenditure.formula + data.expenditure.avgTraining : null,
+      )
+    : dayBase + kcalExercise
   const left = plan - kcalIn
   // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
   const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null

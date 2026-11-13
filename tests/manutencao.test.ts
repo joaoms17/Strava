@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inWaterPhase, isMaintenanceWeek, maintenanceTarget, mondayOf } from '../api/_lib/rules/manutencao'
+import { inWaterPhase, isMaintenanceWeek, maintenanceFallback, maintenanceTarget, mondayOf } from '../api/_lib/rules/manutencao'
 
 describe('mondayOf', () => {
   it('recua até à segunda-feira da semana', () => {
@@ -66,5 +66,28 @@ describe('inWaterPhase', () => {
     expect(inWaterPhase('2026-09-07', '2026-09-10', false)).toBe(true)
     expect(inWaterPhase(null, '2026-09-10')).toBe(false)
     expect(inWaterPhase('2026-09-07', '2026-09-01')).toBe(false)
+  })
+})
+
+describe('maintenanceFallback (K5: a Pergunta e o menu sem gasto medido)', () => {
+  it('a fórmula do último fecho mais o treino médio dos dias completos', () => {
+    const days = [
+      { date: '2026-11-10', formula_base: 1500, kcal_exercise: 300, is_complete: true },
+      { date: '2026-11-11', formula_base: '1510', kcal_exercise: 100, is_complete: true },
+      { date: '2026-11-12', formula_base: 1520, kcal_exercise: 900, is_complete: false },
+      { date: '2026-11-13', formula_base: 9999, kcal_exercise: 0, is_complete: true },
+    ]
+    // Só antes de hoje; o incompleto não entra no treino médio.
+    expect(maintenanceFallback(days, '2026-11-13')).toBe(1520 + 200)
+    expect(maintenanceTarget(null, maintenanceFallback(days, '2026-11-13'))).toBe(1720)
+  })
+
+  it('sem fórmula guardada: null (fica o 2 000 de recurso)', () => {
+    expect(maintenanceFallback([{ date: '2026-11-10', kcal_exercise: 100, is_complete: true }], '2026-11-13')).toBeNull()
+    expect(maintenanceFallback([], '2026-11-13')).toBeNull()
+  })
+
+  it('sem dias completos, só a fórmula', () => {
+    expect(maintenanceFallback([{ date: '2026-11-10', formula_base: 1600 }], '2026-11-13')).toBe(1600)
   })
 })
