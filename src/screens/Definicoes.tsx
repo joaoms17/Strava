@@ -63,6 +63,11 @@ const BIKE: Field[] = [
   { key: 'bike_min_cadence', label: 'Cadência mínima', unit: 'rpm', min: 50, max: 130 },
 ]
 
+const EXPORT_PAGE = 1000
+const EXPORT_MAX_PAGES = 100
+// As que têm dia: saem por dia (as outras pela chave).
+const DATED_TABLES = new Set(['meals', 'days', 'weights', 'workouts', 'health_daily'])
+
 // A tabela, o nome do ficheiro (sem acentos) e o que se lê no botão.
 const EXPORT_TABLES: [string, string, string][] = [
   ['meals', 'refeicoes', 'Refeições'],
@@ -190,13 +195,23 @@ export default function Definicoes() {
     toast(ok ? 'Guardado.' : 'Não consegui guardar. Tenta outra vez.')
   }
 
+  // Por páginas de 1 000 (o máximo que a API devolve por pedido, H3), por uma
+  // ordem fixa: antes pedia 20 000, recebia as primeiras 1 000 por uma ordem
+  // qualquer e o ficheiro parecia completo.
   async function exportTable(table: string, filename: string, label: string) {
-    const { data, error } = await supabase.from(table).select('*').limit(20_000)
-    if (error || !data) {
-      toast(`Não consegui exportar: ${label}.`)
-      return
+    const rows: Record<string, unknown>[] = []
+    for (let page = 0; page < EXPORT_MAX_PAGES; page++) {
+      let query = supabase.from(table).select('*')
+      if (DATED_TABLES.has(table)) query = query.order('date')
+      const { data, error } = await query.order('id').range(page * EXPORT_PAGE, (page + 1) * EXPORT_PAGE - 1)
+      if (error || !data) {
+        toast(`Não consegui exportar: ${label}.`)
+        return
+      }
+      rows.push(...(data as Record<string, unknown>[]))
+      if (data.length < EXPORT_PAGE) break
     }
-    downloadCsv(`${filename}.csv`, toCsv(data as Record<string, unknown>[]))
+    downloadCsv(`${filename}.csv`, toCsv(rows))
   }
 
   function numberInput(field: Field) {
