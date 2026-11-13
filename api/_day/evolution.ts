@@ -57,12 +57,13 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
     if (!profile) throw new HttpError(400, 'Perfil não encontrado.')
     const today = nutritionalDay(new Date(), Number(profile.nutrition_day_cutoff_hour ?? 4))
 
-    const { data: existing } = await db
+    const { data: existing, error: existingError } = await db
       .from('weekly_reviews')
       .select('week_start,text,data,created_at')
       .eq('kind', 'evolucao')
       .eq('week_start', today)
       .maybeSingle()
+    if (existingError) throw new HttpError(503, 'Não consegui ler os teus dados. Tenta outra vez daqui a pouco.')
     if (existing && !body.data.refazer) {
       res.status(200).json({ review: existing })
       return
@@ -111,6 +112,12 @@ export default async function evolution(req: VercelRequest, res: VercelResponse)
         : Promise.resolve({ data: [] as { date: string; body_fat_pct: number }[] }),
     ])
 
+    // S2: com uma leitura falhada, a análise (paga) seria feita com dados
+    // vazios e guardada como a do dia. A forma do intervals.icu pode faltar
+    // (sem a migração): essa fica de fora desta verificação.
+    for (const r of [weights, measurements, days, workouts, health, meals, scale] as { error?: { message: string } | null }[]) {
+      if (r.error) throw new HttpError(503, 'Não consegui ler os teus dados. Tenta outra vez daqui a pouco.')
+    }
     const allWorkouts = (workouts.data ?? []) as PlanWorkout[]
     const efficiency = bikeEfficiency(allWorkouts)
     const mealsByDate: Record<string, { refeicoes: number; kcal: number }> = {}

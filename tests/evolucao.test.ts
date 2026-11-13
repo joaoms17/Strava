@@ -162,7 +162,15 @@ describe('análise da evolução', () => {
       { date: '2026-10-17', body_fat_pct: '25' },
     ]
     // há 30 dias só entram 1/9 e 10/9
-    expect(scaleFatSummary(rows, '2026-10-18')).toEqual({ media_pct: 23.7, ha_30_dias_pct: 23.6 })
+    expect(scaleFatSummary(rows, '2026-10-18')).toEqual({ media_pct: 23.1, ha_30_dias_pct: 21.9 })
     expect(scaleFatSummary([], '2026-10-18')).toBeNull()
+  })
+})
+
+describe('B2: o ritmo da análise é o de hoje', () => {
+  it('três semanas sem pesar: sem ritmo', () => {
+    const weights = Array.from({ length: 20 }, (_, i) => ({ date: shiftDate('2026-09-01', i), kg: 90 - i * 0.15 }))
+    expect(weightSummary(weights, '2026-09-21')!.ritmo_kg_semana).not.toBeNull()
+    expect(weightSummary(weights, '2026-10-12')!.ritmo_kg_semana).toBeNull()
   })
 })

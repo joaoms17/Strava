@@ -76,6 +76,9 @@ export function weekSoFar(
 ): { days: number; diff: number } | null {
   const past = days.filter((d) => d.date < today && d.is_complete && Number(d.kcal_target) > 0)
   if (past.length === 0) return null
-  const diff = past.reduce((a, d) => a + Number(d.kcal_target) - Number(d.kcal_in), todayPlan - todayEaten)
+  // K12: hoje só entra quando já passou o plano (às 9h, com 0 kcal comidas,
+  // o plano inteiro de hoje aparecia como «abaixo do plano»).
+  const todayDiff = Math.min(0, todayPlan - todayEaten)
+  const diff = past.reduce((a, d) => a + Number(d.kcal_target) - Number(d.kcal_in), todayDiff)
   return { days: past.length, diff: Math.round(diff) }
 }

@@ -55,11 +55,28 @@ function pickText(v: unknown): string {
   return ''
 }
 
+// Um valor por 100 g; sem ele, o valor por dose convertido pelas gramas da
+// dose (M15: só com valores por dose dava erro quando dava para converter).
+function per100(
+  nutriments: Record<string, unknown>,
+  key: string,
+  max: number,
+  serving: number | null,
+  digits = 1,
+): number | null {
+  const direct = num(nutriments[`${key}_100g`], max, digits)
+  if (direct != null) return direct
+  if (!serving || serving <= 0) return null
+  const perServing = num(nutriments[`${key}_serving`], max * 20, 4)
+  if (perServing == null) return null
+  return num((perServing * 100) / serving, max, digits)
+}
+
 // kcal por 100 g; alguns produtos só têm a energia em kJ.
-function kcalOf(nutriments: Record<string, unknown>): number | null {
-  const kcal = num(nutriments['energy-kcal_100g'], 900)
+function kcalOf(nutriments: Record<string, unknown>, serving: number | null = null): number | null {
+  const kcal = per100(nutriments, 'energy-kcal', 900, serving)
   if (kcal != null) return kcal
-  const kj = num(nutriments['energy-kj_100g'], 3800) ?? num(nutriments['energy_100g'], 3800)
+  const kj = per100(nutriments, 'energy-kj', 3800, serving) ?? per100(nutriments, 'energy', 3800, serving)
   return kj != null ? round1(kj / 4.184) : null
 }
 
@@ -79,24 +96,37 @@ export function productName(product: OffProduct, fallback: string): string {
   return clip([name, brand].filter(Boolean).join(' — '), 120) || fallback
 }
 
+function servingGrams(product: OffProduct): number | null {
+  return num(product.serving_quantity, 2000) || null
+}
+
+// Energia sem nenhum macro (M15): entra com proteína, hidratos e gordura a 0,
+// e o servidor avisa para confirmar no rótulo.
+export function offMacrosMissing(product: OffProduct): boolean {
+  const nutriments = product.nutriments ?? {}
+  const serving = servingGrams(product)
+  return ['proteins', 'carbohydrates', 'fat'].every((key) => per100(nutriments, key, 100, serving) == null)
+}
+
 // Um produto do Open Food Facts como alimento; null sem informação nutricional.
 export function offFood(product: OffProduct, ean: string): FoodValues | null {
   const nutriments = product.nutriments ?? {}
-  const kcal = kcalOf(nutriments)
+  const serving = servingGrams(product)
+  const kcal = kcalOf(nutriments, serving)
   if (kcal == null) return null
-  const salt = num(nutriments.salt_100g, 100, 2)
-  const sodium = num(nutriments.sodium_100g, 40, 3)
+  const salt = per100(nutriments, 'salt', 100, serving, 2)
+  const sodium = per100(nutriments, 'sodium', 40, serving, 3)
   const grade = clip(product.nutriscore_grade, 1).toLowerCase()
   return {
     name: productName(product, `EAN ${ean}`),
-    default_portion_g: num(product.serving_quantity, 2000) || null,
+    default_portion_g: serving,
     kcal_100g: kcal,
-    protein_100g: num(nutriments.proteins_100g, 100) ?? 0,
-    carbs_100g: num(nutriments.carbohydrates_100g, 100) ?? 0,
-    fat_100g: num(nutriments.fat_100g, 100) ?? 0,
-    fiber_100g: num(nutriments.fiber_100g, 100),
-    sugars_100g: num(nutriments.sugars_100g, 100),
-    sat_fat_100g: num(nutriments['saturated-fat_100g'], 100),
+    protein_100g: per100(nutriments, 'proteins', 100, serving) ?? 0,
+    carbs_100g: per100(nutriments, 'carbohydrates', 100, serving) ?? 0,
+    fat_100g: per100(nutriments, 'fat', 100, serving) ?? 0,
+    fiber_100g: per100(nutriments, 'fiber', 100, serving),
+    sugars_100g: per100(nutriments, 'sugars', 100, serving),
+    sat_fat_100g: per100(nutriments, 'saturated-fat', 100, serving),
     // Sem sal, o sódio × 2,5.
     salt_100g: salt ?? (sodium != null ? Math.round(sodium * 250) / 100 : null),
     nutriscore: (NUTRISCORES as readonly string[]).includes(grade) ? (grade as NutriScore) : null,

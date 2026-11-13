@@ -67,6 +67,12 @@ describe('a semana até agora (Hoje)', () => {
     expect(weekSoFar(days, '2026-10-16', 1800, 2300)).toEqual({ days: 3, diff: -300 })
   })
 
+  it('K12: às 9h, com nada comido, o plano de hoje não conta como «abaixo»', () => {
+    const days = [row('2026-10-12', 1400, 1900)]
+    expect(weekSoFar(days, '2026-10-13', 1900, 0)).toEqual({ days: 1, diff: 500 })
+    expect(weekSoFar(days, '2026-10-13', 1900, 2100)).toEqual({ days: 1, diff: 300 })
+  })
+
   it('à segunda-feira (sem dias completos antes) não há', () => {
     expect(weekSoFar([], '2026-10-12', 1800, 2300)).toBeNull()
     expect(weekSoFar([row('2026-10-12', 0, 0)], '2026-10-13', 1800, 1000)).toBeNull()

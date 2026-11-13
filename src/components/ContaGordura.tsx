@@ -62,16 +62,22 @@ export default function ContaGordura({ today }: { today: string }) {
       : Math.abs(kg) < 0.1
         ? 'Pelas contas, estás ela por ela.'
         : `Pelas contas, devias ter ${kg > 0 ? 'perdido' : 'ganho'} cerca de ${fmt1(Math.abs(kg))} kg de gordura.`
-  const gap = realKg != null && tally.diasContados > 0 ? realKg - kg : null
+  // K2: a balança desce em todos os dias de calendário; compara-se com o
+  // previsto se os dias de fora fossem iguais aos contados.
+  const gap = realKg != null && tally.diasContados > 0 ? realKg - tally.previstoTodosKg : null
   // O peso médio é de 7 dias: uma semana de água do ciclo nesses dias mexe nele.
   const waterWeek = waterWeekDuring(profile, shiftDate(today, -6), today)
+  // A água do início só explica nas primeiras semanas da contagem.
+  const early = tally.diasCalendario <= 21
   const note =
     gap == null
       ? null
       : Math.abs(gap) <= 0.5
         ? 'Bate certo.'
         : gap > 0
-          ? 'A balança desceu mais do que as contas: no início sai água, ou o gasto real é maior do que o estimado.'
+          ? early
+            ? 'A balança desceu mais do que as contas: no início sai água, ou o gasto real é maior do que o estimado.'
+            : 'A balança desceu mais do que as contas: o gasto real deve ser maior do que o estimado.'
           : waterWeek
             ? 'As contas dizem mais do que a balança: é a semana de água do ciclo, que esconde gordura perdida.'
             : 'As contas dizem mais do que a balança: água e sal escondem gordura perdida, ou ficou comida por registar.'
@@ -95,6 +101,8 @@ export default function ContaGordura({ today }: { today: string }) {
       {tally.diasFora > 0 && (
         <p className="text-[13px] text-dim">
           {tally.diasFora} {tally.diasFora === 1 ? 'dia ficou' : 'dias ficaram'} de fora (incompletos ou com «faltou algo»).
+          {tally.diasContados > 0 &&
+            ` Se ${tally.diasFora === 1 ? 'fosse igual' : 'fossem iguais'} aos contados: cerca de ${fmt1(Math.abs(tally.previstoTodosKg))} kg ${tally.previstoTodosKg >= 0 ? 'perdidos' : 'ganhos'}.`}
         </p>
       )}
       {confirm ? (

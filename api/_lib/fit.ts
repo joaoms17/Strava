@@ -35,6 +35,26 @@ export function fitDeveloperFields(bytes: Uint8Array): DevField[] | null {
   if (data.length < 12 || !Decoder.isFIT(stream)) return null
   const decoder = new Decoder(stream)
   const { messages } = decoder.read({ convertDateTimesToDates: false, includeUnknownData: false })
+  return summaryDevFields(messages as FitMessages)
+}
+
+export interface FitMessages {
+  fieldDescriptionMesgs?: unknown[]
+  sessionMesgs?: unknown[]
+  lapMesgs?: unknown[]
+  recordMesgs?: unknown[]
+}
+
+type DevMesg = { developerFields?: Record<string, unknown>; totalTimerTime?: unknown; totalElapsedTime?: unknown }
+
+const POWER_UNITS = ['w', 'watt', 'watts']
+const PEAK = /max|peak|pico|m[aá]x/i
+
+// O resumo das apps: a sessão manda. Sem ela, os valores acumulados
+// (distância, calorias) são os da última volta ou do último registo, mas a
+// potência média é a média dos registos (ou das voltas, pesadas pelo tempo),
+// não a do fim do treino (T19).
+export function summaryDevFields(messages: FitMessages): DevField[] {
   const descriptions = new Map<number, { name: string; units: string | null }>()
   for (const d of (messages.fieldDescriptionMesgs ?? []) as Record<string, unknown>[]) {
     if (typeof d.key !== 'number') continue
@@ -45,17 +65,40 @@ export function fitDeveloperFields(bytes: Uint8Array): DevField[] | null {
   }
   if (descriptions.size === 0) return []
   const withDev = (list: unknown) =>
-    ((list ?? []) as { developerFields?: Record<string, unknown> }[]).filter(
-      (m) => m.developerFields && Object.keys(m.developerFields).length > 0,
-    )
-  const source =
-    withDev(messages.sessionMesgs).at(-1) ?? withDev(messages.lapMesgs).at(-1) ?? withDev(messages.recordMesgs).at(-1)
+    ((list ?? []) as DevMesg[]).filter((m) => m.developerFields && Object.keys(m.developerFields).length > 0)
+  const sessions = withDev(messages.sessionMesgs)
+  const laps = withDev(messages.lapMesgs)
+  const records = withDev(messages.recordMesgs)
+  const source = sessions.at(-1) ?? laps.at(-1) ?? records.at(-1)
   if (!source?.developerFields) return []
-  const out: DevField[] = []
-  for (const [key, raw] of Object.entries(source.developerFields)) {
-    const desc = descriptions.get(Number(key))
+  const valueOf = (m: DevMesg, key: string): number | null => {
+    const raw = m.developerFields?.[key]
     const value = Array.isArray(raw) ? raw[0] : raw
-    if (!desc || typeof value !== 'number') continue
+    return typeof value === 'number' && Number.isFinite(value) ? value : null
+  }
+  const averagePower = (key: string): number | null => {
+    const fromRecords = records.map((r) => valueOf(r, key)).filter((v): v is number => v != null)
+    if (fromRecords.length) return fromRecords.reduce((a, b) => a + b, 0) / fromRecords.length
+    let total = 0
+    let weight = 0
+    for (const lap of laps) {
+      const v = valueOf(lap, key)
+      if (v == null) continue
+      const t = Number(lap.totalTimerTime ?? lap.totalElapsedTime)
+      const w = Number.isFinite(t) && t > 0 ? t : 1
+      total += v * w
+      weight += w
+    }
+    return weight > 0 ? total / weight : null
+  }
+  const fromSession = sessions.length > 0
+  const out: DevField[] = []
+  for (const key of Object.keys(source.developerFields)) {
+    const desc = descriptions.get(Number(key))
+    let value = valueOf(source, key)
+    if (!desc || value == null) continue
+    const unit = (desc.units ?? '').trim().toLowerCase()
+    if (!fromSession && POWER_UNITS.includes(unit) && !PEAK.test(desc.name)) value = averagePower(key) ?? value
     out.push({ name: desc.name, units: desc.units, value })
   }
   return out

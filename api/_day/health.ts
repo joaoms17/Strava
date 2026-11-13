@@ -4,7 +4,6 @@ import { sameSecret } from '../_lib/secret.js'
 import { aiProvider, anthropic, MODELS } from '../_lib/anthropic.js'
 import { geminiModels } from '../_lib/rules/gemini.js'
 import {
-  PROMPT_REVIEW,
   PROMPT_REVIEW_NEUTRAL,
   PROMPT_MEAL_PHOTO_V3,
   PROMPT_MEAL_TEXT_V2,
@@ -15,10 +14,15 @@ import {
   PROMPT_RECIPE,
   PROMPT_WORKOUT_SHOT,
   PROMPT_ASK,
+  PROMPT_EVOLUTION,
+  PROMPT_WORKOUT_SAID,
+  PROMPT_MENU_PICK,
   readPrompt,
 } from '../_lib/prompts.js'
 
-// Estado do deploy, para abrir no browser: /api/day/health?token=<CRON_SECRET>.
+// Estado do deploy: de preferência com o cabeçalho «Authorization: Bearer
+// <CRON_SECRET>» (scripts/smoke.mjs); para abrir no browser,
+// /api/day/health?token=<CRON_SECRET> (fica no histórico e nos registos).
 // Diz que variáveis existem (nunca os valores), se os prompts foram incluídos,
 // se o Supabase responde e se a chave da Anthropic dá acesso aos dois modelos.
 
@@ -31,6 +35,7 @@ const ENV_VARS = [
   'CRON_SECRET',
   'ICS_TOKEN',
   'HEALTH_INGEST_TOKEN',
+  'HOUSE_EMAILS',
 ] as const
 
 const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']
@@ -76,8 +81,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const env = Object.fromEntries(ENV_VARS.map((name) => [name, Boolean(process.env[name])]))
 
   const prompts = Object.fromEntries(
+    // Os prompts que a app usa hoje (o do narrador antigo já não é chamado).
     [
-      PROMPT_REVIEW,
       PROMPT_REVIEW_NEUTRAL,
       PROMPT_MEAL_PHOTO_V3,
       PROMPT_MEAL_TEXT_V2,
@@ -88,6 +93,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       PROMPT_RECIPE,
       PROMPT_WORKOUT_SHOT,
       PROMPT_ASK,
+      PROMPT_EVOLUTION,
+      PROMPT_WORKOUT_SAID,
+      PROMPT_MENU_PICK,
     ].map((file) => {
       try {
         return [file, readPrompt(file).length > 0]
@@ -105,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const visionModel = provider === 'gemini' ? geminiModels('vision', process.env)[0]! : MODELS.vision
   async function modelExists(model: string): Promise<undefined> {
     if (provider === 'anthropic') {
-      await anthropic().models.retrieve(model, {}, aiOptions)
+      await (await anthropic()).models.retrieve(model, {}, aiOptions)
       return undefined
     }
     const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}`, {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { labelFood, offFood, offSearchResults, searchKey, withoutExtras, type LabelRead } from '../api/_lib/rules/off'
+import { labelFood, offFood, offMacrosMissing, offSearchResults, searchKey, withoutExtras, type LabelRead } from '../api/_lib/rules/off'
 
 // Produtos de marca: Open Food Facts (código de barras e pesquisa pelo nome)
 // e o rótulo lido pela IA quando o produto não está lá.
@@ -46,6 +46,19 @@ describe('offFood', () => {
     const food = offFood({ nutriments: { energy_100g: 418.4, sodium_100g: 0.4, proteins_100g: 'x' } }, '12345678')
     expect(food).toMatchObject({ name: 'EAN 12345678', kcal_100g: 100, salt_100g: 1, protein_100g: 0, nutriscore: null })
     expect(offFood({ product_name: 'Água', nutriments: {} }, '12345678')).toBeNull()
+  })
+
+  it('M15: só com valores por dose converte pelas gramas da dose', () => {
+    const food = offFood(
+      { serving_quantity: 30, nutriments: { 'energy-kcal_serving': 120, proteins_serving: 3, carbohydrates_serving: 18, fat_serving: 4.5 } },
+      '12345678',
+    )
+    expect(food).toMatchObject({ kcal_100g: 400, protein_100g: 10, carbs_100g: 60, fat_100g: 15 })
+  })
+
+  it('M15: energia sem macros fica marcada para avisar', () => {
+    expect(offMacrosMissing({ nutriments: { 'energy-kcal_100g': 300 } })).toBe(true)
+    expect(offMacrosMissing({ nutriments: { 'energy-kcal_100g': 300, proteins_100g: 5 } })).toBe(false)
   })
 })
 

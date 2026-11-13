@@ -1,24 +1,20 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { shiftDate } from './rules/nutritional-day.js'
-import { round1 } from './rules/meal-totals.js'
-import { kcalTarget, storedExerciseKcal, type WorkoutType } from './rules/targets.js'
-import { floorWarning, isDayComplete } from './rules/day-close.js'
-import { adaptiveDay, TDEE_LOOKBACK_DAYS } from './rules/adaptativo.js'
-import { isMaintenanceWeek, maintenanceTarget, mondayOf } from './rules/manutencao.js'
 import {
-  dailyBase,
-  formulaBase,
-  kcalOut,
-  limitWeeklyBase,
-  measuredFlags,
-  trustedTdee,
-  withMeasuredFlags,
-} from './rules/gasto.js'
+  CLOSE_HISTORY_DAYS,
+  CLOSE_WEIGHTS_DAYS,
+  computeCloseDay,
+  sameUserFlags,
+  withUserFlags,
+  type ClosedDayRow,
+  type HistoryDay,
+} from './rules/fecho.js'
 
 // Fecho de um dia nutricional: kcal e macros das refeições contadas, kcal
 // guardadas dos treinos, meta (plano ou semana de pausa), dia completo,
-// peso médio, aviso do mínimo e gasto medido. Usado pela cron e pelo
-// recálculo (/api/day/recompute).
+// peso médio e gasto medido. Usado pela cron e pelo recálculo
+// (/api/day/recompute). As contas estão em rules/fecho.ts; aqui só se lê e
+// grava.
 
 // Colunas do perfil de que o fecho do dia precisa (cron e recálculo).
 export const CLOSE_DAY_PROFILE_COLUMNS =
@@ -36,91 +32,6 @@ export interface CloseDayProfile {
   birth_year?: number | null
   sex?: string | null
   expected_tdee?: number | null
-}
-
-// Gasto de um dia (Fase 6, só para mostrar): base sem treino + treino. A
-// base usa o gasto medido congelado antes da segunda-feira da semana e a
-// média das kcal de treino dos dias completos dessa janela; com menos de 10
-// dias completos, a fórmula. A base medida muda no máximo 100 kcal por
-// semana em relação à da semana anterior (decisão 304).
-async function dayExpenditure(
-  admin: SupabaseClient,
-  profile: CloseDayProfile,
-  date: string,
-  weightTrend: number | null,
-  kcalExercise: number,
-) {
-  const userId = profile.user_id
-  const monday = mondayOf(date)
-  const [{ data: frozen }, { data: window }, { count }, { data: lastTrend }, { data: lastBase }] = await Promise.all([
-    admin
-      .from('days')
-      .select('tdee_est')
-      .eq('user_id', userId)
-      .lt('date', monday)
-      .not('tdee_est', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1),
-    admin
-      .from('days')
-      .select('kcal_exercise')
-      .eq('user_id', userId)
-      .eq('is_complete', true)
-      .lt('date', monday)
-      .order('date', { ascending: false })
-      .limit(14),
-    admin
-      .from('days')
-      .select('date', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('is_complete', true)
-      .lt('date', monday),
-    weightTrend == null
-      ? admin
-          .from('days')
-          .select('weight_trend')
-          .eq('user_id', userId)
-          .lte('date', date)
-          .not('weight_trend', 'is', null)
-          .order('date', { ascending: false })
-          .limit(1)
-      : Promise.resolve({ data: [{ weight_trend: weightTrend }] }),
-    admin
-      .from('days')
-      .select('daily_base_est')
-      .eq('user_id', userId)
-      .lt('date', monday)
-      .not('daily_base_est', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1),
-  ])
-  const trainings = (window ?? []).map((d) => Number(d.kcal_exercise ?? 0))
-  const avgTraining = trainings.length ? trainings.reduce((a, b) => a + b, 0) / trainings.length : 0
-  const formula = formulaBase({
-    weightKg: lastTrend?.[0]?.weight_trend != null ? Number(lastTrend[0].weight_trend) : null,
-    heightCm: profile.height_cm ?? null,
-    birthYear: profile.birth_year ?? null,
-    sex: profile.sex ?? 'm',
-    date,
-    fallback: Number(profile.expected_tdee ?? 2200),
-  })
-  const base = limitWeeklyBase(
-    dailyBase({
-      completeDays: count ?? 0,
-      tdeeFrozen: trustedTdee(frozen?.[0]?.tdee_est != null ? Number(frozen[0].tdee_est) : null, formula + avgTraining),
-      avgTrainingKcal: avgTraining,
-      formula,
-    }),
-    lastBase?.[0]?.daily_base_est != null ? Number(lastBase[0].daily_base_est) : null,
-  )
-  return {
-    values: { formula_base: formula, daily_base_est: base.base, kcal_out_est: kcalOut(base.base, kcalExercise) },
-    baseLimited: base.limited,
-  }
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100
 }
 
 // Âncora da regra 7 (semana de pausa da dieta): fixa no perfil. Um perfil
@@ -149,224 +60,136 @@ export async function maintenanceAnchor(admin: SupabaseClient, profile: CloseDay
   return first
 }
 
-// Regra 4 (decisão 304): sobre os últimos 28 dias completos fora da fase de
-// água; EMA sobre a estimativa anterior, um passo por dia completo, no
-// máximo 100 kcal por semana e, até 6 semanas de dados, a ±15 % da fórmula
-// (`adaptiveDay`). Guarda também o valor só pelo peso (`tdee_raw`), para o
-// Balanço o mostrar, e as marcas do gasto (`gasto_teto`, `gasto_ritmo`…)
-// para as notas. Corre depois do upsert do dia.
-async function computeAdaptive(
-  admin: SupabaseClient,
-  profile: CloseDayProfile,
-  date: string,
-  complete: boolean,
-  anchor: string | null,
-  flags: string[],
-  baseLimited: boolean,
-) {
-  const userId = profile.user_id
-  const lastBefore = (cut: string) =>
-    admin
-      .from('days')
-      .select('tdee_est')
-      .eq('user_id', userId)
-      .lt('date', cut)
-      .not('tdee_est', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1)
-  const [{ data: completeDays }, { data: prevRows }, { data: weekRows }] = await Promise.all([
-    admin
-      .from('days')
-      .select('date,kcal_in,weight_trend,kcal_exercise,formula_base')
-      .eq('user_id', userId)
-      .eq('is_complete', true)
-      .gte('date', shiftDate(date, -TDEE_LOOKBACK_DAYS))
-      .lte('date', date)
-      .order('date'),
-    lastBefore(date),
-    lastBefore(mondayOf(date)),
-  ])
-  const rows = (completeDays ?? []).map((d) => ({
-    date: d.date as string,
-    kcal_in: Number(d.kcal_in),
-    weight_trend: d.weight_trend != null ? Number(d.weight_trend) : null,
-    kcal_exercise: d.kcal_exercise != null ? Number(d.kcal_exercise) : null,
-    formula_base: d.formula_base != null ? Number(d.formula_base) : null,
-  }))
-  const result = adaptiveDay({
-    date,
-    complete,
-    rows,
-    anchor,
-    maintenanceEnabled: profile.maintenance_enabled !== false,
-    previous: prevRows?.[0]?.tdee_est != null ? Number(prevRows[0].tdee_est) : null,
-    weekStart: weekRows?.[0]?.tdee_est != null ? Number(weekRows[0].tdee_est) : null,
-  })
-  const raw = result.raw
-  // Uma pesagem mal escrita pode dar um valor só pelo peso absurdo (fora de
-  // numeric(6,1)): fica sem ele.
-  const rawStored = raw != null && Math.abs(raw) < 100_000 ? raw : null
-  const nextFlags = withMeasuredFlags(flags, measuredFlags({ limit: result.limit, excluded: result.excluded, baseLimited }))
-  const { error } = await admin
-    .from('days')
-    .update({ tdee_est: result.tdee, tdee_raw: rawStored, flags: nextFlags })
-    .eq('user_id', userId)
-    .eq('date', date)
-  // Antes da migração 20261018140000 não há tdee_raw: a estimativa guarda-se na mesma.
-  if (error) {
-    await admin.from('days').update({ tdee_est: result.tdee, flags: nextFlags }).eq('user_id', userId).eq('date', date)
-  }
+// Colunas que podem faltar numa base sem as migrações: base_kcal e tdee_raw
+// (20261018140000) e as do gasto (fase 6). O dia fecha sem elas.
+const OPTIONAL_COLUMNS: { test: RegExp; keys: (keyof ClosedDayRow)[] }[] = [
+  { test: /base_kcal|tdee_raw/, keys: ['base_kcal', 'tdee_raw'] },
+  { test: /kcal_out_est|daily_base_est|formula_base/, keys: ['kcal_out_est', 'daily_base_est', 'formula_base'] },
+]
+
+const MAX_ATTEMPTS = 3
+
+type Read<T> = { data: T | null; error: { message: string } | null; count?: number | null }
+
+function must<T>(res: Read<T>, what: string, date: string): T | null {
+  if (res.error) throw new Error(`leitura de ${what} (${date}): ${res.error.message}`)
+  return res.data
 }
 
-export async function closeDay(
+// Uma passagem: lê tudo de uma vez (P3: uma ida, 6 consultas), faz as contas,
+// volta a ler as marcas do dia e grava. Devolve null quando a pessoa
+// respondeu «Foi tudo?» entretanto (as contas usaram as marcas velhas).
+async function closeOnce(
   admin: SupabaseClient,
   profile: CloseDayProfile,
   date: string,
   anchor: string | null,
+  lastAttempt: boolean,
 ) {
   const userId = profile.user_id
-
-  const [mealsRes, workoutsRes, weightRes, existingRes, weightsRes, recentDaysRes, pendingRes] =
-    await Promise.all([
-      admin.from('meals_counted').select('kcal,protein,carbs,fat').eq('user_id', userId).eq('date', date),
-      admin
-        .from('workouts_active')
-        .select('type,minutes,watts,raw,kcal_est')
-        .eq('user_id', userId)
-        .eq('date', date),
-      admin.from('weights').select('kg').eq('user_id', userId).eq('date', date).maybeSingle(),
-      // Tudo (`*`): sem a migração 20261018140000 não há base_kcal e a leitura não falha.
-      admin.from('days').select('*').eq('user_id', userId).eq('date', date).maybeSingle(),
-      admin
-        .from('weights')
-        .select('date,kg')
-        .eq('user_id', userId)
-        .gte('date', shiftDate(date, -6))
-        .lte('date', date),
-      admin
-        .from('days')
-        .select('kcal_in,is_complete')
-        .eq('user_id', userId)
-        .lt('date', date)
-        .order('date', { ascending: false })
-        .limit(21),
-      // Fotos ainda sem números (a analisar, com erro ou acima do limite da IA).
-      admin
-        .from('meals')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('date', date)
-        .is('deleted_at', null)
-        .in('status', ['a_analisar', 'sem_analise', 'erro']),
-    ])
-  for (const res of [mealsRes, workoutsRes]) {
-    if (res.error) throw new Error(`leitura (${date}): ${res.error.message}`)
-  }
-
-  const meals = mealsRes.data ?? []
-  const sum = (pick: (m: Record<string, unknown>) => unknown) =>
-    meals.reduce((acc, m) => acc + Number(pick(m)), 0)
-  const kcalIn = Math.round(sum((m) => m.kcal))
-  const protein = round1(sum((m) => m.protein))
-  const carbs = round1(sum((m) => m.carbs))
-  const fat = round1(sum((m) => m.fat))
-
-  // Soma as kcal guardadas em cada treino (a regra 2 corre ao gravar).
-  const kcalExercise = storedExerciseKcal(
-    (workoutsRes.data ?? []).map((w) => ({
-      type: w.type as WorkoutType,
-      minutes: w.minutes as number | null,
-      watts: w.watts as number | null,
-      deviceCalories:
-        typeof (w.raw as { calories?: unknown } | null)?.calories === 'number'
-          ? (w.raw as { calories: number }).calories
-          : null,
-      kcal_est: w.kcal_est as number | null,
-    })),
-  )
-
-  // O plano base em vigor nesse dia: o guardado no primeiro fecho fica, para
-  // mudar o plano não reescrever os dias antigos (no ecrã e no recálculo).
-  const existingBase = (existingRes.data as { base_kcal?: number | null } | null)?.base_kcal
-  const base = existingBase != null ? Number(existingBase) : profile.base_kcal
-
-  // Regra 7: na semana de pausa da dieta, a meta é o gasto estimado (ou 2000).
-  const maintenance =
-    profile.maintenance_enabled !== false && anchor != null && isMaintenanceWeek(anchor, date)
-  let target: number
-  if (maintenance) {
-    const { data: tdeeRows } = await admin
-      .from('days')
-      .select('tdee_est')
+  const [mealsRes, workoutsRes, weightsRes, existingRes, historyRes, pendingRes] = await Promise.all([
+    admin.from('meals_counted').select('kcal,protein,carbs,fat').eq('user_id', userId).eq('date', date),
+    admin.from('workouts_active').select('type,minutes,watts,raw,kcal_est').eq('user_id', userId).eq('date', date),
+    // As pesagens da janela do gasto medido (o peso do dia e o peso médio saem daqui).
+    admin
+      .from('weights')
+      .select('date,kg')
       .eq('user_id', userId)
+      .gte('date', shiftDate(date, -CLOSE_WEIGHTS_DAYS))
+      .lte('date', date)
+      .order('date'),
+    // Tudo (`*`): sem a migração 20261018140000 não há base_kcal e a leitura não falha.
+    admin.from('days').select('*').eq('user_id', userId).eq('date', date).maybeSingle(),
+    // Os dias antes deste (120): gasto congelado, base da semana anterior,
+    // treino médio, gasto medido anterior e a janela do gasto medido.
+    admin
+      .from('days')
+      .select('date,kcal_in,is_complete,weight_trend,kcal_exercise,formula_base,tdee_est,daily_base_est')
+      .eq('user_id', userId)
+      .gte('date', shiftDate(date, -CLOSE_HISTORY_DAYS))
       .lt('date', date)
-      .not('tdee_est', 'is', null)
-      .order('date', { ascending: false })
-      .limit(1)
-    target = maintenanceTarget(tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null)
-  } else {
-    target = kcalTarget(base, kcalExercise)
-  }
+      .order('date'),
+    // Fotos ainda sem números (a analisar, com erro ou acima do limite da IA).
+    admin
+      .from('meals')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('date', date)
+      .is('deleted_at', null)
+      .in('status', ['a_analisar', 'sem_analise', 'erro']),
+  ])
+  // S2: qualquer leitura que falhe pára o fecho (antes, sem a linha do dia,
+  // regravava-se o dia sem as respostas «Foi tudo?» e com o plano de hoje).
+  const meals = must(mealsRes, 'refeições', date) ?? []
+  const workouts = must(workoutsRes, 'treinos', date) ?? []
+  const weights = must(weightsRes, 'pesagens', date) ?? []
+  const existing = must(existingRes, 'dia', date) as { flags?: unknown; base_kcal?: number | null } | null
+  const history = (must(historyRes, 'dias anteriores', date) ?? []) as HistoryDay[]
+  must(pendingRes, 'fotos por analisar', date)
 
-  const prevFlags: string[] = Array.isArray(existingRes.data?.flags) ? existingRes.data.flags : []
-  const complete = isDayComplete({
-    mealCount: meals.length,
-    kcalIn,
-    manuallyClosed: prevFlags.includes('dia_fechado'),
-    missingSomething: prevFlags.includes('faltou_algo'),
-    uncountedMeals: pendingRes.count ?? 0,
+  const result = computeCloseDay({
+    profile,
+    date,
+    anchor,
+    meals,
+    workouts: workouts as { type: string; minutes: number | null; watts: number | null; raw: unknown; kcal_est: number | null }[],
+    weights: weights.map((w) => ({ date: w.date as string, kg: Number(w.kg) })),
+    existing,
+    history,
+    pendingMeals: pendingRes.count ?? 0,
   })
 
-  // Peso médio (regra 3): média das pesagens na janela [date-6, date].
-  const windowWeights = (weightsRes.data ?? []).map((w) => Number(w.kg))
-  const weightTrend = windowWeights.length
-    ? round2(windowWeights.reduce((a, b) => a + b, 0) / windowWeights.length)
-    : null
+  // S5: a pessoa pode ter respondido «Foi tudo?» enquanto se faziam as
+  // contas. Volta a ler as marcas mesmo antes de gravar; se mudaram, as
+  // contas repetem-se com as novas.
+  const fresh = await admin.from('days').select('flags').eq('user_id', userId).eq('date', date).maybeSingle()
+  if (fresh.error) throw new Error(`leitura do dia (${date}): ${fresh.error.message}`)
+  if (!lastAttempt && !sameUserFlags(existing?.flags, fresh.data?.flags)) return null
 
-  // Mínimo (regra 6): média dos últimos 7 dias completos, este incluído se completo.
-  const completeKcals = (recentDaysRes.data ?? [])
-    .filter((d) => d.is_complete)
-    .map((d) => Number(d.kcal_in))
-    .reverse()
-  if (complete) completeKcals.push(kcalIn)
-  const chao = floorWarning(completeKcals, profile.kcal_floor_week)
-
-  const flags = new Set(prevFlags)
-  if (chao) flags.add('chao')
-  else flags.delete('chao')
-  if (complete) flags.delete('dia_incompleto')
-  else flags.add('dia_incompleto')
-  if (maintenance) flags.add('manutencao')
-  else flags.delete('manutencao')
-
-  const expenditure = await dayExpenditure(admin, profile, date, weightTrend, kcalExercise)
-  const row = {
+  // Sem `dirty`: o dia foi posto como limpo antes das leituras (closeDay); se
+  // uma refeição, um treino ou uma pesagem mudou entretanto, o gatilho voltou
+  // a marcá-lo e a próxima cron (ou o recálculo) fecha-o outra vez.
+  // Na última tentativa, as respostas mais recentes ficam na mesma (o dia
+  // continua marcado para recalcular, por isso as contas acertam depois).
+  const values: Record<string, unknown> = {
     user_id: userId,
-    date,
-    kcal_in: kcalIn,
-    protein,
-    carbs,
-    fat,
-    kcal_exercise: kcalExercise,
-    kcal_target: target,
-    is_complete: complete,
-    weight_kg: weightRes.data ? Number(weightRes.data.kg) : null,
-    weight_trend: weightTrend,
-    flags: [...flags],
-    meals_pending: pendingRes.count ?? 0,
-    dirty: false,
+    ...result.row,
+    flags: withUserFlags(result.row.flags, fresh.data?.flags ?? existing?.flags),
   }
-  const upsert = (values: Record<string, unknown>) => admin.from('days').upsert(values, { onConflict: 'user_id,date' })
-  let { error } = await upsert({ ...row, ...expenditure.values, base_kcal: base })
-  // Antes da migração 20261018140000 não há base_kcal, e antes da 7 as
-  // colunas do gasto: fecha o dia sem elas.
-  if (error && /base_kcal/.test(error.message)) ({ error } = await upsert({ ...row, ...expenditure.values }))
-  if (error && /kcal_out_est|daily_base_est|formula_base/.test(error.message)) ({ error } = await upsert(row))
+  const upsert = () => admin.from('days').upsert(values, { onConflict: 'user_id,date' })
+  let { error } = await upsert()
+  const dropped = new Set<number>()
+  for (;;) {
+    const i = error ? OPTIONAL_COLUMNS.findIndex((o, k) => !dropped.has(k) && o.test.test(error!.message)) : -1
+    if (i < 0) break
+    dropped.add(i)
+    for (const key of OPTIONAL_COLUMNS[i]!.keys) delete values[key]
+    ;({ error } = await upsert())
+  }
   if (error) throw new Error(`days upsert (${date}): ${error.message}`)
 
-  await computeAdaptive(admin, profile, date, complete, anchor, row.flags, expenditure.baseLimited)
+  return { date, kcal_in: result.row.kcal_in, is_complete: result.complete, maintenance: result.maintenance }
+}
 
-  return { date, kcal_in: kcalIn, is_complete: complete, chao, maintenance }
+export async function closeDay(admin: SupabaseClient, profile: CloseDayProfile, date: string, anchor: string | null) {
+  const userId = profile.user_id
+  // S5: o dia fica limpo ANTES de se ler; uma escrita do telemóvel durante o
+  // fecho volta a marcá-lo (gatilho ou `dirty: true` do «Foi tudo?») e essa
+  // marca já não se apaga no fim.
+  const claim = await admin.from('days').update({ dirty: false }).eq('user_id', userId).eq('date', date)
+  if (claim.error) throw new Error(`days dirty (${date}): ${claim.error.message}`)
+  try {
+    for (let attempt = 1; ; attempt++) {
+      const closed = await closeOnce(admin, profile, date, anchor, attempt >= MAX_ATTEMPTS)
+      if (closed) return closed
+    }
+  } catch (e) {
+    // Não fechou: o dia volta a ficar por recalcular (a próxima noite tenta outra vez).
+    await Promise.resolve(
+      admin.from('days').upsert({ user_id: userId, date, dirty: true }, { onConflict: 'user_id,date' }),
+    ).catch(() => undefined)
+    throw e
+  }
 }
 
 // A ordem das pessoas na cron: fixa (por user_id) e a começar noutra pessoa

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapActivityToWorkout, mapStravaType } from '../api/_lib/strava'
+import { mapActivityToWorkout, mapStravaType } from '../strava-mapping'
 
 describe('mapStravaType', () => {
   it('Ride e VirtualRide são bike', () => {

@@ -2,7 +2,7 @@
 // de bem-estar para as linhas da app. Defensivo: os campos em falta ficam a
 // null e uma atividade vinda do Strava (vazia por causa dos termos do
 // Strava) não entra.
-import { countedMinutes, durationsMatch, type WattsSource } from './treino.js'
+import { countedMinutes, durationsMatch, sportOf, type WattsSource } from './treino.js'
 import type { OtherSport, WorkoutType } from './targets.js'
 
 export interface IcuActivity {
@@ -166,14 +166,28 @@ export function mapActivity(a: IcuActivity): MappedActivity {
 // consola, «Já fiz»): mesmo tipo e dia, início a ±15 min quando os dois têm
 // hora e duração a ±5 % (no mínimo ±2 min). Quando a hora da sessão foi
 // suposta (registada sem hora, horas depois ou num dia passado), a hora não
-// conta e a duração vai a ±10 % (no mínimo ±3 min), como nos prints.
+// conta e a duração vai a ±10 % (no mínimo ±3 min), como nos prints. Nos
+// «outros» tem de ser o mesmo desporto (o pilates dito não se junta à
+// caminhada do relógio — T4).
 export const SYNC_START_WINDOW_MIN = 15
 
 export function syncMatch<
-  T extends { type: WorkoutType; date: string; minutes: number | null; started_at: string | null; start_guessed?: boolean },
->(activity: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null }, sessions: T[]): T | null {
+  T extends {
+    type: WorkoutType
+    date: string
+    minutes: number | null
+    started_at: string | null
+    start_guessed?: boolean
+    sport?: string | null
+    raw?: unknown
+  },
+>(
+  activity: { type: WorkoutType; date: string; minutes: number | null; started_at: string | null; sport?: string | null },
+  sessions: T[],
+): T | null {
   for (const s of sessions) {
     if (s.type !== activity.type || s.date !== activity.date) continue
+    if (activity.type === 'other' && activity.sport !== undefined && sportOf(s) !== sportOf(activity)) continue
     if (s.start_guessed) {
       if (durationsMatch(s.minutes, activity.minutes)) return s
       continue

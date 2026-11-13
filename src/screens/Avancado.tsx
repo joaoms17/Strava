@@ -8,6 +8,7 @@ import { fmtInt } from '../lib/format'
 import { USD_TO_EUR, kindLabel, nearMonthlyCap } from '../../api/_lib/rules/custos'
 import type { CatalogExercise } from '../lib/types'
 import AiCheck from '../components/AiCheck'
+import AvisoNoite from '../components/AvisoNoite'
 
 const KIND_LABEL: Record<string, string> = {
   meal_parse_text: 'refeições por texto',
@@ -101,6 +102,7 @@ export default function Avancado() {
 
   return (
     <div className="space-y-6 pt-1 pb-4">
+      <AvisoNoite />
       <section className="space-y-2 rounded-2xl bg-surface p-4">
         <h2 className="text-[15px] font-semibold">A IA está a funcionar?</h2>
         <p className="text-[14px] text-dim">

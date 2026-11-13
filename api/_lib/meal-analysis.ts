@@ -11,7 +11,9 @@ import {
   readPrompt,
 } from './prompts.js'
 import { mealTotals, type MealItem } from './rules/meal-totals.js'
-import { analysedStatus, foodRefs, guardedWrite, mergeAdded, toMealItems } from './rules/analise.js'
+import { analysedStatus, foodRefs, guardedWrite, mergeAdded, ownPhotoPath, sameInput, toMealItems, type AnalysisInput } from './rules/analise.js'
+import { factorOf } from './rules/porcoes.js'
+import { scaleItems } from './rules/favoritos.js'
 import { mealIsEstimate } from './rules/estimativas.js'
 import { clockTime, lisbonClock, lisbonInstant } from './rules/momentos.js'
 import { VISION_KINDS, aiLimitsFor, dailyVisionCapReached, monthlyCapReached } from './rules/custos.js'
@@ -41,6 +43,7 @@ export interface MealRow {
   analysis_attempts: number
   deleted_at: string | null
   model_reserve?: boolean // migração 20261018150002
+  analysis_tags?: string[] | null // migração 20261113000020 (as etiquetas que os números já leram)
   leftover_photo_path?: string | null // migração 20261018200000 («Sobrou comida?»)
   portion_factor?: number | null
   share_with?: string[] | null // migração 20261018160000
@@ -60,8 +63,12 @@ function mediaTypeFor(path: string): ImageMediaType {
 }
 
 // As fotos da refeição (Storage, com a service role) como blocos de imagem
-// para a IA, pela ordem dada.
-export async function photoContent(admin: SupabaseClient, paths: string[]) {
+// para a IA, pela ordem dada. `meals.photo_paths` é escrita pelo cliente
+// (RLS): só se leem fotos da pasta de quem é dono da refeição (G2).
+export async function photoContent(admin: SupabaseClient, paths: string[], userId: string) {
+  if (paths.some((p) => !ownPhotoPath(p, userId))) {
+    throw new AiError('Uma das fotos não é desta conta. Junta-a outra vez.', 'foto fora da pasta de quem pede')
+  }
   return Promise.all(
     paths.map(async (path) => {
       const { data, error } = await admin.storage.from('meal-photos').download(path)
@@ -99,8 +106,36 @@ export async function foodLibrary(admin: SupabaseClient, userId: string) {
   return { refs, forPrompt }
 }
 
+// O custo do mês em dólares, somado na base de dados (S3): a API devolve no
+// máximo 1 000 linhas por pedido, e a soma em JavaScript ficava cortada. Sem
+// a função (migração 20261113000022), soma por páginas. null quando não se
+// consegue ler: quem chama trata como «limite atingido».
+const COST_PAGE = 1000
+const COST_MAX_PAGES = 50
+
+export async function monthCostUsd(admin: SupabaseClient, userId: string, monthStart: string): Promise<number | null> {
+  const { data, error } = await admin.rpc('ai_cost_since', { p_user_id: userId, p_from: monthStart })
+  if (!error && data != null && Number.isFinite(Number(data))) return Number(data)
+  let total = 0
+  for (let page = 0; page < COST_MAX_PAGES; page++) {
+    const { data: rows, error: pageError } = await admin
+      .from('api_calls')
+      .select('cost_usd')
+      .eq('user_id', userId)
+      .gte('created_at', monthStart)
+      .order('created_at')
+      .order('id')
+      .range(page * COST_PAGE, page * COST_PAGE + COST_PAGE - 1)
+    if (pageError) return null
+    total += (rows ?? []).reduce((acc, c) => acc + Number(c.cost_usd), 0)
+    if ((rows ?? []).length < COST_PAGE) return total
+  }
+  return total
+}
+
 // Limites da IA: teto mensal em euros e limite diário de fotos (com o
-// Gemini, as fotos de toda a casa, que partilha a chave; sem euros).
+// Gemini, as fotos de toda a casa, que partilha a chave; sem euros). Uma
+// leitura que falhe conta como limite atingido (S3): sem ela não há teto.
 export async function aiLimitReached(
   admin: SupabaseClient,
   userId: string,
@@ -116,16 +151,18 @@ export async function aiLimitReached(
     .in('kind', VISION_KINDS)
     .gte('created_at', dayStart)
   if (!limits.sharedDaily) visionQuery = visionQuery.eq('user_id', userId)
-  const [{ data: profile }, { data: monthCalls }, { count: visionToday }] = await Promise.all([
+  const [{ data: profile }, monthUsd, vision] = await Promise.all([
     admin.from('profile').select('ai_monthly_cap_eur,ai_daily_vision_cap').eq('user_id', userId).maybeSingle(),
-    limits.monthlyEur
-      ? admin.from('api_calls').select('cost_usd').eq('user_id', userId).gte('created_at', monthStart)
-      : Promise.resolve({ data: [] as { cost_usd: number }[] }),
-    withPhotos ? visionQuery : Promise.resolve({ count: 0 }),
+    limits.monthlyEur ? monthCostUsd(admin, userId, monthStart) : Promise.resolve(0),
+    withPhotos ? visionQuery : Promise.resolve({ count: 0, error: null }),
   ])
-  const monthUsd = (monthCalls ?? []).reduce((acc, c) => acc + Number(c.cost_usd), 0)
-  if (limits.monthlyEur && monthlyCapReached(monthUsd, Number(profile?.ai_monthly_cap_eur ?? 10))) return true
-  return withPhotos && dailyVisionCapReached(visionToday ?? 0, Number(profile?.ai_daily_vision_cap ?? 40))
+  if (limits.monthlyEur) {
+    if (monthUsd == null) return true
+    if (monthlyCapReached(monthUsd, Number(profile?.ai_monthly_cap_eur ?? 10))) return true
+  }
+  if (!withPhotos) return false
+  if (vision.error) return true
+  return dailyVisionCapReached(vision.count ?? 0, Number(profile?.ai_daily_vision_cap ?? 40))
 }
 
 // Correção por texto (Haiku, sem imagem): «o arroz era metade», «comi metade».
@@ -135,6 +172,9 @@ export async function correctItems(
   items: MealItem[],
   correction: string,
   request: AiRequest = REQUEST_TEXT,
+  // O que já está aplicado nos itens (a nota e as etiquetas de antes): a
+  // correção aplica só a diferença (M4).
+  applied: string | null = null,
 ): Promise<{ items: MealItem[]; title: string; confidence: MealAnalysis['meal_confidence'] }> {
   const { refs, forPrompt } = await foodLibrary(admin, userId)
   const byFood = new Map(Object.entries(refs).map(([ref, id]) => [id, ref]))
@@ -150,6 +190,7 @@ export async function correctItems(
       food_ref: i.food_id ? (byFood.get(i.food_id) ?? null) : null,
     })),
     correcao: correction,
+    ja_aplicado: applied,
     alimentos: forPrompt,
   })
   const { output: parsed } = await structuredCall(
@@ -184,6 +225,13 @@ export function addingToItems(meal: Pick<MealRow, 'items' | 'photo_paths'>): boo
 type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot' | 'logged_at' | 'photo_paths' | 'items'> &
   Partial<Pick<MealRow, 'leftover_photo_path'>>
 
+// Como correr a análise: `reread` («Analisar outra vez» numa foto lida pelo
+// modelo de reserva, M2) lê as fotos de raiz, com o prompt da primeira
+// análise, mesmo com itens; os itens de antes só voltam se falhar.
+export interface AnalyseOptions {
+  reread?: boolean
+}
+
 // O teto da chamada dentro do que falta à função (`deadline`, em ms desde
 // 1970); sem deadline, o de sempre.
 function within(request: AiRequest, deadline: number | undefined): AiRequest {
@@ -197,6 +245,7 @@ async function runModel(
   admin: SupabaseClient,
   meal: ModelInput,
   deadline?: number,
+  reread = false,
 ): Promise<{
   analysis: MealAnalysis
   order: Order | null
@@ -208,7 +257,7 @@ async function runModel(
 }> {
   const { refs, forPrompt } = await foodLibrary(admin, meal.user_id)
   const photos = meal.photo_paths ?? []
-  const adding = addingToItems(meal)
+  const adding = !reread && addingToItems(meal)
   const byFood = new Map(Object.entries(refs).map(([ref, id]) => [id, ref]))
   const payload = JSON.stringify({
     ...(adding
@@ -236,7 +285,7 @@ async function runModel(
   const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V3
 
   if (photos.length > 0) {
-    const images = await photoContent(admin, photos.slice(0, 4))
+    const images = await photoContent(admin, photos.slice(0, 4), meal.user_id)
     // O tempo de descarregar as fotos já conta.
     const meta = { userId: meal.user_id, kind: 'meal_photo', request: within(REQUEST_VISION, deadline) }
     const params = {
@@ -258,7 +307,7 @@ async function runModel(
     const { order, ...output } = call.output
     // Taxas, gorjeta, saco, talheres ou totais nunca contam, mesmo que a IA os
     // deixe passar; e a mesma linha de duas capturas sobrepostas conta uma vez.
-    let items = dropNonFood(output.items)
+    let items = dropNonFood(output.items, order != null)
     if (order && images.length > 1) items = dedupeOrderLines(items)
     if (order) items = unlinkMultiples(items)
     const analysis: MealAnalysis = { ...output, items }
@@ -315,13 +364,23 @@ export async function analyseClaimed(
   admin: SupabaseClient,
   meal: MealRow,
   deadline = Date.now() + ANALYSIS_FUNCTION_BUDGET_MS,
+  options: AnalyseOptions = {},
 ): Promise<Record<string, unknown> | null> {
   const claimedAt = meal.analysis_started_at
   if (!claimedAt) return null
+  const reread = options.reread === true
+  // A juntar fotos ou a reler, a refeição tem itens que contavam: uma falha
+  // volta logo a «por rever» com eles (M3).
+  const keepsItems = reread || addingToItems(meal)
   try {
-    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline)
-    const analysed = toMealItems(analysis.items, refs)
-    const adding = addingToItems(meal)
+    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline, reread)
+    let analysed = toMealItems(analysis.items, refs)
+    const adding = !reread && addingToItems(meal)
+    const factor = factorOf(meal.portion_factor)
+    // Os itens de uma refeição noutra porção (½, a meias) estão nessa porção:
+    // o que a IA lê de novo nas fotos entra na mesma porção (M9), e uma
+    // releitura volta a ela.
+    if ((adding || reread) && factor !== 1) analysed = scaleItems(analysed, factor)
     // Um pedido de entrega para 2 ou mais em que a pessoa não disse como o
     // dividiu fica por rever, com a dica «Pedido para 2» (rules/pedido.ts). A
     // juntar fotos, fica o que a primeira análise disse.
@@ -336,13 +395,19 @@ export async function analyseClaimed(
     const items = !adding ? analysed : meal.leftover_photo_path ? mergeAfterLeftovers(meal.items, analysed) : mergeAdded(meal.items, analysed)
     const tags = meal.tags ?? []
     const inputType = meal.input_type === 'photo' ? 'photo' : 'text'
+    const read: AnalysisInput = { note: meal.note ?? null, tags }
+    const hasTagsColumn = 'analysis_tags' in meal
 
-    const written = await guardedWrite(items, meal.note, claimedAt, {
-      write: async (finalItems, noteUsed) => {
-        // Uma nota que chegou a meio já foi aplicada pela correção e pode dizer
-        // como dividiram («comemos a meias»): aí não há dica, para não cortar duas vezes.
-        const split = noteUsed === (meal.note ?? null) ? people : null
-        const status = split != null ? 'por_rever' : analysedStatus(finalItems, analysis.meal_confidence)
+    const written = await guardedWrite(items, read, claimedAt, {
+      write: async (finalItems, used) => {
+        // Uma nota ou etiqueta que chegou a meio já foi aplicada pela correção e
+        // pode dizer como dividiram («comemos a meias»): aí não há dica, para
+        // não cortar duas vezes.
+        const split = sameInput(used, read) ? people : null
+        let status = split != null ? 'por_rever' : analysedStatus(finalItems, analysis.meal_confidence)
+        // Juntar uma foto (um rótulo, confiança alta) a uma refeição que ninguém
+        // confirmou não a dá por certa (M10): fica por rever até «Está certo».
+        if (adding && status === 'ok' && !(meal as MealRow & { confirmed_at?: string | null }).confirmed_at) status = 'por_rever'
         const patch: Record<string, unknown> = {
           items: finalItems,
           ...mealTotals(finalItems),
@@ -351,7 +416,9 @@ export async function analyseClaimed(
           is_estimate: mealIsEstimate(inputType, tags.includes('jantar_fora') || order != null, finalItems),
           confidence: analysis.meal_confidence === 'alta' ? 0.9 : analysis.meal_confidence === 'media' ? 0.6 : 0.3,
           raw_text: meal.raw_text ?? analysis.title,
-          analysis_note: noteUsed,
+          analysis_note: used.note,
+          // As etiquetas que os números já leram (migração 20261113000020).
+          ...(hasTagsColumn ? { analysis_tags: used.tags } : {}),
           analysis_error: null,
           model,
           prompt_version: prompt,
@@ -361,8 +428,17 @@ export async function analyseClaimed(
         // primeira análise: uma análise nova limpa o que a de antes disse.
         if (!adding && (split != null || 'order_people' in meal)) patch.order_people = split
         const run = (values: Record<string, unknown>) => {
-          let query = admin.from('meals').update(values).eq('id', meal.id).eq('analysis_started_at', claimedAt)
-          query = noteUsed == null ? query.is('note', null) : query.eq('note', noteUsed)
+          // Apagada a meio (M14): não grava nem avisa «Jantar analisado».
+          let query = admin
+            .from('meals')
+            .update(values)
+            .eq('id', meal.id)
+            .eq('analysis_started_at', claimedAt)
+            .is('deleted_at', null)
+          query = used.note == null ? query.is('note', null) : query.eq('note', used.note)
+          // As etiquetas também (M1): «Comi metade» tocado a meio da análise
+          // não pode ficar com os números do prato inteiro.
+          query = query.contains('tags', used.tags).containedBy('tags', used.tags)
           return query.select()
         }
         let { data, error } = await run(patch)
@@ -376,32 +452,37 @@ export async function analyseClaimed(
       reread: async () => {
         const { data } = await admin
           .from('meals')
-          .select('note,analysis_started_at,deleted_at')
+          .select('note,tags,analysis_started_at,deleted_at')
           .eq('id', meal.id)
           .maybeSingle()
         if (!data) return null
         return {
           note: data.note as string | null,
+          tags: (data.tags as string[] | null) ?? [],
           startedAt: data.analysis_started_at as string | null,
           deleted: data.deleted_at != null,
         }
       },
-      // A nota mudou a meio: corrige só se a correção ainda couber na função.
-      correct: async (current, note) => {
+      // A nota ou as etiquetas mudaram a meio: corrige só se a correção ainda
+      // couber na função. Sem tempo, grava sem a correção mas com o que leu
+      // (analysis_note/analysis_tags dizem o que falta aplicar).
+      correct: async (current, correction, applied) => {
         const request = requestWithin(REQUEST_TEXT, deadline - Date.now(), ANALYSIS_WRITE_MARGIN_MS)
-        if (!request) return current
-        return (await correctItems(admin, meal.user_id, current, note, request)).items
+        if (!request) throw new AiError('A IA demorou demasiado a responder.', 'sem tempo para a correção da nota', true)
+        return (await correctItems(admin, meal.user_id, current, correction, request, applied)).items
       },
     })
     // Foto lida pelo modelo de reserva: a folha da refeição diz porquê. À
     // parte e sem falhar (sem a migração 20261018150002 a coluna não existe).
-    if (written && (reserve || meal.model_reserve)) {
+    // O aviso só sai com uma leitura de raiz (primeira análise ou «Analisar
+    // outra vez»): juntar uma foto não relê as porções de antes (M2).
+    if (written && (reserve || (meal.model_reserve && !adding))) {
       const { error } = await admin.from('meals').update({ model_reserve: reserve }).eq('id', meal.id)
       if (!error) written.model_reserve = reserve
     }
     // Uma refeição de texto ensina logo o que tem confiança alta (as fotos
     // e o que se juntou por foto só depois de confirmados).
-    if (written && !adding && meal.input_type === 'text') {
+    if (written && !adding && !reread && meal.input_type === 'text') {
       await learnFoods(admin, meal.user_id, itemsToLearn('analisada', 'text', written.items as MealItem[]), 'text')
     }
     return written
@@ -413,8 +494,8 @@ export async function analyseClaimed(
     // motivo e o botão «Tentar outra vez».
     // A juntar fotos a uma refeição com itens, a falha não a tira das contas:
     // volta a «por rever» com os itens que tinha e o motivo à vista.
-    const retry = describeAiError(err).transient && meal.analysis_attempts < 3
-    const failed = addingToItems(meal) ? { status: 'por_rever', analysis_started_at: null } : { status: 'erro' }
+    const retry = !keepsItems && describeAiError(err).transient && meal.analysis_attempts < 3
+    const failed = keepsItems ? { status: 'por_rever', analysis_started_at: null } : { status: 'erro' }
     await admin
       .from('meals')
       .update({
@@ -437,6 +518,7 @@ export async function claimAndAnalyse(
   admin: SupabaseClient,
   mealId: string,
   reset = false,
+  options: AnalyseOptions = {},
 ): Promise<Record<string, unknown> | null> {
   const startedAt = Date.now()
   const deadline = startedAt + ANALYSIS_FUNCTION_BUDGET_MS
@@ -448,8 +530,9 @@ export async function claimAndAnalyse(
     if (error) throw new Error(error.message)
     const claimed = (Array.isArray(data) ? data[0] : data) as MealRow | undefined
     if (!claimed) return null
-    const result = await analyseClaimed(admin, claimed, deadline)
-    if (result || Date.now() - startedAt > SECOND_TRY_BEFORE_MS) return result
+    const result = await analyseClaimed(admin, claimed, deadline, options)
+    // A reler (ou a juntar), uma falha já devolveu a refeição a «por rever».
+    if (result || options.reread || Date.now() - startedAt > SECOND_TRY_BEFORE_MS) return result
   }
   return null
 }

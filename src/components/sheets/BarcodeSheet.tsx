@@ -98,8 +98,9 @@ export default function BarcodeSheet() {
     setError(null)
     setMissing(null)
     try {
-      const { food: found } = await getApi<{ food: Food }>(`/api/food/barcode/${ean}`)
+      const { food: found, warning } = await getApi<{ food: Food; warning?: string }>(`/api/food/barcode/${ean}`)
       showFood(found)
+      if (warning) toast(warning)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não encontrei este código.')
       if (err instanceof ApiError && (err.status === 404 || err.status === 422)) setMissing(ean)

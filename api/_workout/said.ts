@@ -59,8 +59,9 @@ export default async function said(req: VercelRequest, res: VercelResponse) {
     }
 
     const admin = adminClient()
-    if (await aiLimitReached(admin, user.id, false)) {
-      throw new HttpError(429, 'Chegaste ao limite mensal da IA (Definições › Avançado).')
+    // O áudio vai para o modelo das fotos: conta e trava no limite diário delas (S6).
+    if (await aiLimitReached(admin, user.id, audio != null)) {
+      throw new HttpError(429, 'Chegaste ao limite da IA (Definições › Avançado).')
     }
     const [{ data: profile }, { data: logged }, { data: own }] = await Promise.all([
       db.from('profile').select('nutrition_day_cutoff_hour').single(),

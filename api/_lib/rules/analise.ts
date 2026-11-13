@@ -16,6 +16,12 @@ export interface AnalysedItem {
   food_ref: string | null
 }
 
+// Uma foto só se lê com a service role se estiver na pasta de quem é dono
+// da refeição (G2): `meals.photo_paths` é uma coluna que o cliente escreve.
+export function ownPhotoPath(path: string, userId: string): boolean {
+  return !!userId && path.startsWith(`${userId}/`) && !path.includes('..')
+}
+
 // Os alimentos pessoais vão para o prompt com referências curtas (a1…a40).
 export function foodRefs(foodIds: string[]): { refs: Record<string, string>; byId: Map<string, string> } {
   const refs: Record<string, string> = {}
@@ -104,33 +110,92 @@ export function analysedStatus(items: { confidence?: Confidence }[], mealConfide
   return 'ok'
 }
 
+// O que a análise leu da pessoa: a nota e as etiquetas («Comi metade»,
+// «Com azeite»…). As duas mudam os números; a escrita protegida e a correção
+// de uma refeição já analisada tratam-nas da mesma maneira (M1).
+export interface AnalysisInput {
+  note: string | null
+  tags: string[]
+}
+
+// As etiquetas que mudam as quantidades, em palavras para a correção por
+// texto. «Jantar fora» só diz que é comida de restaurante (fica estimativa).
+const TAG_TEXT: Record<string, string> = {
+  comi_metade: 'comi metade',
+  azeite: 'com azeite',
+  sem_molho: 'sem molho',
+  porcao_grande: 'porção grande',
+}
+const TAG_UNDO_TEXT: Record<string, string> = {
+  comi_metade: 'afinal comi a dose toda, não metade',
+  azeite: 'afinal sem azeite',
+  sem_molho: 'afinal com o molho',
+  porcao_grande: 'afinal a porção era normal, não grande',
+}
+
+export function sameTags(a: readonly string[] | null | undefined, b: readonly string[] | null | undefined): boolean {
+  const x = new Set(a ?? [])
+  const y = new Set(b ?? [])
+  return x.size === y.size && [...x].every((t) => y.has(t))
+}
+
+export function sameInput(a: AnalysisInput, b: AnalysisInput): boolean {
+  return (a.note ?? null) === (b.note ?? null) && sameTags(a.tags, b.tags)
+}
+
+// O que já está aplicado nos números, em texto (para a correção aplicar só a
+// diferença, M4): a nota e as etiquetas que a análise ou a última correção leram.
+export function appliedText(applied: AnalysisInput): string | null {
+  const parts = [applied.note?.trim() || null, ...applied.tags.map((t) => TAG_TEXT[t]).filter(Boolean)]
+  const text = parts.filter((p): p is string => !!p).join('; ')
+  return text || null
+}
+
+// A correção a pedir quando a nota ou as etiquetas mudaram depois de os
+// números as terem lido: a nota nova (inteira; o que já estava aplicado vai
+// à parte) e as etiquetas que entraram ou saíram. null quando não há nada que
+// mude as quantidades (nota apagada, só «Jantar fora»): grava-se sem IA.
+export function correctionText(applied: AnalysisInput, next: AnalysisInput): string | null {
+  const parts: string[] = []
+  const note = next.note?.trim() || null
+  if (note && note !== (applied.note?.trim() || null)) parts.push(note)
+  const before = new Set(applied.tags)
+  const after = new Set(next.tags)
+  for (const tag of after) if (!before.has(tag) && TAG_TEXT[tag]) parts.push(TAG_TEXT[tag]!)
+  for (const tag of before) if (!after.has(tag) && TAG_UNDO_TEXT[tag]) parts.push(TAG_UNDO_TEXT[tag]!)
+  return parts.length ? parts.join('; ') : null
+}
+
 // Escrita final protegida: só grava se a análise ainda for a mesma
-// (analysis_started_at) e a nota não tiver mudado entretanto. Se a nota mudou,
-// aplica a correção com a nota nova e tenta outra vez (no máximo 2 vezes).
+// (analysis_started_at) e a nota e as etiquetas não tiverem mudado
+// entretanto. Se mudaram, aplica a correção com o que mudou (só a diferença:
+// o que já estava aplicado vai junto) e tenta outra vez (no máximo 2 vezes).
 export interface GuardedWriteDeps<T> {
-  write: (items: MealItem[], noteUsed: string | null) => Promise<T | null>
-  reread: () => Promise<{ note: string | null; startedAt: string | null; deleted: boolean } | null>
-  correct: (items: MealItem[], note: string) => Promise<MealItem[]>
+  write: (items: MealItem[], used: AnalysisInput) => Promise<T | null>
+  reread: () => Promise<(AnalysisInput & { startedAt: string | null; deleted: boolean }) | null>
+  correct: (items: MealItem[], correction: string, applied: string | null) => Promise<MealItem[]>
 }
 
 export async function guardedWrite<T>(
   items: MealItem[],
-  noteUsed: string | null,
+  initial: AnalysisInput,
   claimedAt: string,
   deps: GuardedWriteDeps<T>,
   maxCorrections = 2,
 ): Promise<T | null> {
   let current = items
-  let note = noteUsed
+  let used: AnalysisInput = { note: initial.note ?? null, tags: [...(initial.tags ?? [])] }
   for (let attempt = 0; attempt <= maxCorrections; attempt++) {
-    const written = await deps.write(current, note)
+    const written = await deps.write(current, used)
     if (written) return written
     const fresh = await deps.reread()
     // Apagada, ou outra tentativa reivindicou a análise: essa é que manda.
     if (!fresh || fresh.deleted || fresh.startedAt !== claimedAt) return null
-    if (fresh.note === note) return null
-    note = fresh.note
-    if (note) current = await deps.correct(current, note)
+    const next: AnalysisInput = { note: fresh.note ?? null, tags: [...(fresh.tags ?? [])] }
+    if (sameInput(next, used)) return null
+    const text = correctionText(used, next)
+    if (text) current = await deps.correct(current, text, appliedText(used))
+    used = next
   }
   return null
 }

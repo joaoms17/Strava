@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { nutritionalDay, shiftDate } from './rules/nutritional-day.js'
 import { lisbonInstant } from './rules/momentos.js'
-import { exerciseKcal, mergePatch, startGuessed, type WattsSource } from './rules/treino.js'
+import { exerciseKcal, kcalAfterMerge, mergePatch, startGuessed, type WattsSource } from './rules/treino.js'
 import {
   isEmptyStravaCopy,
   isSameActivity,
@@ -16,7 +16,6 @@ import {
 } from './rules/intervals.js'
 import type { WorkoutType } from './rules/targets.js'
 import { ciqExtras, hasCiq, type CiqExtras } from './rules/ciq.js'
-import { fitDeveloperFields } from './fit.js'
 import { isDeletedWeighing } from './rules/weight.js'
 import { gymPaceFor, weightNear } from './kcal-context.js'
 
@@ -82,6 +81,7 @@ async function readCiq(key: string, activityId: string, timeoutMs: number): Prom
   let lastDownloaded = false
   for (const kind of ['file', 'fit-file'] as const) {
     try {
+      const { fitDeveloperFields } = await import('./fit.js') // P7: o SDK do FIT só quando é preciso
       const fields = fitDeveloperFields(await icuFile(key, activityId, kind, timeoutMs))
       lastDownloaded = true
       if (fields) return ciqExtras(fields)
@@ -376,7 +376,7 @@ export async function syncIntervals(
         name: a.name,
       }
       const match = syncMatch(
-        { type: a.type, date, minutes: a.minutes, started_at: startedAt },
+        { type: a.type, date, minutes: a.minutes, started_at: startedAt, sport: a.sport },
         candidates.filter((c) => !used.has(c.id)),
       )
       if (match) {
@@ -399,27 +399,22 @@ export async function syncIntervals(
           Object.assign(patch, { started_at: startedAt, raw: Object.keys(raw).length ? raw : null })
           filled.push('started_at')
         }
-        if (patch.watts != null) {
-          const kcal = exerciseKcal({
-            type: a.type,
-            minutes: match.minutes ?? a.minutes,
-            watts: patch.watts as number,
-            wattsSource: patch.watts_source as WattsSource,
-            deviceCalories: null,
-          })
-          Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
-        } else if (match.type === 'strength' && Number(patch.kcal_device) > 0) {
-          // O ginásio registado com séries (ou dito) ganha as calorias do
-          // relógio: passam a contar por inteiro.
-          const kcal = exerciseKcal({
-            type: 'strength',
-            minutes: match.minutes ?? a.minutes,
-            watts: null,
-            wattsSource: null,
-            deviceCalories: patch.kcal_device as number,
-          })
-          Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
-        }
+        // As contas: watts medidos, ou as calorias do relógio numa bicicleta
+        // sem watts (ou com os supostos), num «outro» (T9) ou num ginásio.
+        const again = kcalAfterMerge(
+          {
+            type: match.type,
+            minutes: match.minutes,
+            watts: match.watts,
+            watts_source: match.watts_source,
+            kcal_device: (match.kcal_device as number | null) ?? null,
+            sport: (match.sport as string | null) ?? a.sport,
+            raw: match.raw,
+          },
+          patch,
+          a.minutes,
+        )
+        if (again) Object.assign(patch, again)
         await admin
           .from('workouts')
           .update({

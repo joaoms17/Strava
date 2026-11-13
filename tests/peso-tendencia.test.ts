@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { goalDate, linearSlope, projectWeight, trend7, weeklyMeans } from '../api/_lib/rules/weight'
+import { shiftDate } from '../api/_lib/rules/nutritional-day'
 
 // Regra 3: média móvel de 7 dias + projeção linear sobre 21 dias.
 describe('trend7', () => {
@@ -105,5 +106,28 @@ describe('weeklyMeans', () => {
       { date: '2026-10-12', kg: 85.17 },
       { date: '2026-10-19', kg: 84 },
     ])
+  })
+})
+
+// P4: a janela deslizante dá o mesmo que a conta antiga (filtro por pesagem).
+describe('trend7 linear', () => {
+  const naive = (weights: { date: string; value: number }[]) => {
+    const n = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000
+    const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date))
+    return sorted.map((e) => {
+      const w = sorted.filter((x) => n(x.date) >= n(e.date) - 6 && n(x.date) <= n(e.date))
+      return { date: e.date, value: Math.round((w.reduce((a, x) => a + x.value, 0) / w.length) * 100) / 100 }
+    })
+  }
+  it('o mesmo resultado, com buracos e duas pesagens no mesmo dia', () => {
+    let seed = 7
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    const weights: { date: string; value: number }[] = []
+    let d = '2026-01-01'
+    for (let i = 0; i < 400; i++) {
+      d = shiftDate(d, Math.floor(rnd() * 4))
+      weights.push({ date: d, value: Math.round((80 + rnd() * 5) * 10) / 10 })
+    }
+    expect(trend7(weights)).toEqual(naive(weights))
   })
 })

@@ -58,10 +58,16 @@ export function QualFoiQuestion({ workout: w, onDone }: { workout: Workout; onDo
         toast(`${workoutTitle(w)} de ${when}: ${label}${kcalOfWorkout(workout)}`, [
           {
             label: 'Anular',
+            // Uma falha no Anular diz-se (antes ficava em silêncio — T24).
             run: async () => {
-              await postApi('/api/workout/update', { workout_id: w.id, ...qualFoiUndo(w) })
-              emitDataChanged()
-              onDone?.()
+              try {
+                await postApi('/api/workout/update', { workout_id: w.id, ...qualFoiUndo(w) })
+                emitDataChanged()
+                onDone?.()
+                toast('Anulado.')
+              } catch (err) {
+                toast(err instanceof Error ? `Não anulei: ${err.message}` : 'Não consegui anular. Tenta outra vez.')
+              }
             },
           },
           ...(real.kind === 'dia'

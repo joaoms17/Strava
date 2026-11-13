@@ -100,12 +100,33 @@ export function missingInfo(w: SessionLike & { source?: string | null }): string
 
 // «Possível duplicado»: o mesmo treino registado duas vezes (ex.: o «Já fiz»
 // das 21:00 e a bicicleta do relógio das 07:00). Mesmo dia e tipo (e
-// desporto), duração parecida (±10 %, no mínimo 3 min), não vieram os dois do
-// relógio (as cópias do relógio já ficam de fora) e não se sabe que começaram
-// a mais de 30 min um do outro (uma hora suposta ou de um registo à mão não
-// conta). Só avisa: quem decide é a pessoa, e um «Não, é outro» ao guardar
-// (raw.outro_treino) cala o aviso.
+// desporto), nenhum dos dois confirmado como outro treino («Não, é outro» ao
+// guardar: raw.outro_treino) e não vieram os dois do relógio (as cópias do
+// relógio já ficam de fora). Avisa quando:
+// - a duração é parecida (±10 %, no mínimo 3 min) e não se sabe que
+//   começaram a mais de 30 min um do outro (uma hora suposta ou de um
+//   registo à mão não conta); ou
+// - um é do relógio e o outro não, e os dois intervalos se sobrepõem (o
+//   ginásio do cronómetro da app às 18:00 com 62 min e o do relógio às 18:03
+//   com 55), ou a hora do que não veio do relógio é suposta (o «Já fiz» de
+//   45 min ao lado do treino que o relógio partiu em 20 + 25) — T1.
+// Só avisa: quem decide é a pessoa («Juntar os dois» ou «Não, é outro»).
 export const DUPLICATE_START_GAP_MIN = 30
+
+// Início e fim (ms) quando a hora é de confiança (nem suposta nem em falta).
+export function knownInterval(w: SessionLike & { raw?: unknown }): [number, number] | null {
+  if (!w.started_at || startGuessed(w)) return null
+  const start = Date.parse(w.started_at)
+  if (!Number.isFinite(start)) return null
+  const seconds = w.elapsed_s ?? (w.minutes ?? 0) * 60
+  return [start, start + Math.max(60, seconds) * 1000]
+}
+
+export function intervalsOverlap(a: SessionLike & { raw?: unknown }, b: SessionLike & { raw?: unknown }): boolean {
+  const x = knownInterval(a)
+  const y = knownInterval(b)
+  return !!x && !!y && x[0] < y[1] && y[0] < x[1]
+}
 
 export function possibleDuplicates<
   T extends SessionLike & { source?: string | null; external_id?: string | null; raw?: unknown },
@@ -119,10 +140,16 @@ export function possibleDuplicates<
       const a = sessions[i]!
       const b = sessions[j]!
       if (!a.id || !b.id || a.date !== b.date || !sameKind(a, b)) continue
-      if (a.minutes == null || b.minutes == null || !durationsMatch(a.minutes, b.minutes)) continue
       if ((fromWatch(a) && fromWatch(b)) || confirmed(a) || confirmed(b)) continue
-      const gap = Math.abs(knownStart(a) - knownStart(b)) / 60_000
-      if (gap > DUPLICATE_START_GAP_MIN) continue
+      const similar =
+        a.minutes != null &&
+        b.minutes != null &&
+        durationsMatch(a.minutes, b.minutes) &&
+        !(Math.abs(knownStart(a) - knownStart(b)) / 60_000 > DUPLICATE_START_GAP_MIN)
+      const watchAndOther = fromWatch(a) !== fromWatch(b)
+      const other = fromWatch(a) ? b : a
+      const sameTime = watchAndOther && (intervalsOverlap(a, b) || startGuessed(other))
+      if (!similar && !sameTime) continue
       out.add(a.id)
       out.add(b.id)
     }

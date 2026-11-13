@@ -181,7 +181,9 @@ describe('avisos e lembretes', () => {
   })
 
   it('balança: média suavizada à parte', () => {
-    expect(scaleFatAverage([24, 22, 23, 25])).toBe(23.8)
+    expect(scaleFatAverage([24, 22, 23, 25])).toBe(23.6)
+    // K13: a primeira leitura não vale por todas as de antes.
+    expect(scaleFatAverage([25, 22, 22, 22, 22])).toBe(22.5)
     expect(scaleFatAverage([])).toBeNull()
   })
 })
@@ -322,5 +324,12 @@ describe('o peso perdido e a gordura numa frase só', () => {
     expect(lossSentence({ weightKg: 3.2, fatKg: 1, fatShare: 31 })).toBeNull()
     expect(lossSentence({ weightKg: -3.5, fatKg: 0.4, fatShare: -11 })).toBeNull()
     expect(lossSentence({ weightKg: -3.5, fatKg: -4.2, fatShare: 120 })).toBeNull()
+  })
+})
+
+describe('K14: medidas absurdas não dão gordura negativa', () => {
+  it('pescoço 45 e cintura 60: sem composição', () => {
+    expect(composition(180, { neck_cm: 45, waist_cm: 60, weight_used_kg: 80 })).toBeNull()
+    expect(composition(180, { neck_cm: 38, waist_cm: 90, weight_used_kg: 85 })).not.toBeNull()
   })
 })

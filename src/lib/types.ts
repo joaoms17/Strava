@@ -82,6 +82,8 @@ export interface Meal {
   thumb_paths: string[]
   note: string | null
   analysis_note: string | null
+  analysis_tags?: string[] | null // as etiquetas que os números já leram (migração 20261113000020)
+  image_hashes?: string[]
   tags: string[]
   slot: Slot | null
   status: 'a_analisar' | 'por_rever' | 'ok' | 'erro' | 'sem_analise'
