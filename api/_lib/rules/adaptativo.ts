@@ -7,6 +7,7 @@
 // Se |tdee_est - expected_tdee| > 250, propor ajustar base_kcal.
 import { isMaintenanceWeek, mondayOf } from './manutencao.js'
 import { shiftDate } from './nutritional-day.js'
+import { linearSlope } from './weight.js'
 
 export interface ClosedDay {
   date: string
@@ -24,17 +25,83 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
+// K1: o gasto medido só com pesagens reais suficientes na janela — pelo
+// menos 4 dias de pesagem, a cobrir 10 dias ou mais (como a projeção). O
+// peso médio guardado em cada dia carrega a mesma pesagem 7 dias seguidos:
+// duas pesagens no mesmo fim de semana pareciam «peso estável» e o gasto
+// ficava igual ao que se comeu.
+export const MEASURED_MIN_WEIGHINGS = 4
+export const MEASURED_MIN_SPAN_DAYS = 10
+
+export interface Weighing {
+  date: string
+  kg: number
+}
+
+// Quantas pesagens faltam para medir (0 = chegam): 4 dias de pesagem e 10
+// dias entre a primeira e a última. Com os 4 dias mas pouco espaço entre
+// eles, falta pelo menos mais uma, mais tarde.
+export function missingWeighings(dates: string[]): number {
+  const unique = [...new Set(dates)].sort()
+  const span = unique.length ? dayDiff(unique[0]!, unique[unique.length - 1]!) : 0
+  const byCount = Math.max(0, MEASURED_MIN_WEIGHINGS - unique.length)
+  return Math.max(byCount, span < MEASURED_MIN_SPAN_DAYS ? 1 : 0)
+}
+
+// A descida do peso (kg, positiva = desceu) e os dias que ela cobre, por
+// regressão sobre as pesagens reais, troço a troço: `breaks` diz onde há uma
+// fase de água pelo meio (a conta não a atravessa). Várias pesagens no mesmo
+// dia contam como a média desse dia.
+export function weighingsDrop(
+  weighings: Weighing[],
+  breaks?: (a: string, b: string) => boolean,
+): { drop: number; span: number } {
+  const byDate = new Map<string, number[]>()
+  for (const w of weighings) byDate.set(w.date, [...(byDate.get(w.date) ?? []), Number(w.kg)])
+  const points = [...byDate]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, kgs]) => ({ date, value: kgs.reduce((x, y) => x + y, 0) / kgs.length }))
+  let drop = 0
+  let span = 0
+  let segment: typeof points = []
+  const close = () => {
+    if (segment.length >= 2) {
+      const days = dayDiff(segment[0]!.date, segment[segment.length - 1]!.date)
+      drop += -linearSlope(segment) * days
+      span += days
+    }
+  }
+  for (const p of points) {
+    const prev = segment[segment.length - 1]
+    if (prev && breaks?.(prev.date, p.date)) {
+      close()
+      segment = []
+    }
+    segment.push(p)
+  }
+  close()
+  return { drop, span }
+}
+
 // window: os dias completos da janela, por ordem cronológica.
 // n_dias é o intervalo de calendário entre a primeira e a última tendência
 // (o peso muda em dias de calendário, não só nos dias completos). Com
 // `breaks`, a janela parte-se em troços onde ele diz que há uma fase de
 // água pelo meio: a descida soma-se troço a troço, sem atravessar a fase.
+// Com `weighings` (as pesagens reais da janela; é o que o fecho do dia usa,
+// K1), a descida mede-se entre pesagens e só com o mínimo de pesagens.
 export function tdeeRaw(
   window: ClosedDay[],
-  options: { minDays?: number; breaks?: (a: string, b: string) => boolean } = {},
+  options: { minDays?: number; breaks?: (a: string, b: string) => boolean; weighings?: Weighing[] } = {},
 ): number | null {
   if (window.length < (options.minDays ?? MIN_COMPLETE_DAYS)) return null
   const kcalMean = window.reduce((acc, d) => acc + d.kcal_in, 0) / window.length
+  if (options.weighings) {
+    if (missingWeighings(options.weighings.map((w) => w.date)) > 0) return null
+    const { drop, span } = weighingsDrop(options.weighings, options.breaks)
+    if (span <= 0) return null
+    return round1(kcalMean + (drop * KCAL_PER_KG) / span)
+  }
 
   const withTrend = window.filter((d) => d.weight_trend != null)
   let drop = 0
@@ -188,28 +255,30 @@ export interface AdaptiveDay extends ClosedDay {
   formula_base?: number | null
 }
 
+// «teto»/«piso»: limitado a ±15 % da fórmula (primeiras 6 semanas);
+// «teto400»/«piso400»: depois disso, a ±400 da fórmula (decisão 175, K4: a
+// marca fica à vista em vez de se esconder); «ritmo»: 100 kcal por semana.
+export type AdaptiveLimit = MeasuredLimit | 'teto400' | 'piso400'
+
 export interface AdaptiveResult {
   raw: number | null
   tdee: number | null
   excluded: boolean
   stable: boolean
-  limit: MeasuredLimit | null
+  limit: AdaptiveLimit | null
   eligibleDays: number
+  missingWeighings: number // pesagens que faltam na janela para medir (0 = chegam)
 }
 
-// O gasto medido de um dia fechado, a partir dos dias completos dos últimos
-// 120 dias (`rows`, por ordem, este incluído se completo): a janela são os
-// últimos 28 dias completos fora da fase de água dentro de 56 dias; a conta
-// do peso faz-se por troços, sem atravessar uma fase de água.
-export function adaptiveDay(input: {
+// A janela do gasto medido num dia: os últimos 28 dias completos fora da
+// fase de água dentro de 56 dias (`rows`: dias completos, por ordem). Serve
+// também à base sem treino (K3), que tira o treino médio desta mesma janela.
+export function tdeeWindow(input: {
   date: string
-  complete: boolean
   rows: AdaptiveDay[]
   anchor: string | null
   maintenanceEnabled: boolean
-  previous: number | null
-  weekStart: number | null
-}): AdaptiveResult {
+}): { rows: AdaptiveDay[]; eligibleAll: AdaptiveDay[]; window: AdaptiveDay[]; isWater: (d: string) => boolean } {
   const from = shiftDate(input.date, -TDEE_LOOKBACK_DAYS)
   const rows = input.rows.filter((r) => r.date >= from && r.date <= input.date)
   const starts = dietStarts({
@@ -223,15 +292,44 @@ export function adaptiveDay(input: {
   const eligibleAll = rows.filter((r) => !isWater(r.date))
   const windowFrom = shiftDate(input.date, -TDEE_WINDOW_CALENDAR_DAYS)
   const window = eligibleAll.filter((r) => r.date > windowFrom).slice(-TDEE_WINDOW_DAYS)
+  return { rows, eligibleAll, window, isWater }
+}
+
+// O treino médio por dia numa janela (ou, vazia, nos dias de reserva).
+export function windowTraining(window: AdaptiveDay[], fallback: AdaptiveDay[] = []): number {
+  const basis = window.length ? window : fallback
+  return basis.length ? basis.reduce((a, d) => a + Number(d.kcal_exercise ?? 0), 0) / basis.length : 0
+}
+
+// O gasto medido de um dia fechado, a partir dos dias completos dos últimos
+// 120 dias (`rows`, por ordem, este incluído se completo) e das pesagens
+// reais (`weighings`, K1): a janela são os últimos 28 dias completos fora da
+// fase de água dentro de 56 dias; a descida do peso mede-se entre as
+// pesagens dessa janela, por troços, sem atravessar uma fase de água, e só
+// com 4 dias de pesagem a cobrir 10 dias ou mais.
+export function adaptiveDay(input: {
+  date: string
+  complete: boolean
+  rows: AdaptiveDay[]
+  weighings: Weighing[]
+  anchor: string | null
+  maintenanceEnabled: boolean
+  previous: number | null
+  weekStart: number | null
+}): AdaptiveResult {
+  const { rows, eligibleAll, window, isWater } = tdeeWindow(input)
   const breaks = (a: string, b: string) => {
     for (let d = shiftDate(a, 1); d < b; d = shiftDate(d, 1)) if (isWater(d)) return true
     return false
   }
-  const raw = tdeeRaw(window, { minDays: TDEE_MIN_ELIGIBLE_DAYS, breaks })
+  const weighFrom = window[0]?.date ?? input.date
+  const weighings = input.weighings.filter((w) => w.date >= weighFrom && w.date <= input.date && !isWater(w.date))
+  const missing = missingWeighings(weighings.map((w) => w.date))
+  const raw = tdeeRaw(window, { minDays: TDEE_MIN_ELIGIBLE_DAYS, breaks, weighings })
   const stable = eligibleAll.length >= STABLE_ELIGIBLE_DAYS
   const basis = window.length ? window : rows
   const formula = [...basis].reverse().find((d) => d.formula_base != null)?.formula_base
-  const avgTraining = basis.length ? basis.reduce((a, d) => a + Number(d.kcal_exercise ?? 0), 0) / basis.length : 0
+  const avgTraining = windowTraining(window, rows)
   const reference = formula != null ? Number(formula) + avgTraining : null
   const bounds = formula != null ? measuredBounds(Number(formula), avgTraining, stable) : null
   const excluded = isWater(input.date)
@@ -244,9 +342,9 @@ export function adaptiveDay(input: {
     bounds,
     weekStart: input.weekStart,
   })
-  // Com 6 semanas de dados o limite é o de sempre (400): a nota dos +15 % já não se aplica.
-  const shown = stable && (limit === 'teto' || limit === 'piso') ? null : limit
-  return { raw, tdee: value, excluded, stable, limit: shown, eligibleDays: window.length }
+  // Com 6 semanas de dados o limite é o de sempre (400), e fica dito como tal.
+  const shown: AdaptiveLimit | null = stable && limit === 'teto' ? 'teto400' : stable && limit === 'piso' ? 'piso400' : limit
+  return { raw, tdee: value, excluded, stable, limit: shown, eligibleDays: window.length, missingWeighings: missing }
 }
 
 export function shouldAdjustBase(tdeeEst: number, expectedTdee: number): boolean {

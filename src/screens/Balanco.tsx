@@ -32,6 +32,7 @@ import {
   kcalOut,
   measuredVsFormula,
   persistentGap,
+  rawGapReason,
   round10,
   weekSentence,
 } from '../../api/_lib/rules/gasto'
@@ -239,7 +240,7 @@ export default function Balanco() {
         meals: ofDay.length,
         // Marcado «faltou algo»: o dia tocado diz porquê e deixa voltar atrás.
         missing: flags.includes('faltou_algo'),
-        plan: maintenance ? maintenanceTarget(tdeeBefore(date)) : base + exercise,
+        plan: maintenance ? maintenanceTarget(tdeeBefore(date), expenditure.formula + expenditure.avgTraining) : base + exercise,
         complete: isDayComplete({
           mealCount: ofDay.length,
           kcalIn: eaten,
@@ -376,8 +377,10 @@ export default function Balanco() {
   const minutes = data.workouts.reduce((a, w) => a + (w.minutes ?? 0), 0)
   const trainingKcal = data.workouts.reduce((a, w) => a + (w.kcal_est ?? 0), 0)
   const missingComplete = Math.max(0, MIN_COMPLETE_DAYS - data.completeDays)
-  // Dias completos que cheguem, mas o gasto não se mede sem pesagens.
-  const noWeighings = exp.learning && missingComplete === 0 && exp.weighings < 2
+  // Dias completos que cheguem, mas o gasto não se mede sem pesagens (K1:
+  // 4 dias de pesagem a cobrir 10 dias ou mais).
+  const missingWeighings = exp.state.kind === 'a_aprender' ? exp.state.missingWeighings : 0
+  const noWeighings = exp.learning && missingComplete === 0 && (exp.state.kind === 'formula' || missingWeighings > 0)
   // Na semana de água do ciclo, o peso sobe sem ser gordura.
   const waterWeek = waterWeekDuring(profile, monday, sunday < today ? sunday : today)
   // Até haver 3 dias que contem nesta semana, mostra o resumo da semana passada.
@@ -442,11 +445,14 @@ export default function Balanco() {
     </section>
   )
   // O que falta para medir o gasto pelo peso (no topo e nos detalhes).
-  const learningText = noWeighings
-    ? 'para o medir pelo peso, preciso que te peses 2 ou 3 vezes por semana.'
-    : missingComplete > 0
+  const learningText =
+    exp.state.kind === 'formula'
+      ? 'sem pesagens nas últimas 4 semanas, não o consigo medir pelo peso. Pesa-te 2 ou 3 vezes por semana.'
+      : missingWeighings > 0
+        ? `${missingWeighings === 1 ? 'falta 1 pesagem' : `faltam ${missingWeighings} pesagens`} (4 em 10 dias ou mais)${missingComplete > 0 ? ` e ${missingComplete} ${missingComplete === 1 ? 'dia completo' : 'dias completos'}` : ''} e passo a medir o teu gasto pelo peso.`
+        : missingComplete > 0
       ? `mais ${missingComplete} ${missingComplete === 1 ? 'dia completo' : 'dias completos'} e passo a medir o teu gasto pelo peso.`
-      : 'já há dias completos suficientes; a medição pelo peso começa na próxima semana.'
+      : 'já há dias completos e pesagens suficientes; a medição pelo peso começa na próxima semana.'
 
   async function applyBase(value: number) {
     const previous = profile.base_kcal
@@ -524,7 +530,9 @@ export default function Balanco() {
               </div>
             )}
             {exp.learning && (
-              <p className="text-[14px] text-dim">Gasto (a aprender): {learningText} Até lá uso uma fórmula.</p>
+              <p className="text-[14px] text-dim">
+                Gasto ({exp.state.kind === 'formula' ? 'fórmula' : 'a aprender'}): {learningText} Até lá uso uma fórmula.
+              </p>
             )}
             {noWeighings && (
               <button onClick={() => sheet.open('peso')} className="min-h-11 rounded-xl bg-cta px-4 font-semibold text-on-cta">
@@ -604,10 +612,7 @@ export default function Balanco() {
                   {exp.tdeeMeasured != null && Math.abs(exp.tdeeMeasured - exp.tdeeFrozen) >= 100 && (
                     <span className="text-dim">
                       {' '}
-                      Só pelo peso dava {fmtKcal(round10(exp.tdeeMeasured))}
-                      {exp.tdeeMeasured > exp.tdeeFrozen
-                        ? ': no início, ou depois de uma pausa, o peso desce depressa com água.'
-                        : ': a água e o sal às vezes escondem a descida do peso.'}{' '}
+                      Só pelo peso dava {fmtKcal(round10(exp.tdeeMeasured))}: {rawGapReason(exp.tdeeMeasured, exp.tdeeFrozen, exp.flags)}{' '}
                       O gasto muda devagar (no máximo 100 kcal por semana) e não conta as 2 primeiras semanas da dieta nem as de depois de uma pausa.
                     </span>
                   )}
@@ -615,7 +620,8 @@ export default function Balanco() {
                 </p>
               ) : (
                 <p className="text-dim">
-                  Gasto (a aprender): {learningText} Até lá uso uma fórmula ({fmtKcal(exp.formula)} por dia sem treino).
+                  Gasto ({exp.state.kind === 'formula' ? 'fórmula' : 'a aprender'}): {learningText} Até lá uso uma fórmula (
+                  {fmtKcal(exp.formula)} por dia sem treino).
                 </p>
               )}
               {gapNote && (
