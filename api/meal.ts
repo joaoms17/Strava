@@ -3,7 +3,7 @@ import save from './_meal/save.js'
 import barcode, { foodSearch, label } from './_meal/barcode.js'
 import menu from './_meal/menu.js'
 import { logFavorite, portion, portionUndo, remove, repeat, restore } from './_meal/quick.js'
-import { analyse, attach, capture, correct, detach, estimate, quick, update } from './_meal/async.js'
+import { analyse, attach, capture, correct, detach, estimate, update } from './_meal/async.js'
 import { favoriteCopy, people, share, shareUndo } from './_meal/share.js'
 import recipe from './_meal/recipe.js'
 import { leftovers, leftoversUndo } from './_meal/leftovers.js'
@@ -32,7 +32,6 @@ const routes: Record<string, (req: VercelRequest, res: VercelResponse) => Promis
   'leftovers-undo': leftoversUndo,
   correct,
   update,
-  quick,
   estimate,
   share,
   'share-undo': shareUndo,

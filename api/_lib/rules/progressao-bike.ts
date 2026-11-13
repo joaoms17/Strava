@@ -19,6 +19,7 @@ export interface BikeSessionSummary {
   status: Semaforo | null
   watts_source?: string | null
   rpe?: number | null // esforço dado no relógio (1–10)
+  date?: string | null // AAAA-MM-DD, para o nível das últimas semanas
 }
 
 export interface BikeCaps {
@@ -29,7 +30,7 @@ export interface BikeCaps {
 export interface BikeTarget {
   watts: number
   minutes: number
-  kind: 'start' | 'progress-time' | 'validate-next-watts' | 'hold' | 'ease' | 'need-hr'
+  kind: 'start' | 'progress-time' | 'validate-next-watts' | 'hold' | 'ease' | 'need-hr' | 'step-down'
   // Em 'need-hr': o que falta nas últimas 2 sessões.
   missing?: 'avg' | 'max' | 'both'
 }
@@ -44,20 +45,73 @@ function nearestOption(watts: number, options: number[]): number {
   )
 }
 
+// O nível (T8): o W mais alto validado nas últimas semanas — uma sessão a
+// esse W de 30 min ou mais, com watts a sério (não supostos), sem incómodo
+// nem esforço 9–10 e sem passar os limites de FC (quando os há). Depois de
+// uma sessão leve (ou de uma volta de estrada a 95 W) a sugestão volta a ele
+// em vez de recomeçar de baixo.
+export const BIKE_LEVEL_WEEKS = 6
+
+function shiftIso(date: string, days: number): string {
+  const d = new Date(`${date}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+export function bikeLevel(
+  history: BikeSessionSummary[],
+  wattsOptions: number[],
+  caps: BikeCaps,
+  today?: string | null,
+): number | null {
+  const options = [...wattsOptions].sort((a, b) => a - b)
+  if (!options.length) return null
+  const from = today ? shiftIso(today, -7 * BIKE_LEVEL_WEEKS) : null
+  let level: number | null = null
+  for (const s of history) {
+    if (s.watts == null || s.minutes == null || s.minutes < 30 || s.watts_source === 'prefill') continue
+    if (from && s.date && s.date < from) continue
+    if (rough(s) || overCaps(s, caps)) continue
+    const w = nearestOption(s.watts, options)
+    if (level == null || w > level) level = w
+  }
+  return level
+}
+
+const rough = (s: BikeSessionSummary) => s.status === 'yellow' || s.status === 'red' || (s.rpe ?? 0) >= HARD_RPE
+const overCaps = (s: BikeSessionSummary, caps: BikeCaps) =>
+  (s.avg_hr != null && s.avg_hr > caps.avgHr) || (s.max_hr != null && s.max_hr > caps.maxHr)
+
 export function nextBikeTarget(
   history: BikeSessionSummary[],
   wattsOptions: number[],
   caps: BikeCaps,
+  today?: string | null,
 ): BikeTarget {
   const options = [...wattsOptions].sort((a, b) => a - b)
   const lowest = options[0] ?? 130
-  const sessions = history.filter((s) => s.watts != null && s.minutes != null)
-  const last = sessions[sessions.length - 1]
-  if (!last) return { watts: lowest, minutes: 30, kind: 'start' }
+  let sessions = history.filter((s) => s.watts != null && s.minutes != null)
+  const lastOfAll = sessions[sessions.length - 1]
+  if (!lastOfAll) return { watts: lowest, minutes: 30, kind: 'start' }
 
   // Sessão com incómodo ou muito dura: a seguinte é leve.
-  const rough = (s: BikeSessionSummary) => s.status === 'yellow' || s.status === 'red' || (s.rpe ?? 0) >= HARD_RPE
-  if (rough(last)) return { watts: lowest, minutes: 30, kind: 'ease' }
+  if (rough(lastOfAll)) return { watts: lowest, minutes: 30, kind: 'ease' }
+
+  const level = bikeLevel(sessions, options, caps, today)
+  // A sessão mais recente a um W acima do nível passou os limites de FC (a
+  // validação falhou): volta ao nível (T8).
+  const lastW = nearestOption(lastOfAll.watts!, options)
+  if (level != null && lastW > level && lastOfAll.watts_source !== 'prefill' && overCaps(lastOfAll, caps)) {
+    return { watts: level, minutes: 60, kind: 'step-down' }
+  }
+  // Abaixo do nível (sessão leve, volta de estrada): as sessões leves do fim
+  // não contam e a sugestão continua de onde estava ao nível.
+  if (level != null && lastW < level) {
+    let end = sessions.length
+    while (end > 0 && nearestOption(sessions[end - 1]!.watts!, options) < level) end--
+    if (end > 0) sessions = sessions.slice(0, end)
+  }
+  const last = sessions[sessions.length - 1]!
 
   const currentW = nearestOption(last.watts!, options)
   const currentIdx = options.indexOf(currentW)
@@ -100,6 +154,8 @@ export function bikeSuggestion(target: BikeTarget): string {
   switch (target.kind) {
     case 'validate-next-watts':
       return `Próxima vez: ${target.watts} W durante ${target.minutes} min, para testar.`
+    case 'step-down':
+      return `Os batimentos passaram os limites: volta a ${target.watts} W durante ${target.minutes} min.`
     case 'ease':
       return `Bicicleta leve: ${target.minutes} min a ${target.watts} W, para recuperar.`
     case 'need-hr': {

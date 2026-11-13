@@ -126,9 +126,11 @@ describe('mesma sessão', () => {
     expect(findMergeCandidate(draft, [habitual])?.id).toBe('fav')
   })
 
-  it('duração muito diferente não é a mesma sessão', () => {
-    const draft = { type: 'bike' as const, date: '2026-09-29', minutes: 60, started_at: '2026-09-29T06:10:00Z' }
+  it('duração muito diferente não é a mesma sessão (sem se saber que se sobrepõem)', () => {
+    const draft = { type: 'bike' as const, date: '2026-09-29', minutes: 60, started_at: null }
     expect(findMergeCandidate(draft, [habitual])).toBeNull()
+    // A decorrer ao mesmo tempo, pergunta mesmo com outra duração (T1).
+    expect(findMergeCandidate({ ...draft, started_at: '2026-09-29T06:10:00Z' }, [habitual])?.id).toBe('fav')
   })
 
   it('início a mais de 30 min não é a mesma sessão', () => {

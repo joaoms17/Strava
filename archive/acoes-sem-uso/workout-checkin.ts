@@ -1,3 +1,5 @@
+// Arquivado (L6): POST /api/workout/checkin, sem chamador (gravava kcal sem a
+// regra atual). Fica só para consulta (fora de api/, do tsconfig e do vitest).
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { z } from 'zod'
 import { HttpError, requireUser } from '../_lib/supabase.js'

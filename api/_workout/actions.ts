@@ -6,7 +6,18 @@ import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
 import { painStatus } from '../_lib/rules/semaforo.js'
-import { estimatedStart, exerciseKcal, mergePatch, startGuessed, type WattsSource } from '../_lib/rules/treino.js'
+import {
+  estimatedStart,
+  exerciseKcal,
+  kcalAfterMerge,
+  mergePatch,
+  pickWatts,
+  startGuessed,
+  joinPatch,
+  pickJoinTarget,
+  wattsChain,
+  type WattsSource,
+} from '../_lib/rules/treino.js'
 import { OTHER_SPORTS, isOtherSport, type OtherSport, type WorkoutType } from '../_lib/rules/targets.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { strengthContext, weightNear } from '../_lib/kcal-context.js'
@@ -99,6 +110,11 @@ const StrengthSchema = z.object({
   name: z.string().trim().max(80).nullable().optional(),
   // As calorias do relógio ditas («Dizer ou escrever»): contam por inteiro.
   kcal_device: int(0, 5000).nullable().optional(),
+  // Com workout_id: «Sim, é esse» ao ginásio do dia (o do relógio, T3). As
+  // séries juntam-se a essa sessão sem mexer na duração nem na hora dela.
+  merge: z.boolean().optional(),
+  // «Não, é outro»: havia um ginásio parecido nesse dia e não é o mesmo.
+  not_duplicate: z.boolean().optional(),
 })
 
 const ShotAddSchema = z.object({
@@ -112,6 +128,8 @@ const ShotAddSchema = z.object({
 const MAX_SHOTS = 4
 
 const WorkoutIdSchema = z.object({ workout_id: z.string().uuid() })
+// «Juntar os dois»: o do relógio fica e o outro junta-se a ele (a ordem não importa).
+const JoinSchema = z.object({ workout_id: z.string().uuid(), other_id: z.string().uuid() })
 const ImportIdSchema = z.object({ import_id: z.string().uuid(), reset: z.boolean().optional() })
 
 type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void>
@@ -292,19 +310,23 @@ export const save = post(async ({ db, userId, body, res }) => {
       .eq('id', favorite.id)
   }
 
+  // A cadeia dos watts (`pickWatts`, testada): os do pedido, os do favorito
+  // e, só sem calorias do relógio, os últimos confirmados (T2, L10).
   let watts: number | null = null
   let wattsSource: WattsSource | null = null
   if (type === 'bike') {
-    if (input.watts != null) {
-      watts = input.watts
-      wattsSource = input.watts_source ?? (input.favorite_id && input.watts === favoriteWatts ? 'favorite' : 'manual')
-    } else if (favoriteWatts != null) {
-      watts = favoriteWatts
-      wattsSource = 'favorite'
-    } else {
-      watts = await lastConfirmedWatts(db, date)
-      wattsSource = watts != null ? 'prefill' : null
+    const chain = wattsChain({
+      watts: input.watts ?? null,
+      wattsSource: input.watts_source ?? null,
+      favoriteWatts: input.favorite_id ? favoriteWatts : null,
+      deviceCalories: input.kcal_device ?? null,
+    })
+    let picked = pickWatts(chain)
+    if (picked.watts == null && !((input.kcal_device ?? 0) > 0)) {
+      picked = pickWatts({ ...chain, lastConfirmed: await lastConfirmedWatts(db, date) })
     }
+    watts = picked.watts
+    wattsSource = picked.source
   }
 
   const sport = (type === 'other' ? (input.sport ?? 'outro') : null) as OtherSport | null
@@ -360,27 +382,24 @@ export const save = post(async ({ db, userId, body, res }) => {
     if (target.source === 'intervals' && input.kcal_device != null && input.kcal_device !== target.kcal_device) {
       patch.kcal_device = input.kcal_device
     }
-    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts,
-    // noutro desporto (as do «Já fiz» numa caminhada do relógio) ou no ginásio
-    // (o print junto ao ginásio dito ou com séries: contam as do relógio).
-    const wattsNow = (patch.watts ?? target.watts) as number | null
-    const newDeviceKcal =
-      patch.kcal_device != null &&
-      ((target.type === 'bike' && wattsNow == null) ||
-        target.type === 'other' ||
-        (target.type === 'strength' && Number(patch.kcal_device) > 0))
-    if (patch.watts != null || newDeviceKcal) {
-      const targetSport = (target.sport ?? (target.raw as { sport?: unknown } | null)?.sport) as string | null | undefined
-      const again = exerciseKcal({
+    // Novas contas quando chegam watts, ou calorias numa bicicleta sem watts
+    // (ou com os supostos), noutro desporto (as do «Já fiz» numa caminhada do
+    // relógio) ou no ginásio (o print junto ao ginásio dito ou com séries:
+    // contam as do relógio).
+    const again = kcalAfterMerge(
+      {
         type: target.type as WorkoutType,
-        minutes: (target.minutes as number | null) ?? input.minutes,
-        watts: target.type === 'bike' ? wattsNow : null,
-        wattsSource: (patch.watts_source ?? target.watts_source) as WattsSource,
-        deviceCalories: (patch.kcal_device ?? target.kcal_device) as number | null,
-        sport: target.type === 'other' && isOtherSport(targetSport) ? targetSport : null,
-      })
-      Object.assign(patch, { kcal_est: again.kcal, kcal_rule: again.rule, kcal_estimated: again.estimated })
-    }
+        minutes: (target.minutes as number | null) ?? null,
+        watts: (target.watts as number | null) ?? null,
+        watts_source: (target.watts_source as string | null) ?? null,
+        kcal_device: (target.kcal_device as number | null) ?? null,
+        sport: (target.sport as string | null) ?? null,
+        raw: target.raw,
+      },
+      patch,
+      input.minutes,
+    )
+    if (again) Object.assign(patch, again)
     if (importRow) {
       Object.assign(patch, {
         source_paths: [...((target.source_paths as string[]) ?? []), ...importRow.source_paths],
@@ -481,6 +500,75 @@ export const strength = post(async ({ db, userId, body, res }) => {
       } | null)
     : null
 
+  // «Sim, é esse» (T3): as séries ditas vão para o ginásio do dia que já lá
+  // estava (o do relógio). Fica a duração e a hora dele; as calorias ditas só
+  // entram se ele não as tem; as séries que já tiver ficam e as novas
+  // continuam a numeração.
+  if (input.workout_id && input.merge) {
+    const target = await ownWorkout(db, input.workout_id)
+    if (target.deleted_at) throw new HttpError(409, 'Esse treino foi apagado.')
+    if (target.type !== 'strength') throw new HttpError(422, 'Esse treino não é um ginásio.')
+    const patch: Record<string, unknown> = {}
+    const filled: string[] = []
+    if (target.minutes == null) {
+      patch.minutes = input.minutes
+      filled.push('minutes')
+    }
+    if (input.kcal_device != null && input.kcal_device > 0 && storedDeviceKcal(target) == null) {
+      patch.kcal_device = input.kcal_device
+      filled.push('kcal_device')
+    }
+    if (favorite && !target.favorite_id) {
+      Object.assign(patch, { favorite_id: favorite.id, name: favorite.name })
+      filled.push('favorite_id')
+    } else if (input.name && !target.favorite_id && target.source !== 'manual') {
+      patch.name = input.name
+    }
+    const note = input.note?.trim()
+    if (note && !target.note) {
+      patch.note = note
+      filled.push('note')
+    }
+    const again = kcalAfterMerge(
+      {
+        type: 'strength',
+        minutes: (target.minutes as number | null) ?? input.minutes,
+        watts: null,
+        watts_source: null,
+        kcal_device: storedDeviceKcal(target),
+      },
+      patch,
+      input.minutes,
+    )
+    if (again) Object.assign(patch, again)
+    const { data: existingSets } = await db.from('exercise_log').select('exercise,set_index').eq('workout_id', target.id)
+    const offset = new Map<string, number>()
+    for (const row of (existingSets ?? []) as { exercise: string; set_index: number }[]) {
+      offset.set(row.exercise, Math.max(offset.get(row.exercise) ?? 0, row.set_index))
+    }
+    if (input.sets.length) filled.push('series')
+    patch.merged_from = [
+      ...(((target.merged_from as unknown[]) ?? []) as unknown[]),
+      { said: true, at: new Date().toISOString(), filled },
+    ]
+    const { data, error } = await db.from('workouts').update(patch).eq('id', target.id).select().single()
+    if (error) throw new HttpError(500, error.message)
+    if (input.sets.length) {
+      const { error: logError } = await db
+        .from('exercise_log')
+        .insert(rows(target.id).map((r) => ({ ...r, set_index: r.set_index + (offset.get(r.exercise) ?? 0) })))
+      if (logError) throw new HttpError(500, logError.message)
+    }
+    if (favorite) {
+      await db
+        .from('favorites')
+        .update({ use_count: (favorite.use_count ?? 0) + 1, last_used_at: new Date().toISOString() })
+        .eq('id', favorite.id)
+    }
+    res.status(200).json({ workout: data, merged: true, filled })
+    return
+  }
+
   if (input.workout_id) {
     const target = await ownWorkout(db, input.workout_id)
     const patch: Record<string, unknown> = { minutes: input.minutes }
@@ -543,7 +631,7 @@ export const strength = post(async ({ db, userId, body, res }) => {
       favorite_id: favorite?.id ?? null,
       ...(favorite ? { name: favorite.name } : input.name ? { name: input.name } : {}),
       note: input.note?.trim() || null,
-      raw: withGuess(null, guessed),
+      raw: withGuess(input.not_duplicate ? { outro_treino: true } : null, guessed),
     })
     .select()
     .single()
@@ -664,6 +752,116 @@ export const update = post(async ({ db, userId, body, res }) => {
   const { data, error } = await db.from('workouts').update(patch).eq('id', workout.id).select().single()
   if (error) throw new HttpError(500, error.message)
   res.status(200).json({ workout: data, previous })
+})
+
+// «Juntar os dois» (T1): um treino registado à mão (ou por print) e o mesmo
+// vindo do relógio. Fica o do relógio, com as séries do ginásio, o teu
+// treino, a nota e os watts confirmados do outro; o outro fica apagado (com
+// raw.juntado_a) e as kcal e o dia refazem-se com os valores juntos (o
+// gatilho marca os dois dias para recalcular).
+export const join = post(async ({ db, userId, body, res }) => {
+  const input = parse(JoinSchema, body)
+  const [first, second] = await Promise.all([ownWorkout(db, input.workout_id), ownWorkout(db, input.other_id)])
+  const choice = pickJoinTarget(
+    first as typeof first & { type: WorkoutType },
+    second as typeof second & { type: WorkoutType },
+  )
+  if ('error' in choice) throw new HttpError(422, choice.error)
+  const { keep, drop } = choice
+  const previous = { ...keep }
+  const { patch, filled } = joinPatch(keep as never, drop)
+
+  // As séries do ginásio passam para o que fica (se esse ainda não as tem).
+  let movedSets: string[] = []
+  if (keep.type === 'strength') {
+    const { count } = await db
+      .from('exercise_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('workout_id', keep.id)
+    if (!count) {
+      const { data: moved, error: moveError } = await db
+        .from('exercise_log')
+        .update({ workout_id: keep.id })
+        .eq('workout_id', drop.id)
+        .select('id')
+      if (moveError) throw new HttpError(500, moveError.message)
+      movedSets = (moved ?? []).map((r) => r.id as string)
+      if (movedSets.length) filled.push('series')
+    }
+  }
+
+  // O dia e as kcal com os valores juntos.
+  const cutoff = await cutoffHour(db)
+  const startedAt = (patch.started_at ?? keep.started_at) as string | null
+  const date = startedAt ? nutritionalDay(new Date(startedAt), cutoff) : (keep.date as string)
+  if (date !== keep.date) patch.date = date
+  const type = keep.type as WorkoutType
+  const merged = { ...keep, ...patch } as Record<string, unknown>
+  const deviceCalories = storedDeviceKcal(merged)
+  const sportRaw = (merged.sport ?? (merged.raw as { sport?: unknown } | null)?.sport) as string | null | undefined
+  const sport = type === 'other' ? (isOtherSport(sportRaw) ? sportRaw : 'outro') : null
+  const gym =
+    type === 'strength'
+      ? await strengthNeeds(db, userId, cutoff, date, deviceCalories)
+      : { gymPace: null, weightKg: null }
+  const kcal = exerciseKcal({
+    type,
+    minutes: (merged.minutes as number | null) ?? null,
+    watts: type === 'bike' ? ((merged.watts as number | null) ?? null) : null,
+    wattsSource: type === 'bike' ? ((merged.watts_source as WattsSource | null) ?? null) : null,
+    deviceCalories,
+    sport,
+    weightKg: type === 'other' && deviceCalories == null ? await weightNear(db, date) : gym.weightKg,
+    gymPace: gym.gymPace,
+  })
+  Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
+  // O que estava antes em cada campo mudado e as séries que vieram: o Anular
+  // (`join-undo`) volta exatamente a isto.
+  const before = Object.fromEntries(Object.keys(patch).map((k) => [k, keep[k] ?? null]))
+  patch.merged_from = [
+    ...(((keep.merged_from as unknown[]) ?? []) as unknown[]),
+    { workout_id: drop.id, at: new Date().toISOString(), filled, before, sets: movedSets },
+  ]
+  const { data: workout, error } = await db.from('workouts').update(patch).eq('id', keep.id).select().single()
+  if (error) throw new HttpError(500, error.message)
+
+  const dropRaw = (drop.raw && typeof drop.raw === 'object' ? drop.raw : {}) as Record<string, unknown>
+  const { data: removed, error: dropError } = await db
+    .from('workouts')
+    .update({ deleted_at: new Date().toISOString(), raw: { ...dropRaw, juntado_a: keep.id } })
+    .eq('id', drop.id)
+    .select()
+    .maybeSingle()
+  if (dropError) throw new HttpError(500, dropError.message)
+  res.status(200).json({ workout, removed, previous, filled, moved_sets: movedSets.length })
+})
+
+// Anular «Juntar os dois»: o que ficou volta aos valores de antes, as séries
+// voltam ao treino de onde vieram e o outro é reposto.
+export const joinUndo = post(async ({ db, body, res }) => {
+  const input = parse(JoinSchema, body)
+  const keep = await ownWorkout(db, input.workout_id)
+  const drop = await ownWorkout(db, input.other_id)
+  const history = ((keep.merged_from as unknown[]) ?? []) as Record<string, unknown>[]
+  const entry = [...history].reverse().find((e) => e && e.workout_id === drop.id && e.before)
+  if (!entry) throw new HttpError(409, 'Estes dois treinos não foram juntados aqui.')
+  const sets = Array.isArray(entry.sets) ? (entry.sets as string[]) : []
+  if (sets.length) {
+    const { error: setsError } = await db.from('exercise_log').update({ workout_id: drop.id }).in('id', sets)
+    if (setsError) throw new HttpError(500, setsError.message)
+  }
+  const patch = { ...(entry.before as Record<string, unknown>), merged_from: history.filter((e) => e !== entry) }
+  const { data: workout, error } = await db.from('workouts').update(patch).eq('id', keep.id).select().single()
+  if (error) throw new HttpError(500, error.message)
+  const { juntado_a: _j, ...raw } = (drop.raw && typeof drop.raw === 'object' ? drop.raw : {}) as Record<string, unknown>
+  const { data: restored, error: dropError } = await db
+    .from('workouts')
+    .update({ deleted_at: null, raw: Object.keys(raw).length ? raw : null })
+    .eq('id', drop.id)
+    .select()
+    .maybeSingle()
+  if (dropError) throw new HttpError(500, dropError.message)
+  res.status(200).json({ workout, restored })
 })
 
 export const remove = post(async ({ db, body, res }) => {

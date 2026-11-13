@@ -70,24 +70,39 @@ export interface ExerciseSuggestion {
   topLoad: number | null
   ready: boolean
   today: number | null // carga sugerida para hoje
+  // Ao subir a carga, as repetições começam no mínimo (T7): sem isto o
+  // «✓ Todas» gravava 42 × 12 sem as fazer. null: as da última vez.
+  repsToday: number | null
 }
 
+const topLoadOf = (sets: LoggedSet[]) =>
+  sets.reduce<number | null>((acc, s) => (s.load_kg != null && (acc == null || s.load_kg > acc) ? s.load_kg : acc), null)
+
 // sessions: séries deste exercício por sessão, por ordem cronológica.
-export function suggestExercise(sessions: LoggedSet[][], repMax = FREE_REP_MAX): ExerciseSuggestion {
+// Só se sugere subir com a mesma carga de topo nas duas sessões (30 × 12 e
+// 40 × 12 não dão 42), com carga (peso do corpo, carga 0, não dá «Hoje: 1
+// kg») e fora dos exercícios de tempo (12 segundos de prancha não são o
+// topo) — T7.
+export function suggestExercise(
+  sessions: LoggedSet[][],
+  repMax = FREE_REP_MAX,
+  options: { repMin?: number; timed?: boolean } = {},
+): ExerciseSuggestion {
   const withSets = sessions.filter((s) => s.length > 0)
   const lastSets = withSets[withSets.length - 1] ?? []
-  if (!lastSets.length) return { firstTime: true, lastSets: [], topLoad: null, ready: false, today: null }
-  const topLoad = lastSets.reduce<number | null>(
-    (acc, s) => (s.load_kg != null && (acc == null || s.load_kg > acc) ? s.load_kg : acc),
-    null,
-  )
-  const ready = readyForIncreaseFree(withSets, repMax)
+  if (!lastSets.length) return { firstTime: true, lastSets: [], topLoad: null, ready: false, today: null, repsToday: null }
+  const topLoad = topLoadOf(lastSets)
+  const previous = withSets[withSets.length - 2]
+  const sameLoad = previous != null && topLoadOf(previous) === topLoad
+  const ready =
+    !options.timed && topLoad != null && topLoad > 0 && sameLoad && readyForIncreaseFree(withSets, repMax)
   return {
     firstTime: false,
     lastSets,
     topLoad,
     ready,
-    today: topLoad == null ? null : ready ? topLoad + loadStep(topLoad) : topLoad,
+    today: topLoad == null || topLoad <= 0 ? null : ready ? topLoad + loadStep(topLoad) : topLoad,
+    repsToday: ready ? (options.repMin ?? FREE_REP_MIN) : null,
   }
 }
 
