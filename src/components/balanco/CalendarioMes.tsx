@@ -68,15 +68,16 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
 
   return (
     <ChartCard
+      interactive
       kicker={`Dias no alvo · ${monthName(month)}`}
       reading={cal.reading}
       aside={
         <div className="flex items-center justify-between">
-          <button disabled={!canPrev} onClick={() => (setMonth(prev), setPicked(null))} className="h-10 w-10 text-xl text-dim disabled:opacity-30" aria-label="Mês anterior">
+          <button disabled={!canPrev} onClick={() => (setMonth(prev), setPicked(null))} className="h-11 w-11 text-xl text-dim disabled:opacity-30" aria-label="Mês anterior">
             ‹
           </button>
           <p className="text-[15px] font-semibold capitalize">{monthName(month)}</p>
-          <button disabled={!canNext} onClick={() => (setMonth(next), setPicked(null))} className="h-10 w-10 text-xl text-dim disabled:opacity-30" aria-label="Mês seguinte">
+          <button disabled={!canNext} onClick={() => (setMonth(next), setPicked(null))} className="h-11 w-11 text-xl text-dim disabled:opacity-30" aria-label="Mês seguinte">
             ›
           </button>
         </div>
@@ -114,7 +115,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
               onClick={() => setPicked(picked === c.date ? null : c.date)}
               aria-pressed={picked === c.date}
               aria-label={`${fmtDayShort(c.date)}: ${RESULT_TEXT[c.result]}`}
-              className={`relative flex aspect-square min-h-10 flex-col items-center justify-center rounded-lg text-[14px] leading-none tabular-nums disabled:opacity-40 ${
+              className={`relative flex aspect-square min-h-11 flex-col items-center justify-center rounded-lg text-[14px] leading-none tabular-nums disabled:opacity-40 ${
                 picked === c.date ? 'ring-[2.5px] ring-ink ring-offset-2 ring-offset-surface' : ''
               }`}
               style={style(c)}
@@ -161,7 +162,7 @@ export default function CalendarioMes({ data, today, onOpenDay }: { data: Balanc
                 )}
               </div>
               {cell.result !== 'futuro' && (
-                <button onClick={() => onOpenDay(cell.date)} className="min-h-10 shrink-0 text-[15px] font-semibold text-eat">
+                <button onClick={() => onOpenDay(cell.date)} className="min-h-11 shrink-0 text-[15px] font-semibold text-eat">
                   Abrir ›
                 </button>
               )}

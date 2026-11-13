@@ -37,7 +37,7 @@ export interface CorpoData {
 type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
 
 // O Supabase devolve no máximo 1000 linhas por pedido.
-async function allPages<T>(make: (from: number, to: number) => Page<T>): Promise<T[]> {
+export async function allPages<T>(make: (from: number, to: number) => Page<T>): Promise<T[]> {
   const rows: T[] = []
   for (;;) {
     const { data, error } = await make(rows.length, rows.length + PAGE - 1)
@@ -96,6 +96,27 @@ export async function loadCorpo(profile: Profile, today: string, scope: 'recente
   }
 }
 
+// P1b: o «Tudo» a partir do lote recente já lido — só o que fica antes dele
+// (pesagens, relógio e treinos); as medições, os dias e a projeção são os
+// mesmos. Três pedidos em vez de seis, sem reler os últimos 5 meses.
+export async function loadCorpoOlder(recent: CorpoData): Promise<CorpoData> {
+  const from = shiftDate(recent.today, -RECENT_DAYS)
+  const workoutsFrom = shiftDate(from, -42)
+  const [weights, health, workouts] = await Promise.all([
+    allPages<CorpoWeight>((a, b) => supabase.from('weights').select('date,kg,body_fat_pct').lt('date', from).order('date').range(a, b)),
+    allPages<CorpoHealth>((a, b) => supabase.from('health_daily').select(HEALTH_COLUMNS).lt('date', from).order('date').range(a, b)),
+    allPages<CorpoWorkout>((a, b) => supabase.from('workouts_active').select(WORKOUT_COLUMNS).lt('date', workoutsFrom).order('date').range(a, b)),
+  ])
+  const older = weights.map((w) => ({ date: w.date, kg: Number(w.kg), body_fat_pct: w.body_fat_pct != null ? Number(w.body_fat_pct) : null }))
+  return {
+    ...recent,
+    scope: 'tudo',
+    weights: [...older, ...recent.weights],
+    health: [...health, ...recent.health],
+    workouts: [...workouts, ...recent.workouts],
+  }
+}
+
 // O período escolhido fica neste telemóvel, para cada pessoa.
 const PERIOD_KEY = 'regresso.corpo.periodo'
 
@@ -132,7 +153,8 @@ export function useCorpoData(profile: Profile, today: string, period: Period, ve
     }
     let alive = true
     setState((s) => ({ ...s, loading: true }))
-    loadCorpo(profile, today, scope)
+    const recent = scope === 'tudo' ? cache.current.find((c) => c.profile === profile && c.key === `${base}:recente`) : undefined
+    ;(recent ? loadCorpoOlder(recent.data) : loadCorpo(profile, today, scope))
       .then((data) => {
         if (!alive) return
         const keep = cache.current.filter((c) => c.profile === profile && c.key.startsWith(`${base}:`))

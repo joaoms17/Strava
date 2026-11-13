@@ -52,14 +52,15 @@ export default function SemanaChart({
   days,
   today,
   avg7,
-  learning,
+  gasto,
   note,
   onOpenDay,
 }: {
   days: ChartDay[]
   today: string
   avg7: number | null
-  learning: boolean
+  // O estado do gasto quando ainda não é medido («a aprender (faltam 2 pesagens)», «fórmula»).
+  gasto?: string | null
   // Uma linha quando o gasto medido está limitado ou a acompanhar (decisão 304).
   note?: string | null
   onOpenDay: (date: string) => void
@@ -89,6 +90,7 @@ export default function SemanaChart({
   return (
     <ChartCard
       id="semana-grafico"
+      interactive
       kicker="Comer contra o alvo, dia a dia"
       reading={reading}
       note={note ?? undefined}
@@ -101,12 +103,12 @@ export default function SemanaChart({
           {results.has('fora') && <Key shape="outline" color={colors.dim} label="fora (incompleto)" />}
           {results.has('hoje') && <Key shape="outline" color={colors.dim} label="hoje (a meio)" />}
           <Key shape="line" color={colors.ink} label="alvo do dia" />
-          <Key shape="line" color={colors.burn} label={`gasto${learning ? ' (a aprender)' : ''}`} />
+          <Key shape="line" color={colors.burn} label={gasto ? `gasto (${gasto})` : 'gasto'} />
           {avg7 != null &&
             (meanLine ? (
-              <Key shape="dash" color={colors.dim} label={`comeste em média (7 dias): ${fmtInt(avg7)} kcal`} />
+              <Key shape="dash" color={colors.dim} label={`média dos últimos 7 dias completos: ${fmtInt(avg7)} kcal`} />
             ) : (
-              <span>comeste em média (7 dias): {fmtInt(avg7)} kcal</span>
+              <span>média dos últimos 7 dias completos: {fmtInt(avg7)} kcal</span>
             ))}
         </Legend>
       }
@@ -207,7 +209,7 @@ export default function SemanaChart({
                 <MissingNote date={selected.date} today={today} compact />
               </div>
             )}
-            <button onClick={() => onOpenDay(selected.date)} className="min-h-9 text-[15px] font-semibold text-eat">
+            <button onClick={() => onOpenDay(selected.date)} className="min-h-11 text-[15px] font-semibold text-eat">
               Abrir o dia ›
             </button>
           </div>

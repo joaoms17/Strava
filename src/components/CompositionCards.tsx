@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSheet } from '../lib/sheet'
 import { useReadyProfile } from '../lib/profile'
-import { localCalendarDate } from '../lib/day'
+import { nutritionalDay } from '../lib/day'
 import { fmt1, fmtDayMonth } from '../lib/format'
 import {
   DETECTABLE_CHANGE_PP,
@@ -35,7 +35,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
   const profile = useReadyProfile()
   const [details, setDetails] = useState(false)
   const height = Number(profile.height_cm ?? 183)
-  const today = localCalendarDate()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour) // K10: o dia do Balanço
   const female = profile.sex === 'f'
 
   if (rows.length === 0) {
@@ -116,7 +116,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
       <div className="grid grid-cols-2 gap-3">
         <div>
           <p className="num text-[34px] leading-none font-extrabold text-body">{fmt1(last.c.shown.fatKg)} kg</p>
-          <p className="text-[14px] text-dim">gordura · cerca de {last.c.shown.pct}&nbsp;%</p>
+          <p className="text-[14px] text-dim">gordura · cerca de {fmt1(last.c.pct)}&nbsp;% {/* B11: a mesma casa decimal do gráfico da %G */}</p>
         </div>
         <div>
           <p className="num text-[34px] leading-none font-extrabold">{fmt1(last.c.shown.leanKg)} kg</p>

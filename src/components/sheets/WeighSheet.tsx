@@ -8,7 +8,7 @@ import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { recomputeFrom } from '../../lib/recompute'
 import { localCalendarDate, shiftDate } from '../../lib/day'
-import { fmt1, parseDecimal } from '../../lib/format'
+import { fmt1, fmtDayShort, parseDecimal } from '../../lib/format'
 import { checkWeighing, trend7 } from '../../../api/_lib/rules/weight'
 import type { WeightRow } from '../../lib/types'
 import { chip } from '../ui/Chips'
@@ -25,22 +25,37 @@ export default function WeighSheet() {
   const [value, setValue] = useState(sheet.params.get('valor') ?? '')
   const [fatPct, setFatPct] = useState('')
   const [weights, setWeights] = useState<WeightRow[]>([])
+  // Para que dia as pesagens já foram lidas (até lá não se grava: «Anular» tem de saber o que havia).
+  const [loadedFor, setLoadedFor] = useState<string | null>(null)
   const [stage, setStage] = useState<Stage>({ kind: 'input' })
   const [saveKey, saving] = useBusyKey()
   const [error, setError] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
 
+  // B7: os 60 dias até ao dia da pesagem (aberta pelo Hoje de um dia antigo,
+  // vê a pesagem que lá está: guardar substitui e «Anular» repõe-na).
   useEffect(() => {
-    async function load() {
-      const { data: rows } = await supabase
-        .from('weights')
-        .select('date,kg,body_fat_pct,measured_at,source')
-        .gte('date', shiftDate(today, -60))
-        .order('date')
-      setWeights(((rows ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })))
+    let alive = true
+    void supabase
+      .from('weights')
+      .select('date,kg,body_fat_pct,measured_at,source')
+      .gte('date', shiftDate(date, -60))
+      .lte('date', date)
+      .order('date')
+      .then(({ data: rows, error: readError }) => {
+        if (!alive) return
+        if (readError) {
+          setError('Não consegui ler as pesagens. Tenta outra vez.')
+          return
+        }
+        setWeights(((rows ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })))
+        setLoadedFor(date)
+      })
+    return () => {
+      alive = false
     }
-    void load()
-  }, [today])
+  }, [date])
+  const loaded = loadedFor === date
 
   const before = weights.filter((w) => w.date !== date && w.date < date)
   const last = before[before.length - 1] ?? null
@@ -56,6 +71,7 @@ export default function WeighSheet() {
 
   async function save(kg: number) {
     setError(null)
+    if (!loaded) return
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -96,6 +112,8 @@ export default function WeighSheet() {
         await supabase.from('weights').delete().eq('user_id', user.id).eq('date', date)
       }
       emitDataChanged()
+      // B7: anular também refaz o peso médio e o gasto dos dias seguintes.
+      recomputeFrom(date, today)
     }
     const text = `Guardado · ${fmt1(kg)} kg`
     toast(text, [{ label: 'Anular', run: undo }])
@@ -151,6 +169,7 @@ export default function WeighSheet() {
   }
 
   function submit() {
+    if (!loaded) return
     const kg = parseDecimal(value)
     if (!Number.isFinite(kg) || kg <= 0) {
       setError('Escreve o peso em kg, por exemplo 84,6.')
@@ -226,11 +245,12 @@ export default function WeighSheet() {
 
   return (
     <BottomSheet
-      title="Peso"
+      // B7: um dia que não é hoje, ontem nem anteontem diz-se no título.
+      title={date < shiftDate(today, -2) ? `Peso · ${fmtDayShort(date)}` : 'Peso'}
       onClose={sheet.close}
       footer={
         <button
-          disabled={saving || !value.trim()}
+          disabled={saving || !value.trim() || !loaded}
           aria-busy={saving || undefined}
           onClick={submit}
           className={`min-h-14 w-full rounded-2xl bg-cta text-[17px] font-semibold text-on-cta disabled:opacity-40 ${saving ? 'opacity-100!' : ''}`}
@@ -275,13 +295,19 @@ export default function WeighSheet() {
             +0,1
           </button>
         </div>
+        {/* Ideia 15: o peso não mudou? Um toque preenche-o. */}
         {last && !value && (
-          <p className="text-center text-[13px] text-dim">
-            {last.date === shiftDate(date, -1) ? 'ontem' : 'última'} {fmt1(last.kg)}
-          </p>
+          <button onClick={() => setValue(fmt1(last.kg))} className="mx-auto block min-h-11 rounded-full border border-line px-4 text-[15px] text-dim tabular-nums">
+            {last.date === shiftDate(date, -1) ? 'ontem' : 'última'} {fmt1(last.kg)} · usar
+          </button>
         )}
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {date < shiftDate(today, -2) && (
+            <button aria-pressed className={chip(true, 'cta')}>
+              {fmtDayShort(date)}
+            </button>
+          )}
           {[0, -1, -2].map((back) => {
             const day = shiftDate(today, back)
             return (

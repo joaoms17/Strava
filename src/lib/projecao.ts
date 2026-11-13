@@ -128,6 +128,8 @@ export async function loadMonth(profile: Profile, month: string, today: string):
   const { data: meals } = await supabase.from('meals_counted').select('date,items').gte('date', first).lte('date', last)
   const p = project({ ...data.input, days: data.input.days.filter((d) => d.date < asOf) })
   const i = data.input
+  // B12: num mês antigo, uma data de chegada que já passou não se mostra.
+  const stale = p.status === 'ok' && p.weight.kind === 'date' && p.weight.date < today
   return monthSummary({
     month,
     weights: i.weights,
@@ -135,6 +137,6 @@ export async function loadMonth(profile: Profile, month: string, today: string):
     days: i.days as unknown as Parameters<typeof monthSummary>[0]['days'],
     workouts: i.workouts as unknown as Parameters<typeof monthSummary>[0]['workouts'],
     meals: (meals ?? []).map((x) => ({ date: x.date as string, items: (x.items as { name: string }[] | null) ?? [] })),
-    projection: projectionLine(p, i.targetKg, data.targetWaistCm, asOf),
+    projection: stale ? null : projectionLine(p, i.targetKg, data.targetWaistCm, asOf),
   })
 }

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fmt1, fmtDayMonth, fmtInt } from '../../lib/format'
-import { mondayOf } from '../../../api/_lib/rules/manutencao'
+import { shiftDate } from '../../lib/day'
 import { bestDeficitWeek, mondaysUpTo, weeklyBalance, weeklyReading, type WeekBalance } from '../../../api/_lib/rules/balanco-graficos'
 import { niceScale } from '../../../api/_lib/rules/graficos'
 import { measuredNoteFromDays } from '../../../api/_lib/rules/gasto'
@@ -13,16 +13,24 @@ import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, axisInt, categ
 const Y_WIDTH = 44
 const MARGIN = { top: 18, right: 10, bottom: 0, left: 0 }
 
-// Balanço › «Semana a semana»: as últimas 12 semanas, o défice médio por dia
-// (barras, dos dias completos) e, por cima, o peso médio de cada semana — a
-// prova de que o esforço funciona. Dois gráficos alinhados (o mesmo eixo das
+// Balanço › Mês › «Semana a semana»: as últimas 12 semanas, o défice médio
+// por dia (barras, dos dias completos) e, por cima, o peso médio de cada
+// semana — a prova de que o esforço funciona. Tocar numa semana mostra o
+// comido, o gasto e o gasto medido (B17: era também o «Por semana» do Mês).
+// A semana em curso fica mais clara e fora da frase (B4). Dois gráficos alinhados (o mesmo eixo das
 // semanas), em vez de dois eixos no mesmo gráfico, cada um com a sua unidade
 // escrita; uma semana sem dias completos tem «–» em vez de barra.
 export default function SemanaASemana({ data, today, waterDay }: { data: BalancoLongo; today: string; waterDay?: (d: string) => boolean }) {
   const colors = useChartColors()
   const model = useMemo(() => {
     const mondays = mondaysUpTo(today, LONG_WEEKS)
-    const all = weeklyBalance(data.days, data.weights, mondays, today, waterDay)
+    const balance = weeklyBalance(data.days, data.weights, mondays, today, waterDay)
+    // O gasto medido de cada semana: o do último dia dela que o tem.
+    const all = balance.map((w) => {
+      const sunday = shiftDate(w.monday, 6)
+      const last = data.days.filter((d) => d.date >= w.monday && d.date <= sunday && d.tdee_est != null).pop()
+      return { ...w, tdee: last?.tdee_est ?? null }
+    })
     // Começa na primeira semana com dados (uma conta nova não fica com 10 semanas vazias).
     const firstIdx = all.findIndex((w) => w.deficit != null || w.kg != null)
     const weeks = firstIdx < 0 ? [] : all.slice(firstIdx)
@@ -45,7 +53,6 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
       kgScale,
       defScale: { ...defScale, domain: [defScale.domain[0], Math.max(defScale.domain[1], Math.ceil(defMax * 1.18))] as [number, number] },
       axis: categoryTicks(weeks.map((w) => w.monday), weeks.length >= 8 ? 4 : 5),
-      current: mondayOf(today),
       enough: weeks.filter((w) => w.deficit != null).length >= 2,
       hasKg: kgs.length >= 2,
       // O gasto das barras é o medido: uma linha quando ainda está limitado (decisão 304).
@@ -53,9 +60,9 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
     }
   }, [data, today, waterDay])
 
-  const tip = (w: WeekBalance) => (
+  const tip = (w: WeekBalance & { tdee: number | null }) => (
     <TipBox
-      title={`Semana de ${fmtDayMonth(w.monday)}${w.monday === model.current ? ' (a meio)' : ''}`}
+      title={`Semana de ${fmtDayMonth(w.monday)}${w.partial ? ' (a meio)' : ''}`}
       rows={[
         { label: 'peso médio', value: w.kg != null ? `${fmt1(w.kg)} kg` : '—', color: colors.weight },
         {
@@ -63,6 +70,9 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
           value: w.deficit != null ? fmtInt(Math.abs(w.deficit)) : '—',
           color: colors.burn,
         },
+        { label: 'comeste (média)', value: w.eaten != null ? `${fmtInt(w.eaten)} kcal` : '—' },
+        { label: 'gasto (média)', value: w.out != null ? `${fmtInt(w.out)} kcal` : '—', color: colors.burn },
+        { label: 'gasto medido', value: w.tdee != null ? `${fmtInt(w.tdee)} kcal` : '—', color: colors.dim, dash: true },
         { label: w.days === 1 ? 'dia completo' : 'dias completos', value: String(w.days) },
       ]}
       colors={colors}
@@ -86,7 +96,8 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
       }
       note={
         <>
-          Só os dias completos contam para o défice (gasto − comido). A semana de hoje ainda vai a meio.
+          Só os dias completos contam para o défice (gasto − comido). A barra mais clara é a semana de hoje: ainda vai a meio e
+          fica fora da frase.
           {model.gastoNote && <span className="block pt-1">{model.gastoNote}</span>}
         </>
       }
@@ -106,7 +117,10 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
                 .reverse()
                 .map((w) => (
                   <tr key={w.monday}>
-                    <td>{fmtDayMonth(w.monday)}</td>
+                    <td>
+                      {fmtDayMonth(w.monday)}
+                      {w.partial ? ' (a meio)' : ''}
+                    </td>
                     <td className="text-right">{w.deficit != null ? `${fmtInt(w.deficit)} kcal` : '—'}</td>
                     <td className="text-right">
                       {w.kg != null ? `${fmt1(w.kg)} kg` : '—'}
@@ -140,7 +154,7 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
                     tickLine={false}
                     width={Y_WIDTH}
                   />
-                  <Tooltip {...tooltipBase(colors)} content={({ active, payload }) => (active && payload?.[0] ? tip(payload[0].payload as WeekBalance) : null)} />
+                  <Tooltip {...tooltipBase(colors)} content={({ active, payload }) => (active && payload?.[0] ? tip(payload[0].payload as WeekBalance & { tdee: number | null }) : null)} />
                   <Line
                     dataKey="kg"
                     stroke={colors.weight}
@@ -176,11 +190,11 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
                 <CartesianGrid stroke={colors.grid} vertical={false} />
                 <XAxis dataKey="monday" ticks={model.axis.ticks} interval={0} tickFormatter={model.axis.format} tick={TICK(colors)} axisLine={{ stroke: colors.grid }} tickLine={false} />
                 <YAxis domain={model.defScale.domain} ticks={model.defScale.ticks} tickFormatter={axisInt} tick={TICK(colors)} axisLine={false} tickLine={false} width={Y_WIDTH} />
-                <Tooltip {...tooltipBase(colors)} content={({ active, payload }) => (active && payload?.[0] ? tip(payload[0].payload as WeekBalance) : null)} />
+                <Tooltip {...tooltipBase(colors)} content={({ active, payload }) => (active && payload?.[0] ? tip(payload[0].payload as WeekBalance & { tdee: number | null }) : null)} />
                 <ReferenceLine y={0} stroke={colors.dim} strokeWidth={1} />
                 <Bar dataKey="deficit" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false}>
                   {model.weeks.map((w) => (
-                    <Cell key={w.monday} fill={w.deficit != null && w.deficit < 0 ? colors.danger : colors.burn} fillOpacity={w.monday === model.current ? 0.45 : 1} />
+                    <Cell key={w.monday} fill={w.deficit != null && w.deficit < 0 ? colors.danger : colors.burn} fillOpacity={w.partial ? 0.45 : 1} />
                   ))}
                 </Bar>
                 {/* Semanas sem barra: «–» (sem dias completos) ou «0», para não ficarem em branco. */}
