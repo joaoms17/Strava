@@ -70,6 +70,8 @@ interface DayData {
   // O plano base guardado no fecho deste dia (null: o de hoje), as respostas
   // «Foi tudo?» deste dia e os dias da semana até este.
   dayBase: number | null
+  // O gasto guardado pelo fecho deste dia (K9: um dia passado mostra o mesmo do Balanço).
+  dayOut: number | null
   flags: string[]
   week: WeekSoFarDay[]
   latestTdee: number | null
@@ -232,9 +234,9 @@ export default function Hoje() {
     if (request !== loads.current) return
     const yesterdayRows = (yMeals ?? []) as Meal[]
     const yesterdayCounted = yesterdayRows.filter((m) => m.status === 'ok' || m.status === 'por_rever')
-    const dayRow = ((weekRows ?? []) as { date: string; base_kcal?: number | null; flags?: unknown }[]).find(
-      (d) => d.date === date,
-    )
+    const dayRow = (
+      (weekRows ?? []) as { date: string; base_kcal?: number | null; kcal_out_est?: number | null; flags?: unknown }[]
+    ).find((d) => d.date === date)
     setData({
       date,
       meals: mealRows,
@@ -249,6 +251,7 @@ export default function Hoje() {
         flags: Array.isArray(yDay?.flags) ? (yDay.flags as string[]) : [],
       },
       dayBase: dayRow?.base_kcal != null ? Number(dayRow.base_kcal) : null,
+      dayOut: dayRow?.kcal_out_est != null && Number.isFinite(Number(dayRow.kcal_out_est)) ? Number(dayRow.kcal_out_est) : null,
       flags: Array.isArray(dayRow?.flags) ? (dayRow.flags as string[]) : [],
       week: (weekRows ?? []) as WeekSoFarDay[],
       latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
@@ -403,8 +406,15 @@ export default function Hoje() {
   const left = plan - kcalIn
   // O que se mostra: Plano − Comido com os números já arredondados (K16).
   const leftShown = kcalLeftShown(plan, kcalIn)
-  // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
-  const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
+  // Gasto de hoje (só para mostrar): base sem treino + treino do dia. Um dia
+  // passado usa o guardado pelo fecho, como o Balanço (K9): recalculado aqui,
+  // com os pesos e o perfil de hoje, podia trocar o veredicto na margem.
+  const outToday =
+    !isToday && data.dayOut != null
+      ? data.dayOut
+      : data.expenditure
+        ? kcalOut(data.expenditure.base, kcalExercise)
+        : null
   const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
   // Contra o plano, com a regra do Balanço (decisões 289, 301 e 309): até 100
   // kcal acima é «no alvo» (sem âmbar), acima disso âmbar e, acima do gasto, o
