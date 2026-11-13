@@ -3,13 +3,13 @@ import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { BusyButton } from '../../lib/busy'
-import { useReadyProfile } from '../../lib/profile'
 import { emitDataChanged } from '../../lib/events'
 import { OTHER_SPORTS, SPORT_LABEL, isOtherSport, workoutKcal, type OtherSport } from '../../../api/_lib/rules/targets'
 import type { Favorite, FavoriteWorkout, TemplateExercise } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import Icon from '../ui/Icon'
 import ExercisePicker from '../ExercisePicker'
+import { useWattsChoices } from '../../lib/use-watts'
 import { chip } from '../ui/Chips'
 import { cleanDecimalText, decimalFromText, decimalText, intFromText } from '../../lib/campo-numero'
 
@@ -28,7 +28,6 @@ const DURATIONS = [30, 45, 60, 75, 90]
 export default function TemplateSheet() {
   const sheet = useSheet()
   const toast = useToast()
-  const profile = useReadyProfile()
   const id = sheet.params.get('id')
   const [loaded, setLoaded] = useState(!id)
   const [name, setName] = useState('')
@@ -53,7 +52,8 @@ export default function TemplateSheet() {
     })
   const dropDrafts = (name: string) =>
     setDrafts((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !k.startsWith(`${name}|`))))
-  const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
+  // As tuas potências (Definições) ou as das últimas sessões; nunca fixas (T15).
+  const wattsOptions = useWattsChoices()
 
   useEffect(() => {
     if (!id) return
@@ -242,10 +242,26 @@ export default function TemplateSheet() {
               <p className="label">Potência</p>
               <div className="flex flex-wrap gap-2">
                 {wattsOptions.map((w) => (
-                  <button key={w} onClick={() => setWatts(w)} className={chip(watts === w, 'cta')}>
+                  <button key={w} onClick={() => setWatts(watts === w ? null : w)} className={chip(watts === w, 'cta')}>
                     {w} W
                   </button>
                 ))}
+                <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                  <input
+                    inputMode="numeric"
+                    aria-label="Outra potência em watts"
+                    value={watts != null && !wattsOptions.includes(watts) ? String(watts) : ''}
+                    placeholder="outra"
+                    onChange={(e) => {
+                      const n = Number.parseInt(e.target.value.replace(/\D/g, '').slice(0, 3), 10)
+                      setWatts(Number.isFinite(n) && n > 0 ? n : null)
+                    }}
+                    className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                      watts != null && !wattsOptions.includes(watts) ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
+                    }`}
+                  />
+                  W
+                </label>
               </div>
             </div>
           )}

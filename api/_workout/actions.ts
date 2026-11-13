@@ -80,6 +80,8 @@ const UpdateSchema = z.object({
   // «São dois treinos» ao aviso de possível duplicado (true) ou o Anular
   // (false): fica em raw.outro_treino, como o «Não, é outro» ao guardar.
   outro_treino: z.boolean().optional(),
+  // Corrigir as calorias do relógio de um treino guardado (T17).
+  kcal_device: int(1, 5000).optional(),
 })
 
 const ShotSchema = z.object({
@@ -134,6 +136,8 @@ const WorkoutIdSchema = z.object({ workout_id: z.string().uuid() })
 // «Juntar os dois»: o do relógio fica e o outro junta-se a ele (a ordem não importa).
 const JoinSchema = z.object({ workout_id: z.string().uuid(), other_id: z.string().uuid() })
 const ImportIdSchema = z.object({ import_id: z.string().uuid(), reset: z.boolean().optional() })
+// «Descartar» com Anular (T17): `undo` volta a pôr o print por confirmar.
+const DiscardSchema = ImportIdSchema.extend({ undo: z.boolean().optional() })
 
 type Handler = (req: VercelRequest, res: VercelResponse) => Promise<void>
 
@@ -691,6 +695,7 @@ export const update = post(async ({ db, userId, body, res }) => {
     patch.watts = input.watts
     patch.watts_source = input.watts == null ? null : 'manual'
   }
+  if (input.kcal_device !== undefined) patch.kcal_device = input.kcal_device
   let raw = (workout.raw ?? null) as Record<string, unknown> | null
   if (input.started_at) {
     const startedAt = instantOrNow(input.started_at, new Date())
@@ -726,10 +731,11 @@ export const update = post(async ({ db, userId, body, res }) => {
     (input.minutes !== undefined && input.minutes !== workout.minutes) ||
     // Os mesmos watts confirmados à mão deixam de ser «≈ da última sessão».
     (input.watts !== undefined && (input.watts !== workout.watts || patch.watts_source !== workout.watts_source)) ||
-    (input.sport !== undefined && type === 'other' && input.sport !== storedSport)
+    (input.sport !== undefined && type === 'other' && input.sport !== storedSport) ||
+    (input.kcal_device !== undefined && input.kcal_device !== storedDeviceKcal(workout))
   if (changed) {
     const date = (patch.date ?? workout.date) as string
-    const deviceCalories = storedDeviceKcal(workout)
+    const deviceCalories = input.kcal_device ?? storedDeviceKcal(workout)
     const gym =
       type === 'strength'
         ? await strengthNeeds(db, userId, await cutoffHour(db), date, deviceCalories)
@@ -1010,7 +1016,21 @@ export const parseShot = post(async ({ db, userId, body, res }) => {
 })
 
 export const discard = post(async ({ db, body, res }) => {
-  const input = parse(ImportIdSchema, body)
+  const input = parse(DiscardSchema, body)
+  if (input.undo) {
+    const { data: row } = await db.from('workout_imports').select('id,parsed,status').eq('id', input.import_id).maybeSingle()
+    if (!row) throw new HttpError(404, 'Print não encontrado.')
+    const { data, error } = await db
+      .from('workout_imports')
+      .update({ status: row.parsed ? 'por_confirmar' : 'erro' })
+      .eq('id', input.import_id)
+      .eq('status', 'descartado')
+      .select()
+      .maybeSingle()
+    if (error) throw new HttpError(500, error.message)
+    res.status(200).json({ import: data })
+    return
+  }
   const { data, error } = await db
     .from('workout_imports')
     .update({ status: 'descartado' })

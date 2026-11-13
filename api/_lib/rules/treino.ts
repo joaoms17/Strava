@@ -115,7 +115,9 @@ export function kcalExplanation(w: {
 }): string {
   if (w.type === 'bike') {
     if (w.watts == null && (w.rule === 'device' || w.rule === 'device_x0.7') && w.deviceCalories != null) {
-      return `As ${w.deviceCalories} kcal do relógio (a bicicleta manda-lhe os watts e ele já os usa na conta).`
+      // Sem potência, as calorias do relógio contam (numa volta de estrada não
+      // há watts; no rolo, a app da bicicleta pode mandá-los ao relógio) — T15.
+      return `As ${w.deviceCalories} kcal do relógio: sem potência, são elas que contam.`
     }
     if (w.watts == null) return 'Sem potência: junta uma foto da consola ou escreve os watts.'
     const base = `${w.watts} W × ${w.minutes ?? 0} min = ${w.kcal}`

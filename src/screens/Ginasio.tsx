@@ -521,7 +521,8 @@ export default function Ginasio() {
         >
           <Icon name="calendar" size={18} />
           <span className="min-w-0 truncate">Ver plano · {dayLabel(planDay, true)}</span>
-          {plan?.cuidados && <span className="shrink-0 font-normal text-attn">· joelho</span>}
+          {/* A zona vem do plano («Joelho direito»), não do código (T15). */}
+          {plan?.cuidados && <span className="shrink-0 font-normal text-attn">· {plan.cuidados.zona.toLowerCase()}</span>}
         </button>
       )}
 

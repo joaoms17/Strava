@@ -9,6 +9,7 @@ import { fmtDayShort, timeOf } from '../lib/format'
 import { shiftDate } from '../lib/day'
 import { workoutTitle } from '../lib/workout-actions'
 import { missingInfo } from '../../api/_lib/rules/sessoes'
+import { usesConnectIq } from '../lib/bicicleta'
 import type { Workout } from '../lib/types'
 
 const KEY = 'regresso.treinos.sem-prints'
@@ -32,8 +33,11 @@ export default function PendingInfo({ workouts, today }: { workouts: Workout[]; 
   const [hidden, setHidden] = useState<string[]>(ignored)
   const [fetching, setFetching] = useState(false)
   const connected = profile?.integration_status?.intervals?.connected === true
+  // Só a quem usa a app da bicicleta no relógio (Connect IQ): numa volta de
+  // estrada sem potência não há nada a juntar (T15).
+  const withConnectIq = usesConnectIq(workouts.filter((w) => w.type === 'bike'))
   const pending = workouts
-    .filter((w) => w.date >= shiftDate(today, -14) && !hidden.includes(w.id) && missingInfo(w).length > 0)
+    .filter((w) => withConnectIq && w.date >= shiftDate(today, -14) && !hidden.includes(w.id) && missingInfo(w).length > 0)
     .slice()
     .reverse()
   if (pending.length === 0) return null

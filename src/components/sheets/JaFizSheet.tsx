@@ -16,6 +16,7 @@ import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import { DayChips, chip } from '../ui/Chips'
 import SameSession from '../SameSession'
+import { useWattsChoices } from '../../lib/use-watts'
 
 type Kind = 'bike' | 'strength' | OtherSport
 
@@ -61,7 +62,8 @@ export default function JaFizSheet() {
   const [deviceKcal, setDeviceKcal] = useState('')
   // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
   const [match, setMatch] = useState<Workout | null>(null)
-  const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
+  // As tuas potências (Definições) ou as das últimas sessões; nunca fixas (T15).
+  const wattsOptions = useWattsChoices()
 
   // Uma duração fora dos botões (ex.: 52 min do relógio) vai para «outro»,
   // para se ver qual fica escolhida.
@@ -260,13 +262,27 @@ export default function JaFizSheet() {
             <div className="space-y-2">
               <p className="label">Potência</p>
               <div className="flex flex-wrap gap-2">
-                {[...new Set([...wattsOptions, ...(watts ? [watts] : [])])]
-                  .sort((a, b) => a - b)
-                  .map((w) => (
-                    <button key={w} onClick={() => setWatts(w)} className={chip(watts === w, 'cta')}>
-                      {w} W
-                    </button>
-                  ))}
+                {wattsOptions.map((w) => (
+                  <button key={w} onClick={() => setWatts(watts === w ? null : w)} className={chip(watts === w, 'cta')}>
+                    {w} W
+                  </button>
+                ))}
+                <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                  <input
+                    inputMode="numeric"
+                    aria-label="Outra potência em watts"
+                    value={watts != null && !wattsOptions.includes(watts) ? String(watts) : ''}
+                    placeholder="outra"
+                    onChange={(e) => {
+                      const n = Number.parseInt(e.target.value.replace(/\D/g, '').slice(0, 3), 10)
+                      setWatts(Number.isFinite(n) && n > 0 ? n : null)
+                    }}
+                    className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                      watts != null && !wattsOptions.includes(watts) ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
+                    }`}
+                  />
+                  W
+                </label>
               </div>
             </div>
             <div className="space-y-1">

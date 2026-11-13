@@ -24,6 +24,7 @@ import { duplicatePairs, mergeSessions, possibleDuplicates, zoneMinutes } from '
 import Duplicado from '../components/Duplicado'
 import { useGymQueue } from '../lib/ginasio-fila'
 import { workoutOrigin } from '../lib/treino-origem'
+import { usesBikePower, wattsChoices } from '../lib/bicicleta'
 
 
 interface TreinoData {
@@ -192,6 +193,14 @@ export default function Treino() {
 
 
   const bikes = sessions.filter((w) => w.type === 'bike')
+  // As potências das Definições ou das últimas sessões, nunca números fixos (T15).
+  const wattsOptions = wattsChoices(
+    profile.bike_watts_options,
+    bikes
+      .filter((w) => w.watts_source !== 'prefill')
+      .map((w) => w.watts)
+      .reverse(),
+  )
   const target = nextBikeTarget(
     bikes.map((w) => ({
       watts: w.watts,
@@ -203,14 +212,20 @@ export default function Treino() {
       rpe: w.rpe ?? null,
       date: w.date,
     })),
-    profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150],
+    wattsOptions,
     { avgHr: profile.bike_hr_avg_cap, maxHr: profile.bike_hr_max_cap },
     today,
   )
   const suggestion = bikeSuggestion(target)
-  // A sugestão da bicicleta só para quem anda de bicicleta e não tem o plano
-  // semanal (aí quem sugere é a IA).
-  const ridesBike = bikes.length > 0 || favorites.some((f) => f.workout?.type === 'bike')
+  // A sugestão da bicicleta só para quem anda de bicicleta com potência: uma
+  // volta de estrada do relógio (sem watts) não chega (T15).
+  const ridesBike =
+    wattsOptions.length > 0 &&
+    usesBikePower({
+      profileOptions: profile.bike_watts_options,
+      bikeFavorites: favorites.filter((f) => f.workout?.type === 'bike').length,
+      bikes,
+    })
 
   const history = [...sessions.slice().reverse(), ...mergeSessions(older ?? []).reverse()]
   async function loadOlder() {
