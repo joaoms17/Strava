@@ -19,8 +19,13 @@ export interface FatTally {
   diasContados: number
   diasFora: number
   defice: number // kcal; positivo = comeu menos do que gastou
-  previstoKg: number // positivo = devia ter perdido
+  previstoKg: number // positivo = devia ter perdido (só os dias contados)
+  // K2: o previsto como se os dias de fora fossem iguais aos contados (o
+  // défice médio dos dias contados × os dias de calendário). É este que se
+  // compara com a balança, que desce em todos os dias, não só nos contados.
+  previstoTodosKg: number
   realKg: number | null // positivo = o peso médio desceu
+  diasCalendario: number
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10 || 0
@@ -48,6 +53,8 @@ export function fatTally(days: TallyDay[], weights: { date: string; kg: number }
     diasFora: Math.max(0, calendarDays - used.length),
     defice,
     previstoKg: round1(defice / KCAL_PER_KG),
+    previstoTodosKg: used.length ? round1(((defice / used.length) * calendarDays) / KCAL_PER_KG) : 0,
     realKg,
+    diasCalendario: calendarDays,
   }
 }

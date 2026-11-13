@@ -44,3 +44,21 @@ describe('fatTally', () => {
     expect(fatTally(days, [], '2026-10-01', '2026-10-06').realKg).toBeNull()
   })
 })
+
+// K2: com metade dos dias de fora, o previsto conta só metade; a balança
+// desce em todos os dias. Compara-se com o previsto para todos os dias.
+describe('previsto para os dias de calendário (K2)', () => {
+  it('extrapola o défice médio dos dias contados aos dias de fora', () => {
+    const days = Array.from({ length: 30 }, (_, i) => ({
+      date: `2026-10-${String(i + 1).padStart(2, '0')}`,
+      kcal_in: 1500,
+      kcal_out_est: 2270,
+      is_complete: i % 2 === 0,
+    }))
+    const t = fatTally(days, [], '2026-10-01', '2026-10-31')
+    expect(t.diasContados).toBe(15)
+    expect(t.diasCalendario).toBe(30)
+    expect(t.previstoKg).toBe(1.5)
+    expect(t.previstoTodosKg).toBe(3)
+  })
+})
