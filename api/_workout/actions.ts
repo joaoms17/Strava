@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
 import { respondError } from '../_lib/http.js'
 import { nutritionalDay, shiftDate } from '../_lib/rules/nutritional-day.js'
-import { painStatus } from '../_lib/rules/semaforo.js'
 import {
   estimatedStart,
   exerciseKcal,
@@ -32,7 +31,10 @@ const SPORT = z.enum(OTHER_SPORTS)
 const WATTS_SOURCE = z.enum(['device', 'console', 'manual', 'favorite', 'prefill'])
 const int = (min: number, max: number) => z.number().int().min(min).max(max)
 
-const SaveSchema = z.object({
+// L7: a dor no joelho (pain_during, pain_next_day) deixou de ser pedida
+// (decisão 143). Os esquemas já não a têm; um cliente antigo que ainda a
+// mande não falha: o Zod ignora as chaves a mais e nada se grava.
+export const SaveSchema = z.object({
   client_id: z.string().uuid(),
   type: TYPE,
   sport: SPORT.nullable().optional(),
@@ -48,7 +50,6 @@ const SaveSchema = z.object({
   max_hr: int(35, 230).nullable().optional(),
   cadence: int(20, 200).nullable().optional(),
   kcal_device: int(0, 5000).nullable().optional(),
-  pain_during: int(0, 10).nullable().optional(),
   favorite_id: z.string().uuid().nullable().optional(),
   import_id: z.string().uuid().nullable().optional(),
   merge_into: z.string().uuid().nullable().optional(),
@@ -57,7 +58,7 @@ const SaveSchema = z.object({
   name: z.string().trim().max(80).nullable().optional(),
 })
 
-const UpdateSchema = z.object({
+export const UpdateSchema = z.object({
   workout_id: z.string().uuid(),
   type: TYPE.optional(),
   sport: SPORT.nullable().optional(),
@@ -68,8 +69,6 @@ const UpdateSchema = z.object({
   avg_hr: int(35, 220).nullable().optional(),
   max_hr: int(35, 230).nullable().optional(),
   cadence: int(20, 200).nullable().optional(),
-  pain_during: int(0, 10).nullable().optional(),
-  pain_next_day: int(0, 10).nullable().optional(),
   note: z.string().max(500).nullable().optional(),
   // «Que treino foi?»: liga a sessão (do relógio, por exemplo) a um dos
   // teus treinos; o nome passa a ser o desse treino.
@@ -91,7 +90,7 @@ const ShotSchema = z.object({
   image_hashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)).max(4).default([]),
 })
 
-const StrengthSchema = z.object({
+export const StrengthSchema = z.object({
   client_id: z.string().uuid(),
   workout_id: z.string().uuid().nullable().optional(), // editar uma sessão antiga
   started_at: z.string().nullable().optional(),
@@ -109,7 +108,6 @@ const StrengthSchema = z.object({
       }),
     )
     .max(120),
-  pain_during: int(0, 10).nullable().optional(),
   favorite_id: z.string().uuid().nullable().optional(),
   note: z.string().max(500).nullable().optional(),
   name: z.string().trim().max(80).nullable().optional(),
@@ -444,8 +442,6 @@ export const save = post(async ({ db, userId, body, res }) => {
       kcal_est: kcal.kcal,
       kcal_rule: kcal.rule,
       kcal_estimated: kcal.estimated,
-      pain_during: input.pain_during ?? null,
-      status: painStatus(input.pain_during ?? null, null),
       favorite_id: input.favorite_id ?? null,
       // O nome do teu treino («Pernas A»), ou o do print.
       ...(favoriteName ? { name: favoriteName } : input.name ? { name: input.name } : {}),
@@ -587,10 +583,6 @@ export const strength = post(async ({ db, userId, body, res }) => {
       Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
     }
     if (favorite) Object.assign(patch, { favorite_id: favorite.id, name: favorite.name })
-    if (input.pain_during !== undefined) {
-      patch.pain_during = input.pain_during
-      patch.status = painStatus(input.pain_during, (target.pain_next_day as number | null) ?? null)
-    }
     if (input.note !== undefined) patch.note = input.note?.trim() || null
     const { data, error } = await db.from('workouts').update(patch).eq('id', target.id).select().single()
     if (error) throw new HttpError(500, error.message)
@@ -633,8 +625,6 @@ export const strength = post(async ({ db, userId, body, res }) => {
       kcal_est: kcal.kcal,
       kcal_rule: kcal.rule,
       kcal_estimated: kcal.estimated,
-      pain_during: input.pain_during ?? null,
-      status: painStatus(input.pain_during ?? null, null),
       favorite_id: favorite?.id ?? null,
       ...(favorite ? { name: favorite.name } : input.name ? { name: input.name } : {}),
       note: input.note?.trim() || null,
@@ -668,7 +658,7 @@ export const update = post(async ({ db, userId, body, res }) => {
   const workout = await ownWorkout(db, input.workout_id)
   const previous = { ...workout }
   const patch: Record<string, unknown> = {}
-  for (const key of ['type', 'minutes', 'avg_hr', 'max_hr', 'cadence', 'pain_during', 'pain_next_day'] as const) {
+  for (const key of ['type', 'minutes', 'avg_hr', 'max_hr', 'cadence'] as const) {
     if (input[key] !== undefined) patch[key] = input[key]
   }
   if (input.note !== undefined) patch.note = input.note?.trim() || null
@@ -751,12 +741,6 @@ export const update = post(async ({ db, userId, body, res }) => {
       gymPace: gym.gymPace,
     })
     Object.assign(patch, { kcal_est: kcal.kcal, kcal_rule: kcal.rule, kcal_estimated: kcal.estimated })
-  }
-  if (input.pain_during !== undefined || input.pain_next_day !== undefined) {
-    patch.status = painStatus(
-      (input.pain_during !== undefined ? input.pain_during : workout.pain_during) as number | null,
-      (input.pain_next_day !== undefined ? input.pain_next_day : workout.pain_next_day) as number | null,
-    )
   }
   if (Object.keys(patch).length === 0) {
     res.status(200).json({ workout, previous })

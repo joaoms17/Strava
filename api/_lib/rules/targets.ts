@@ -85,10 +85,6 @@ export function workoutKcal(w: WorkoutForKcal): number {
   }
 }
 
-export function dayExerciseKcal(workouts: WorkoutForKcal[]): number {
-  return workouts.reduce((acc, w) => acc + workoutKcal(w), 0)
-}
-
 // Um treino guarda as kcal calculadas ao gravar; somam-se essas, para que
 // mudanças futuras na regra nunca reescrevam dias passados.
 export function storedExerciseKcal(

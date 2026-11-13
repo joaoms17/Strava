@@ -346,12 +346,3 @@ export function adaptiveDay(input: {
   const shown: AdaptiveLimit | null = stable && limit === 'teto' ? 'teto400' : stable && limit === 'piso' ? 'piso400' : limit
   return { raw, tdee: value, excluded, stable, limit: shown, eligibleDays: window.length, missingWeighings: missing }
 }
-
-export function shouldAdjustBase(tdeeEst: number, expectedTdee: number): boolean {
-  return Math.abs(tdeeEst - expectedTdee) > 250
-}
-
-// Ritmo em kg/semana para um dado gasto: negativo = a perder peso.
-export function paceKgPerWeek(kcalMeanIn: number, tdee: number): number {
-  return Math.round((((kcalMeanIn - tdee) * 7) / KCAL_PER_KG) * 100) / 100
-}
