@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSheet } from '../lib/sheet'
 import { useReadyProfile } from '../lib/profile'
-import { localCalendarDate } from '../lib/day'
+import { nutritionalDay } from '../lib/day'
 import { fmt1, fmtDayMonth } from '../lib/format'
 import {
   DETECTABLE_CHANGE_PP,
@@ -35,7 +35,7 @@ export default function CompositionCards({ rows, scale }: { rows: BodyMeasuremen
   const profile = useReadyProfile()
   const [details, setDetails] = useState(false)
   const height = Number(profile.height_cm ?? 183)
-  const today = localCalendarDate()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour) // K10: o dia do Balanço
   const female = profile.sex === 'f'
 
   if (rows.length === 0) {
