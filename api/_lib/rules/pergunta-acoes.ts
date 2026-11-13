@@ -20,10 +20,8 @@ export const ASK_ACTION_TYPES = [
   'mark_day',
   'share_meal',
 ] as const
-export type AskActionType = (typeof ASK_ACTION_TYPES)[number]
 
 export const DAY_FLAGS = ['dia_fechado', 'faltou_algo'] as const
-export type DayFlag = (typeof DAY_FLAGS)[number]
 
 export const ASK_MAX_ACTIONS = 3
 // As ações só mexem nos últimos 28 dias (os que vão no contexto).

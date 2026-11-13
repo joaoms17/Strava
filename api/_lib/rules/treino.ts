@@ -243,7 +243,6 @@ export const MERGE_FILL_FIELDS = [
   'minutes',
 ] as const
 
-export type MergeField = (typeof MERGE_FILL_FIELDS)[number]
 
 export function mergePatch(
   existing: Record<string, unknown> & { watts: number | null; watts_source: string | null },

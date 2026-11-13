@@ -3,8 +3,6 @@
 
 // Taxa fixa para mostrar e comparar em euros (aproximado).
 export const USD_TO_EUR = 0.92
-export const DEFAULT_MONTHLY_CAP_EUR = 10
-export const DEFAULT_DAILY_VISION_CAP = 40
 
 // O que conta como «análise de foto» para o limite diário: os pedidos ao
 // modelo das fotos (também o áudio do «Dizer o treino», que vai para ele, a
