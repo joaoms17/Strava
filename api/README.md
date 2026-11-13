@@ -1,6 +1,6 @@
 # /api — funções serverless (Vercel)
 
-6 funções: `meal`, `workout`, `day`, `health/daily`, `cron/daily` e `cron/lembretes` (o Hobby aceita 12; `tests/guardas.test.ts` falha acima de 10). Os routers `meal`, `workout` e `day` despacham por `?action=`, e os caminhos públicos mantêm-se por rewrites no `vercel.json`. As funções correm como ES modules: imports relativos com `.js`. O export CSV gera-se no cliente (Definições). A integração por API do Strava está em `/archive/strava` (exige subscrição paga) e o plano de 4 semanas com o calendário em `/archive/plano`.
+6 funções: `meal`, `workout`, `day`, `health/daily`, `cron/daily` e `cron/lembretes` (o Hobby aceita 12; `tests/guardas.test.ts` falha acima de 10). Os routers `meal`, `workout` e `day` despacham por `?action=`, e os caminhos públicos mantêm-se por rewrites no `vercel.json`. As funções correm como ES modules: imports relativos com `.js`. O export CSV gera-se no cliente (Definições). A integração do Strava (API e mapeamento) está em `/archive/strava` (exige subscrição paga), o plano de 4 semanas com o calendário em `/archive/plano`, o plano semanal com IA em `/archive/plano-semanal` e as ações sem chamador (`meal/quick`, `workout/checkin`) em `/archive/acoes-sem-uso`.
 
 | Endpoint | Método | Descrição |
 | --- | --- | --- |
@@ -8,7 +8,6 @@
 | `/api/meal/analyse` | POST | Outra tentativa com lease (`claim_meal_analysis`); `reset` para «Tentar de novo» e «Reanalisar foto», `force` para analisar acima do limite, `auto` quando é o telemóvel a pedir sozinho (uma análise solta depois de um erro passageiro; só com a refeição ainda em `a_analisar` e sem repor as tentativas, porque a vista do telemóvel pode estar atrasada; no fim avisa «Refeição analisada», como a captura; `rules/analise.ts`, `analyseRequest`). |
 | `/api/meal/correct` | POST | «Corrigir por texto»: Haiku sobre os itens atuais, sem foto; devolve os itens anteriores para Anular. |
 | `/api/meal/update` | POST | Itens (passos de 10 g), dia e momento, nota (corrige se a análise já acabou e, num pedido por dividir, tira `order_people`), marcas, confirmar e anular a confirmação. |
-| `/api/meal/quick` | POST | Só números, com item sintético «Registo rápido». Sem uso na app desde que o «Só números» saiu do ＋ (os números escrevem-se no texto). |
 | `/api/meal/estimate` | POST | Analisar sem gravar («Nova favorita»): o texto, ou a foto (em `<user>/…`) com o nome, pelo mesmo caminho das refeições (biblioteca com referências curtas, confiança por item e as guardas dos números). Devolve `{items[], title, confidence}`. |
 | `/api/meal/save` | POST | Grava a refeição confirmada: valida com Zod, calcula dia nutricional (regra 1) e totais no servidor. |
 | `/api/meal/log-favorite` | POST | Favorito com 1 toque, sem IA: itens × porção, dia nutricional e totais no servidor; num dia passado usa a hora habitual do momento. |
@@ -32,9 +31,7 @@
 | `/api/workout/strength` | POST | Sessão de ginásio livre: cria ou corrige a sessão e as séries (`exercise_log`). Aceita `kcal_device` (as calorias ditas no «Dizer ou escrever»), com as kcal do ginásio como em `save`. Ao corrigir, as kcal só se refazem se mudar a duração ou as calorias do relógio (com as guardadas). |
 | `/api/workout/shot` · `shot-add` · `parse-shot` · `discard` | POST | Print do relógio: rascunho em `workout_imports`, leitura em segundo plano (Sonnet 5), outra tentativa e descartar. O mesmo print outra vez devolve o treino. |
 | `/api/workout/update` · `delete` · `restore` | POST | Editar, apagar e repor. Mudar o tipo, a duração, os watts ou o desporto recalcula as kcal desse treino com as calorias do relógio guardadas (`kcal_device` ou, nas antigas, `raw.calories`), também no ginásio; corrigir só os batimentos, o nome ou a hora não mexe nelas. |
-| `/api/workout/checkin` | POST | Dados da consola (watts, batimentos, cadência) de um treino. A dor já não é pedida. |
 | `/api/workout/parse-said` | POST | «Dizer o treino»: texto ou áudio (WAV, só com o Gemini) → campos do registo, com os nomes dos exercícios que a pessoa já usa. Não grava. |
-| `/api/workout/plan-week` | POST | Plano da semana pela IA com os dados do relógio (desligado na app, o código fica). |
 | `/api/workout/connect` · `sync` · `disconnect` | POST | intervals.icu (relógio Garmin): valida e guarda a chave só no servidor (`integrations`, RLS sem políticas), sincroniza atividades e bem-estar (3 dias ao abrir a app, 30 a pedido) e desliga. Um ginásio do relógio entra com as calorias dele por inteiro e, junto a um ginásio registado à mão sem elas, passa a contá-las; os que já entraram não se refazem. A cron sincroniza os últimos 3 dias antes de fechar os dias (máx. 8 s). |
 | `/api/day/recompute` | POST | Recalcula os dias desde `from` até ontem, por ordem, em blocos de 30 (`next` diz onde continuar). |
 | `/api/day/health` | GET | Estado do deploy (`?token=CRON_SECRET`; fechado sem ela): env vars presentes (nunca valores), prompts, Supabase, migrações 1, 2 e 4 e se a chave da IA em uso (Gemini ou Claude) chega aos dois modelos. |

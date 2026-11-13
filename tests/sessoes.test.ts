@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mergeSessions } from '../api/_lib/rules/sessoes'
-import { planProgress, weeklyStats } from '../api/_lib/rules/plano'
+import { weeklyStats } from '../api/_lib/rules/plano'
 
 // O relógio às vezes parte um treino em dois (parou e recomeçou): conta um só.
 const part = (over: Record<string, unknown>) => ({
@@ -46,7 +46,7 @@ describe('sessões partidas', () => {
     expect(mergeSessions(rows).map((s) => s.parts.length)).toEqual([1, 1, 1, 1, 1, 1, 1, 1])
   })
 
-  it('ginásio em duas partes também junta; a semana e o plano contam um treino', () => {
+  it('ginásio em duas partes também junta; a semana conta um treino', () => {
     const rows = [
       part({ id: 'g1', type: 'strength', sport: null, started_at: '2026-10-06T18:00:00Z', minutes: 20 }),
       part({ id: 'g2', type: 'strength', sport: null, started_at: '2026-10-06T18:25:00Z', minutes: 30 }),
@@ -56,9 +56,6 @@ describe('sessões partidas', () => {
     const week = weeklyStats(rows, ['2026-10-05'])[0]!
     expect(week.bike).toMatchObject({ sessions: 1, minutes: 35 })
     expect(week.gym).toEqual({ sessions: 1, minutes: 50 })
-    const progress = planProgress({ bicicleta: [{}, {}] as never, ginasio: [{}] as never }, rows)
-    expect(progress.bike.map((b) => b?.minutes ?? null)).toEqual([35, null])
-    expect(progress.gym[0]?.minutes).toBe(50)
   })
 })
 

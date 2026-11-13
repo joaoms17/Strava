@@ -1,3 +1,4 @@
+// Arquivado (L17): estava em api/_lib/strava.ts, só importado por um teste.
 // Mapeamento de atividades do Strava para workouts. A integração por API
 // (OAuth, webhook, reconciliação) está em archive/strava: exige subscrição paga.
 import { workoutKcal } from './rules/targets.js'
