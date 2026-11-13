@@ -146,7 +146,7 @@ export default function ReviewSheet() {
   if (meals == null) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
@@ -154,7 +154,7 @@ export default function ReviewSheet() {
   if (!meal) {
     return (
       <BottomSheet title="Rever" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Nada por confirmar.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Nada por confirmar.</p>
       </BottomSheet>
     )
   }
@@ -177,7 +177,7 @@ export default function ReviewSheet() {
   const when = `${SLOT_LABEL[meal.slot ?? slotOf(new Date(meal.logged_at))]} · ${timeOf(meal.logged_at)}`
   const portions = (
     <div className="space-y-1.5">
-      <p className="text-[13px] text-dim">{portionLabelText} · toca e fica confirmada</p>
+      <p className="text-[0.8125rem] text-dim">{portionLabelText} · toca e fica confirmada</p>
       <div
         className={`grid gap-2 ${row.length > 4 ? 'grid-cols-5' : 'grid-cols-4'}`}
         role="group"
@@ -190,7 +190,7 @@ export default function ReviewSheet() {
             busy={sameFactor(f, factor) ? 'A confirmar…' : 'A mudar a porção…'}
             aria-pressed={sameFactor(f, factor)}
             onClick={() => setPortion(f)}
-            className={`min-h-12 rounded-xl border text-[17px] font-semibold tabular-nums ${
+            className={`min-h-12 rounded-xl border text-[1.0625rem] font-semibold tabular-nums ${
               sameFactor(f, factor) ? 'border-eat bg-eat text-bg' : 'border-line'
             }`}
           >
@@ -211,7 +211,7 @@ export default function ReviewSheet() {
             busy="A corrigir…"
             disabled={!text.trim()}
             onClick={correct}
-            className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
+            className="min-h-14 w-full rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg disabled:opacity-40"
           >
             Corrigir
           </BusyButton>
@@ -220,10 +220,10 @@ export default function ReviewSheet() {
             <BusyButton busy="A confirmar…" onClick={confirm} className="min-h-14 rounded-2xl bg-eat font-semibold text-bg">
               Está certo
             </BusyButton>
-            <button onClick={() => setCorrecting(true)} className="min-h-14 rounded-2xl bg-surface2 text-[15px]">
+            <button onClick={() => setCorrecting(true)} className="min-h-14 rounded-2xl bg-surface2 text-[0.9375rem]">
               Corrigir
             </button>
-            <button onClick={() => next(true)} className="min-h-14 rounded-2xl bg-surface2 text-[15px] text-dim">
+            <button onClick={() => next(true)} className="min-h-14 rounded-2xl bg-surface2 text-[0.9375rem] text-dim">
               Depois
             </button>
           </div>
@@ -234,7 +234,7 @@ export default function ReviewSheet() {
         {/* Partilhada: a porção é o que há para decidir, por isso vem primeiro. */}
         {from && (
           <>
-            <p className="text-[15px] text-dim">
+            <p className="text-[0.9375rem] text-dim">
               {when} · <span className="text-ink">{meal.note}</span>
             </p>
             {!correcting && portions}
@@ -243,22 +243,22 @@ export default function ReviewSheet() {
         {photo && <img loading="lazy" decoding="async" src={photo} alt="" className="max-h-64 w-full rounded-2xl object-cover" />}
         {!from && (
           <>
-            <p className="text-[15px] text-dim">{when}</p>
-            {meal.note && <p className="text-[15px]">Nota: {meal.note}</p>}
+            <p className="text-[0.9375rem] text-dim">{when}</p>
+            {meal.note && <p className="text-[0.9375rem]">Nota: {meal.note}</p>}
           </>
         )}
         <ul className="divide-y divide-line rounded-2xl bg-surface2">
           {meal.items.map((item, i) => (
-            <li key={i} className="flex justify-between gap-3 px-3 py-2.5 text-[15px]">
+            <li key={i} className="flex justify-between gap-3 px-3 py-2.5 text-[0.9375rem]">
               <span className="min-w-0">
                 {item.name} <span className="text-dim tabular-nums">· {fmtInt(item.grams)} g</span>
-                {item.confidence === 'baixa' && <span className="ml-1 text-[13px] text-attn">confirma a porção</span>}
+                {item.confidence === 'baixa' && <span className="ml-1 text-[0.8125rem] text-attn">confirma a porção</span>}
               </span>
               <span className="shrink-0 text-dim tabular-nums">{fmtInt(item.kcal)}</span>
             </li>
           ))}
         </ul>
-        <p className="text-[17px] font-semibold tabular-nums">≈ {fmtKcal(Number(meal.kcal))} kcal</p>
+        <p className="text-[1.0625rem] font-semibold tabular-nums">≈ {fmtKcal(Number(meal.kcal))} kcal</p>
         {!from && !correcting && portions}
         {correcting && (
           <input
@@ -266,7 +266,7 @@ export default function ReviewSheet() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Ex.: o arroz era metade, sem queijo"
-            className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+            className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none"
           />
         )}
       </div>

@@ -109,7 +109,7 @@ export function AlertBadge({ colors }: { colors: ChartColors }) {
   return (
     <span
       aria-hidden
-      className="mr-1 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full align-[-3px] text-[13px] leading-none font-extrabold"
+      className="mr-1 inline-flex h-[18px] w-[18px] items-center justify-center rounded-full align-[-3px] text-[0.8125rem] leading-none font-extrabold"
       style={{ background: colors.danger, color: colors.onDanger }}
     >
       !
@@ -205,16 +205,16 @@ export function ChartCard({
     <figure id={id} className={`space-y-2 rounded-[18px] border border-line bg-surface p-4 ${className}`}>
       <figcaption className="space-y-0.5">
         <p className="label">{kicker}</p>
-        <p className="text-[17px] leading-snug font-semibold">{reading}</p>
+        <p className="text-[1.0625rem] leading-snug font-semibold">{reading}</p>
       </figcaption>
       {aside}
       <div role={interactive ? 'group' : 'img'} aria-label={`${kicker}: ${reading}`} className={`transition-opacity ${dimmed ? 'opacity-50' : ''}`}>
         {children}
       </div>
       {legend}
-      {note && <div className="text-[13px] text-dim">{note}</div>}
+      {note && <div className="text-[0.8125rem] text-dim">{note}</div>}
       {table && (
-        <details className="text-[13px] text-dim">
+        <details className="text-[0.8125rem] text-dim">
           <summary className="cursor-pointer py-1">Ver os números</summary>
           {table}
         </details>
@@ -226,7 +226,7 @@ export function ChartCard({
 // «Ainda poucos dados»: a mesma altura do gráfico, para nada saltar.
 export function EmptyChart({ text, height }: { text: string; height: number }) {
   return (
-    <div className="flex items-center justify-center rounded-xl bg-surface2/60 px-6 text-center text-[15px] text-dim" style={{ height }}>
+    <div className="flex items-center justify-center rounded-xl bg-surface2/60 px-6 text-center text-[0.9375rem] text-dim" style={{ height }}>
       {text}
     </div>
   )
@@ -292,7 +292,7 @@ export function Key({
 }
 
 export function Legend({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-dim">{children}</div>
+  return <div className="flex flex-wrap gap-x-4 gap-y-1 text-[0.8125rem] text-dim">{children}</div>
 }
 
 // --- A dica (o valor primeiro, forte; o nome depois) -------------------------
@@ -307,7 +307,7 @@ export interface TipRow {
 export function TipBox({ title, rows, colors }: { title: string; rows: TipRow[]; colors: ChartColors }) {
   return (
     <div
-      className="rounded-xl px-3 py-2 text-[13px] tabular-nums shadow"
+      className="rounded-xl px-3 py-2 text-[0.8125rem] tabular-nums shadow"
       style={{ background: colors.surface, border: `1px solid ${colors.grid}`, color: colors.ink }}
     >
       <p style={{ color: colors.dim }}>{title}</p>

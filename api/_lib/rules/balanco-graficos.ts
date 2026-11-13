@@ -158,10 +158,13 @@ export interface MonthCalendar {
   reading: string
 }
 
-export function monthCalendar(month: string, days: MonthDay[], today: string): MonthCalendar {
+// `start`: o primeiro dia com comida registada (L15). Os dias de antes (o
+// histórico do relógio criou-os sem comida) ficam em branco, não «sem
+// registos», e as semanas só com eles não se desenham.
+export function monthCalendar(month: string, days: MonthDay[], today: string, start?: string | null): MonthCalendar {
   const { first, last } = monthBounds(month)
   const byDate = new Map(days.map((d) => [d.date, d]))
-  const cells: CalCell[] = []
+  const cells: (CalCell | null)[] = []
   let on = 0
   let mild = 0
   let grave = 0
@@ -169,6 +172,10 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
   let streak = 0
   let run = 0
   for (let date = first; date <= last; date = shiftDate(date, 1)) {
+    if (start && date < start) {
+      cells.push(null)
+      continue
+    }
     const d = byDate.get(date)
     let result: CalResult
     if (date > today) result = 'futuro'
@@ -200,7 +207,10 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
   const grid: (CalCell | null)[] = [...Array.from({ length: lead }, () => null), ...cells]
   while (grid.length % 7) grid.push(null)
   const weeks: (CalCell | null)[][] = []
-  for (let i = 0; i < grid.length; i += 7) weeks.push(grid.slice(i, i + 7))
+  for (let i = 0; i < grid.length; i += 7) {
+    const week = grid.slice(i, i + 7)
+    if (week.some((c) => c != null)) weeks.push(week)
+  }
   // A frase diz os dias acima do gasto (o falhar grave); os «acima do alvo»
   // veem-se no calendário e na legenda (a frase não cabia com os dois e a
   // sequência).

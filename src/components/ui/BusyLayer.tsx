@@ -39,7 +39,7 @@ export default function BusyLayer() {
             <div className={`fade-in h-full ${ownLabel ? 'bg-bg/20' : 'bg-bg/45'}`}>
               {!ownLabel && (
                 <div className={`fixed inset-x-0 flex justify-center px-4 ${place}`}>
-                  <p className="flex w-full max-w-md items-center gap-3 rounded-2xl bg-toast px-4 py-3 text-[15px] font-semibold text-on-toast shadow-lg ring-1 ring-white/10">
+                  <p className="flex w-full max-w-md items-center gap-3 rounded-2xl bg-toast px-4 py-3 text-[0.9375rem] font-semibold text-on-toast shadow-lg ring-1 ring-white/10">
                     <Spinner size={20} />
                     {busy.label}
                   </p>

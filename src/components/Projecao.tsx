@@ -42,7 +42,7 @@ export function TargetInput({ onDone }: { onDone?: () => void }) {
         placeholder="Peso alvo (kg)"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="min-h-12 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-[17px] tabular-nums"
+        className="min-h-12 min-w-0 flex-1 rounded-xl border border-line bg-surface2 px-3 text-[1.0625rem] tabular-nums"
       />
       <BusyButton
         busy="A guardar…"
@@ -90,26 +90,26 @@ export default function Projecao({
       <p className="label">Projeção</p>
       {p.status === 'insuficiente' ? (
         <>
-          <p className="text-[15px]">Dados insuficientes para uma data honesta.</p>
-          <p className="text-[13px] text-dim">
+          <p className="text-[0.9375rem]">Dados insuficientes para uma data honesta.</p>
+          <p className="text-[0.8125rem] text-dim">
             Precisa de 14 dias completos e de pesagens ao longo de 14 dias (nas últimas 4 semanas). {p.missing}
           </p>
         </>
       ) : p.status === 'sem_alvo' ? (
         <>
-          <p className="text-[15px]">Define o peso alvo para ver quando lá chegas a este ritmo.</p>
+          <p className="text-[0.9375rem]">Define o peso alvo para ver quando lá chegas a este ritmo.</p>
           <TargetInput />
         </>
       ) : (
         <button onClick={() => sheet.open('projecao')} className="block w-full space-y-1 text-left">
-          <p className="text-[17px] font-semibold">{projectionLine(p, targetKg, targetWaistCm, today)}</p>
-          {rangeText(p.weight, today) && <p className="text-[13px] text-dim">Peso {rangeText(p.weight, today)}</p>}
+          <p className="text-[1.0625rem] font-semibold">{projectionLine(p, targetKg, targetWaistCm, today)}</p>
+          {rangeText(p.weight, today) && <p className="text-[0.8125rem] text-dim">Peso {rangeText(p.weight, today)}</p>}
           {note && (
-            <p className={`text-[13px] ${note.days > 0 ? 'text-attn' : 'text-dim'}`}>
+            <p className={`text-[0.8125rem] ${note.days > 0 ? 'text-attn' : 'text-dim'}`}>
               Desde a semana passada: {note.text}.
             </p>
           )}
-          <p className="pt-1 text-[15px] font-semibold text-eat">E se…? ›</p>
+          <p className="pt-1 text-[0.9375rem] font-semibold text-eat">E se…? ›</p>
         </button>
       )}
     </section>

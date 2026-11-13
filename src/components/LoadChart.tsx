@@ -57,7 +57,7 @@ export default function LoadChart({
   if (!exercise) {
     return (
       <div className="rounded-2xl border border-edge bg-card p-6 text-center text-sm text-dim">
-        <p className="text-[17px] font-semibold text-ink">Cargas</p>
+        <p className="text-[1.0625rem] font-semibold text-ink">Cargas</p>
         <p className="mt-2">Regista sessões de força para veres a progressão por exercício.</p>
       </div>
     )

@@ -1,45 +1,30 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'wouter'
 import { supabase } from '../lib/supabase'
 import { shiftDate } from '../lib/day'
-import { fmtDayMonth, fmtInt, fmtKcal } from '../lib/format'
+import { fmtInt, fmtKcal } from '../lib/format'
 import type { LongDay } from '../lib/balanco'
 import type { HealthRow } from '../lib/balanco-semana'
 import { mondayOf } from '../../api/_lib/rules/manutencao'
 import { intakeLinks, type IntakeLink } from '../../api/_lib/rules/extras'
-import { fmtSleep } from '../../api/_lib/rules/sono'
 import type { MealItem } from '../lib/types'
-
-function mean(values: number[]): number | null {
-  return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null
-}
 
 function normalize(name: string): string {
   return name.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-// Balanço › Mês: passos e sono das últimas 5 semanas (e o que se comeu
-// depois de noites más ou com poucos passos) e os 10 alimentos que mais se
-// repetem. Os dias e o relógio vêm do Balanço (lidos uma vez para a página,
-// P1b); aqui só se lêem os itens das refeições. O comido contra o gasto de
+// Balanço › Mês: o que se comeu depois de noites más ou com poucos passos
+// e os 10 alimentos que mais se repetem. Os passos e o sono de cada semana
+// estão no Corpo › Recuperação e no Hoje (B17: apareciam em 3 sítios). Os
+// dias e o relógio vêm do Balanço (lidos uma vez para a página, P1b); aqui
+// só se lêem os itens das refeições. O comido contra o gasto de
 // cada semana está em «Semana a semana», por cima (B17: era a mesma conta
 // desenhada duas vezes).
 export default function BalancoMes({ today, days, health }: { today: string; days: LongDay[]; health: HealthRow[] }) {
   const [foods, setFoods] = useState<{ name: string; count: number; kcal: number }[]>([])
+  const [, navigate] = useLocation()
 
   const first = shiftDate(mondayOf(today), -28)
-  const weeks = useMemo(() => {
-    const mondays = Array.from({ length: 5 }, (_, i) => shiftDate(first, i * 7))
-    return mondays.map((monday) => {
-      const sunday = shiftDate(monday, 6)
-      const h = health.filter((x) => x.date >= monday && x.date <= sunday)
-      return {
-        monday,
-        steps: mean(h.filter((x) => x.steps != null).map((x) => Number(x.steps))),
-        sleep: mean(h.filter((x) => x.sleep_minutes != null).map((x) => Number(x.sleep_minutes))),
-        sleepScore: mean(h.filter((x) => x.sleep_score != null).map((x) => Number(x.sleep_score))),
-      }
-    })
-  }, [health, first])
   const links = useMemo(
     () =>
       intakeLinks(
@@ -84,7 +69,6 @@ export default function BalancoMes({ today, days, health }: { today: string; day
     }
   }, [today, days])
 
-  const withSteps = weeks.filter((w) => w.steps != null || w.sleep != null)
   const compared = (link: IntakeLink) =>
     Math.abs(link.diff) < 100
       ? 'comeste mais ou menos o mesmo que nos outros dias'
@@ -96,33 +80,17 @@ export default function BalancoMes({ today, days, health }: { today: string; day
 
   return (
     <div className="space-y-4">
-      {withSteps.length > 0 && (
-        <section className="space-y-1 rounded-[18px] border border-line bg-surface p-4 text-[15px]">
-          <div className="flex items-baseline justify-between">
-            <p className="label">Passos e sono</p>
-            <p className="text-[13px] text-dim">média de cada semana</p>
-          </div>
-          {withSteps.map((w) => (
-            <p key={w.monday} className="flex justify-between gap-3 tabular-nums">
-              <span className="shrink-0 text-dim">
-                {fmtDayMonth(w.monday)}
-                {w.monday === mondayOf(today) ? ' (a meio)' : ''}
-              </span>
-              <span className="text-right">
-                {w.steps != null ? `${fmtInt(w.steps)} passos` : ''}
-                {w.steps != null && w.sleep != null ? ' · ' : ''}
-                {w.sleep != null ? `${fmtSleep(Math.round(w.sleep))} de sono` : ''}
-                {w.sleepScore != null ? ` · nota ${Math.round(w.sleepScore)}` : ''}
-              </span>
+      {linkLines.length > 0 && (
+        <section className="space-y-1 rounded-[18px] border border-line bg-surface p-4 text-[0.9375rem]">
+          <p className="label">O que comes, o sono e os passos</p>
+          {linkLines.map((line) => (
+            <p key={line} className="text-dim">
+              {line}
             </p>
           ))}
-          {linkLines.length > 0 && (
-            <div className="space-y-1 border-t border-line pt-2 text-[14px] text-dim">
-              {linkLines.map((line) => (
-                <p key={line}>{line}</p>
-              ))}
-            </div>
-          )}
+          <button onClick={() => navigate('/corpo?ver=recuperacao')} className="min-h-11 text-eat">
+            Passos e sono de cada dia: Corpo › Recuperação ›
+          </button>
         </section>
       )}
 
@@ -131,10 +99,10 @@ export default function BalancoMes({ today, days, health }: { today: string; day
           <p className="label">Os 10 alimentos mais frequentes (30 dias)</p>
           <ol className="divide-y divide-line/60">
             {foods.map((f, i) => (
-              <li key={f.name} className="flex items-center gap-3 py-2 text-[15px]">
+              <li key={f.name} className="flex items-center gap-3 py-2 text-[0.9375rem]">
                 <span className="num w-6 text-dim">{i + 1}</span>
                 <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                <span className="shrink-0 text-[14px] text-dim tabular-nums">
+                <span className="shrink-0 text-[0.875rem] text-dim tabular-nums">
                   {f.count}× · ≈ {fmtKcal(f.kcal)} kcal
                 </span>
               </li>

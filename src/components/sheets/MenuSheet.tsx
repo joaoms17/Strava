@@ -146,7 +146,7 @@ export default function MenuSheet() {
   }
 
   const primary =
-    'flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[18px] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40'
+    'flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-eat font-display text-[1.125rem] font-bold tracking-[0.04em] text-bg uppercase disabled:opacity-40'
   const top = result?.ranked.slice(0, 3) ?? []
   const rest = result ? [...result.ranked.slice(3), ...result.others] : []
 
@@ -164,7 +164,7 @@ export default function MenuSheet() {
     >
       {!result ? (
         <div className="space-y-4 pb-2">
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             Tira foto ao menu (até {MAX_PHOTOS} páginas). Digo-te os 3 pratos que melhor cabem no que te falta hoje, pelas
             calorias e pela proteína.
           </p>
@@ -194,7 +194,7 @@ export default function MenuSheet() {
               ].map((b) => (
                 <label
                   key={b.label}
-                  className={`flex min-h-[64px] cursor-pointer items-center justify-center gap-2 rounded-2xl font-display text-[17px] font-bold tracking-[0.06em] uppercase ${
+                  className={`flex min-h-[64px] cursor-pointer items-center justify-center gap-2 rounded-2xl font-display text-[1.0625rem] font-bold tracking-[0.06em] uppercase ${
                     b.camera && photos.length === 0 ? 'bg-eat text-bg' : 'border border-line bg-surface2'
                   }`}
                 >
@@ -222,14 +222,14 @@ export default function MenuSheet() {
             disabled={reading}
             placeholder="Preferências (opcional). Ex.: peixe, sem fritos"
             aria-label="Preferências"
-            className="h-12 w-full rounded-2xl border border-line bg-bg px-4 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
+            className="h-12 w-full rounded-2xl border border-line bg-bg px-4 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none"
           />
-          {reading && <p className="text-center text-[15px] text-dim">A ler os pratos e a fazer as contas (até 30 s)…</p>}
-          {error && <p className="text-[15px] text-pain">{error}</p>}
+          {reading && <p className="text-center text-[0.9375rem] text-dim">A ler os pratos e a fazer as contas (até 30 s)…</p>}
+          {error && <p className="text-[0.9375rem] text-pain">{error}</p>}
         </div>
       ) : (
         <div className="space-y-4 pb-2">
-          <p className="text-[16px]">
+          <p className="text-[1rem]">
             {result.kcal_left > 0 ? (
               <>
                 Faltam-te hoje <span className="font-semibold text-eat tabular-nums">{fmtKcal(result.kcal_left)} kcal</span>
@@ -253,22 +253,22 @@ export default function MenuSheet() {
             {top.map((d, i) => (
               <li key={d.name} className={`rounded-[18px] border bg-surface p-4 ${i === 0 ? 'border-2 border-eat' : 'border-line'}`}>
                 <div className="flex items-start gap-3">
-                  <span className="num w-6 shrink-0 text-[26px] leading-none text-dim">{i + 1}</span>
+                  <span className="num w-6 shrink-0 text-[1.625rem] leading-none text-dim">{i + 1}</span>
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-[17px] leading-snug font-semibold">
+                    <p className="text-[1.0625rem] leading-snug font-semibold">
                       {d.name}
                       {d.price != null && <span className="font-normal text-dim"> · {euros(d.price)}</span>}
                     </p>
-                    {d.description && <p className="text-[14px] text-dim">{d.description}</p>}
+                    {d.description && <p className="text-[0.875rem] text-dim">{d.description}</p>}
                     <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 pt-1">
-                      <span className="num text-[24px] leading-none">
-                        {fmtKcal(d.kcal)} <span className="text-[14px] text-dim">kcal</span>
+                      <span className="num text-[1.5rem] leading-none">
+                        {fmtKcal(d.kcal)} <span className="text-[0.875rem] text-dim">kcal</span>
                       </span>
-                      <span className="num text-[24px] leading-none text-protein">
-                        {fmtInt(d.protein)} <span className="text-[14px] text-dim">g proteína</span>
+                      <span className="num text-[1.5rem] leading-none text-protein">
+                        {fmtInt(d.protein)} <span className="text-[0.875rem] text-dim">g proteína</span>
                       </span>
                     </p>
-                    <p className="text-[14px] text-dim">
+                    <p className="text-[0.875rem] text-dim">
                       {fmt1(d.proteinPer100)} g de proteína por 100 kcal
                       {d.kcalAfter != null &&
                         (d.fits ? (
@@ -282,7 +282,7 @@ export default function MenuSheet() {
                 <BusyButton
                   busy="A registar…"
                   onClick={() => eat(d)}
-                  className={`mt-3 min-h-12 w-full rounded-xl font-display text-[16px] font-bold tracking-[0.04em] uppercase disabled:opacity-40 ${
+                  className={`mt-3 min-h-12 w-full rounded-xl font-display text-[1rem] font-bold tracking-[0.04em] uppercase disabled:opacity-40 ${
                     i === 0 ? 'bg-eat text-bg' : 'border border-line bg-surface2'
                   }`}
                 >
@@ -294,7 +294,7 @@ export default function MenuSheet() {
 
           {rest.length > 0 && (
             <div className="space-y-2">
-              <button onClick={() => setShowAll(!showAll)} className="min-h-11 w-full text-[15px] text-eat">
+              <button onClick={() => setShowAll(!showAll)} className="min-h-11 w-full text-[0.9375rem] text-eat">
                 {showAll ? 'Esconder os outros' : `Ver os outros ${rest.length} do menu`}
               </button>
               {showAll && (
@@ -308,10 +308,10 @@ export default function MenuSheet() {
                         className="flex min-h-14 w-full items-center gap-3 px-3 py-2 text-left disabled:opacity-40"
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[15px]">{d.name}</span>
-                          {d.price != null && <span className="block text-[13px] text-dim">{euros(d.price)}</span>}
+                          <span className="block text-[0.9375rem]">{d.name}</span>
+                          {d.price != null && <span className="block text-[0.8125rem] text-dim">{euros(d.price)}</span>}
                         </span>
-                        <span className="shrink-0 text-right text-[14px] tabular-nums">
+                        <span className="shrink-0 text-right text-[0.875rem] tabular-nums">
                           {fmtKcal(d.kcal)} kcal
                           <span className="block text-protein">{fmtInt(d.protein)} g prot.</span>
                         </span>
@@ -323,8 +323,8 @@ export default function MenuSheet() {
             </div>
           )}
 
-          <p className="text-[13px] text-dim">Estimativas para a dose habitual de restaurante. Ao registar, podes corrigir depois.</p>
-          <button onClick={restart} className="min-h-11 w-full text-[15px] text-dim">
+          <p className="text-[0.8125rem] text-dim">Estimativas para a dose habitual de restaurante. Ao registar, podes corrigir depois.</p>
+          <button onClick={restart} className="min-h-11 w-full text-[0.9375rem] text-dim">
             Outro menu
           </button>
         </div>

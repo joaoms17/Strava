@@ -239,7 +239,7 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
         key={opts.key}
         kicker={opts.kicker}
         reading={known.length < 2 ? (week ? 'Poucos dias do relógio nos últimos 7 dias' : 'Ainda poucos dias do relógio neste período') : opts.reading}
-        aside={opts.aside && <p className="text-[14px] text-dim tabular-nums">{opts.aside}</p>}
+        aside={opts.aside && <p className="text-[0.875rem] text-dim tabular-nums">{opts.aside}</p>}
         legend={
           opts.avg != null &&
           known.length >= 2 && (
@@ -365,7 +365,7 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
   return (
     <div className="space-y-3">
       {cards}
-      <details className="text-[13px] text-dim">
+      <details className="text-[0.8125rem] text-dim">
         <summary className="cursor-pointer py-1">Ver os números do relógio</summary>
         <table className="mt-2 w-full tabular-nums">
           <thead>

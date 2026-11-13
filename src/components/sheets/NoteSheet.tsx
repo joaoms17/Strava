@@ -84,7 +84,7 @@ export default function NoteSheet() {
           busy="A guardar…"
           disabled={!meal}
           onClick={save}
-          className="min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40"
+          className="min-h-14 w-full rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg disabled:opacity-40"
         >
           Guardar
         </BusyButton>
@@ -94,7 +94,7 @@ export default function NoteSheet() {
         {meal && (
           <div className="flex items-center gap-3">
             {thumb && <img loading="lazy" decoding="async" src={thumb} alt="" className="h-14 w-14 rounded-xl object-cover" />}
-            <p className="text-[15px] text-dim tabular-nums">{timeOf(meal.logged_at)}</p>
+            <p className="text-[0.9375rem] text-dim tabular-nums">{timeOf(meal.logged_at)}</p>
           </div>
         )}
         <TagChips value={tags} onToggle={(tag) => setTags(toggle(tags, tag))} />
@@ -104,10 +104,10 @@ export default function NoteSheet() {
           onChange={(e) => setNote(e.target.value)}
           placeholder="Ex.: comi metade, com azeite"
           enterKeyHint="done"
-          className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+          className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none"
         />
         {meal && (
-          <p className="text-[13px] text-dim">
+          <p className="text-[0.8125rem] text-dim">
             {meal.status === 'a_analisar'
               ? 'Junto a nota e as etiquetas à análise.'
               : 'Vou corrigir a refeição com o que mudou na nota e nas etiquetas.'}

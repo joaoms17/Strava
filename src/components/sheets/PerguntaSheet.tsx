@@ -51,7 +51,7 @@ function ActionCard({
   const [, navigate] = useLocation()
   return (
     <div className="space-y-2.5 rounded-2xl border border-line bg-bg p-3">
-      <p className="text-[15px] leading-snug">{actionLabel(action, today)}</p>
+      <p className="text-[0.9375rem] leading-snug">{actionLabel(action, today)}</p>
       {state === 'por_fazer' ? (
         <div className="flex gap-2">
           <BusyButton
@@ -59,16 +59,16 @@ function ActionCard({
             onClick={async () => {
               if (await runAskAction(action, today, toast, navigate)) onState('feito')
             }}
-            className="min-h-11 flex-1 rounded-xl bg-cta text-[16px] font-semibold text-on-cta"
+            className="min-h-11 flex-1 rounded-xl bg-cta text-[1rem] font-semibold text-on-cta"
           >
             Fazer
           </BusyButton>
-          <button onClick={() => onState('nao')} className="min-h-11 rounded-xl bg-surface2 px-5 text-[16px]">
+          <button onClick={() => onState('nao')} className="min-h-11 rounded-xl bg-surface2 px-5 text-[1rem]">
             Não
           </button>
         </div>
       ) : (
-        <p className={`flex items-center gap-1.5 text-[14px] ${state === 'feito' ? 'text-ok' : 'text-dim'}`}>
+        <p className={`flex items-center gap-1.5 text-[0.875rem] ${state === 'feito' ? 'text-ok' : 'text-dim'}`}>
           {state === 'feito' ? (
             <>
               <Icon name="check" size={16} /> Feito
@@ -144,7 +144,7 @@ export default function PerguntaSheet() {
           className="space-y-2"
         >
           {error && (
-            <p role="alert" className="text-[15px] text-pain">
+            <p role="alert" className="text-[0.9375rem] text-pain">
               {error}
             </p>
           )}
@@ -163,7 +163,7 @@ export default function PerguntaSheet() {
               enterKeyHint="send"
               placeholder="Pergunta ou pede…"
               aria-label="A tua pergunta"
-              className="min-h-12 flex-1 resize-none rounded-2xl border border-line bg-bg px-3 py-3 text-[17px] leading-snug placeholder:text-dim focus:border-eat focus:outline-none"
+              className="min-h-12 flex-1 resize-none rounded-2xl border border-line bg-bg px-3 py-3 text-[1.0625rem] leading-snug placeholder:text-dim focus:border-eat focus:outline-none"
             />
             <button
               type="submit"
@@ -180,7 +180,7 @@ export default function PerguntaSheet() {
       <div className="space-y-4 pb-2" aria-live="polite">
         {turns.length === 0 ? (
           <div className="space-y-4">
-            <p className="text-[15px] text-dim">
+            <p className="text-[0.9375rem] text-dim">
               Pergunta sobre os teus números ou pede para registar. A resposta vem só dos teus dados, e nada muda sem
               tocares em «Fazer».
             </p>
@@ -189,7 +189,7 @@ export default function PerguntaSheet() {
                 <button
                   key={s}
                   onClick={() => ask(s)}
-                  className="min-h-10 rounded-full border border-line px-3 py-1.5 text-left text-[15px]"
+                  className="min-h-10 rounded-full border border-line px-3 py-1.5 text-left text-[0.9375rem]"
                 >
                   {s}
                 </button>
@@ -204,7 +204,7 @@ export default function PerguntaSheet() {
                   setTurns([])
                   setError(null)
                 }}
-                className="-mr-1 px-1 py-1 text-[14px] text-dim"
+                className="-mr-1 px-1 py-1 text-[0.875rem] text-dim"
               >
                 Começar de novo
               </button>
@@ -213,13 +213,13 @@ export default function PerguntaSheet() {
               turn.from === 'me' ? (
                 <p
                   key={i}
-                  className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-surface2 px-3.5 py-2.5 text-[16px] leading-snug whitespace-pre-wrap"
+                  className="ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-surface2 px-3.5 py-2.5 text-[1rem] leading-snug whitespace-pre-wrap"
                 >
                   {turn.text}
                 </p>
               ) : (
                 <div key={i} className="max-w-[92%] space-y-2">
-                  <p className="text-[16px] leading-relaxed whitespace-pre-wrap">{turn.text}</p>
+                  <p className="text-[1rem] leading-relaxed whitespace-pre-wrap">{turn.text}</p>
                   {turn.actions?.map((a, j) => (
                     <ActionCard
                       key={j}
@@ -233,7 +233,7 @@ export default function PerguntaSheet() {
               ),
             )}
             {sending && (
-              <p className="flex items-center gap-2 text-[15px] text-dim">
+              <p className="flex items-center gap-2 text-[0.9375rem] text-dim">
                 <Spinner size={16} /> A pensar…
               </p>
             )}

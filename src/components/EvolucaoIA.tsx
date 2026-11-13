@@ -129,20 +129,20 @@ export default function EvolucaoIA({ today }: { today: string }) {
         : `de ${review.week_start.slice(8, 10)}/${review.week_start.slice(5, 7)}`
     : null
   const primary =
-    'min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50'
+    'min-h-12 w-full rounded-xl bg-cta font-display text-[1.0625rem] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50'
 
   return (
     <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4" aria-label="Análise da IA" role="region">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="font-display text-[12px] font-bold tracking-[0.16em] text-burn uppercase">Análise da IA</p>
-        {analysis && when && <span className="text-[13px] text-dim">{when}</span>}
+        <p className="font-display text-[0.75rem] font-bold tracking-[0.16em] text-burn uppercase">Análise da IA</p>
+        {analysis && when && <span className="text-[0.8125rem] text-dim">{when}</span>}
       </div>
 
       {review === undefined ? (
-        <p className="text-[15px] text-dim">A carregar…</p>
+        <p className="text-[0.9375rem] text-dim">A carregar…</p>
       ) : !analysis || (!analysis.resumo && analysis.areas.length === 0) ? (
         <>
-          <p className="text-[15px] text-dim">
+          <p className="text-[0.9375rem] text-dim">
             A IA olha para tudo — peso, medidas, comida, treino e o que o relógio mandar — e diz como estás a evoluir e
             no que te deves focar.
           </p>
@@ -152,15 +152,15 @@ export default function EvolucaoIA({ today }: { today: string }) {
         </>
       ) : (
         <>
-          {analysis.titulo && <p className="text-[19px] leading-snug font-semibold">{analysis.titulo}</p>}
-          {analysis.resumo && <p className={`text-[15px] ${open ? '' : 'line-clamp-3'}`}>{analysis.resumo}</p>}
+          {analysis.titulo && <p className="text-[1.1875rem] leading-snug font-semibold">{analysis.titulo}</p>}
+          {analysis.resumo && <p className={`text-[0.9375rem] ${open ? '' : 'line-clamp-3'}`}>{analysis.resumo}</p>}
           {questions.length > 0 && (
             <div className="space-y-2">
               <p className="label">A IA pergunta</p>
               {questions.map((q) => (
                 <div key={q.data} className="space-y-2 rounded-xl bg-surface2 p-3">
-                  <p className="text-[13px] font-semibold text-dim">{fmtDayShort(q.data)}</p>
-                  <p className="text-[15px]">{q.pergunta}</p>
+                  <p className="text-[0.8125rem] font-semibold text-dim">{fmtDayShort(q.data)}</p>
+                  <p className="text-[0.9375rem]">{q.pergunta}</p>
                   <DayAnswerButtons
                     date={q.data}
                     today={today}
@@ -172,11 +172,11 @@ export default function EvolucaoIA({ today }: { today: string }) {
           )}
           {!open && (
             <div className="flex items-center justify-between gap-3">
-              <button onClick={() => setOpen(true)} aria-expanded={false} className="min-h-11 text-[15px] font-semibold text-eat">
+              <button onClick={() => setOpen(true)} aria-expanded={false} className="min-h-11 text-[0.9375rem] font-semibold text-eat">
                 Ler tudo ›
               </button>
               {review!.week_start !== today && (
-                <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-dim">
+                <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[0.875rem] text-dim">
                   {busy ? 'A analisar…' : 'Atualizar'}
                 </button>
               )}
@@ -187,12 +187,12 @@ export default function EvolucaoIA({ today }: { today: string }) {
               {analysis.areas.map((a) => (
                 <li key={a.area} className="space-y-0.5 py-2.5">
                   <p className="flex items-baseline justify-between gap-2">
-                    <span className="text-[15px] font-semibold">{AREA_LABEL[a.area]}</span>
-                    <span className={`shrink-0 text-[13px] font-semibold ${ESTADO[a.estado].className}`}>
+                    <span className="text-[0.9375rem] font-semibold">{AREA_LABEL[a.area]}</span>
+                    <span className={`shrink-0 text-[0.8125rem] font-semibold ${ESTADO[a.estado].className}`}>
                       {ESTADO[a.estado].label}
                     </span>
                   </p>
-                  <p className="text-[14px] text-dim">{a.texto}</p>
+                  <p className="text-[0.875rem] text-dim">{a.texto}</p>
                 </li>
               ))}
             </ul>
@@ -200,7 +200,7 @@ export default function EvolucaoIA({ today }: { today: string }) {
           {open && analysis.foco.length > 0 && (
             <div className="space-y-1.5">
               <p className="label">No que te focares</p>
-              <ol className="list-decimal space-y-1 pl-5 text-[15px]">
+              <ol className="list-decimal space-y-1 pl-5 text-[0.9375rem]">
                 {analysis.foco.map((f) => (
                   <li key={f}>{f}</li>
                 ))}
@@ -209,17 +209,17 @@ export default function EvolucaoIA({ today }: { today: string }) {
           )}
           {open &&
             (review!.week_start === today ? (
-              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-eat">
+              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[0.875rem] text-eat">
                 {busy ? 'A analisar…' : 'Analisar outra vez'}
               </button>
             ) : (
               // O mesmo «Atualizar» discreto de quando está fechada.
-              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-dim">
+              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[0.875rem] text-dim">
                 {busy ? 'A analisar…' : 'Atualizar'}
               </button>
             ))}
           {open && (
-            <button onClick={() => setOpen(false)} aria-expanded className="block min-h-11 text-[14px] text-dim">
+            <button onClick={() => setOpen(false)} aria-expanded className="block min-h-11 text-[0.875rem] text-dim">
               Mostrar menos
             </button>
           )}
@@ -232,14 +232,14 @@ export default function EvolucaoIA({ today }: { today: string }) {
             <div className="h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
               <div className="h-full w-1/3 animate-pulse rounded-full bg-burn" />
             </div>
-            <p className="text-[14px] text-dim">
+            <p className="text-[0.875rem] text-dim">
               A IA está a ver o peso, as medidas, a comida e o treino. Pode demorar até um minuto; podes sair daqui, a
               análise fica guardada.
             </p>
           </div>
         )}
       </div>
-      {error && <p className="text-[14px] text-pain">{error}</p>}
+      {error && <p className="text-[0.875rem] text-pain">{error}</p>}
     </div>
   )
 }

@@ -63,13 +63,13 @@ export default function CinturaChart({ rows, from, today, week = false }: { rows
       reading={model.reading}
       aside={
         <>
-          {model.weekNote && <p className="text-[14px] text-dim">{model.weekNote}</p>}
+          {model.weekNote && <p className="text-[0.875rem] text-dim">{model.weekNote}</p>}
           <div className="flex items-end gap-3">
-            <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
+            <p className="num shrink-0 text-[2.125rem] leading-none font-extrabold whitespace-nowrap text-body">
               {fmt1(Number(model.lastValue))}
-              <span className="text-[17px] font-semibold">{'\u00a0'}cm</span>
+              <span className="text-[1.0625rem] font-semibold">{'\u00a0'}cm</span>
             </p>
-            <p className="min-w-0 text-[14px] leading-snug text-dim">
+            <p className="min-w-0 text-[0.875rem] leading-snug text-dim">
               agora{model.targetCm != null && <> · alvo ~{model.targetCm}&nbsp;cm (a cintura da tua %G alvo)</>}
             </p>
           </div>
@@ -84,7 +84,7 @@ export default function CinturaChart({ rows, from, today, week = false }: { rows
       note={
         <div className="space-y-3">
           <p>A cintura em cm é o número mais honesto: não passa por nenhum modelo.</p>
-          <div className="grid grid-cols-2 gap-2 text-[15px] text-ink">
+          <div className="grid grid-cols-2 gap-2 text-[0.9375rem] text-ink">
             <button onClick={() => sheet.open('medidas')} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
               Medir
             </button>

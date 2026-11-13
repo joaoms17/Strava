@@ -173,12 +173,12 @@ export default function SemanaChart({
               onClick={() => sel.toggle(r.date)}
               aria-pressed={active}
               aria-label={`${fmtDayShort(r.date)}${r.eaten != null ? `: ${fmtInt(r.eaten)} kcal` : ''}${RESULT_TEXT[r.result] ? `, ${RESULT_TEXT[r.result]}` : ''}`}
-              className={`flex min-h-11 flex-1 flex-col items-center justify-center rounded-lg text-[13px] leading-tight tabular-nums disabled:opacity-40 ${
+              className={`flex min-h-11 flex-1 flex-col items-center justify-center rounded-lg text-[0.8125rem] leading-tight tabular-nums disabled:opacity-40 ${
                 active ? 'bg-surface2 font-semibold text-ink' : r.date === today ? 'font-semibold text-ink' : 'text-dim'
               }`}
             >
               <span>{weekdayLetter(r.date)}</span>
-              <span className="text-[12px]">{Number(r.date.slice(8, 10))}</span>
+              <span className="text-[0.75rem]">{Number(r.date.slice(8, 10))}</span>
             </button>
           )
         })}
@@ -186,14 +186,14 @@ export default function SemanaChart({
       <div className="min-h-[76px] rounded-xl bg-surface2/60 px-3 py-2.5" aria-live="polite">
         {selected ? (
           <div className="space-y-1">
-            <p className="text-[14px] text-dim">
+            <p className="text-[0.875rem] text-dim">
               {fmtDayShort(selected.date)} ·{' '}
               {selected.result === 'acima_gasto' && <AlertBadge colors={colors} />}
               <span className={selected.result === 'acima_gasto' ? 'font-semibold text-ink' : undefined}>
                 {dayVerdict(selected.result, selected.eaten, selected.plan, selected.out)}
               </span>
             </p>
-            <p className="text-[15px] tabular-nums">
+            <p className="text-[0.9375rem] tabular-nums">
               {selected.eaten != null ? (
                 <>
                   Comeste <span className="font-semibold">{fmtInt(selected.eaten)} kcal</span>
@@ -209,12 +209,12 @@ export default function SemanaChart({
                 <MissingNote date={selected.date} today={today} compact />
               </div>
             )}
-            <button onClick={() => onOpenDay(selected.date)} className="min-h-11 text-[15px] font-semibold text-eat">
+            <button onClick={() => onOpenDay(selected.date)} className="min-h-11 text-[0.9375rem] font-semibold text-eat">
               Abrir o dia ›
             </button>
           </div>
         ) : (
-          <p className="pt-1 text-[14px] text-dim">Toca num dia para veres o que comeste, o alvo e o gasto desse dia.</p>
+          <p className="pt-1 text-[0.875rem] text-dim">Toca num dia para veres o que comeste, o alvo e o gasto desse dia.</p>
         )}
       </div>
     </ChartCard>

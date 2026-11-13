@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   ASK_DAILY_CAP,
   ASK_KIND,
+  DEFAULT_DAILY_VISION_CAP,
+  DEFAULT_MONTHLY_CAP_EUR,
   VISION_KINDS,
   aiLimitsFor,
   dailyAskCapReached,
@@ -9,7 +11,77 @@ import {
   kindLabel,
   monthlyCapReached,
   nearMonthlyCap,
+  quotaMessage,
+  quotaOutcome,
+  quotaPlan,
 } from '../api/_lib/rules/custos'
+
+// M20: reserva atómica da quota (ai_reserve_call, migração 20261113000060).
+describe('reserva da quota da IA', () => {
+  it('fotos: limite diário do perfil, da casa com o Gemini, sem euros', () => {
+    expect(quotaPlan('meal_photo', 'gemini', { ai_daily_vision_cap: 25, ai_monthly_cap_eur: 5 })).toEqual({
+      countKinds: VISION_KINDS,
+      dailyCap: 25,
+      sharedDaily: true,
+      monthlyCapEur: 0,
+    })
+  })
+
+  it('fotos com o Claude: por pessoa e com o teto do mês (por omissão 40 e 10 €)', () => {
+    expect(quotaPlan('evolution', 'anthropic', null)).toEqual({
+      countKinds: VISION_KINDS,
+      dailyCap: DEFAULT_DAILY_VISION_CAP,
+      sharedDaily: false,
+      monthlyCapEur: DEFAULT_MONTHLY_CAP_EUR,
+    })
+    expect(DEFAULT_DAILY_VISION_CAP).toBe(40)
+    expect(DEFAULT_MONTHLY_CAP_EUR).toBe(10)
+  })
+
+  it('perguntas: 60 por dia, só as perguntas contam', () => {
+    const plan = quotaPlan(ASK_KIND, 'gemini', { ai_daily_vision_cap: 5 })
+    expect(plan.countKinds).toEqual([ASK_KIND])
+    expect(plan.dailyCap).toBe(ASK_DAILY_CAP)
+  })
+
+  it('texto e correções: só o teto do mês', () => {
+    expect(quotaPlan('meal_correct', 'anthropic', { ai_monthly_cap_eur: '7.5' })).toEqual({
+      countKinds: [],
+      dailyCap: 0,
+      sharedDaily: false,
+      monthlyCapEur: 7.5,
+    })
+    expect(quotaPlan('meal_text', 'gemini', null).monthlyCapEur).toBe(0)
+  })
+
+  it('0 no perfil = sem limite; a verificação e o «mesmo assim» não têm limites', () => {
+    expect(quotaPlan('meal_photo', 'anthropic', { ai_daily_vision_cap: 0, ai_monthly_cap_eur: 0 })).toMatchObject({
+      dailyCap: 0,
+      monthlyCapEur: 0,
+    })
+    expect(quotaPlan('ai_check', 'anthropic', null)).toMatchObject({ dailyCap: 0, monthlyCapEur: 0, countKinds: [] })
+    expect(quotaPlan('meal_photo', 'anthropic', null, true)).toMatchObject({ dailyCap: 0, monthlyCapEur: 0 })
+  })
+
+  it('lê a resposta da função; o que não se percebe fica como antes (null)', () => {
+    expect(quotaOutcome({ ok: true, id: 'abc' })).toEqual({ ok: true, id: 'abc' })
+    expect(quotaOutcome({ ok: false, reason: 'diario', count: 40 })).toEqual({ ok: false, reason: 'diario' })
+    expect(quotaOutcome({ ok: false, reason: 'mensal' })).toEqual({ ok: false, reason: 'mensal' })
+    expect(quotaOutcome({ ok: true })).toBeNull()
+    expect(quotaOutcome({ ok: false, reason: 'outro' })).toBeNull()
+    expect(quotaOutcome(null)).toBeNull()
+    expect(quotaOutcome([{ ok: true, id: 'x' }])).toBeNull()
+    expect(quotaOutcome('ok')).toBeNull()
+  })
+
+  it('a frase para a app diz qual limite', () => {
+    expect(quotaMessage('mensal', 'meal_photo', true)).toMatch(/mensal/)
+    expect(quotaMessage('diario', ASK_KIND, true)).toMatch(/casa já fez muitas perguntas/)
+    expect(quotaMessage('diario', ASK_KIND, false)).toMatch(/Já fizeste/)
+    expect(quotaMessage('diario', 'meal_photo', true)).toMatch(/casa/)
+    expect(quotaMessage('diario', 'meal_photo', false)).toMatch(/limite diário de fotos/)
+  })
+})
 
 describe('limites da IA', () => {
   it('teto mensal em euros', () => {

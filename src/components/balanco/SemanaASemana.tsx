@@ -139,7 +139,7 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
         <div className="space-y-2">
           {model.hasKg && (
             <div className="border-b border-line/70 pb-2">
-              <p className="pl-1 text-[12px] text-dim">peso médio (kg)</p>
+              <p className="pl-1 text-[0.75rem] text-dim">peso médio (kg)</p>
             <div style={{ height: 104 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={model.weeks} margin={{ ...MARGIN, top: 10, bottom: 8 }}>
@@ -183,7 +183,7 @@ export default function SemanaASemana({ data, today, waterDay }: { data: Balanco
             </div>
             </div>
           )}
-          <p className="pl-1 text-[12px] text-dim">défice por dia (kcal)</p>
+          <p className="pl-1 text-[0.75rem] text-dim">défice por dia (kcal)</p>
           <div style={{ height: 150 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={model.weeks} margin={MARGIN} barCategoryGap="24%">

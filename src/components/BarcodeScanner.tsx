@@ -104,8 +104,8 @@ export default function BarcodeScanner({
     // Opaco e abaixo da barra de estado: a app por trás não se vê através da câmara.
     <div className="fixed inset-0 z-50 flex flex-col bg-bg px-4 pt-[calc(16px+env(safe-area-inset-top))] pb-[calc(16px+env(safe-area-inset-bottom))]">
       <div className="flex items-center justify-between pb-2">
-        <h2 className="font-display text-[22px] font-bold uppercase">Ler código de barras</h2>
-        <button className="-mr-2 min-h-11 px-3 text-[15px] text-dim" onClick={onClose}>
+        <h2 className="font-display text-[1.375rem] font-bold uppercase">Ler código de barras</h2>
+        <button className="-mr-2 min-h-11 px-3 text-[0.9375rem] text-dim" onClick={onClose}>
           Fechar
         </button>
       </div>
@@ -141,7 +141,7 @@ export default function BarcodeScanner({
         </button>
       </div>
       {onSearch && (
-        <button onClick={onSearch} className="mt-2 min-h-12 w-full rounded-xl border border-edge text-[15px]">
+        <button onClick={onSearch} className="mt-2 min-h-12 w-full rounded-xl border border-edge text-[0.9375rem]">
           Procurar pelo nome
         </button>
       )}

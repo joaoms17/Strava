@@ -1,6 +1,6 @@
 import type { VercelResponse } from '@vercel/node'
 import { HttpError } from './supabase.js'
-import { AiError } from './rules/resposta-ia.js'
+import { AiError, AiQuotaError } from './rules/resposta-ia.js'
 
 // Os erros do SDK da Anthropic reconhecem-se pelo nome da classe (sem
 // importar o SDK aqui: P7, arranque a frio mais curto).
@@ -28,6 +28,11 @@ export function respondError(res: VercelResponse, err: unknown): void {
       return
     }
     res.status(err.status).json({ error: err.message })
+    return
+  }
+  // M20: a reserva da quota foi recusada (não é um erro do servidor).
+  if (err instanceof AiQuotaError) {
+    res.status(429).json({ error: err.message })
     return
   }
   console.error(err)

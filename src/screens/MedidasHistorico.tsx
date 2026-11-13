@@ -48,11 +48,11 @@ export default function MedidasHistorico() {
     void load()
   }, [load, version])
 
-  if (!rows) return <p className="pt-8 text-center text-[15px] text-dim">A carregar…</p>
+  if (!rows) return <p className="pt-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
   if (rows.length === 0) {
     return (
       <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
-        <p className="text-[15px] text-dim">Ainda não há medições.</p>
+        <p className="text-[0.9375rem] text-dim">Ainda não há medições.</p>
         <button onClick={() => sheet.open('medidas')} className="min-h-12 w-full rounded-xl bg-cta font-semibold text-on-cta">
           Medir agora
         </button>
@@ -81,10 +81,10 @@ export default function MedidasHistorico() {
           {trends.map((t) => (
             <div key={t.zone} className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[15px]">
+                <p className="text-[0.9375rem]">
                   {ZONE_LABEL[t.zone]} {fmt1(t.last)} cm
                 </p>
-                <p className="text-[13px] text-dim">
+                <p className="text-[0.8125rem] text-dim">
                   {t.change === 0
                     ? `igual desde ${fmtDayMonth(t.firstDate)}`
                     : `${fmt1(Math.abs(t.change))} cm a ${t.change < 0 ? 'menos' : 'mais'} desde ${fmtDayMonth(t.firstDate)}`}
@@ -103,14 +103,14 @@ export default function MedidasHistorico() {
         return (
           <div key={m.id} className="rounded-2xl border border-line bg-surface">
             <button onClick={() => sheet.open('medidas', { id: m.id })} className="block w-full p-4 pb-2 text-left" aria-label={`Corrigir a medição de ${fmtDayMonth(m.date)}`}>
-              <p className="num text-[22px] leading-tight">{fmtDayMonth(m.date)}</p>
-              <p className="text-[15px]">
+              <p className="num text-[1.375rem] leading-tight">{fmtDayMonth(m.date)}</p>
+              <p className="text-[0.9375rem]">
                 {ZONE_ORDER.filter((z) => zoneValue(m, z) != null)
                   .map((z) => zoneText(m, index, z))
                   .join(' · ')}
               </p>
               {c && (
-                <p className="text-[14px] text-dim">
+                <p className="text-[0.875rem] text-dim">
                   Gordura cerca de {fmt1(c.shown.fatKg)} kg ({fmt1(c.pct)} %) · Massa magra {fmt1(c.shown.leanKg)} kg · peso{' '}
                   {fmt1(Number(m.weight_used_kg))} kg
                   {usual != null && <> · {usualNeckLabel(usual)}</>}
@@ -119,7 +119,7 @@ export default function MedidasHistorico() {
               {m.flags
                 .filter((f) => !(f === 'pescoco_mudou' && why))
                 .map((f) => (
-                  <p key={f} className="text-[13px] text-attn">
+                  <p key={f} className="text-[0.8125rem] text-attn">
                     {FLAG_TEXT[f as MeasureFlag] ?? f}
                   </p>
                 ))}

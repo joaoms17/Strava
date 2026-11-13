@@ -268,7 +268,7 @@ export default function BarcodeSheet() {
   const describe = (m: Target) =>
     `${SLOT_LABEL[mealSlot(m)]} · ${dayLabel(m.date, today).toLowerCase()} · ${mealName(m)}`
   const primary =
-    'min-h-14 w-full rounded-2xl bg-eat text-[17px] font-semibold text-bg disabled:opacity-40'
+    'min-h-14 w-full rounded-2xl bg-eat text-[1.0625rem] font-semibold text-bg disabled:opacity-40'
 
   return (
     <BottomSheet
@@ -284,21 +284,21 @@ export default function BarcodeSheet() {
     >
       <div className="space-y-4 pb-2">
         {restored > 0 && basket.length > 0 && (
-          <p className="text-[13px] text-dim">
+          <p className="text-[0.8125rem] text-dim">
             {restored === 1 ? 'O produto que leste antes ficou guardado.' : `Os ${restored} produtos que leste antes ficaram guardados.`}
           </p>
         )}
 
         {error && (
           <div className="space-y-3">
-            <p className="text-[15px]">{error}</p>
+            <p className="text-[0.9375rem]">{error}</p>
             {missing && (
               <>
-                <p className="text-[15px] text-dim">
+                <p className="text-[0.9375rem] text-dim">
                   Tira uma foto à tabela nutricional: a IA lê os valores e o código fica conhecido para a próxima vez.
                 </p>
                 <label
-                  className={`flex min-h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-eat text-[16px] font-semibold text-bg ${labelBusy ? 'pointer-events-none' : ''}`}
+                  className={`flex min-h-12 w-full cursor-pointer items-center justify-center rounded-xl bg-eat text-[1rem] font-semibold text-bg ${labelBusy ? 'pointer-events-none' : ''}`}
                   aria-busy={labelBusy || undefined}
                 >
                   {labelBusy ? <BusyLabel text="A ler o rótulo…" /> : 'Fotografar o rótulo'}
@@ -317,7 +317,7 @@ export default function BarcodeSheet() {
               </>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={() => setScanning(true)} className="min-h-12 rounded-xl bg-surface2 text-[15px]">
+              <button onClick={() => setScanning(true)} className="min-h-12 rounded-xl bg-surface2 text-[0.9375rem]">
                 Ler outra vez
               </button>
               <button
@@ -326,7 +326,7 @@ export default function BarcodeSheet() {
                   setMissing(null)
                   setSearching(true)
                 }}
-                className="min-h-12 rounded-xl bg-surface2 text-[15px]"
+                className="min-h-12 rounded-xl bg-surface2 text-[0.9375rem]"
               >
                 Procurar pelo nome
               </button>
@@ -351,7 +351,7 @@ export default function BarcodeSheet() {
                     void runBusy('A procurar…', search, searchBusyKey)
                   }
                 }}
-                className="h-12 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+                className="h-12 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 text-[1.0625rem] placeholder:text-dim focus:border-eat focus:outline-none"
               />
               <button
                 disabled={searchBusy || query.trim().length < 3}
@@ -364,7 +364,7 @@ export default function BarcodeSheet() {
             </div>
             {results &&
               (results.length === 0 ? (
-                <p className="text-[15px] text-dim">Não encontrei nada com esse nome. Tenta outras palavras ou lê o código.</p>
+                <p className="text-[0.9375rem] text-dim">Não encontrei nada com esse nome. Tenta outras palavras ou lê o código.</p>
               ) : (
                 <ul className="divide-y divide-line rounded-2xl bg-surface2" aria-label="Produtos encontrados">
                   {results.map((r) => (
@@ -374,8 +374,8 @@ export default function BarcodeSheet() {
                         onClick={() => lookup(r.code)}
                         className="flex min-h-12 w-full items-baseline justify-between gap-3 px-3 py-2.5 text-left"
                       >
-                        <span className="min-w-0 flex-1 text-[15px]">{r.name}</span>
-                        <span className="shrink-0 text-[13px] text-dim tabular-nums">
+                        <span className="min-w-0 flex-1 text-[0.9375rem]">{r.name}</span>
+                        <span className="shrink-0 text-[0.8125rem] text-dim tabular-nums">
                           {r.kcal_100g != null ? `${fmtInt(r.kcal_100g)} kcal/100 g` : 'sem valores'}
                         </span>
                       </BusyButton>
@@ -383,10 +383,10 @@ export default function BarcodeSheet() {
                   ))}
                 </ul>
               ))}
-            <button onClick={() => setScanning(true)} className="min-h-11 text-[15px] text-eat">
+            <button onClick={() => setScanning(true)} className="min-h-11 text-[0.9375rem] text-eat">
               Ler o código
             </button>
-            <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>
+            <p className="text-[0.75rem] text-dim">Dados: Open Food Facts (ODbL)</p>
           </div>
         )}
 
@@ -395,15 +395,15 @@ export default function BarcodeSheet() {
             {basket.map((item, i) => (
               <li key={`${item.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px]">{item.name}</p>
-                  <p className="text-[13px] text-dim tabular-nums">
+                  <p className="truncate text-[0.9375rem]">{item.name}</p>
+                  <p className="text-[0.8125rem] text-dim tabular-nums">
                     {fmtInt(item.grams)} g · {fmtInt(item.kcal)} kcal · proteína {fmtInt(item.protein)} g
                   </p>
                 </div>
                 <button
                   onClick={() => setBasket(basket.filter((_, j) => j !== i))}
                   aria-label={`Tirar ${item.name}`}
-                  className="h-11 w-11 shrink-0 rounded-lg text-[17px] text-dim"
+                  className="h-11 w-11 shrink-0 rounded-lg text-[1.0625rem] text-dim"
                 >
                   ✕
                 </button>
@@ -414,12 +414,12 @@ export default function BarcodeSheet() {
 
         {food && (
           <div className="space-y-3 rounded-2xl border border-line p-3">
-            <p className="text-[17px] font-semibold">{food.name}</p>
+            <p className="text-[1.0625rem] font-semibold">{food.name}</p>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => changeGrams(grams > 10 ? grams - 10 : grams - 1)}
                 aria-label={grams > 10 ? 'Menos 10 g' : 'Menos 1 g'}
-                className="h-12 w-12 rounded-xl bg-surface2 text-[17px]"
+                className="h-12 w-12 rounded-xl bg-surface2 text-[1.0625rem]"
               >
                 −
               </button>
@@ -435,24 +435,24 @@ export default function BarcodeSheet() {
                     if (g != null) setGrams(g)
                   }}
                   onBlur={() => setGramsText(String(grams))}
-                  className="num w-28 rounded-xl border border-line bg-bg py-1 text-center text-[32px] focus:border-eat focus:outline-none"
+                  className="num w-28 rounded-xl border border-line bg-bg py-1 text-center text-[2rem] focus:border-eat focus:outline-none"
                 />
-                <span className="num text-[22px]">g</span>
+                <span className="num text-[1.375rem]">g</span>
               </label>
-              <button onClick={() => changeGrams(grams + 10)} aria-label="Mais 10 g" className="h-12 w-12 rounded-xl bg-surface2 text-[17px]">
+              <button onClick={() => changeGrams(grams + 10)} aria-label="Mais 10 g" className="h-12 w-12 rounded-xl bg-surface2 text-[1.0625rem]">
                 +
               </button>
             </div>
-            <p className="text-[15px] text-dim tabular-nums">
+            <p className="text-[0.9375rem] text-dim tabular-nums">
               {fmtInt((food.kcal_100g * grams) / 100)} kcal ·{' '}
               <span className="text-protein">Proteína {fmtInt((food.protein_100g * grams) / 100)} g</span> · Hidratos{' '}
               {fmtInt((food.carbs_100g * grams) / 100)} g · Gordura {fmtInt((food.fat_100g * grams) / 100)} g
             </p>
             {foodExtrasText(food, grams) && (
-              <p className="text-[13px] text-dim tabular-nums">{foodExtrasText(food, grams)}</p>
+              <p className="text-[0.8125rem] text-dim tabular-nums">{foodExtrasText(food, grams)}</p>
             )}
-            {food.serving_label && <p className="text-[13px] text-dim">Dose do rótulo: {food.serving_label}</p>}
-            {food.source === 'off' && <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>}
+            {food.serving_label && <p className="text-[0.8125rem] text-dim">Dose do rótulo: {food.serving_label}</p>}
+            {food.source === 'off' && <p className="text-[0.75rem] text-dim">Dados: Open Food Facts (ODbL)</p>}
           </div>
         )}
 
@@ -463,16 +463,16 @@ export default function BarcodeSheet() {
                 addCurrent()
                 setScanning(true)
               }}
-              className="min-h-12 w-full rounded-xl border border-line text-[16px]"
+              className="min-h-12 w-full rounded-xl border border-line text-[1rem]"
             >
               ＋ Ler outro produto
             </button>
             {items.length > 1 && (
-              <p className="text-[14px] text-dim tabular-nums">
+              <p className="text-[0.875rem] text-dim tabular-nums">
                 Total: {fmtInt(kcal)} kcal · proteína {fmtInt(protein)} g
               </p>
             )}
-            <button onClick={() => setChoosing(true)} className="min-h-11 text-[15px] text-eat">
+            <button onClick={() => setChoosing(true)} className="min-h-11 text-[0.9375rem] text-eat">
               Juntar a uma refeição já registada
             </button>
           </>
@@ -482,7 +482,7 @@ export default function BarcodeSheet() {
           <div className="space-y-2">
             <p className="label">Juntar a qual? · {dayLabel(date, today)}</p>
             {dayMeals.length === 0 ? (
-              <p className="text-[15px] text-dim">Não há refeições registadas neste dia.</p>
+              <p className="text-[0.9375rem] text-dim">Não há refeições registadas neste dia.</p>
             ) : (
               <ul className="space-y-2">
                 {dayMeals.map((m) => (
@@ -490,7 +490,7 @@ export default function BarcodeSheet() {
                     <BusyButton
                       busy="A juntar…"
                       onClick={() => addTo(m)}
-                      className="min-h-12 w-full truncate rounded-xl border border-line px-3 text-left text-[15px]"
+                      className="min-h-12 w-full truncate rounded-xl border border-line px-3 text-left text-[0.9375rem]"
                     >
                       {describe(m)}
                     </BusyButton>
@@ -498,7 +498,7 @@ export default function BarcodeSheet() {
                 ))}
               </ul>
             )}
-            <button onClick={() => setChoosing(false)} className="min-h-11 text-[15px] text-dim">
+            <button onClick={() => setChoosing(false)} className="min-h-11 text-[0.9375rem] text-dim">
               Voltar
             </button>
           </div>

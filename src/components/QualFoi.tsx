@@ -19,6 +19,7 @@ import {
 } from '../../api/_lib/rules/plano-treino'
 import { OTHER_SPORTS, SPORT_LABEL, type OtherSport } from '../../api/_lib/rules/targets'
 import type { Workout } from '../lib/types'
+import { WORKOUT_LIST_COLUMNS, fromListRows } from '../lib/treino-lista'
 import { chip } from './ui/Chips'
 import Icon from './ui/Icon'
 import { dayTone } from './plano/PlanoViews'
@@ -89,9 +90,9 @@ export function QualFoiQuestion({ workout: w, onDone }: { workout: Workout; onDo
             <button
               key={d.n}
               onClick={() => answer({ kind: 'dia-plano', n: d.n })}
-              className="flex min-h-12 items-center gap-3 rounded-xl border border-line bg-bg px-3 text-left text-[16px] font-semibold"
+              className="flex min-h-12 items-center gap-3 rounded-xl border border-line bg-bg px-3 text-left text-[1rem] font-semibold"
             >
-              <span className={`num w-5 text-center text-[22px] ${tone.text}`}>{d.n}</span>
+              <span className={`num w-5 text-center text-[1.375rem] ${tone.text}`}>{d.n}</span>
               <span className="min-w-0 flex-1 truncate">{dayLabel(d, true)}</span>
             </button>
           )
@@ -122,36 +123,42 @@ export function QualFoiQuestion({ workout: w, onDone }: { workout: Workout; onDo
 // ainda não têm resposta, o mais recente primeiro (até 3; no Hoje, 1).
 // O Hoje escolhe um só cartão de ação (H9): `onCount` diz-lhe quantos há e
 // `hidden` mantém a contagem sem mostrar nada.
+// `workouts`: os treinos que o ecrã já leu (o Treino lê 12 semanas); com eles
+// não se faz outra consulta (P5). Sem eles (o Hoje), lê só os últimos 7 dias.
 export default function QualFoi({
   today,
   max = 3,
   hidden = false,
   onCount,
+  workouts: given,
 }: {
   today: string
   max?: number
   hidden?: boolean
   onCount?: (count: number) => void
+  workouts?: Workout[]
 }) {
   const plan = usePlanoTreino()
   const version = useDataVersion()
-  const [workouts, setWorkouts] = useState<Workout[]>([])
+  const [fetched, setFetched] = useState<Workout[]>([])
 
   const load = useCallback(async () => {
+    if (given) return
     const { data } = await supabase
       .from('workouts_active')
-      .select('*')
+      .select(WORKOUT_LIST_COLUMNS)
       .gte('date', shiftDate(today, -(QUAL_FOI_DAYS - 1)))
       .in('type', ['strength', 'other'])
       .is('favorite_id', null)
       .order('date', { ascending: false })
-    setWorkouts((data ?? []) as Workout[])
-  }, [today])
+    setFetched(fromListRows(data))
+  }, [today, !given])
 
   useEffect(() => {
     if (plan) void load()
   }, [load, version, !!plan])
 
+  const workouts = given ?? fetched
   const all = plan ? askWhichWorkout(workouts, today) : []
   const count = all.length
   useEffect(() => {
@@ -171,8 +178,8 @@ export default function QualFoi({
               <Icon name="watch" size={22} />
             </span>
             <p className="min-w-0 flex-1">
-              <span className="block font-display text-[22px] leading-none font-extrabold uppercase">Qual foi?</span>
-              <span className="mt-1 block text-[15px] text-dim">
+              <span className="block font-display text-[1.375rem] leading-none font-extrabold uppercase">Qual foi?</span>
+              <span className="mt-1 block text-[0.9375rem] text-dim">
                 {workoutTitle(w)} de {w.date === today ? 'hoje' : fmtDayShort(w.date)}
                 {w.started_at && !w.raw?.hora_estimada ? `, ${timeOf(w.started_at)}` : ''}
                 {w.minutes != null ? ` · ${w.minutes} min` : ''}

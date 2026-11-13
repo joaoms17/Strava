@@ -42,7 +42,7 @@ export function personPayload(d: PersonDraft) {
 export default function PersonFields({ value, onChange }: { value: PersonDraft; onChange: (d: PersonDraft) => void }) {
   const set = (patch: Partial<PersonDraft>) => onChange({ ...value, ...patch })
   const field =
-    'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
+    'h-11 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none'
   const payload = personPayload(value)
   const targets = payload
     ? startingTargets(
@@ -101,7 +101,7 @@ export default function PersonFields({ value, onChange }: { value: PersonDraft; 
         </label>
       </div>
       {targets && (
-        <p className="rounded-xl bg-surface2 px-3 py-2 text-[14px] text-dim tabular-nums">
+        <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.875rem] text-dim tabular-nums">
           Para começar: <span className="text-ink">{fmtInt(targets.base_kcal)} kcal</span> por dia e{' '}
           <span className="text-ink">{targets.protein_g} g</span> de proteína. Muda-se depois nas Definições.
         </p>

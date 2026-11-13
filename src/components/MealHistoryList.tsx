@@ -81,14 +81,14 @@ export default function MealHistoryList({
       >
         <Thumb url={thumb ? urls[thumb] : null} size={44} />
         <span className="min-w-0 flex-1">
-          <span className="line-clamp-2 text-[15px]">{mealName(meal)}</span>
-          <span className="block text-[13px] text-dim">
+          <span className="line-clamp-2 text-[0.9375rem]">{mealName(meal)}</span>
+          <span className="block text-[0.8125rem] text-dim">
             {extra ?? `${SLOT_LABEL[mealSlot(meal)]} · ${timeOf(meal.logged_at)}`}
           </span>
         </span>
-        <span className="shrink-0 text-right text-[14px] tabular-nums">
+        <span className="shrink-0 text-right text-[0.875rem] tabular-nums">
           {fmtKcal(Number(meal.kcal))} kcal
-          <span className="block text-[12px] text-dim">{Math.round(Number(meal.protein))} g prot.</span>
+          <span className="block text-[0.75rem] text-dim">{Math.round(Number(meal.protein))} g prot.</span>
         </span>
       </button>
     )
@@ -105,14 +105,14 @@ export default function MealHistoryList({
         }}
         placeholder="Procurar (ex.: frango, aveia, sopa)"
         aria-label="Procurar refeição"
-        className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
+        className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[1rem] placeholder:text-dim focus:border-eat focus:outline-none"
       />
       {header?.(query)}
 
       {meals == null ? (
-        <p className="py-6 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">A carregar…</p>
       ) : found.length === 0 ? (
-        <p className="py-6 text-center text-[15px] text-dim">
+        <p className="py-6 text-center text-[0.9375rem] text-dim">
           {query.trim() ? 'Nada com esse nome nos últimos 3 meses.' : emptyText}
         </p>
       ) : (
@@ -136,7 +136,7 @@ export default function MealHistoryList({
           {days.length > shownDays && (
             <button
               onClick={() => setShownDays(shownDays + PAGE)}
-              className="min-h-11 w-full rounded-xl border border-line text-[15px]"
+              className="min-h-11 w-full rounded-xl border border-line text-[0.9375rem]"
             >
               Mais dias
             </button>

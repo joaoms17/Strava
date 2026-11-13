@@ -12,9 +12,9 @@ export default function TreinoSheet() {
   return (
     <BottomSheet title="Treino" onClose={sheet.close}>
       <div className="space-y-4 pb-2">
-        {date && <p className="text-[15px] text-dim">A registar em {fmtDayShort(date)}</p>}
+        {date && <p className="text-[0.9375rem] text-dim">A registar em {fmtDayShort(date)}</p>}
         <WorkoutLogOptions date={date} inSheet />
-        <p className="text-[14px] text-dim">
+        <p className="text-[0.875rem] text-dim">
           Print: abre o treino na app do relógio ou noutra app (Strava, a app do ginásio…) e tira 1 a 4 capturas. Os
           treinos do relógio também chegam sozinhos pelo intervals.icu.
         </p>

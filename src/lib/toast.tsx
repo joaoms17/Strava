@@ -50,7 +50,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const buttons = toast?.actions.map((action) => (
     <button
       key={action.label}
-      className="min-h-11 min-w-11 shrink-0 rounded-lg px-2 text-[15px] font-semibold text-toast-action"
+      className="min-h-11 min-w-11 shrink-0 rounded-lg px-2 text-[0.9375rem] font-semibold text-toast-action"
       onClick={() => {
         setToast(null)
         // Anular (e as porções) também esperam pelo servidor: nada muda a meio.
@@ -70,7 +70,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               de 2 ações (as porções e Anular), as ações vão para uma 2.ª linha. */}
           <div className="w-full max-w-md rounded-2xl bg-toast px-4 py-1 text-on-toast shadow-lg ring-1 ring-white/10">
             <div className="flex items-center gap-2">
-              <p className="min-w-0 flex-1 py-2.5 text-[15px]">{toast.text}</p>
+              <p className="min-w-0 flex-1 py-2.5 text-[0.9375rem]">{toast.text}</p>
               {toast.actions.length > 0 && toast.actions.length <= 2 && <div className="-mr-2 flex shrink-0 gap-1">{buttons}</div>}
             </div>
             {toast.actions.length > 2 && <div className="-mt-1 -mr-2 flex justify-end gap-1">{buttons}</div>}

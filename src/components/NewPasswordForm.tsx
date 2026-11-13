@@ -38,7 +38,7 @@ export default function NewPasswordForm({
   }
 
   const field =
-    'w-full rounded-xl border border-line bg-surface px-4 py-3 text-[17px] text-ink placeholder:text-dim focus:border-eat focus:outline-none'
+    'w-full rounded-xl border border-line bg-surface px-4 py-3 text-[1.0625rem] text-ink placeholder:text-dim focus:border-eat focus:outline-none'
 
   return (
     <form
@@ -69,15 +69,15 @@ export default function NewPasswordForm({
         onChange={(e) => setConfirm(e.target.value)}
         className={field}
       />
-      <label className="flex items-center gap-2 text-[14px] text-dim">
+      <label className="flex items-center gap-2 text-[0.875rem] text-dim">
         <input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} className="h-4 w-4 accent-cta" />
         Mostrar
       </label>
-      {error && <p className="text-[14px] text-eat">{error}</p>}
+      {error && <p className="text-[0.875rem] text-eat">{error}</p>}
       <button
         type="submit"
         disabled={busy || !password || !confirm}
-        className="min-h-12 w-full rounded-xl bg-cta font-display text-[17px] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50"
+        className="min-h-12 w-full rounded-xl bg-cta font-display text-[1.0625rem] font-bold tracking-[0.04em] text-on-cta uppercase disabled:opacity-50"
       >
         {busyContent(busy, 'A guardar…', submitLabel)}
       </button>

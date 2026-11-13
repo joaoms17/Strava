@@ -18,7 +18,7 @@ export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
 
   if (!metric) {
     return (
-      <div className="rounded-2xl border border-line bg-surface p-4 text-[15px]">
+      <div className="rounded-2xl border border-line bg-surface p-4 text-[0.9375rem]">
         <p className="font-semibold">Eficiência na bicicleta</p>
         <p className="mt-1 text-dim">
           Para comparar sessões é preciso saber o esforço de cada uma: a potência (watts) ou a distância. Os batimentos
@@ -37,10 +37,10 @@ export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
-      <p className="text-[15px] font-semibold">
+      <p className="text-[0.9375rem] font-semibold">
         {metric === 'watts' ? 'Watts por batimento' : 'Metros por batimento'}
       </p>
-      <p className="text-[13px] text-dim">
+      <p className="text-[0.8125rem] text-dim">
         Se sobe, fazes o mesmo esforço com menos batimentos.{' '}
         {points.length >= 2 &&
           `Desde ${fmtDayMonth(first.date)}: ${change > 0 ? '+' : ''}${change}${NBSP}%.`}
@@ -72,7 +72,7 @@ export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
                 if (!active || !p) return null
                 return (
                   <div
-                    className="rounded-xl px-3 py-2 text-[13px] tabular-nums shadow"
+                    className="rounded-xl px-3 py-2 text-[0.8125rem] tabular-nums shadow"
                     style={{ background: colors.surface, border: `1px solid ${colors.line}`, color: colors.ink }}
                   >
                     <p style={{ color: colors.dim }}>{fmtDayShort(p.date)}</p>
@@ -105,7 +105,7 @@ export default function BikeHrChart({ workouts }: { workouts: Workout[] }) {
         </ResponsiveContainer>
       </div>
       {left_out > 0 && (
-        <p className="mt-1 text-[13px] text-dim">
+        <p className="mt-1 text-[0.8125rem] text-dim">
           {left_out === 1 ? '1 sessão não entra' : `${left_out} sessões não entram`} (menos de {MIN_EFFICIENCY_MINUTES} min
           ou sem {metric === 'watts' ? 'potência' : 'distância'}): não dá para comparar.
         </p>

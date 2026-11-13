@@ -1,6 +1,9 @@
 # Auditoria de novembro de 2026 — estado
 
-Estado de cada achado de [`auditoria-2026-11.md`](auditoria-2026-11.md) depois dos Lotes A, B e C e da limpeza final. Fonte: as mensagens dos commits (cada uma cita os códigos). Estados: **feito**, **em parte**, **decisão do dono**, **não feito**.
+Estado de cada achado de [`auditoria-2026-11.md`](auditoria-2026-11.md) depois dos Lotes A, B, C e D e da limpeza final. Fonte: as mensagens dos commits (cada uma cita os códigos). Estados: **feito**, **em parte**, **decisão do dono**, **não feito**.
+
+
+> **Lote D (13 nov):** feitos M20 (quota atómica, chamadas falhadas contam), G4 (token do Atalho com data e «Gerar novo token»), P1 (Hoje num só pedido, `day_bundle`), P5 (Treino sem `select('*')`, páginas de 100), T17 (folha dividida em três ficheiros), P6 (miniaturas das favoritas, URLs assinados estáveis), H11 (um só bloco «Quantidade»), H16 (texto em rem em toda a app; o Dynamic Type do iPhone exigiria `font: -apple-system-body`, não aplicado), B17 (passos e sono só no Corpo e no Hoje) e L15 (calendário do Mês começa no primeiro dia com comida). Fica: P2 (Recharts no precache, para o Treino e o Balanço abrirem sem rede) e as confirmações no painel (G1, G6). Migrações 20–42 aplicadas a 13 nov; 60–63 aplicadas a seguir; a 50 (limpeza) fica para depois de 17 nov.
 
 ## Corpo e energia
 

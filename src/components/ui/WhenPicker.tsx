@@ -36,7 +36,7 @@ export default function WhenPicker({
   const pill = (active: boolean) => `${chip(active)} shrink-0 whitespace-nowrap`
   const missing = value.slot == null
   const cell = (active: boolean) =>
-    `min-h-12 rounded-xl border px-1 py-1 text-[15px] leading-tight ${
+    `min-h-12 rounded-xl border px-1 py-1 text-[0.9375rem] leading-tight ${
       active ? 'border-eat bg-eat text-bg' : 'border-line bg-transparent'
     }`
 
@@ -83,7 +83,7 @@ export default function WhenPicker({
             onClick={() => onChange(normalizeWhen({ date: value.date, slot: 'agora' }, today))}
             className={cell(value.slot === 'agora')}
           >
-            Agora <span className="block text-[12px] opacity-70 tabular-nums">{clockTime(new Date())}</span>
+            Agora <span className="block text-[0.75rem] opacity-70 tabular-nums">{clockTime(new Date())}</span>
           </button>
         )}
         {SLOTS.map((slot) => (
@@ -94,11 +94,11 @@ export default function WhenPicker({
             onClick={() => onChange({ date: value.date, slot })}
             className={`${cell(value.slot === slot)} ${missing ? 'border-eat/60' : ''}`}
           >
-            {SHORT[slot]} <span className="block text-[12px] opacity-70 tabular-nums">{SLOT_TIME[slot]}</span>
+            {SHORT[slot]} <span className="block text-[0.75rem] opacity-70 tabular-nums">{SLOT_TIME[slot]}</span>
           </button>
         ))}
       </div>
-      {missing && <p className="text-[13px] text-eat">Que refeição foi? Escolhe acima.</p>}
+      {missing && <p className="text-[0.8125rem] text-eat">Que refeição foi? Escolhe acima.</p>}
     </div>
   )
 }
@@ -123,11 +123,11 @@ export function WhenLine({
   return (
     <div className="space-y-2">
       <div className="flex min-h-11 items-center justify-between gap-3">
-        <p className="text-[13px] text-dim">
+        <p className="text-[0.8125rem] text-dim">
           Vai ficar em <span className="font-semibold text-ink">{whenLabel(value, today)}</span>
         </p>
         {!shown && (
-          <button onClick={() => setOpen(true)} className="-mr-2 min-h-11 shrink-0 px-2 text-[15px] text-eat">
+          <button onClick={() => setOpen(true)} className="-mr-2 min-h-11 shrink-0 px-2 text-[0.9375rem] text-eat">
             Mudar
           </button>
         )}

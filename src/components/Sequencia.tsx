@@ -51,7 +51,7 @@ export default function Sequencia({ today }: { today: string }) {
 
   if (streak < 2) return null
   return (
-    <span className="text-[13px] text-dim tabular-nums">
+    <span className="text-[0.8125rem] text-dim tabular-nums">
       {streak} dias seguidos com tudo registado
     </span>
   )

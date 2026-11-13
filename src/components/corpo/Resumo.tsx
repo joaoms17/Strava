@@ -85,25 +85,25 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
   return (
     <section id="resumo" className="space-y-4 rounded-3xl bg-surface p-5" aria-label="Resumo">
       {!latest ? (
-        <p className="text-[15px] text-dim">Pesa-te de manhã, antes de comer.</p>
+        <p className="text-[0.9375rem] text-dim">Pesa-te de manhã, antes de comer.</p>
       ) : profile.calm_mode && enough && last ? (
         // Modo calmo: sem o peso de cada dia, só a média da semana.
         <div className="space-y-1">
           <p className="label">Peso médio</p>
-          <p className="text-[64px] leading-none font-extrabold text-body font-display">
-            {fmt1(last.value)} <span className="text-[22px] font-semibold">kg</span>
+          <p className="text-[4rem] leading-none font-extrabold text-body font-display">
+            {fmt1(last.value)} <span className="text-[1.375rem] font-semibold">kg</span>
           </p>
-          {rate != null && <p className="text-[15px]">{rateText(rate)}</p>}
-          {thisWeek && <p className="text-[15px] text-dim tabular-nums">{thisWeek}{waterNote}</p>}
+          {rate != null && <p className="text-[0.9375rem]">{rateText(rate)}</p>}
+          {thisWeek && <p className="text-[0.9375rem] text-dim tabular-nums">{thisWeek}{waterNote}</p>}
         </div>
       ) : (
         <div className="space-y-1">
           <p className="label">Último peso · {when(latest.date)}</p>
-          <p className="text-[64px] leading-none font-extrabold text-body font-display">
-            {fmt1(latest.kg)} <span className="text-[22px] font-semibold">kg</span>
+          <p className="text-[4rem] leading-none font-extrabold text-body font-display">
+            {fmt1(latest.kg)} <span className="text-[1.375rem] font-semibold">kg</span>
           </p>
           {diff != null && previous && (
-            <p className="text-[15px] tabular-nums">
+            <p className="text-[0.9375rem] tabular-nums">
               {diff === 0
                 ? `Igual a ${when(previous.date)}`
                 : `${diff < 0 ? '−' : '+'}${fmt1(Math.abs(diff))} kg desde ${when(previous.date)}`}
@@ -111,7 +111,7 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
             </p>
           )}
           {thisWeek && (
-            <p className="text-[15px] text-dim tabular-nums">
+            <p className="text-[0.9375rem] text-dim tabular-nums">
               {thisWeek} no peso médio{waterNote}
             </p>
           )}
@@ -121,17 +121,17 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
       {rate != null &&
         rate < -FAST_LOSS_KG_WEEK &&
         (waterPhase ? (
-          <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-dim">
+          <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem] text-dim">
             A descer depressa, mas é normal agora: nas primeiras semanas (da dieta ou depois da manutenção) sai sobretudo
             água.
           </p>
         ) : (
-          <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-attn">
+          <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem] text-attn">
             Estás a perder depressa (mais de 0,85 kg por semana). Come um pouco mais para proteger o músculo.
           </p>
         ))}
       {stable && rate != null && Math.abs(rate) < 0.1 && (
-        <p className="rounded-xl bg-surface2 px-3 py-2 text-[15px] text-dim">Peso estável há 3 semanas. A app ajusta o gasto sozinha.</p>
+        <p className="rounded-xl bg-surface2 px-3 py-2 text-[0.9375rem] text-dim">Peso estável há 3 semanas. A app ajusta o gasto sozinha.</p>
       )}
 
       {since && tiles.length > 0 && (
@@ -140,11 +140,11 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
           <div className="grid grid-cols-3 gap-2">
             {tiles.map((t) => (
               <div key={t.label} className="rounded-xl bg-surface2 px-2.5 py-2">
-                <p className={`font-display text-[24px] leading-tight font-bold ${t.good ? 'text-ok-text' : 'text-ink'}`}>
+                <p className={`font-display text-[1.5rem] leading-tight font-bold ${t.good ? 'text-ok-text' : 'text-ink'}`}>
                   {t.value}
                   {t.good && <span className="sr-only"> (a melhorar)</span>}
                 </p>
-                <p className="text-[12px] leading-tight text-dim">{t.label}</p>
+                <p className="text-[0.75rem] leading-tight text-dim">{t.label}</p>
               </div>
             ))}
           </div>
@@ -155,7 +155,7 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
         <Projecao today={today} data={data.projection} embedded />
       </div>
 
-      <button onClick={() => sheet.open('peso')} className="min-h-12 w-full rounded-2xl bg-surface2 text-[15px] font-semibold">
+      <button onClick={() => sheet.open('peso')} className="min-h-12 w-full rounded-2xl bg-surface2 text-[0.9375rem] font-semibold">
         Pesar
       </button>
     </section>

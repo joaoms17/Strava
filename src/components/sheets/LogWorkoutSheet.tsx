@@ -43,14 +43,14 @@ export default function LogWorkoutSheet() {
   if (favorite === undefined) {
     return (
       <BottomSheet onClose={sheet.close}>
-        <p className="py-8 text-center text-[15px] text-dim">A carregar…</p>
+        <p className="py-8 text-center text-[0.9375rem] text-dim">A carregar…</p>
       </BottomSheet>
     )
   }
   if (!favorite?.workout) {
     return (
       <BottomSheet title="Treino" onClose={sheet.close}>
-        <p className="py-6 text-center text-[15px] text-dim">Este treino já não existe.</p>
+        <p className="py-6 text-center text-[0.9375rem] text-dim">Este treino já não existe.</p>
       </BottomSheet>
     )
   }
@@ -109,7 +109,7 @@ export default function LogWorkoutSheet() {
           <BusyButton
             busy="A guardar…"
             onClick={() => save()}
-            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
+            className="min-h-14 w-full rounded-2xl bg-cta font-display text-[1.1875rem] font-bold tracking-[0.06em] text-on-cta uppercase disabled:opacity-40"
           >
             Registar
           </BusyButton>
@@ -117,15 +117,15 @@ export default function LogWorkoutSheet() {
       }
     >
       <div className="space-y-3 pb-2">
-        <p className="text-[15px] text-dim">{kind}</p>
-        <p className="num text-[30px] leading-tight">
+        <p className="text-[0.9375rem] text-dim">{kind}</p>
+        <p className="num text-[1.875rem] leading-tight">
           {w.minutes} min{w.watts ? ` · ${w.watts} W` : ''}
           {kcal > 0 && <span className="text-burn"> · +{fmtKcal(kcal)}</span>}
         </p>
-        {date && date !== today && <p className="text-[15px] text-dim">Em {fmtDayShort(date)}</p>}
+        {date && date !== today && <p className="text-[0.9375rem] text-dim">Em {fmtDayShort(date)}</p>}
         <button
           onClick={() => sheet.open('ja-fiz', { fav: favorite.id, ...(date ? { data: date } : {}) })}
-          className="text-[15px] text-dim underline underline-offset-2"
+          className="text-[0.9375rem] text-dim underline underline-offset-2"
         >
           Foi diferente? Mudar o tempo{w.type === 'bike' ? ' ou a potência' : ''}
         </button>

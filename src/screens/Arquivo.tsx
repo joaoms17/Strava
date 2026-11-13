@@ -20,27 +20,27 @@ function Index() {
 
   return (
     <div className="space-y-6 pt-1 pb-4">
-      <p className="text-[15px] text-dim">
+      <p className="text-[0.9375rem] text-dim">
         A parte narrativa da primeira versão, só para ver: capítulos, patronos e os resumos antigos.
       </p>
       <div className="divide-y divide-line rounded-2xl bg-surface">
-        <Link href="/capitulo" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+        <Link href="/capitulo" className="flex min-h-14 items-center justify-between px-4 text-[0.9375rem]">
           Capítulo <span className="text-dim">›</span>
         </Link>
-        <Link href="/linha" className="flex min-h-14 items-center justify-between px-4 text-[15px]">
+        <Link href="/linha" className="flex min-h-14 items-center justify-between px-4 text-[0.9375rem]">
           Linha do tempo <span className="text-dim">›</span>
         </Link>
       </div>
       <section className="space-y-3">
-        <h2 className="px-1 text-[13px] font-semibold text-dim">Resumos antigos do narrador</h2>
-        {reviews == null && <p className="text-[15px] text-dim">A carregar…</p>}
-        {reviews?.length === 0 && <p className="text-[15px] text-dim">Sem resumos arquivados.</p>}
+        <h2 className="px-1 text-[0.8125rem] font-semibold text-dim">Resumos antigos do narrador</h2>
+        {reviews == null && <p className="text-[0.9375rem] text-dim">A carregar…</p>}
+        {reviews?.length === 0 && <p className="text-[0.9375rem] text-dim">Sem resumos arquivados.</p>}
         {reviews?.map((review) => (
           <article key={review.week_start} className="space-y-1 rounded-2xl bg-surface p-4">
-            <p className="text-[13px] text-dim">
+            <p className="text-[0.8125rem] text-dim">
               Semana de {review.week_start.split('-').reverse().slice(0, 2).join('/')}
             </p>
-            <p className="text-[15px] leading-relaxed whitespace-pre-line">{review.text}</p>
+            <p className="text-[0.9375rem] leading-relaxed whitespace-pre-line">{review.text}</p>
           </article>
         ))}
       </section>

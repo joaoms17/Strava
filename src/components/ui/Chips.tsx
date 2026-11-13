@@ -16,7 +16,7 @@ export const TAG_LABEL: Record<string, string> = {
 // do botão principal (`cta`) nos treinos, no corpo e nas pessoas (decisão 93).
 export type ChipTone = 'eat' | 'cta'
 export const chip = (active: boolean, tone: ChipTone = 'eat') =>
-  `min-h-11 rounded-full border px-3 py-1.5 text-[15px] ${
+  `min-h-11 rounded-full border px-3 py-1.5 text-[0.9375rem] ${
     !active ? 'border-line bg-transparent' : tone === 'cta' ? 'border-cta bg-cta text-on-cta' : 'border-eat bg-eat text-bg'
   }`
 

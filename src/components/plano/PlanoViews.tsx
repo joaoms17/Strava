@@ -15,25 +15,25 @@ const TONES = [
 ]
 export const dayTone = (n: number) => TONES[(Math.max(1, n) - 1) % TONES.length]!
 
-export const kicker = 'font-display text-[13px] font-bold tracking-[0.16em] uppercase'
-export const bigTitle = 'font-display text-[38px] leading-[0.95] font-extrabold uppercase'
+export const kicker = 'font-display text-[0.8125rem] font-bold tracking-[0.16em] uppercase'
+export const bigTitle = 'font-display text-[2.375rem] leading-[0.95] font-extrabold uppercase'
 
 export function Pill({ children }: { children: ReactNode }) {
-  return <span className="rounded-full border border-line bg-surface px-3 py-1 text-[14px] text-dim">{children}</span>
+  return <span className="rounded-full border border-line bg-surface px-3 py-1 text-[0.875rem] text-dim">{children}</span>
 }
 
 function Numbers({ e, tone }: { e: PlanoExercicio; tone: string }) {
   const p = prescription(e)
   const cell = (value: string, label: string, color: string) => (
     <span className="flex flex-col items-center">
-      <span className={`num text-[30px] leading-none ${color}`}>{value}</span>
-      <span className="mt-1 font-display text-[11px] font-semibold tracking-[0.14em] text-dim uppercase">{label}</span>
+      <span className={`num text-[1.875rem] leading-none ${color}`}>{value}</span>
+      <span className="mt-1 font-display text-[0.6875rem] font-semibold tracking-[0.14em] text-dim uppercase">{label}</span>
     </span>
   )
   return (
     <span className="flex shrink-0 items-start gap-2" aria-label={p.series ? `${p.series} séries de ${p.alvo} ${p.unidade}` : `${p.alvo} ${p.unidade}`}>
       {p.series && cell(p.series, 'séries', 'text-ink')}
-      {p.series && <span className="num pt-2 text-[16px] text-dim">×</span>}
+      {p.series && <span className="num pt-2 text-[1rem] text-dim">×</span>}
       {cell(p.alvo, p.unidade, tone)}
     </span>
   )
@@ -42,7 +42,7 @@ function Numbers({ e, tone }: { e: PlanoExercicio; tone: string }) {
 function NoteChip({ e, tone }: { e: PlanoExercicio; tone: ReturnType<typeof dayTone> }) {
   if (!e.nota || e.superserie) return null
   return (
-    <span className={`mt-2 inline-flex items-center gap-1.5 rounded-lg ${tone.soft} px-2.5 py-1 text-[15px] font-semibold ${tone.text}`}>
+    <span className={`mt-2 inline-flex items-center gap-1.5 rounded-lg ${tone.soft} px-2.5 py-1 text-[0.9375rem] font-semibold ${tone.text}`}>
       {e.nota_tipo === 'subir' ? <span aria-hidden="true">↑</span> : e.nota_tipo === 'tempo' ? <Icon name="watch" size={15} /> : null}
       {e.nota}
     </span>
@@ -54,12 +54,12 @@ export function ExerciseCard({ e, index, n }: { e: PlanoExercicio; index: number
   return (
     <li className="rounded-[18px] border border-line bg-surface p-3">
       <div className="flex items-start gap-3">
-        <span className={`num flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[17px] ${tone.soft} ${tone.text}`}>
+        <span className={`num flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[1.0625rem] ${tone.soft} ${tone.text}`}>
           {String(index + 1).padStart(2, '0')}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[19px] leading-tight font-semibold">{e.nome}</span>
-          {e.detalhe && <span className="block text-[15px] text-dim">{e.detalhe}</span>}
+          <span className="block text-[1.1875rem] leading-tight font-semibold">{e.nome}</span>
+          {e.detalhe && <span className="block text-[0.9375rem] text-dim">{e.detalhe}</span>}
         </span>
         <Numbers e={e} tone={tone.text} />
       </div>
@@ -71,15 +71,15 @@ export function ExerciseCard({ e, index, n }: { e: PlanoExercicio; index: number
       {e.superserie && (
         <div className="mt-3 ml-[52px] space-y-2">
           {e.superserie.map((part, i) => (
-            <p key={part.nome} className="flex items-center gap-2.5 text-[17px] font-semibold">
-              <span className={`num flex h-7 w-7 items-center justify-center rounded-full border-2 text-[14px] ${tone.text} border-current`}>
+            <p key={part.nome} className="flex items-center gap-2.5 text-[1.0625rem] font-semibold">
+              <span className={`num flex h-7 w-7 items-center justify-center rounded-full border-2 text-[0.875rem] ${tone.text} border-current`}>
                 {'ABCDEFGH'[i]}
               </span>
               {part.nome}
             </p>
           ))}
           {e.nota && (
-            <p className="flex items-center gap-1.5 pt-1 text-[15px] text-dim">
+            <p className="flex items-center gap-1.5 pt-1 text-[0.9375rem] text-dim">
               <span className={tone.text}>
                 <Icon name="repeat" size={16} />
               </span>
@@ -99,8 +99,8 @@ export function KneeWarning({ text, onOpen }: { text: string; onOpen?: () => voi
         <Icon name="alert" size={20} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[16px] font-semibold text-attn">Joelho direito</span>
-        <span className="block text-[15px] text-dim">{text}</span>
+        <span className="block text-[1rem] font-semibold text-attn">Joelho direito</span>
+        <span className="block text-[0.9375rem] text-dim">{text}</span>
       </span>
       {onOpen && <Icon name="chevron" size={20} />}
     </>
@@ -123,7 +123,7 @@ export function DayHeader({ day, fase }: { day: PlanoDia; fase: number }) {
         Dia {day.n} · Fase {fase}
       </p>
       <h2 className={bigTitle}>{day.titulo}</h2>
-      {day.subtitulo && <p className={`font-display text-[20px] font-bold tracking-[0.12em] uppercase ${tone.text}`}>{day.subtitulo}</p>}
+      {day.subtitulo && <p className={`font-display text-[1.25rem] font-bold tracking-[0.12em] uppercase ${tone.text}`}>{day.subtitulo}</p>}
       <div className="flex flex-wrap gap-2 pt-1">
         <Pill>{day.exercicios.length} exercícios</Pill>
         {day.etiquetas?.map((t) => <Pill key={t}>{t}</Pill>)}
@@ -155,7 +155,7 @@ export function Cuidados({ plan }: { plan: PlanoTreino }) {
       >
         <Icon name={kind === 'evitar' ? 'close' : 'check'} size={16} />
       </span>
-      <span className="text-[17px] font-semibold">{text}</span>
+      <span className="text-[1.0625rem] font-semibold">{text}</span>
     </li>
   )
   return (
@@ -164,8 +164,8 @@ export function Cuidados({ plan }: { plan: PlanoTreino }) {
         <p className={`${kicker} flex items-center gap-2 text-attn`}>
           <Icon name="alert" size={16} /> {c.zona}
         </p>
-        <p className="mt-2 text-[21px] leading-snug font-semibold">{c.titulo}</p>
-        {c.detalhe && <p className="mt-1 text-[16px] text-dim">{c.detalhe}</p>}
+        <p className="mt-2 text-[1.3125rem] leading-snug font-semibold">{c.titulo}</p>
+        {c.detalhe && <p className="mt-1 text-[1rem] text-dim">{c.detalhe}</p>}
       </div>
       {c.evitar.length > 0 && (
         <section className="space-y-2">
@@ -194,7 +194,7 @@ export function Progressao({ plan }: { plan: PlanoTreino }) {
           <li key={f.fase} className="flex gap-3">
             <span className="flex flex-col items-center">
               <span
-                className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[17px] ${
+                className={`num flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[1.0625rem] ${
                   current ? 'bg-cta text-on-cta' : 'border-2 border-line text-dim'
                 }`}
               >
@@ -206,16 +206,16 @@ export function Progressao({ plan }: { plan: PlanoTreino }) {
               <div className="flex items-center justify-between gap-2">
                 <p className={`${kicker} ${current ? 'text-ink' : 'text-dim'}`}>Fase {f.fase}</p>
                 <span
-                  className={`rounded-full px-2.5 py-0.5 font-display text-[12px] font-bold tracking-[0.1em] uppercase ${
+                  className={`rounded-full px-2.5 py-0.5 font-display text-[0.75rem] font-bold tracking-[0.1em] uppercase ${
                     current ? 'bg-cta text-on-cta' : 'border border-line text-dim'
                   }`}
                 >
                   {STATE_LABEL[f.estado]}
                 </span>
               </div>
-              <p className="mt-1 text-[19px] leading-snug font-semibold">{f.titulo}</p>
+              <p className="mt-1 text-[1.1875rem] leading-snug font-semibold">{f.titulo}</p>
               {f.pontos.length > 0 && (
-                <ul className="mt-2 space-y-1 text-[16px] text-dim">
+                <ul className="mt-2 space-y-1 text-[1rem] text-dim">
                   {f.pontos.map((p) => (
                     <li key={p} className="flex gap-2">
                       <span aria-hidden="true">•</span>

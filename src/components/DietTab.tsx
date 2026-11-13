@@ -11,6 +11,7 @@ import { followDiet, loadDiets } from '../lib/diets'
 import { dietSlots, dietTotals } from '../../api/_lib/rules/dieta'
 import { SLOT_LABEL } from '../../api/_lib/rules/momentos'
 import type { Diet, Favorite } from '../lib/types'
+import { favoriteThumb } from '../lib/favorites'
 
 // Favoritas › Dieta: as tuas dietas feitas com as favoritas (com fotos), a
 // que estás a seguir em cima.
@@ -47,17 +48,17 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
 
   if (missing) {
     return (
-      <p className="rounded-2xl border border-line p-5 text-center text-[15px] text-dim">
+      <p className="rounded-2xl border border-line p-5 text-center text-[0.9375rem] text-dim">
         As dietas ainda não estão disponíveis nesta conta.
       </p>
     )
   }
-  if (diets == null) return <p className="pt-6 text-center text-[15px] text-dim">A carregar…</p>
+  if (diets == null) return <p className="pt-6 text-center text-[0.9375rem] text-dim">A carregar…</p>
 
   const create = (
     <button
       onClick={() => sheet.open('dieta')}
-      className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[15px]"
+      className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line text-[0.9375rem]"
     >
       <Icon name="plus" size={18} /> {diets.length ? 'Nova dieta' : 'Criar a minha dieta'}
     </button>
@@ -66,7 +67,7 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
   return (
     <div className="space-y-3">
       {diets.length === 0 && (
-        <div className="space-y-2 rounded-2xl border border-line p-5 text-[15px]">
+        <div className="space-y-2 rounded-2xl border border-line p-5 text-[0.9375rem]">
           <p>Monta o teu dia com as tuas favoritas: o que comes ao pequeno-almoço, almoço, lanche e jantar.</p>
           <p className="text-dim">
             Depois registas cada refeição com um toque (com a foto dela) e o Hoje mostra o que falta.
@@ -80,13 +81,13 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
           <div key={diet.id} className={`space-y-3 rounded-2xl border bg-surface p-3 ${diet.active ? 'border-eat' : 'border-line'}`}>
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <h3 className="truncate text-[17px] font-semibold">{diet.name}</h3>
-                <p className="text-[13px] text-dim tabular-nums">
+                <h3 className="truncate text-[1.0625rem] font-semibold">{diet.name}</h3>
+                <p className="text-[0.8125rem] text-dim tabular-nums">
                   {fmtKcal(totals.kcal)} kcal · {fmtInt(totals.protein)} g proteína · plano {fmtKcal(profile.base_kcal)} kcal
                 </p>
               </div>
               {diet.active && (
-                <span className="shrink-0 rounded-full bg-eat px-2.5 py-1 text-[12px] font-semibold text-bg">A seguir</span>
+                <span className="shrink-0 rounded-full bg-eat px-2.5 py-1 text-[0.75rem] font-semibold text-bg">A seguir</span>
               )}
             </div>
             <ul className="space-y-2">
@@ -96,15 +97,15 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
                 if (!fav) return null
                 return (
                   <li key={slot} className="flex items-center gap-3">
-                    <Thumb url={fav.photo_path ? photos[fav.photo_path] : null} size={44} />
+                    <Thumb url={photos[favoriteThumb(fav) ?? ''] ?? null} size={44} />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[12px] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[slot]}</span>
-                      <span className="block truncate text-[15px]">
+                      <span className="block text-[0.75rem] text-dim uppercase tracking-[0.06em]">{SLOT_LABEL[slot]}</span>
+                      <span className="block truncate text-[0.9375rem]">
                         {fav.name}
                         {options.length > 1 && <span className="text-dim"> · ou mais {options.length - 1}</span>}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[13px] text-dim tabular-nums">{fmtKcal(fav.kcal)}</span>
+                    <span className="shrink-0 text-[0.8125rem] text-dim tabular-nums">{fmtKcal(fav.kcal)}</span>
                   </li>
                 )
               })}
@@ -112,14 +113,14 @@ export default function DietTab({ favorites, photos }: { favorites: Favorite[]; 
             <div className="flex gap-2">
               <button
                 onClick={() => sheet.open('dieta', { id: diet.id })}
-                className="min-h-11 flex-1 rounded-xl border border-line text-[15px]"
+                className="min-h-11 flex-1 rounded-xl border border-line text-[0.9375rem]"
               >
                 Editar
               </button>
               <BusyButton
                 busy="A mudar…"
                 onClick={() => follow(diet.active ? null : diet.id, diet.name)}
-                className={`min-h-11 flex-1 rounded-xl text-[15px] ${diet.active ? 'bg-surface2 text-dim' : 'bg-eat font-semibold text-bg'}`}
+                className={`min-h-11 flex-1 rounded-xl text-[0.9375rem] ${diet.active ? 'bg-surface2 text-dim' : 'bg-eat font-semibold text-bg'}`}
               >
                 {diet.active ? 'Deixar de seguir' : 'Seguir esta'}
               </BusyButton>

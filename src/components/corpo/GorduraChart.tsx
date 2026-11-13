@@ -100,13 +100,13 @@ export default function GorduraChart({ rows, from, today, week = false }: { rows
       reading={model.reading}
       aside={
         <>
-          {model.weekNote && <p className="text-[14px] text-dim">{model.weekNote}</p>}
+          {model.weekNote && <p className="text-[0.875rem] text-dim">{model.weekNote}</p>}
           <div className="flex items-end gap-3">
-            <p className="num shrink-0 text-[34px] leading-none font-extrabold whitespace-nowrap text-body">
+            <p className="num shrink-0 text-[2.125rem] leading-none font-extrabold whitespace-nowrap text-body">
               {fmt1(model.last.value)}
-              <span className="text-[17px] font-semibold">{' '}%</span>
+              <span className="text-[1.0625rem] font-semibold">{' '}%</span>
             </p>
-            <p className="min-w-0 text-[14px] leading-snug text-dim">
+            <p className="min-w-0 text-[0.875rem] leading-snug text-dim">
               agora · alvo {model.target}&nbsp;%{model.last.usual != null && <> · {usualNeckLabel(model.last.usual)}</>}
             </p>
           </div>
@@ -131,7 +131,7 @@ export default function GorduraChart({ rows, from, today, week = false }: { rows
                   disabled={pos <= 0}
                   onClick={() => setPicked(model.shown[pos - 1]!.index)}
                   aria-label="Medição anterior"
-                  className="h-11 w-11 rounded-lg text-[19px] text-dim disabled:opacity-30"
+                  className="h-11 w-11 rounded-lg text-[1.1875rem] text-dim disabled:opacity-30"
                 >
                   ‹
                 </button>
@@ -139,7 +139,7 @@ export default function GorduraChart({ rows, from, today, week = false }: { rows
                   disabled={pos >= model.shown.length - 1}
                   onClick={() => setPicked(model.shown[pos + 1]!.index)}
                   aria-label="Medição seguinte"
-                  className="h-11 w-11 rounded-lg text-[19px] text-dim disabled:opacity-30"
+                  className="h-11 w-11 rounded-lg text-[1.1875rem] text-dim disabled:opacity-30"
                 >
                   ›
                 </button>
@@ -150,7 +150,7 @@ export default function GorduraChart({ rows, from, today, week = false }: { rows
             {explanation ? (
               <ExplicacaoGordura explanation={explanation} row={rows[selected.index]} compact />
             ) : (
-              <p className="text-[14px] text-dim">A primeira medição: a partir da próxima digo porque mudou.</p>
+              <p className="text-[0.875rem] text-dim">A primeira medição: a partir da próxima digo porque mudou.</p>
             )}
           </div>
           <p>
