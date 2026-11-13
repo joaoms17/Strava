@@ -16,6 +16,12 @@ export interface AnalysedItem {
   food_ref: string | null
 }
 
+// Uma foto só se lê com a service role se estiver na pasta de quem é dono
+// da refeição (G2): `meals.photo_paths` é uma coluna que o cliente escreve.
+export function ownPhotoPath(path: string, userId: string): boolean {
+  return !!userId && path.startsWith(`${userId}/`) && !path.includes('..')
+}
+
 // Os alimentos pessoais vão para o prompt com referências curtas (a1…a40).
 export function foodRefs(foodIds: string[]): { refs: Record<string, string>; byId: Map<string, string> } {
   const refs: Record<string, string> = {}

@@ -87,7 +87,7 @@ async function readLeftovers(
     ...leftoversContext(meal.tags, meal.portion_factor),
     nota_depois: afterNote,
   })
-  const images = await photoContent(admin, [...before, after])
+  const images = await photoContent(admin, [...before, after], meal.user_id)
   const { output } = await structuredCall(
     admin,
     { userId: meal.user_id, kind: 'meal_leftovers', request: REQUEST_VISION },

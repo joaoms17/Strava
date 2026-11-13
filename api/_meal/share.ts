@@ -21,6 +21,7 @@ import {
   type FactorChange,
 } from '../_lib/rules/porcoes.js'
 import { UndoChangeSchema, rescaleRow, restoreFactors } from './quick.js'
+import { ownPhotoPath } from '../_lib/rules/analise.js'
 
 // Partilhar uma refeição com outra pessoa da app (ex.: o João e a Joana a
 // comer o mesmo): copia-a para a conta dela, no mesmo dia, refeição e hora,
@@ -165,10 +166,13 @@ export async function copyMealTo(
     .single()
   if (error || !meal) throw new HttpError(500, error?.message ?? 'Não consegui partilhar.')
 
-  // Fotos: copia para a pasta de quem recebe (as pastas são por pessoa).
+  // Fotos: copia para a pasta de quem recebe (as pastas são por pessoa). Só
+  // as da pasta de quem partilha (G2): photo_paths é escrita pelo cliente.
+  const owner = source.user_id as string
   const copy = async (paths: string[] | null | undefined) => {
     const out: string[] = []
     for (const path of paths ?? []) {
+      if (!ownPhotoPath(path, owner)) continue
       const dest = sharedPath(path, toUserId, meal.id as string)
       const { error: copyError } = await admin.storage.from('meal-photos').copy(path, dest)
       if (!copyError) out.push(dest)

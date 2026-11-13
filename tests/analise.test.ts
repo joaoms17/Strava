@@ -7,6 +7,7 @@ import {
   guardedWrite,
   implausibleItem,
   mergeAdded,
+  ownPhotoPath,
   sameTags,
   toMealItems,
   type AnalysisInput,
@@ -190,5 +191,14 @@ describe('juntar fotos a uma refeição com itens', () => {
   it('nada de novo: fica tudo igual', () => {
     const current = [exact('Iogurte grego', 120)]
     expect(mergeAdded(current, [])).toEqual(current)
+  })
+})
+
+describe('fotos só da pasta de quem é dono (G2)', () => {
+  it('aceita a pasta da pessoa e recusa a de outra ou com ..', () => {
+    expect(ownPhotoPath('u1/c1/a.jpg', 'u1')).toBe(true)
+    expect(ownPhotoPath('u2/c1/a.jpg', 'u1')).toBe(false)
+    expect(ownPhotoPath('u1/../u2/a.jpg', 'u1')).toBe(false)
+    expect(ownPhotoPath('u10/a.jpg', 'u1')).toBe(false)
   })
 })

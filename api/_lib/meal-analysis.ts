@@ -11,7 +11,7 @@ import {
   readPrompt,
 } from './prompts.js'
 import { mealTotals, type MealItem } from './rules/meal-totals.js'
-import { analysedStatus, foodRefs, guardedWrite, mergeAdded, sameInput, toMealItems, type AnalysisInput } from './rules/analise.js'
+import { analysedStatus, foodRefs, guardedWrite, mergeAdded, ownPhotoPath, sameInput, toMealItems, type AnalysisInput } from './rules/analise.js'
 import { factorOf } from './rules/porcoes.js'
 import { scaleItems } from './rules/favoritos.js'
 import { mealIsEstimate } from './rules/estimativas.js'
@@ -63,8 +63,12 @@ function mediaTypeFor(path: string): ImageMediaType {
 }
 
 // As fotos da refeição (Storage, com a service role) como blocos de imagem
-// para a IA, pela ordem dada.
-export async function photoContent(admin: SupabaseClient, paths: string[]) {
+// para a IA, pela ordem dada. `meals.photo_paths` é escrita pelo cliente
+// (RLS): só se leem fotos da pasta de quem é dono da refeição (G2).
+export async function photoContent(admin: SupabaseClient, paths: string[], userId: string) {
+  if (paths.some((p) => !ownPhotoPath(p, userId))) {
+    throw new AiError('Uma das fotos não é desta conta. Junta-a outra vez.', 'foto fora da pasta de quem pede')
+  }
   return Promise.all(
     paths.map(async (path) => {
       const { data, error } = await admin.storage.from('meal-photos').download(path)
@@ -281,7 +285,7 @@ async function runModel(
   const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V3
 
   if (photos.length > 0) {
-    const images = await photoContent(admin, photos.slice(0, 4))
+    const images = await photoContent(admin, photos.slice(0, 4), meal.user_id)
     // O tempo de descarregar as fotos já conta.
     const meta = { userId: meal.user_id, kind: 'meal_photo', request: within(REQUEST_VISION, deadline) }
     const params = {
