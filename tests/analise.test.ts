@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { analysedStatus, foodRefs, guardedWrite, implausibleItem, mergeAdded, toMealItems } from '../api/_lib/rules/analise'
+import {
+  analysedStatus,
+  appliedText,
+  correctionText,
+  foodRefs,
+  guardedWrite,
+  implausibleItem,
+  mergeAdded,
+  sameTags,
+  toMealItems,
+  type AnalysisInput,
+} from '../api/_lib/rules/analise'
 import type { MealItem } from '../api/_lib/rules/meal-totals'
 
 const item = (confidence: 'alta' | 'media' | 'baixa', food_ref: string | null = null) => ({
@@ -50,30 +61,33 @@ describe('resultado da análise', () => {
   })
 })
 
-describe('escrita protegida da nota', () => {
+describe('escrita protegida da nota e das etiquetas', () => {
   const base: MealItem[] = [{ name: 'Arroz', grams: 180, kcal: 230, protein: 4, carbs: 50, fat: 0, food_id: null, estimated: true }]
+  const none: AnalysisInput = { note: null, tags: [] }
 
-  // Base de dados falsa: uma linha com nota e lease, e escrita condicional.
-  function store(initialNote: string | null) {
-    const row = { note: initialNote, startedAt: 'T1', deleted: false, items: [] as MealItem[] }
+  // Base de dados falsa: uma linha com nota, etiquetas e lease, e escrita condicional.
+  function store(initialNote: string | null, initialTags: string[] = []) {
+    const row = { note: initialNote, tags: initialTags, startedAt: 'T1', deleted: false, items: [] as MealItem[], applied: [] as (string | null)[] }
     return {
       row,
       deps: {
-        write: async (items: MealItem[], noteUsed: string | null) => {
-          if (row.startedAt !== 'T1' || row.note !== noteUsed) return null
+        write: async (items: MealItem[], used: AnalysisInput) => {
+          if (row.startedAt !== 'T1' || row.note !== used.note || !sameTags(row.tags, used.tags)) return null
           row.items = items
           return { ...row }
         },
-        reread: async () => ({ note: row.note, startedAt: row.startedAt, deleted: row.deleted }),
-        correct: async (items: MealItem[], note: string) =>
-          note === 'comi metade' ? items.map((i) => ({ ...i, grams: i.grams / 2, kcal: i.kcal / 2 })) : items,
+        reread: async () => ({ note: row.note, tags: row.tags, startedAt: row.startedAt, deleted: row.deleted }),
+        correct: async (items: MealItem[], correction: string, applied: string | null) => {
+          row.applied.push(applied)
+          return /comi metade/.test(correction) ? items.map((i) => ({ ...i, grams: i.grams / 2, kcal: i.kcal / 2 })) : items
+        },
       },
     }
   }
 
   it('sem mudanças, grava à primeira', async () => {
     const { deps, row } = store(null)
-    expect(await guardedWrite(base, null, 'T1', deps)).not.toBeNull()
+    expect(await guardedWrite(base, none, 'T1', deps)).not.toBeNull()
     expect(row.items[0]!.kcal).toBe(230)
   })
 
@@ -81,15 +95,37 @@ describe('escrita protegida da nota', () => {
     const { deps, row } = store(null)
     // passo intercalado: o utilizador junta «comi metade» depois de a análise começar
     row.note = 'comi metade'
-    const result = await guardedWrite(base, null, 'T1', deps)
+    const result = await guardedWrite(base, none, 'T1', deps)
     expect(result).not.toBeNull()
     expect(row.items[0]).toMatchObject({ grams: 90, kcal: 115 })
+  })
+
+  it('M1: só o chip «Comi metade» tocado a meio, sem texto: os números ficam a metade', async () => {
+    const { deps, row } = store(null)
+    row.tags = ['comi_metade']
+    expect(await guardedWrite(base, none, 'T1', deps)).not.toBeNull()
+    expect(row.items[0]).toMatchObject({ grams: 90, kcal: 115 })
+  })
+
+  it('M1: «Jantar fora» a meio não pede correção (não muda as quantidades)', async () => {
+    const { deps, row } = store(null)
+    row.tags = ['jantar_fora']
+    expect(await guardedWrite(base, none, 'T1', deps)).not.toBeNull()
+    expect(row.items[0]!.kcal).toBe(230)
+    expect(row.applied).toEqual([])
+  })
+
+  it('M4: a correção a meio leva o que já estava aplicado', async () => {
+    const { deps, row } = store('comi metade')
+    row.note = 'comi metade, sem pão'
+    await guardedWrite(base, { note: 'comi metade', tags: [] }, 'T1', deps)
+    expect(row.applied).toEqual(['comi metade'])
   })
 
   it('outra tentativa reivindicou a análise: desiste sem gravar', async () => {
     const { deps, row } = store(null)
     row.startedAt = 'T2'
-    expect(await guardedWrite(base, null, 'T1', deps)).toBeNull()
+    expect(await guardedWrite(base, none, 'T1', deps)).toBeNull()
     expect(row.items).toEqual([])
   })
 
@@ -97,7 +133,35 @@ describe('escrita protegida da nota', () => {
     const { deps, row } = store(null)
     row.note = 'x'
     row.deleted = true
-    expect(await guardedWrite(base, null, 'T1', deps)).toBeNull()
+    expect(await guardedWrite(base, none, 'T1', deps)).toBeNull()
+  })
+})
+
+describe('correção pela nota e pelas etiquetas (M1, M4)', () => {
+  it('uma etiqueta nova numa refeição já analisada pede a correção', () => {
+    expect(correctionText({ note: null, tags: [] }, { note: null, tags: ['comi_metade'] })).toBe('comi metade')
+  })
+
+  it('tirar «Comi metade» desfaz o corte', () => {
+    expect(correctionText({ note: null, tags: ['comi_metade'] }, { note: null, tags: [] })).toMatch(/dose toda/)
+  })
+
+  it('sem nada que mude as quantidades: sem correção', () => {
+    expect(correctionText({ note: null, tags: [] }, { note: null, tags: ['jantar_fora'] })).toBeNull()
+    expect(correctionText({ note: 'sem pão', tags: [] }, { note: null, tags: [] })).toBeNull()
+    expect(correctionText({ note: 'x', tags: ['azeite'] }, { note: 'x', tags: ['azeite'] })).toBeNull()
+  })
+
+  it('nota editada: vai a nota nova inteira, e o que já estava aplicado à parte', () => {
+    const applied = { note: 'comi metade', tags: ['azeite'] }
+    expect(correctionText(applied, { note: 'comi metade, sem pão', tags: ['azeite'] })).toBe('comi metade, sem pão')
+    expect(appliedText(applied)).toBe('comi metade; com azeite')
+    expect(appliedText({ note: null, tags: [] })).toBeNull()
+  })
+
+  it('a ordem das etiquetas não conta', () => {
+    expect(sameTags(['azeite', 'comi_metade'], ['comi_metade', 'azeite'])).toBe(true)
+    expect(sameTags(['azeite'], [])).toBe(false)
   })
 })
 

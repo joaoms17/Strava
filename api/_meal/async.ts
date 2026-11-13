@@ -9,10 +9,12 @@ import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
 import { duplicatePhotoWindow } from '../_lib/rules/captura.js'
 import { mealTotals, round1, type MealItem } from '../_lib/rules/meal-totals.js'
 import { mealIsEstimate } from '../_lib/rules/estimativas.js'
-import { analyseRequest } from '../_lib/rules/analise.js'
+import { analyseRequest, appliedText, correctionText, sameTags } from '../_lib/rules/analise.js'
+import { splitStoredError } from '../_lib/rules/resposta-ia.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
 import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
 import { notifyMealAnalysed } from '../_lib/push.js'
+import { recomputeDirtyPast } from '../_lib/meal-recompute.js'
 import { shareAfterAnalysis } from './share.js'
 import { learnFoods } from '../_lib/foods.js'
 import { itemsToLearn } from '../_lib/rules/aprender.js'
@@ -50,6 +52,9 @@ const AnalyseSchema = MealIdSchema.extend({
   reset: z.boolean().optional(), // «Tentar de novo» e «Reanalisar foto»
   force: z.boolean().optional(), // «Analisar esta mesmo assim» (acima do limite)
   auto: z.boolean().optional(), // a outra tentativa que o telemóvel pede sozinho
+  // «Analisar outra vez» numa foto lida pelo modelo de reserva (M2): relê as
+  // fotos de raiz; devolve `previous` para o antes → depois e o Anular.
+  reread: z.boolean().optional(),
 })
 
 // Juntar fotos a uma refeição que já existe (não carregou, erro ou faltava a
@@ -70,6 +75,8 @@ const DetachSchema = MealIdSchema.extend({
   photo_paths: z.array(z.string()).max(MAX_MEAL_PHOTOS),
   thumb_paths: z.array(z.string()).max(MAX_MEAL_PHOTOS),
   image_hashes: z.array(z.string()).max(MAX_MEAL_PHOTOS),
+  // Anular «Analisar outra vez»: volta também o aviso da foto lida pela reserva.
+  model_reserve: z.boolean().optional(),
 })
 
 const CorrectSchema = MealIdSchema.extend({ text: z.string().trim().min(1).max(500) })
@@ -146,8 +153,14 @@ async function afterAnalysis(admin: SupabaseClient, meal: Record<string, unknown
   if (notify) await notifyMealAnalysed(admin, shared ?? meal)
 }
 
+// A análise de uma foto de ontem (ou de uma partilha para outro dia) acaba
+// depois da resposta: recalcula aí os dias passados que mudaram (M8).
 function analyseInBackground(admin: SupabaseClient, mealId: string) {
-  inBackground(claimAndAnalyse(admin, mealId).then((meal) => afterAnalysis(admin, meal, true)))
+  inBackground(
+    claimAndAnalyse(admin, mealId)
+      .then((meal) => afterAnalysis(admin, meal, true))
+      .then(() => recomputeDirtyPast(admin)),
+  )
 }
 
 export async function ownMeal(db: SupabaseClient, mealId: string): Promise<MealRow & Record<string, unknown>> {
@@ -260,6 +273,10 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   if (meal.deleted_at) throw new HttpError(404, 'Refeição apagada.')
   // A outra tentativa pedida pelo telemóvel sozinho, com a refeição que já
   // não está a analisar (erro, sem análise, analisada): fica como está.
+  if (input.reread) {
+    await rereadMeal(db, userId, meal, res)
+    return
+  }
   const { skip, reset } = analyseRequest(input, meal.status as string)
   if (skip) {
     res.status(200).json({ meal })
@@ -284,6 +301,46 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   if (result) inBackground(afterAnalysis(admin, result, input.auto === true && !reset))
   res.status(200).json({ meal: result ?? (await ownMeal(db, input.meal_id)) })
 })
+
+// «Analisar outra vez» (M2): lê as fotos de raiz, com o prompt da primeira
+// análise (não o de juntar, que deixava as porções mal lidas como estavam). Só
+// numa refeição analisada com fotos e sem o que sobrou descontado; conta para
+// o limite diário das fotos e não há «mesmo assim» (S6). Se falhar, a refeição
+// fica como estava (itens, estado e o aviso da reserva).
+async function rereadMeal(db: SupabaseClient, userId: string, meal: MealRow & Record<string, unknown>, res: VercelResponse) {
+  if (meal.status !== 'ok' && meal.status !== 'por_rever') throw new HttpError(409, 'Só se lê outra vez uma refeição já analisada.')
+  if (!(meal.photo_paths ?? []).length) throw new HttpError(422, 'Esta refeição não tem fotos para ler outra vez.')
+  if (meal.leftover_photo_path) {
+    throw new HttpError(409, 'Esta refeição já tem o que sobrou descontado. Anula isso primeiro para a ler outra vez.')
+  }
+  const admin = adminClient()
+  if (await aiLimitReached(admin, userId, true)) {
+    res.status(200).json({ meal, limit: true })
+    return
+  }
+  const previous = {
+    items: meal.items,
+    status: meal.status,
+    model_reserve: meal.model_reserve === true,
+    confirmed_at: (meal.confirmed_at as string | null) ?? null,
+  }
+  const result = await claimAndAnalyse(admin, meal.id, true, { reread: true })
+  if (result) {
+    res.status(200).json({ meal: result, previous })
+    return
+  }
+  // Falhou: volta ao estado de antes, sem o aviso «a foto nova não foi analisada».
+  const failed = await ownMeal(db, meal.id)
+  const reason = failed.analysis_error ? splitStoredError(failed.analysis_error as string).message : null
+  const { data: restored } = await admin
+    .from('meals')
+    .update({ status: previous.status, confirmed_at: previous.confirmed_at, analysis_error: null })
+    .eq('id', meal.id)
+    .eq('status', 'por_rever')
+    .is('analysis_started_at', null)
+    .select()
+  res.status(200).json({ meal: restored?.[0] ?? failed, reread_error: reason ?? 'Não consegui ler a foto outra vez.' })
+}
 
 export const attach = post(async ({ db, userId, body, res }) => {
   const input = parse(AttachSchema, body)
@@ -371,6 +428,11 @@ export const detach = post(async ({ db, body, res }) => {
     .select()
     .single()
   if (error) throw new HttpError(500, error.message)
+  // À parte e sem falhar (sem a migração 20261018150002 a coluna não existe).
+  if (input.model_reserve != null && 'model_reserve' in meal) {
+    const { error: reserveError } = await db.from('meals').update({ model_reserve: input.model_reserve }).eq('id', meal.id)
+    if (!reserveError) data.model_reserve = input.model_reserve
+  }
   res.status(200).json({ meal: data })
 })
 
@@ -432,18 +494,37 @@ export const update = post(async ({ db, userId, body, res }) => {
     patch.slot = input.slot ?? slotOf(loggedAt)
   }
 
-  if (input.note !== undefined) {
-    const note = input.note?.trim() || null
-    patch.note = note
-    // Com a análise terminada, uma nota nova corrige os itens (Haiku, sem foto).
-    // A correr, fica guardada e a escrita protegida da análise aplica-a.
-    if (meal.status !== 'a_analisar' && note && note !== meal.analysis_note && !items && meal.items?.length) {
-      items = (await correctItems(adminClient(), userId, meal.items, note)).items
-      patch.analysis_note = note
+  if (input.note !== undefined) patch.note = input.note?.trim() || null
+
+  // Uma nota ou etiqueta nova (M1): com a análise terminada, corrige os itens
+  // (Haiku, sem foto) com o que mudou, a dizer o que já estava aplicado para
+  // não cortar duas vezes (M4). A correr, fica guardada e a escrita protegida
+  // da análise aplica-a. Itens escritos à mão com a nota (Anular) dizem que
+  // essa nota e essas etiquetas são as que estão nos números.
+  const hasTagsColumn = 'analysis_tags' in meal
+  const applied = {
+    note: (meal.analysis_note as string | null | undefined) ?? null,
+    tags: (hasTagsColumn ? (meal.analysis_tags as string[] | null) : null) ?? ((meal.tags ?? []) as string[]),
+  }
+  const next = {
+    note: input.note !== undefined ? (patch.note as string | null) : ((meal.note as string | null) ?? null),
+    tags,
+  }
+  let corrected = false
+  const touched = input.note !== undefined || input.tags !== undefined
+  if (touched && !items && meal.status !== 'a_analisar' && meal.items?.length) {
+    const correction = correctionText(applied, next)
+    if (correction) {
+      items = (await correctItems(adminClient(), userId, meal.items, correction, undefined, appliedText(applied))).items
+      corrected = true
       // A nota pode dizer como dividiram o pedido: sai o «Pedido para 2», para
       // a porção não ser cortada duas vezes (só com a migração 20261018220000).
       if (meal.order_people != null) patch.order_people = null
     }
+  }
+  if (touched && (corrected || items)) {
+    if (next.note !== applied.note) patch.analysis_note = next.note
+    if (hasTagsColumn && !sameTags(next.tags, applied.tags)) patch.analysis_tags = next.tags
   }
 
   if (items) {
@@ -465,7 +546,7 @@ export const update = post(async ({ db, userId, body, res }) => {
     patch.confirmed_at = null
   }
   if (Object.keys(patch).length === 0) {
-    res.status(200).json({ meal, previous })
+    res.status(200).json({ meal, previous, corrected })
     return
   }
   const { data, error } = await db.from('meals').update(patch).eq('id', meal.id).select().single()
@@ -477,7 +558,7 @@ export const update = post(async ({ db, userId, body, res }) => {
   else if (items) learned = itemsToLearn('editada', meal.input_type, patch.items as MealItem[], meal.items)
   else if (input.confirm === true && meal.status === 'por_rever') learned = itemsToLearn('confirmada', meal.input_type, meal.items)
   if (learned.length) inBackground(learnFoods(db, userId, learned, meal.input_type))
-  res.status(200).json({ meal: data, previous })
+  res.status(200).json({ meal: data, previous, corrected })
 })
 
 export const estimate = post(async ({ userId, body, res }) => {
