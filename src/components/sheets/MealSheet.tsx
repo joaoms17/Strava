@@ -706,42 +706,6 @@ export default function MealSheet() {
                 {fmtInt(totals.carbs)} g · Gordura {fmtInt(totals.fat)} g
               </p>
             </div>
-            {mode === 'view' && !dirty && !reanalysing && !splitPending && canChangePortion(current) && (
-              <div className="space-y-2">
-                {orderPeople != null && (
-                  <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-2">
-                    <p className="text-[15px]">
-                      <span className="font-semibold">Pedido para {orderPeople}</span> ·{' '}
-                      {orderPeople === 2 ? 'divide em ½' : 'escolhe a tua porção'}
-                    </p>
-                    {halfWith && (
-                      <button
-                        onClick={() => {
-                          setSharing(halfWith)
-                          setMode('share')
-                        }}
-                        className="min-h-11 text-[15px] text-eat"
-                      >
-                        ou partilha a meias ›
-                      </button>
-                    )}
-                  </div>
-                )}
-                {(scopeToggle || copyPeople.length > 0) && (
-                  <div className="flex flex-wrap gap-2">
-                    {scopeToggle}
-                    {copyPeople.length > 0 && (
-                      <ScopeToggle on={alsoCopies} onChange={setAlsoCopies}>
-                        Também {copyCount > 1 ? 'nas' : 'na'} de {joinNames(copyPeople.map((p) => p.name))}
-                      </ScopeToggle>
-                    )}
-                  </div>
-                )}
-                <PortionRow value={factor} onPick={pickPortion} />
-              </div>
-            )}
-            <LeftoversNote meal={current} />
-
             {current.model_reserve && current.deleted_at == null && !reanalysing && (
               <div className="space-y-2 rounded-xl bg-surface2 px-3 py-2">
                 <p className="text-[14px] text-dim">
@@ -767,87 +731,97 @@ export default function MealSheet() {
               </p>
             )}
 
-            <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
-
-            {current.deleted_at == null && (
-              <>
-                {suggest && mode === 'view' && (
-                  <div className="space-y-2 rounded-2xl border border-line p-3">
-                    <p className="text-[15px]">Registas isto muitas vezes. Guardar como favorita?</p>
-                    <div className="flex gap-2">
-                      <button onClick={() => setMode('favorite')} className="min-h-11 flex-1 rounded-xl bg-eat font-semibold text-bg">
-                        Guardar
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSuggest(false)
-                          void update({ dismissed_hints: [...(profile.dismissed_hints ?? []), patternKey(current.items)] })
-                        }}
-                        className="min-h-11 px-3 text-[15px] text-dim"
-                      >
-                        Não voltar a perguntar
-                      </button>
+            {/* Quantidade (H11): as maneiras de mexer no quanto comeste num só
+                bloco — a porção e as gramas de cada item; corrigir por texto,
+                o que sobrou e a divisão ao partilhar como ações secundárias. */}
+            <section aria-label="Quantidade" className="space-y-3">
+              <p className="label">Quantidade</p>
+              {mode === 'view' && !dirty && !reanalysing && !splitPending && canChangePortion(current) && (
+                <div className="space-y-2">
+                  {orderPeople != null && (
+                    <div className="flex min-h-11 flex-wrap items-center justify-between gap-x-2">
+                      <p className="text-[15px]">
+                        <span className="font-semibold">Pedido para {orderPeople}</span> ·{' '}
+                        {orderPeople === 2 ? 'divide em ½' : 'escolhe a tua porção'}
+                      </p>
+                      {halfWith && (
+                        <button
+                          onClick={() => {
+                            setSharing(halfWith)
+                            setMode('share')
+                          }}
+                          className="min-h-11 text-[15px] text-eat"
+                        >
+                          ou partilha a meias ›
+                        </button>
+                      )}
                     </div>
-                  </div>
-                )}
-
-                {mode === 'share' && sharing && (
-                  <div ref={chooser} className="scroll-mb-4">
-                    <ShareChooser
-                      me={me}
-                      other={sharing.name}
-                      scope={scopeToggle}
-                      onPick={(split) => shareTo(sharing, split)}
-                      onCancel={() => {
-                        setSharing(null)
-                        setMode('view')
-                      }}
-                    />
-                  </div>
-                )}
-                {mode === 'correct' ? (
-                  <div className="space-y-2">
-                    <input
-                      autoFocus
-                      value={text}
-                      onChange={(e) => setText(e.target.value)}
-                      placeholder="Ex.: o arroz era metade, sem queijo"
-                      enterKeyHint="send"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && text.trim()) void runBusy('A corrigir…', () => correct(text.trim()))
-                      }}
-                      className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
-                    />
-                    <div className="grid grid-cols-[1fr_2fr] gap-2">
-                      <button
-                        onClick={() => {
-                          setText('')
+                  )}
+                  {(scopeToggle || copyPeople.length > 0) && (
+                    <div className="flex flex-wrap gap-2">
+                      {scopeToggle}
+                      {copyPeople.length > 0 && (
+                        <ScopeToggle on={alsoCopies} onChange={setAlsoCopies}>
+                          Também {copyCount > 1 ? 'nas' : 'na'} de {joinNames(copyPeople.map((p) => p.name))}
+                        </ScopeToggle>
+                      )}
+                    </div>
+                  )}
+                  <PortionRow value={factor} onPick={pickPortion} />
+                </div>
+              )}
+              <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
+              <LeftoversNote meal={current} />
+              {current.deleted_at == null && (
+                <>
+                  {mode === 'share' && sharing && (
+                    <div ref={chooser} className="scroll-mb-4">
+                      <ShareChooser
+                        me={me}
+                        other={sharing.name}
+                        scope={scopeToggle}
+                        onPick={(split) => shareTo(sharing, split)}
+                        onCancel={() => {
+                          setSharing(null)
                           setMode('view')
                         }}
-                        className={secondary}
-                      >
-                        Cancelar
-                      </button>
-                      <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
-                        Corrigir
-                      </BusyButton>
+                      />
                     </div>
-                  </div>
-                ) : (
-                  mode === 'view' && (
-                    // As ações que ficaram (decisão 174) em botões de 44 px, 2 por linha.
+                  )}
+                  {mode === 'correct' && (
+                    <div className="space-y-2">
+                      <input
+                        autoFocus
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        placeholder="Ex.: o arroz era metade, sem queijo"
+                        enterKeyHint="send"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && text.trim()) void runBusy('A corrigir…', () => correct(text.trim()))
+                        }}
+                        className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] placeholder:text-dim focus:border-eat focus:outline-none"
+                      />
+                      <div className="grid grid-cols-[1fr_2fr] gap-2">
+                        <button
+                          onClick={() => {
+                            setText('')
+                            setMode('view')
+                          }}
+                          className={secondary}
+                        >
+                          Cancelar
+                        </button>
+                        <BusyButton busy="A corrigir…" disabled={!text.trim()} onClick={() => correct(text.trim())} className={primary}>
+                          Corrigir
+                        </BusyButton>
+                      </div>
+                    </div>
+                  )}
+                  {mode === 'view' && (
                     <div className="grid grid-cols-2 gap-2 text-[15px] [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:justify-center [&>*]:rounded-xl [&>*]:border [&>*]:border-line [&>*]:px-3 [&>*]:text-center [&>*]:leading-tight">
                       <button onClick={() => setMode('correct')} className="text-eat">
                         Corrigir por texto
                       </button>
-                      <button onClick={() => setMode('when')} className="text-eat">
-                        Mudar dia ou refeição
-                      </button>
-                      {(current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
-                        <AttachPhotoButton meal={current} onDone={() => void load()} className="text-eat">
-                          Juntar foto
-                        </AttachPhotoButton>
-                      )}
                       <LeftoversButton meal={current} onDone={() => void load()} className="text-eat" />
                       {people.map((p) =>
                         // Uma cópia não se partilha de volta com quem a partilhou.
@@ -872,7 +846,44 @@ export default function MealSheet() {
                         ),
                       )}
                     </div>
-                  )
+                  )}
+                </>
+              )}
+            </section>
+
+            {current.deleted_at == null && (
+              <>
+                {suggest && mode === 'view' && (
+                  <div className="space-y-2 rounded-2xl border border-line p-3">
+                    <p className="text-[15px]">Registas isto muitas vezes. Guardar como favorita?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setMode('favorite')} className="min-h-11 flex-1 rounded-xl bg-eat font-semibold text-bg">
+                        Guardar
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSuggest(false)
+                          void update({ dismissed_hints: [...(profile.dismissed_hints ?? []), patternKey(current.items)] })
+                        }}
+                        className="min-h-11 px-3 text-[15px] text-dim"
+                      >
+                        Não voltar a perguntar
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {mode === 'view' && (
+                  // As ações que ficaram (decisão 174) em botões de 44 px, 2 por linha.
+                  <div className="grid grid-cols-2 gap-2 text-[15px] [&>*]:flex [&>*]:min-h-11 [&>*]:items-center [&>*]:justify-center [&>*]:rounded-xl [&>*]:border [&>*]:border-line [&>*]:px-3 [&>*]:text-center [&>*]:leading-tight">
+                    <button onClick={() => setMode('when')} className="text-eat">
+                      Mudar dia ou refeição
+                    </button>
+                    {(current.photo_paths?.length ?? 0) < MAX_MEAL_PHOTOS && (
+                      <AttachPhotoButton meal={current} onDone={() => void load()} className="text-eat">
+                        Juntar foto
+                      </AttachPhotoButton>
+                    )}
+                  </div>
                 )}
               </>
             )}
