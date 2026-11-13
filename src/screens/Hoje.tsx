@@ -53,13 +53,14 @@ import AttachPhotoButton from '../components/ui/AttachPhotoButton'
 import { MAX_MEAL_PHOTOS } from '../lib/capture'
 import WeekStrip from '../components/ui/WeekStrip'
 import { mergeSessions } from '../../api/_lib/rules/sessoes'
-import { STEPS_AVG_DAYS, daySteps } from '../../api/_lib/rules/passos'
+import { daySteps } from '../../api/_lib/rules/passos'
 import { proteinPicks } from '../../api/_lib/rules/favoritos'
 import { sharedFrom } from '../../api/_lib/rules/partilha'
 import { orderSplitHint } from '../../api/_lib/rules/pedido'
 import MesPronto from '../components/MesPronto'
 import { hojeActionCard } from '../lib/cartao-hoje'
 import { monthBanner } from '../../api/_lib/rules/mes'
+import { dayBundleArgs, dayBundleMissing, parseDayBundle } from '../lib/dia-pacote'
 
 interface DayData {
   date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
@@ -99,6 +100,70 @@ interface DayData {
 const dayCache = new Map<string, { data: DayData; at: number }>()
 const DAY_FRESH_MS = 30_000
 const DAY_CACHE_MAX = 14
+
+// P1: o dia num só pedido (day_bundle, migração 20261113000062). Sem a
+// função, não se volta a pedi-la até a app recarregar: ficam os pedidos
+// separados de antes.
+let dayBundleUnavailable = false
+
+type Answer = { data: unknown; error: { message: string } | null; status: number }
+
+// O que o dia lê sempre igual (refeições, treinos, pesagem, véspera, dias,
+// gasto, relógio): num só pedido, ou nos separados se a função faltar ou a
+// resposta não servir. Devolve as respostas no formato dos pedidos separados.
+async function loadDayCore(date: string): Promise<Record<'meals' | 'deleted' | 'workouts' | 'weights' | 'yMeals' | 'tdee' | 'health' | 'days', Answer>> {
+  const args = dayBundleArgs(date, Date.now())
+  if (!dayBundleUnavailable) {
+    const { data, error, status } = await supabase.rpc('day_bundle', args)
+    if (dayBundleMissing(error, status)) dayBundleUnavailable = true
+    const bundle = error ? null : parseDayBundle(data, date)
+    if (bundle) {
+      const ok = (rows: unknown): Answer => ({ data: rows, error: null, status })
+      return {
+        meals: ok(bundle.meals),
+        deleted: ok(bundle.deleted),
+        workouts: ok(bundle.workouts),
+        weights: ok(bundle.weights),
+        yMeals: ok(bundle.yesterdayMeals),
+        tdee: ok(bundle.tdee != null ? [{ tdee_est: bundle.tdee }] : []),
+        health: ok(bundle.health),
+        days: ok(bundle.days),
+      }
+    }
+  }
+  const yesterday = shiftDate(date, -1)
+  const [meals, deleted, workouts, weights, yMeals, tdee, health, days] = await Promise.all([
+    supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
+    supabase
+      .from('meals')
+      .select('*')
+      .eq('date', date)
+      .not('deleted_at', 'is', null)
+      .gte('deleted_at', args.p_deleted_since),
+    supabase.from('workouts_active').select('*').eq('date', date).order('created_at'),
+    supabase.from('weights').select('date,kg,measured_at,created_at').eq('date', date),
+    supabase.from('meals').select('*').eq('date', yesterday).is('deleted_at', null).order('logged_at'),
+    supabase
+      .from('days')
+      .select('tdee_est')
+      .lt('date', date)
+      .not('tdee_est', 'is', null)
+      .order('date', { ascending: false })
+      .limit(1),
+    // O relógio (Garmin via intervals.icu) num só pedido: o sono da noite que
+    // acabou neste dia e das três antes, e os passos do dia e dos 30 antes.
+    supabase
+      .from('health_daily')
+      .select('*')
+      .lte('date', date)
+      .gte('date', args.p_health_from)
+      .order('date', { ascending: false }),
+    // Os dias desta semana até este (o plano base de cada um e a semana até
+    // agora) e o de ontem («Foi tudo?»).
+    supabase.from('days').select('*').gte('date', args.p_days_from).lte('date', date),
+  ])
+  return { meals, deleted, workouts, weights, yMeals, tdee, health, days }
+}
 
 function dayCacheKey(date: string): string {
   return `${activeUserId() ?? ''}:${date}`
@@ -185,46 +250,30 @@ export default function Hoje() {
     const cached = dayCache.get(key)
     if (!force && cached && Date.now() - cached.at < DAY_FRESH_MS) return
     const request = ++loads.current
-    const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
     const yesterday = shiftDate(date, -1)
     const calendarToday = localCalendarDate()
-    // Os dias desta semana até este e o de ontem (que pode ser da semana anterior) num só pedido.
-    const daysFrom = mondayOf(date) < yesterday ? mondayOf(date) : yesterday
     const [
-      { data: meals, error: mealsError, status: mealsStatus },
-      { data: deleted },
-      { data: workouts, error: workoutsError, status: workoutsStatus },
-      { data: weights },
-      { data: yMeals, error: yMealsError, status: yMealsStatus },
-      { data: tdeeRows },
+      {
+        meals: { data: meals, error: mealsError, status: mealsStatus },
+        deleted: { data: deleted },
+        workouts: { data: workouts, error: workoutsError, status: workoutsStatus },
+        weights: { data: weights },
+        yMeals: { data: yMeals, error: yMealsError, status: yMealsStatus },
+        tdee: { data: tdeeData },
+        health: { data: health },
+        days: { data: dayRows, error: daysError, status: daysStatus },
+      },
       { data: favorites },
       { data: todayWeights },
       { count: weightCount },
       { count: mealCount },
       { data: imports },
       { data: lastMeasure },
-      { data: health },
-      { data: dayRows, error: daysError, status: daysStatus },
       expenditure,
       diet,
     ] = await Promise.all([
-      supabase.from('meals').select('*').eq('date', date).is('deleted_at', null).order('logged_at'),
-      supabase
-        .from('meals')
-        .select('*')
-        .eq('date', date)
-        .not('deleted_at', 'is', null)
-        .gte('deleted_at', weekAgo),
-      supabase.from('workouts_active').select('*').eq('date', date).order('created_at'),
-      supabase.from('weights').select('date,kg,measured_at,created_at').eq('date', date),
-      supabase.from('meals').select('*').eq('date', yesterday).is('deleted_at', null).order('logged_at'),
-      supabase
-        .from('days')
-        .select('tdee_est')
-        .lt('date', date)
-        .not('tdee_est', 'is', null)
-        .order('date', { ascending: false })
-        .limit(1),
+      // Refeições, treinos, pesagem, véspera, dias e relógio (P1: num só pedido).
+      loadDayCore(date),
       supabase.from('favorites').select('*').eq('kind', 'meal').eq('archived', false),
       // Pesou-se hoje (dia do calendário): quando é o dia que se vê, serve o pedido de cima.
       calendarToday === date
@@ -241,17 +290,6 @@ export default function Hoje() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),
-      // O relógio (Garmin via intervals.icu) num só pedido: o sono da noite que
-      // acabou neste dia e das três antes, e os passos do dia e dos 30 antes.
-      supabase
-        .from('health_daily')
-        .select('*')
-        .lte('date', date)
-        .gte('date', shiftDate(date, -STEPS_AVG_DAYS))
-        .order('date', { ascending: false }),
-      // Os dias desta semana até este (o plano base de cada um e a semana até
-      // agora) e o de ontem («Foi tudo?»).
-      supabase.from('days').select('*').gte('date', daysFrom).lte('date', date),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
       // A dieta que segue (migração 10; sem ela fica null).
       loadActiveDiet(),
@@ -274,6 +312,7 @@ export default function Hoje() {
         return
       }
     }
+    const tdeeRows = tdeeData as { tdee_est: number | null }[] | null
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
     const favoriteRows = (favorites ?? []) as Favorite[]
     const photos = await signedUrls(
