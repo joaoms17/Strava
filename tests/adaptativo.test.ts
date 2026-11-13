@@ -4,8 +4,6 @@ import {
   missingWeighings,
   weighingsDrop,
   dayTdee,
-  paceKgPerWeek,
-  shouldAdjustBase,
   smoothTdee,
   tdeeRaw,
   type ClosedDay,
@@ -59,20 +57,6 @@ describe('smoothTdee', () => {
 
   it('a primeira estimativa entra sem suavização', () => {
     expect(smoothTdee(null, 2100)).toBe(2100)
-  })
-})
-
-describe('shouldAdjustBase', () => {
-  it('propõe ajuste com diferença acima de 250 kcal', () => {
-    expect(shouldAdjustBase(2451, 2200)).toBe(true)
-    expect(shouldAdjustBase(1949, 2200)).toBe(true)
-    expect(shouldAdjustBase(2450, 2200)).toBe(false)
-  })
-})
-
-describe('paceKgPerWeek', () => {
-  it('défice de 700 kcal/dia = -0,64 kg/semana', () => {
-    expect(paceKgPerWeek(1500, 2200)).toBeCloseTo(-0.64, 2)
   })
 })
 

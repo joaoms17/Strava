@@ -13,7 +13,9 @@ import { nutritionalDay } from '../../lib/day'
 import { fmtInt } from '../../lib/format'
 import { prepareMenuPhoto } from '../../lib/image'
 import { foodExtrasText } from '../../lib/food-extras'
-import { dayLabel, whenFromParams } from '../../lib/when'
+import { dayLabel, whenFromParams, whenParams } from '../../lib/when'
+import { BASKET_KEY, basketFromStore, basketToStore, gramsFromInput } from '../../lib/barras'
+import { readScoped, writeScoped } from '../../lib/scoped'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { round1 } from '../../../api/_lib/rules/meal-totals'
 import { SLOT_LABEL, SLOT_TIME, loggedAtFor, slotOf } from '../../../api/_lib/rules/momentos'
@@ -38,8 +40,7 @@ function itemOf(food: Food, grams: number): MealItem {
 
 // Código de barras (Open Food Facts, sem IA): lê vários produtos para a mesma
 // refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
-// juntos a uma já registada (?refeicao=id, a partir da folha da refeição, ou
-// escolhida aqui entre as desse dia). Também se procura pelo nome, e um
+// juntos a uma já registada (escolhida aqui entre as desse dia). Também se procura pelo nome, e um
 // produto que o Open Food Facts não tem lê-se pela foto do rótulo (fica
 // ligado ao código para a próxima vez, também para a outra pessoa).
 export default function BarcodeSheet() {
@@ -50,11 +51,17 @@ export default function BarcodeSheet() {
   // O «Quando» escolhido no Registar (?data=…&momento=…); sem ele, agora.
   const when = whenFromParams(sheet.params, today)
   const date = when.date
-  const targetId = sheet.params.get('refeicao')
-  const [scanning, setScanning] = useState(true)
+  // Os produtos lidos de antes (fechou-se sem guardar) voltam (H17); com eles
+  // abre-se a lista (ler outro está lá).
+  const [basket, setBasket] = useState<MealItem[]>(() =>
+    basketFromStore(typeof localStorage === 'undefined' ? null : readScoped(localStorage, BASKET_KEY), new Date()),
+  )
+  const [restored] = useState(() => basket.length)
+  const [scanning, setScanning] = useState(restored === 0)
   const [food, setFood] = useState<Food | null>(null)
   const [grams, setGrams] = useState(100)
-  const [basket, setBasket] = useState<MealItem[]>([])
+  // O que está escrito no campo das gramas (de 1 em 1; H17).
+  const [gramsText, setGramsText] = useState('100')
   const [error, setError] = useState<string | null>(null)
   // O código que o Open Food Facts não tem (ou sem tabela): «Fotografar o rótulo».
   const [missing, setMissing] = useState<string | null>(null)
@@ -66,20 +73,10 @@ export default function BarcodeSheet() {
   // Tocar outra vez depois de uma falha de rede não grava a dobrar; outros
   // produtos (ou outro dia) são outro registo.
   const clientIdFor = useClientId()
-  const [target, setTarget] = useState<Target | null>(null)
   const [choosing, setChoosing] = useState(false)
   const [dayMeals, setDayMeals] = useState<Target[]>([])
 
   const columns = 'id,items,status,slot,logged_at,date,input_type,raw_text'
-  useEffect(() => {
-    if (!targetId) return
-    void supabase
-      .from('meals')
-      .select(columns)
-      .eq('id', targetId)
-      .maybeSingle()
-      .then(({ data }) => setTarget((data as Target | null) ?? null))
-  }, [targetId])
 
   useEffect(() => {
     if (!choosing) return
@@ -107,9 +104,15 @@ export default function BarcodeSheet() {
     }
   }
 
+  function changeGrams(next: number) {
+    const g = Math.min(5000, Math.max(1, Math.round(next)))
+    setGrams(g)
+    setGramsText(String(g))
+  }
+
   function showFood(found: Food) {
     setFood(found)
-    setGrams(Number(found.default_portion_g) || 100)
+    changeGrams(Number(found.default_portion_g) || 100)
     setSearching(false)
     setResults(null)
   }
@@ -161,6 +164,27 @@ export default function BarcodeSheet() {
   const kcal = items.reduce((a, i) => a + i.kcal, 0)
   const protein = items.reduce((a, i) => a + i.protein, 0)
 
+  // Tudo o que está lido (também o produto à vista) fica no telemóvel até se gravar.
+  const itemsKey = JSON.stringify(items)
+  useEffect(() => {
+    writeScoped(localStorage, BASKET_KEY, basketToStore(JSON.parse(itemsKey) as MealItem[], new Date()))
+  }, [itemsKey])
+  function forgetBasket() {
+    writeScoped(localStorage, BASKET_KEY, null)
+  }
+
+  // Fechar com produtos lidos: ficam guardados e o aviso leva lá.
+  function close() {
+    if (items.length > 0) {
+      const params = whenParams(when, today)
+      toast(
+        items.length === 1 ? 'O produto lido ficou guardado.' : `Os ${items.length} produtos lidos ficaram guardados.`,
+        [{ label: 'Abrir', run: () => sheet.open('barras', params) }],
+      )
+    }
+    sheet.close()
+  }
+
   async function saveNew() {
     if (items.length === 0) return
     const now = new Date()
@@ -180,6 +204,7 @@ export default function BarcodeSheet() {
         logged_at: loggedAt.toISOString(),
         ...(slot ? { slot } : {}),
       })
+      forgetBasket()
       emitDataChanged()
       sheet.close()
       toast(items.length === 1 ? `Registado · ${items[0]!.name}` : `Registados ${items.length} produtos`, [
@@ -208,6 +233,7 @@ export default function BarcodeSheet() {
         meal_id: meal.id,
         items: [...(meal.items ?? []), ...items],
       })
+      forgetBasket()
       emitDataChanged()
       toast(`Juntei ${items.length === 1 ? items[0]!.name : `${items.length} produtos`} à refeição`, [
         {
@@ -228,7 +254,7 @@ export default function BarcodeSheet() {
     return (
       <BarcodeScanner
         onDetect={(ean) => void runBusy('A procurar o produto…', () => lookup(ean))}
-        onClose={() => (basket.length > 0 ? setScanning(false) : sheet.close())}
+        onClose={() => (basket.length > 0 ? setScanning(false) : close())}
         onSearch={() => {
           setScanning(false)
           setError(null)
@@ -246,18 +272,22 @@ export default function BarcodeSheet() {
 
   return (
     <BottomSheet
-      title={target ? 'Juntar à refeição' : 'Código de barras'}
-      onClose={sheet.close}
+      title="Código de barras"
+      onClose={close}
       footer={
         items.length > 0 && !choosing ? (
-          <BusyButton busy="A guardar…" onClick={() => (target ? addTo(target) : saveNew())} className={primary}>
-            {`${target ? 'Juntar' : 'Guardar'}${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
+          <BusyButton busy="A guardar…" onClick={saveNew} className={primary}>
+            {`Guardar${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
           </BusyButton>
         ) : undefined
       }
     >
       <div className="space-y-4 pb-2">
-        {target && <p className="truncate text-[15px] text-dim">A juntar a: {describe(target)}</p>}
+        {restored > 0 && basket.length > 0 && (
+          <p className="text-[13px] text-dim">
+            {restored === 1 ? 'O produto que leste antes ficou guardado.' : `Os ${restored} produtos que leste antes ficaram guardados.`}
+          </p>
+        )}
 
         {error && (
           <div className="space-y-3">
@@ -353,7 +383,7 @@ export default function BarcodeSheet() {
                   ))}
                 </ul>
               ))}
-            <button onClick={() => setScanning(true)} className="min-h-10 text-[15px] text-eat">
+            <button onClick={() => setScanning(true)} className="min-h-11 text-[15px] text-eat">
               Ler o código
             </button>
             <p className="text-[12px] text-dim">Dados: Open Food Facts (ODbL)</p>
@@ -373,7 +403,7 @@ export default function BarcodeSheet() {
                 <button
                   onClick={() => setBasket(basket.filter((_, j) => j !== i))}
                   aria-label={`Tirar ${item.name}`}
-                  className="h-10 w-10 shrink-0 rounded-lg text-[17px] text-dim"
+                  className="h-11 w-11 shrink-0 rounded-lg text-[17px] text-dim"
                 >
                   ✕
                 </button>
@@ -387,14 +417,29 @@ export default function BarcodeSheet() {
             <p className="text-[17px] font-semibold">{food.name}</p>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setGrams(Math.max(5, grams - 10))}
-                aria-label="Menos 10 g"
+                onClick={() => changeGrams(grams > 10 ? grams - 10 : grams - 1)}
+                aria-label={grams > 10 ? 'Menos 10 g' : 'Menos 1 g'}
                 className="h-12 w-12 rounded-xl bg-surface2 text-[17px]"
               >
                 −
               </button>
-              <p className="num flex-1 text-center text-[32px]">{fmtInt(grams)} g</p>
-              <button onClick={() => setGrams(grams + 10)} aria-label="Mais 10 g" className="h-12 w-12 rounded-xl bg-surface2 text-[17px]">
+              {/* H17: escreve-se o número exato (de 1 em 1); − e + andam de 10 em 10. */}
+              <label className="flex flex-1 items-baseline justify-center gap-1">
+                <input
+                  inputMode="decimal"
+                  value={gramsText}
+                  aria-label="Gramas"
+                  onChange={(e) => {
+                    setGramsText(e.target.value)
+                    const g = gramsFromInput(e.target.value)
+                    if (g != null) setGrams(g)
+                  }}
+                  onBlur={() => setGramsText(String(grams))}
+                  className="num w-28 rounded-xl border border-line bg-bg py-1 text-center text-[32px] focus:border-eat focus:outline-none"
+                />
+                <span className="num text-[22px]">g</span>
+              </label>
+              <button onClick={() => changeGrams(grams + 10)} aria-label="Mais 10 g" className="h-12 w-12 rounded-xl bg-surface2 text-[17px]">
                 +
               </button>
             </div>
@@ -427,11 +472,9 @@ export default function BarcodeSheet() {
                 Total: {fmtInt(kcal)} kcal · proteína {fmtInt(protein)} g
               </p>
             )}
-            {!target && (
-              <button onClick={() => setChoosing(true)} className="min-h-10 text-[15px] text-eat">
-                Juntar a uma refeição já registada
-              </button>
-            )}
+            <button onClick={() => setChoosing(true)} className="min-h-11 text-[15px] text-eat">
+              Juntar a uma refeição já registada
+            </button>
           </>
         )}
 
@@ -455,7 +498,7 @@ export default function BarcodeSheet() {
                 ))}
               </ul>
             )}
-            <button onClick={() => setChoosing(false)} className="min-h-10 text-[15px] text-dim">
+            <button onClick={() => setChoosing(false)} className="min-h-11 text-[15px] text-dim">
               Voltar
             </button>
           </div>

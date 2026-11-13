@@ -133,15 +133,6 @@ export const PUSH_TTL_S: Record<PushKind | 'teste', number> = {
   teste: 600,
 }
 
-// A cron dos lembretes corre uma vez por noite (20:45 UTC; no Hobby do Vercel
-// num minuto qualquer dessa hora UTC, por isso entre as 20:00 e as 22:00 em
-// Lisboa). Leva também o resumo da semana (à segunda ou, se só saiu depois,
-// na primeira noite em que existe; rules/rotinas.ts): o Hobby pode aceitar só
-// duas crons, e a das 05:30 UTC é a do fecho do dia.
-export function isMonday(date: string): boolean {
-  return new Date(`${date}T12:00:00Z`).getUTCDay() === 1
-}
-
 // O serviço de notificações diz que a subscrição já não existe: apaga-se.
 export function deadSubscription(status: number | null | undefined): boolean {
   return status === 404 || status === 410

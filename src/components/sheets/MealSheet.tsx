@@ -33,6 +33,7 @@ import { useAccounts } from '../../lib/accounts'
 import { PortionRow, ScopeToggle, ShareChooser } from '../Porcao'
 import { favoriteName, patternKey, similarCount, SIMILAR_MIN_COUNT } from '../../../api/_lib/rules/favoritos'
 import { mealTotals } from '../../../api/_lib/rules/meal-totals'
+import { proteinMealOk } from '../../../api/_lib/rules/targets'
 import { SLOTS, SLOT_LABEL, slotOf } from '../../../api/_lib/rules/momentos'
 import { canChangePortion, factorOf, joinNames, sameFactor, slotScope, slotScopeLabel, splitText } from '../../../api/_lib/rules/porcoes'
 import { orderSplitHint } from '../../../api/_lib/rules/pedido'
@@ -148,7 +149,6 @@ export default function MealSheet() {
 
   useEffect(() => {
     void load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   // Enquanto analisa, os números chegam sozinhos.
@@ -172,7 +172,6 @@ export default function MealSheet() {
       if (!document.hidden) void load()
     }, 3000)
     return () => clearInterval(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [analysing, splitPending, id])
   // Parada (o servidor soltou-a depois de a IA demorar): pede outra tentativa
   // sozinha, uma de cada vez com o Hoje (lib/analise-auto.ts).
@@ -204,7 +203,7 @@ export default function MealSheet() {
   const failed = current.status === 'erro' || stuck
   const dirty = JSON.stringify(items) !== JSON.stringify(current.items)
   const totals = mealTotals(items)
-  const proteinOk = MAIN_SLOTS.includes(mealSlot) && totals.protein >= profile.protein_per_meal_g
+  const proteinOk = MAIN_SLOTS.includes(mealSlot) && proteinMealOk(totals.protein, profile.protein_per_meal_g)
   // «Também para …» do ＋, à espera do fim da análise.
   const shareWith = current.share_with ?? []
   const goingTo = people.filter((p) => shareWith.includes(p.user_id) && !p.shared)
@@ -519,8 +518,8 @@ export default function MealSheet() {
           <button
             onClick={() =>
               favoriteId
-                ? // Já é favorita: diz-o e leva às favoritas, em vez de não fazer nada (H11).
-                  toast('Já está nas favoritas.', [{ label: 'Ver', run: () => navigate('/favoritos') }])
+                ? // Já é favorita: abre-a (nome, foto, refeição habitual), em vez de não fazer nada (H11).
+                  navigate(`/favoritos?abrir=${favoriteId}`, { replace: true })
                 : setMode('favorite')
             }
             aria-pressed={favoriteId != null}

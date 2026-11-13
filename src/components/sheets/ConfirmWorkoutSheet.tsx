@@ -11,7 +11,7 @@ import { BusyButton, runBusy } from '../../lib/busy'
 import { emitDataChanged } from '../../lib/events'
 import { useReadyProfile } from '../../lib/profile'
 import { signedUrls } from '../../lib/photos'
-import { nutritionalDay } from '../../lib/day'
+import { nutritionalDay, shiftDate } from '../../lib/day'
 import { fmtDayShort, fmtKcal, timeOf } from '../../lib/format'
 import { addShots, deleteWorkout, saveWorkout, workoutTitle } from '../../lib/workout-actions'
 import { useKcalContext } from '../../lib/kcal-context'
@@ -20,6 +20,7 @@ import {
   countedMinutes,
   exerciseKcal,
   findMergeCandidate,
+  LAST_WATTS_WINDOW_DAYS,
   kcalExplanation,
   startGuessed,
   typeOfSport,
@@ -80,7 +81,7 @@ function MergedDetail({ ids }: { ids: string[] }) {
       .select('*')
       .in('id', ids)
       .then(({ data }) => setRows((data ?? []) as Workout[]))
-  }, [ids.join(',')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ids.join(',')])
 
   if (!rows) {
     return (
@@ -179,7 +180,7 @@ function Thumbs({ paths }: { paths: string[] }) {
     void signedUrls(paths, 'workout-shots').then((map) =>
       setUrls(paths.map((p) => map[p]).filter((u): u is string => !!u)),
     )
-  }, [paths.join('|')]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paths.join('|')])
   if (!urls.length) return null
   return (
     <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
@@ -230,16 +231,30 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
 
   useEffect(() => {
     void load()
+  }, [load])
+
+  // Os últimos watts confirmados, com a mesma janela do servidor (30 dias
+  // antes do dia do treino; L20).
+  const wattsDay = draft?.day ?? today
+  useEffect(() => {
+    let alive = true
     void supabase
       .from('workouts_active')
       .select('watts')
       .eq('type', 'bike')
       .not('watts', 'is', null)
       .or('watts_source.is.null,watts_source.neq.prefill')
+      .gte('date', shiftDate(wattsDay, -LAST_WATTS_WINDOW_DAYS))
+      .lte('date', wattsDay)
       .order('date', { ascending: false })
       .limit(1)
-      .then(({ data }) => setLastWatts((data?.[0]?.watts as number | undefined) ?? null))
-  }, [load])
+      .then(({ data }) => {
+        if (alive) setLastWatts((data?.[0]?.watts as number | undefined) ?? null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [wattsDay])
 
   // Enquanto lê, pergunta de 2,5 em 2,5 s; se a leitura parou (a função
   // morreu), pede outra vez uma única vez.
@@ -287,7 +302,6 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
     const filled = { ...next, ...edited }
     setPresent(new Set((Object.keys(filled) as (keyof Draft)[]).filter((k) => filled[k] !== '' && filled[k] != null)))
     setDraft(filled)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row, draft, today, profile.nutrition_day_cutoff_hour])
 
   // Sem watts no print, propõe os últimos confirmados (≈, não contam para subir).
@@ -344,7 +358,7 @@ function ImportConfirm({ id, target }: { id: string; target: string | null }) {
       })
     // Sem a duração nas dependências: apagar um dígito não faz a folha mudar
     // de forma (aparecer e desaparecer o «Juntar»; T17).
-  }, [draft?.day, draft?.kind, draft?.time]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [draft?.day, draft?.kind, draft?.time])
   // Sem calorias do relógio, o ritmo no ginásio e o peso desse dia (como o servidor).
   const context = useKcalContext(draft?.day ?? today, today, draft ? type : null)
 

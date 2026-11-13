@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { shiftDate } from './nutritional-day.js'
 import { SLOTS, SLOT_LABEL, type Slot } from './momentos.js'
 import { PORTION_FACTORS } from './favoritos.js'
-import { MAX_ITEM_GRAMS, mergeShopping, shoppingList, type ShoppingItem } from './extras.js'
+import { MAX_SHOPPING_GRAMS, mergeShopping, shoppingList, type ShoppingItem } from './extras.js'
 import type { MealItem } from './meal-totals.js'
 
 export const ASK_ACTION_TYPES = [
@@ -20,10 +20,8 @@ export const ASK_ACTION_TYPES = [
   'mark_day',
   'share_meal',
 ] as const
-export type AskActionType = (typeof ASK_ACTION_TYPES)[number]
 
 export const DAY_FLAGS = ['dia_fechado', 'faltou_algo'] as const
-export type DayFlag = (typeof DAY_FLAGS)[number]
 
 export const ASK_MAX_ACTIONS = 3
 // As ações só mexem nos últimos 28 dias (os que vão no contexto).
@@ -40,7 +38,7 @@ const KCAL = z.number().min(0).max(10_000)
 const PORTION = z.number().refine((f) => (PORTION_FACTORS as readonly number[]).includes(f))
 const SHOPPING_ITEM = z.object({
   name: z.string().trim().min(1).max(60),
-  grams: z.number().int().min(1).max(MAX_ITEM_GRAMS).nullable(),
+  grams: z.number().int().min(1).max(MAX_SHOPPING_GRAMS).nullable(),
 })
 
 // O que o telemóvel recebe (com os nomes para o cartão) e volta a validar.
@@ -151,7 +149,7 @@ function shoppingItems(raw: Record<string, unknown>, refs: AskRefs): ShoppingIte
     if (!favorite || times == null || !Number.isInteger(times) || times < 1 || times > MAX_SHOPPING_TIMES) continue
     selection.push({ items: favorite.items, times })
   }
-  const fromFavorites = shoppingList(selection).map((l) => ({ name: l.name, grams: l.grams > 0 ? Math.min(MAX_ITEM_GRAMS, l.grams) : null }))
+  const fromFavorites = shoppingList(selection).map((l) => ({ name: l.name, grams: l.grams > 0 ? Math.min(MAX_SHOPPING_GRAMS, l.grams) : null }))
   const written = (Array.isArray(raw.items) ? raw.items : []).map((entry) => {
     const e = record(entry)
     const grams = num(e.grams)

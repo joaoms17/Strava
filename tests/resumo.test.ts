@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { dataFingerprint, reviewHeadline, weekHasData } from '../api/_lib/rules/resumo'
+import {
+  REVIEW_LOOKBACK_WEEKS,
+  REVIEW_WEEKS_PER_NIGHT,
+  dataFingerprint,
+  reviewHeadline,
+  reviewWeeks,
+  weekHasData,
+} from '../api/_lib/rules/resumo'
 import { weeklyRateAsOf } from '../api/_lib/rules/weight'
 import { shiftDate } from '../api/_lib/rules/nutritional-day'
 
@@ -73,5 +80,39 @@ describe('o resumo diz o mesmo que o topo do Balanço', () => {
       ritmoKgSemana: null,
       diasDeFora: ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-10', '2026-10-11'],
     })
+  })
+})
+
+// B9: além da semana anterior, a cron volta a ver as semanas já resumidas
+// cujos dias foram fechados de novo (um «dia de fora» respondido há 3
+// semanas) e, por ordem, as outras resumidas recentes (um recálculo feito
+// durante o dia não deixa marca à noite); a IA só corre se os dados mudaram.
+describe('semanas a rever numa noite (B9)', () => {
+  const today = '2026-11-13' // sexta
+  const prev = '2026-11-02'
+
+  it('sem mais nada, só a semana anterior', () => {
+    expect(reviewWeeks({ today, reviewed: [], touched: [] })).toEqual([prev])
+  })
+
+  it('a semana anterior primeiro, depois as tocadas esta noite, depois as outras resumidas', () => {
+    const reviewed = ['2026-10-12', '2026-10-19', '2026-10-26', prev]
+    const touched = ['2026-10-14', '2026-11-12'] // um dia de há 4 semanas e ontem (semana em curso)
+    expect(reviewWeeks({ today, reviewed, touched })).toEqual([prev, '2026-10-12', '2026-10-26', '2026-10-19'])
+  })
+
+  it('só semanas que já têm resumo, nunca a semana em curso nem uma fora da janela', () => {
+    const old = '2026-08-03'
+    const weeks = reviewWeeks({ today, reviewed: [old], touched: ['2026-10-14', '2026-08-04', '2026-11-10'] })
+    expect(weeks).toEqual([prev])
+  })
+
+  it('no máximo REVIEW_WEEKS_PER_NIGHT por pessoa', () => {
+    const reviewed = Array.from({ length: REVIEW_LOOKBACK_WEEKS + 3 }, (_, i) => shiftDate(prev, -7 * i))
+    const weeks = reviewWeeks({ today, reviewed, touched: [] })
+    expect(weeks.length).toBe(Math.min(REVIEW_WEEKS_PER_NIGHT, REVIEW_LOOKBACK_WEEKS))
+    expect(weeks[0]).toBe(prev)
+    expect(new Set(weeks).size).toBe(weeks.length)
+    expect(weeks.every((w) => w >= shiftDate(prev, -7 * (REVIEW_LOOKBACK_WEEKS - 1)))).toBe(true)
   })
 })

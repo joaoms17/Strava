@@ -139,7 +139,6 @@ export default function MedidasSheet() {
       setLoaded(true)
     })()
     // Ideia 15: numa medição nova, Hoje/Ontem relê o dia escolhido.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, editId ? null : date])
 
   const height = Number(profile.height_cm ?? 183)

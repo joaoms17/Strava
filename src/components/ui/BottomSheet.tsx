@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { isBusy, useBusy } from '../../lib/busy'
 
 // A parte do ecrã que se vê (sem o teclado). No iPhone o teclado não encolhe
@@ -20,6 +20,52 @@ function useVisibleArea(): { top: number; height: number } | null {
   return area
 }
 
+// H12: uma folha local (aberta por estado do ecrã, sem ?folha= na URL) põe
+// uma entrada no histórico, para o gesto de voltar a fechar em vez de sair do
+// ecrã. Fechar pelo botão tira essa entrada. Seguro com o StrictMode: a
+// entrada só sai se a folha não voltar a montar logo a seguir.
+let localSheetSeq = 0
+function useBackCloses(enabled: boolean, onClose: () => void) {
+  const closeRef = useRef(onClose)
+  useEffect(() => {
+    closeRef.current = onClose
+  })
+  const id = useRef<number | null>(null)
+  if (id.current == null) id.current = ++localSheetSeq
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (!enabled) return
+    const mine = id.current
+    const isMine = () => (window.history.state as { localSheet?: number } | null)?.localSheet === mine
+    mounted.current = true
+    if (!isMine()) window.history.pushState({ ...((window.history.state as object | null) ?? {}), localSheet: mine }, '')
+    const onPop = () => {
+      if (!isMine()) closeRef.current()
+    }
+    window.addEventListener('popstate', onPop)
+    return () => {
+      mounted.current = false
+      window.removeEventListener('popstate', onPop)
+      setTimeout(() => {
+        if (!mounted.current && isMine()) window.history.back()
+      }, 0)
+    }
+  }, [enabled])
+}
+
+// H16: ao abrir, o foco vai para a folha (o leitor de ecrã lê o título); ao
+// fechar, volta ao botão que a abriu.
+function useFocusOnOpen(ref: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    // Sem roubar o foco a um campo com autoFocus dentro da folha.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus({ preventScroll: true })
+    return () => {
+      if (previous?.isConnected) previous.focus({ preventScroll: true })
+    }
+  }, [ref])
+}
+
 // Folha inferior: pega em cima, deslizar para baixo fecha, botão principal
 // fixo no fundo e o teclado nunca tapa o campo nem empurra o título para fora.
 export default function BottomSheet({
@@ -27,13 +73,17 @@ export default function BottomSheet({
   onClose,
   children,
   footer,
+  closeOnBack = false,
 }: {
   title?: ReactNode
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  /** Folhas locais (sem ?folha= na URL): o gesto de voltar fecha-as. */
+  closeOnBack?: boolean
 }) {
   const area = useVisibleArea()
+  const panel = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState(0)
   const startY = useRef<number | null>(null)
   // Teclado aberto: a área visível é bem mais baixa do que a janela.
@@ -56,6 +106,8 @@ export default function BottomSheet({
       window.removeEventListener('keydown', onKey)
     }
   }, [close])
+  useBackCloses(closeOnBack, onClose)
+  useFocusOnOpen(panel)
 
   return (
     <div
@@ -67,7 +119,10 @@ export default function BottomSheet({
     >
       <div className="fade-in absolute inset-0 bg-black/55" onClick={close} />
       <div
-        className="sheet-in absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col rounded-t-3xl bg-surface shadow-2xl"
+        ref={panel}
+        tabIndex={-1}
+        aria-label={typeof title === 'string' ? title : undefined}
+        className="sheet-in absolute inset-x-0 bottom-0 mx-auto flex max-w-md flex-col rounded-t-3xl bg-surface shadow-2xl outline-none"
         style={{
           // Com o teclado, a folha usa quase toda a área visível (o título fica à vista).
           maxHeight: area ? area.height - (keyboardOpen ? 8 : Math.round(area.height * 0.08)) : '92dvh',

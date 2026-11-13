@@ -22,7 +22,8 @@ export default function WeekStrip({
     <div className="flex items-center gap-1">
       <button
         onClick={() => setMonday(shiftDate(monday, -7))}
-        className="h-11 w-7 shrink-0 text-xl text-dim"
+        // H16: 28 px à vista, 44 px ao toque (a área estende-se para a margem da página).
+        className="relative h-11 w-7 shrink-0 text-xl text-dim before:absolute before:inset-y-0 before:-left-4 before:right-0 before:content-['']"
         aria-label="Semana anterior"
       >
         ‹
@@ -54,7 +55,7 @@ export default function WeekStrip({
       <button
         disabled={!canGoForward}
         onClick={() => setMonday(shiftDate(monday, 7))}
-        className="h-11 w-7 shrink-0 text-xl text-dim disabled:opacity-30"
+        className="relative h-11 w-7 shrink-0 text-xl text-dim before:absolute before:inset-y-0 before:left-0 before:-right-4 before:content-[''] disabled:opacity-30"
         aria-label="Semana seguinte"
       >
         ›

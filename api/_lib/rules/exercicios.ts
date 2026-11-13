@@ -2,6 +2,7 @@
 // Junta-se aos do exercise_catalog de cada pessoa (nome igual → o dela).
 // Os de tempo levam «(segundos)» no nome: as repetições são os segundos.
 // Sem imports: o telemóvel usa este ficheiro diretamente.
+import { fold } from './comum.js'
 
 export const EXERCISE_GROUPS = ['Peito', 'Costas', 'Ombros', 'Braços', 'Pernas e glúteos', 'Core', 'Outros'] as const
 export type ExerciseGroup = (typeof EXERCISE_GROUPS)[number]
@@ -171,13 +172,6 @@ const PATTERN_GROUP: Record<string, ExerciseGroup> = {
 export function groupOfPattern(pattern: string | null | undefined): ExerciseGroup {
   return (pattern && PATTERN_GROUP[pattern]) || 'Outros'
 }
-
-const fold = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .trim()
 
 // A chave de um exercício para juntar o histórico (sem acentos nem maiúsculas):
 // «Supino Plano com Barra» e «supino plano com barra» são o mesmo.

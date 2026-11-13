@@ -44,7 +44,7 @@ import {
   type NextStepId,
   type NudgeState,
 } from '../../api/_lib/rules/proximo-passo'
-import type { DayRow, Diet, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
+import type { Diet, Favorite, Meal, Slot, WeightRow, Workout } from '../lib/types'
 import Segments from '../components/ui/Segments'
 import Icon from '../components/ui/Icon'
 import BottomSheet from '../components/ui/BottomSheet'
@@ -58,6 +58,8 @@ import { proteinPicks } from '../../api/_lib/rules/favoritos'
 import { sharedFrom } from '../../api/_lib/rules/partilha'
 import { orderSplitHint } from '../../api/_lib/rules/pedido'
 import MesPronto from '../components/MesPronto'
+import { hojeActionCard } from '../lib/cartao-hoje'
+import { monthBanner } from '../../api/_lib/rules/mes'
 
 interface DayData {
   date: string // o dia destes dados (ao mudar de dia, os antigos não aparecem por baixo do novo)
@@ -148,6 +150,8 @@ function pickNights(date: string, rows: (Partial<NightSleep> & { date: string })
 export default function Hoje() {
   const profile = useReadyProfile()
   useAutoSync()
+  // H9: quantos «Qual foi?» há (o componente carrega-os; a fila decide se aparece).
+  const [qualFoiCount, setQualFoiCount] = useState(0)
   const { update } = useProfile()
   const params = useParams<{ date?: string }>()
   const [, navigate] = useLocation()
@@ -587,12 +591,6 @@ export default function Hoje() {
   const proteinFavorites = proteinPicks(data.favorites, left)
 
   const hints = profile.dismissed_hints ?? []
-  const firstCards = isToday && !data.offline
-    ? [
-        !data.hasAnyWeight && !hints.includes('primeira_pesagem') ? 'primeira_pesagem' : null,
-        !data.hasAnyMeal && !hints.includes('primeira_foto') ? 'primeira_foto' : null,
-      ].filter((c): c is string => c != null)
-    : []
 
   // Linha de lacuna: no máximo 1, só com um favorito habitual para esse momento.
   const nowSlot = slotOf(now)
@@ -849,7 +847,10 @@ export default function Hoje() {
           {fresh && analysed && (
             <p className="pl-[72px] text-[13px] text-dim">
               acabado de registar ·{' '}
-              <button className="text-eat" onClick={() => void runBusy('A anular…', () => deleteMeal(meal.id, toast))}>
+              <button
+                className="inline-flex min-h-11 items-center text-eat"
+                onClick={() => void runBusy('A anular…', () => deleteMeal(meal.id, toast))}
+              >
                 Anular
               </button>
             </p>
@@ -941,6 +942,20 @@ export default function Hoje() {
   // convite a começar.
   const watchOnly = entries.filter((e) => e.key === 'sono' || e.key === 'passos')
   const empty = watchOnly.length === entries.length
+  // H9: um só cartão de ação entre o cartão do plano e a lista do dia.
+  const actionCard = hojeActionCard({
+    isToday,
+    offline: data.offline,
+    askPastDay: askDay,
+    missingMarked: data.flags.includes('faltou_algo'),
+    step,
+    qualFoi: qualFoiCount,
+    monthReady: monthBanner(today, hints) != null,
+    hasAnyWeight: data.hasAnyWeight,
+    hasAnyMeal: data.hasAnyMeal,
+    dismissedHints: hints,
+    dayEmpty: empty,
+  })
 
   return (
     <div className="space-y-4 pt-1">
@@ -1110,7 +1125,7 @@ export default function Hoje() {
         )}
       </button>
 
-      {askDay && (
+      {actionCard === 'foi_tudo' && (
         <div className="space-y-3 rounded-[18px] border border-line bg-surface p-4">
           <p className="text-[17px]">
             Registaste {counted.length} {counted.length === 1 ? 'refeição' : 'refeições'} ({fmtKcal(kcalIn)}&nbsp;kcal). Foi
@@ -1121,16 +1136,18 @@ export default function Hoje() {
       )}
 
       {/* Marcado «faltou algo» (às vezes um toque sem querer): diz-se e volta-se atrás. */}
-      {!isToday && !data.offline && data.flags.includes('faltou_algo') && <MissingNote date={date} today={today} />}
+      {actionCard === 'faltou_algo' && <MissingNote date={date} today={today} />}
 
-      {isToday && !data.offline && <MesPronto today={today} />}
+      {actionCard === 'mes' && <MesPronto today={today} />}
 
       {/* Um treino que chegou sozinho: qual foi? (só com plano de treino; decisão 306) */}
-      {isToday && !data.offline && <QualFoi today={today} />}
+      {isToday && !data.offline && (
+        <QualFoi today={today} max={1} hidden={actionCard !== 'qual_foi'} onCount={setQualFoiCount} />
+      )}
 
-      {firstCards.map((card) => (
-        <div key={card} className="space-y-3 rounded-2xl border border-line p-4">
-          {card === 'primeira_pesagem' ? (
+      {(actionCard === 'primeira_pesagem' || actionCard === 'primeira_foto') && (
+        <div className="space-y-3 rounded-2xl border border-line p-4">
+          {actionCard === 'primeira_pesagem' ? (
             <>
               <p className="text-[17px] font-semibold">Pesa-te</p>
               <p className="text-[15px] text-dim">
@@ -1141,7 +1158,7 @@ export default function Hoje() {
                   Pesar
                 </button>
                 {/* «Saltar» esconde de vez; «Agora não» (próximo passo) só até amanhã. */}
-                <button onClick={() => void dismissHint(card)} className={STEP_LATER}>
+                <button onClick={() => void dismissHint('primeira_pesagem')} className={STEP_LATER}>
                   Saltar
                 </button>
               </div>
@@ -1151,16 +1168,16 @@ export default function Hoje() {
               <p className="text-[17px] font-semibold">Fotografa a próxima refeição</p>
               <p className="text-[15px] text-dim">Toca em + e tira uma foto ao prato. Eu faço as contas.</p>
               <div className="-mt-1 flex justify-end">
-                <button onClick={() => void dismissHint(card)} className={STEP_LATER}>
+                <button onClick={() => void dismissHint('primeira_foto')} className={STEP_LATER}>
                   Saltar
                 </button>
               </div>
             </>
           )}
         </div>
-      ))}
+      )}
 
-      {step && (
+      {step && actionCard === step && (
         <NextStepCard
           id={step}
           yesterdayMeals={data.yesterday.meals}
@@ -1237,7 +1254,7 @@ export default function Hoje() {
               </PhotoButton>
               {/* Pesar precisa de rede (grava logo no servidor). */}
               {!data.weighedToday && !data.offline && (
-                <button onClick={() => sheet.open('peso')} className="text-[15px] text-eat">
+                <button onClick={() => sheet.open('peso')} className="min-h-11 text-[15px] text-eat">
                   Ou pesa-te primeiro
                 </button>
               )}
@@ -1263,14 +1280,14 @@ export default function Hoje() {
           <span className="flex-1 text-dim">Ainda sem {SLOT_LABEL[nowSlot].toLowerCase()}</span>
           <button
             onClick={() => void runBusy('A registar…', () => logFavorite(gapFavorite, null, toast))}
-            className="rounded-full bg-surface2 px-3 py-1.5"
+            className="min-h-11 rounded-full bg-surface2 px-3"
           >
             {gapFavorite.name}
           </button>
-          <PhotoButton source="camera" className="flex min-h-9 items-center rounded-full bg-surface2 px-3" aria-label="Fotografar">
+          <PhotoButton source="camera" className="flex min-h-11 items-center rounded-full bg-surface2 px-3" aria-label="Fotografar">
             <Icon name="camera" size={20} />
           </PhotoButton>
-          <button onClick={() => void dismissHint('lacuna')} className="px-1 text-[13px] text-dim" aria-label="Não mostrar isto">
+          <button onClick={() => void dismissHint('lacuna')} className="min-h-11 min-w-11 text-[13px] text-dim" aria-label="Não mostrar isto">
             ✕
           </button>
         </div>
@@ -1278,7 +1295,7 @@ export default function Hoje() {
 
       {data.deleted.length > 0 && (
         <div className="space-y-2">
-          <button onClick={() => setShowDeleted(!showDeleted)} className="text-[13px] text-dim">
+          <button onClick={() => setShowDeleted(!showDeleted)} className="min-h-11 text-[13px] text-dim" aria-expanded={showDeleted}>
             Apagados ({data.deleted.length}) {showDeleted ? '▾' : '›'}
           </button>
           {showDeleted &&
@@ -1289,7 +1306,7 @@ export default function Hoje() {
                 </span>
                 <BusyButton
                   busy="A repor…"
-                  className="shrink-0 pl-3 text-eat"
+                  className="min-h-11 shrink-0 pl-3 text-eat"
                   onClick={async () => {
                     try {
                       await postApi('/api/meal/restore', { meal_id: meal.id })
@@ -1308,7 +1325,7 @@ export default function Hoje() {
       )}
 
       {planOpen && (
-        <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)}>
+        <BottomSheet title={isToday ? 'O plano de hoje' : `O plano de ${fmtDayShort(date)}`} onClose={() => setPlanOpen(false)} closeOnBack>
           <div className="space-y-4 pb-2 text-[15px]">
             {outToday != null && (
               <div className="space-y-1">
@@ -1390,7 +1407,7 @@ export default function Hoje() {
               <p className="text-dim">Um treino aumenta o que podes comer.</p>
             )}
             <details className="text-dim">
-              <summary className="cursor-pointer">Como sei quanto gastas?</summary>
+              <summary className="min-h-11 cursor-pointer py-2">Como sei quanto gastas?</summary>
               <p className="mt-1">
                 Primeiro por uma fórmula com a tua altura, peso e idade. Depois de 10 dias completos, pelo que comes e pelo
                 que o teu peso faz.
@@ -1462,7 +1479,7 @@ function NextStepCard({
   const chips = favorites.length > 0 && (
     <div className="flex flex-wrap gap-2">
       {favorites.map((fav) => (
-        <button key={fav.id} onClick={() => onFavorite(fav)} className="rounded-full bg-surface2 px-3 py-2 text-[15px]">
+        <button key={fav.id} onClick={() => onFavorite(fav)} className="min-h-11 rounded-full bg-surface2 px-3 text-[15px]">
           {fav.name} <span className="text-protein tabular-nums">{fmtInt(Number(fav.protein))} g prot.</span>
         </button>
       ))}

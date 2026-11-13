@@ -11,6 +11,10 @@ import { emitDataChanged } from '../../lib/events'
 import { prepareMenuPhoto } from '../../lib/image'
 import { fmt1, fmtInt, fmtKcal } from '../../lib/format'
 import { dishItem, type Dish, type RankedDish } from '../../../api/_lib/rules/menu'
+import { useReadyProfile } from '../../lib/profile'
+import { nutritionalDay } from '../../lib/day'
+import { whenFromParams, whenLabel } from '../../lib/when'
+import { SLOT_TIME, loggedAtFor, slotOf } from '../../../api/_lib/rules/momentos'
 import type { Meal } from '../../lib/types'
 
 const MAX_PHOTOS = 3
@@ -29,10 +33,14 @@ const euros = (n: number) => `${n.toFixed(2).replace('.', ',')} €`
 // ＋ › «Escolher pelo menu»: fotografas o menu (até 3 fotos) e a app diz os 3
 // pratos que melhor cabem no que te falta hoje — primeiro os que cabem, pela
 // proteína por caloria — com as calorias e a proteína de cada um. «Vou comer
-// este» regista-o agora (estimativa). Os outros pratos ficam por baixo.
+// este» regista-o no «Quando» escolhido no ＋ (agora, por omissão; estimativa). Os outros pratos ficam por baixo.
 export default function MenuSheet() {
   const sheet = useSheet()
   const toast = useToast()
+  const profile = useReadyProfile()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
+  // H17: o «Quando» escolhido no ＋ (?data=…&momento=…) vale aqui também.
+  const when = whenFromParams(sheet.params, today)
   const [photos, setPhotos] = useState<{ file: File; url: string }[]>([])
   const [note, setNote] = useState('')
   const [reading, setReading] = useState(false)
@@ -95,9 +103,18 @@ export default function MenuSheet() {
 
   async function eat(dish: Dish) {
     if (!result) return
+    const now = new Date()
+    const slot = when.slot && when.slot !== 'agora' ? when.slot : null
+    const loggedAt =
+      when.date === today && !slot
+        ? now
+        : loggedAtFor(when.date, SLOT_TIME[slot ?? slotOf(now)], profile.nutrition_day_cutoff_hour, now)
+    const isNow = when.date === today && !slot
     try {
       const { meal } = await postApi<{ meal: Meal }>('/api/meal/save', {
-        client_id: clientIdFor(dish.name),
+        client_id: clientIdFor({ dish: dish.name, date: when.date, slot }),
+        logged_at: loggedAt.toISOString(),
+        ...(slot ? { slot } : {}),
         input_type: 'text',
         raw_text: `Do menu: ${dish.name}`,
         items: [dishItem(dish)],
@@ -107,7 +124,7 @@ export default function MenuSheet() {
       })
       emitDataChanged()
       sheet.close()
-      toast(`Registado · ${dish.name} · ${fmtKcal(dish.kcal)} kcal`, [
+      toast(`Registado · ${dish.name} · ${fmtKcal(dish.kcal)} kcal${isNow ? '' : ` · ${whenLabel(when, today)}`}`, [
         {
           label: 'Anular',
           run: async () => {

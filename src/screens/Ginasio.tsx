@@ -258,7 +258,6 @@ export default function Ginasio() {
         ...(pastDay ? { day: pastDay, minutes: fav?.workout?.minutes ?? 60 } : {}),
       })
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editId, favParam, pastDay, planParam])
 
   // Guarda o rascunho a cada mudança (só sessões novas).

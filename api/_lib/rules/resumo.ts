@@ -5,6 +5,36 @@ import { leftOutDates } from './balanco.js'
 import { round10 } from './gasto.js'
 import { shiftDate } from './nutritional-day.js'
 import { weeklyRateAsOf } from './weight.js'
+import { mondayOf } from './manutencao.js'
+
+// B9: as semanas cujo resumo a cron volta a ver numa noite, por esta ordem:
+// a semana anterior (escreve-se na primeira noite em que falte); as semanas
+// já resumidas com dias fechados de novo esta noite (`touched`: um «dia de
+// fora» respondido há 3 semanas); depois as outras já resumidas, das mais
+// recentes para trás (um recálculo feito durante o dia já não deixa o dia
+// sujo à noite). Só semanas acabadas, das últimas REVIEW_LOOKBACK_WEEKS, e no
+// máximo REVIEW_WEEKS_PER_NIGHT por pessoa. Ver uma semana são só leituras:
+// a IA só corre quando os dados mudaram (`dataFingerprint`), e a cron ainda
+// limita as reescritas por noite (REVIEW_REWRITES_PER_NIGHT).
+export const REVIEW_LOOKBACK_WEEKS = 8
+export const REVIEW_WEEKS_PER_NIGHT = 6
+export const REVIEW_REWRITES_PER_NIGHT = 2
+
+export function reviewWeeks(input: {
+  today: string
+  reviewed: string[] // segundas-feiras das semanas com resumo
+  touched: string[] // dias fechados esta noite
+  lookbackWeeks?: number
+  maxWeeks?: number
+}): string[] {
+  const previous = mondayOf(shiftDate(input.today, -7))
+  const oldest = shiftDate(previous, -7 * ((input.lookbackWeeks ?? REVIEW_LOOKBACK_WEEKS) - 1))
+  const reviewed = new Set(input.reviewed.filter((w) => w >= oldest && w < previous))
+  const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0)
+  const touched = [...new Set(input.touched.map(mondayOf))].filter((w) => reviewed.has(w)).sort(desc)
+  const rest = [...reviewed].filter((w) => !touched.includes(w)).sort(desc)
+  return [previous, ...touched, ...rest].slice(0, input.maxWeeks ?? REVIEW_WEEKS_PER_NIGHT)
+}
 
 // Sem dias completos, refeições nem treinos não há nada a resumir (o fecho
 // do dia cria as linhas dos dias mesmo sem nada registado).

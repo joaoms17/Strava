@@ -76,20 +76,6 @@ export async function sha256Hex(blob: Blob): Promise<string> {
     .join('')
 }
 
-// Usado pela foto dos capítulos (Arquivo) e por imagens avulsas.
-export async function toJpeg(file: File, maxDim = 1600, quality = 0.85): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
-    try {
-      return await toJpegBlob(bitmap, maxDim, quality)
-    } finally {
-      bitmap.close()
-    }
-  } catch {
-    return file
-  }
-}
-
 // Prints do relógio: no tamanho nativo até 2576 px no lado maior (JPEG
 // q0,9) para os números pequenos se lerem, e miniatura de 256 px.
 export async function prepareShot(file: Blob): Promise<{ full: Blob; thumb: Blob }> {

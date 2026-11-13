@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Thumb from './ui/Thumb'
 import { supabase } from '../lib/supabase'
 import { shiftDate } from '../lib/day'
@@ -30,11 +30,14 @@ export default function MealHistoryList({
   onPick,
   exclude,
   emptyText = 'Ainda não há refeições para repetir.',
+  header,
 }: {
   today: string
   onPick: (meal: HistoryMeal) => void
   exclude?: (meal: HistoryMeal) => boolean
   emptyText?: string
+  /** O que vai entre a pesquisa e o histórico (as favoritas no «Repetir»), com o que se procura. */
+  header?: (query: string) => ReactNode
 }) {
   const [meals, setMeals] = useState<HistoryMeal[] | null>(null)
   const [query, setQuery] = useState('')
@@ -104,6 +107,7 @@ export default function MealHistoryList({
         aria-label="Procurar refeição"
         className="h-11 w-full rounded-xl border border-line bg-bg px-3 text-[16px] placeholder:text-dim focus:border-eat focus:outline-none"
       />
+      {header?.(query)}
 
       {meals == null ? (
         <p className="py-6 text-center text-[15px] text-dim">A carregar…</p>

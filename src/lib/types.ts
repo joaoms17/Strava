@@ -20,10 +20,8 @@ export interface Profile {
   expected_tdee: number
   nutrition_day_cutoff_hour: number
   bike_watts_options: number[]
-  bike_min_cadence: number
   bike_hr_avg_cap: number
   bike_hr_max_cap: number
-  strava_athlete_id: number | null
   timeline: { label: string; when: string }[]
   height_cm: number
   // Migração 1 (Fase 1)
@@ -31,19 +29,15 @@ export interface Profile {
   birth_year: number | null
   theme: 'system' | 'dark' | 'light'
   calm_mode: boolean
-  pin_mode: 'off' | '12h' | 'always'
   maintenance_enabled: boolean
   maintenance_anchor: string | null
   dismissed_hints: string[]
   nudge_state: Record<string, unknown>
-  carbs_ref_g: number | null
-  fat_ref_g: number | null
   scale_has_bodyfat: boolean
   // Migração 2 (Fase 2)
   ai_monthly_cap_eur: number
   ai_daily_vision_cap: number
   has_garmin_watch: boolean | null
-  console_shows_watts: boolean | null
   measure_interval_days?: number
   thigh_landmark_cm?: number
   // Plano semanal com IA (goals.plano): ativo, sessões por semana e início.
@@ -150,20 +144,6 @@ export interface TemplateExercise {
   note?: string // o que o treinador diz («Pés altos na plataforma»; decisão 305)
 }
 
-export interface DayRow {
-  date: string
-  kcal_in: number
-  protein: number
-  carbs: number
-  fat: number
-  kcal_exercise: number
-  kcal_target: number
-  is_complete: boolean
-  flags: string[]
-  tdee_est: number | null
-  weight_trend: number | null
-}
-
 export interface WeeklyReview {
   week_start: string
   text: string
@@ -200,7 +180,6 @@ export interface Workout {
   id: string
   date: string
   source: 'strava' | 'manual' | 'screenshot' | 'intervals' | 'health' | 'fit'
-  strava_id: number | null
   type: 'bike' | 'strength' | 'other'
   minutes: number | null
   watts: number | null
@@ -211,7 +190,6 @@ export interface Workout {
   pain_during: number | null
   pain_next_day: number | null
   status: 'green' | 'yellow' | 'red' | null
-  planned_session_id: string | null
   raw: { calories?: number; sport?: string; hora_estimada?: boolean; qual_foi?: boolean } | null
   created_at: string
   deleted_at: string | null
@@ -347,7 +325,6 @@ export interface BodyMeasurement {
   calf_cm: number | null
   readings: Record<string, number[] | string | boolean> | null // leituras por zona, waist_site e neck_confirmed (decisão 303)
   weight_used_kg: number
-  fasted: boolean
   flags: string[]
   note: string | null
   created_at: string

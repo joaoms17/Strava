@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ANALYSIS_FUNCTION_BUDGET_MS,
   ANALYSIS_WRITE_MARGIN_MS,
-  MIN_ATTEMPT_MS,
   attemptBudgetMs,
   requestWithin,
   reserveSliceMs,

@@ -34,15 +34,13 @@ export default function Login() {
     if (authError) {
       const message = authError.message.toLowerCase()
       if (message.includes('confirm')) {
-        setError(
-          'O email ainda não está confirmado. No Supabase: Authentication → Users → abre o utilizador → "Confirm email".',
-        )
+        setError('Este email ainda não está confirmado. Abre o email de confirmação que recebeste e tenta outra vez.')
       } else if (message.includes('invalid login')) {
         setError('Email ou palavra-passe errados.')
       } else if (message.includes('fetch') || message.includes('network')) {
-        setError('Não consegui falar com o Supabase — verifica as VITE_SUPABASE_* no Vercel.')
+        setError('Sem ligação. Verifica a internet e tenta outra vez.')
       } else {
-        setError(authError.message)
+        setError('Não consegui entrar. Tenta outra vez daqui a pouco.')
       }
     }
     setBusy(false)

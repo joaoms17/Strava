@@ -28,6 +28,12 @@ export default function BarcodeScanner({
   const videoRef = useRef<HTMLVideoElement>(null)
   const [manual, setManual] = useState('')
   const [cameraError, setCameraError] = useState(false)
+  // A folha cria um onDetect novo a cada render: guardá-lo numa ref deixa o
+  // efeito correr uma só vez (a câmara não reinicia nem pisca).
+  const onDetectRef = useRef(onDetect)
+  useEffect(() => {
+    onDetectRef.current = onDetect
+  })
 
   useEffect(() => {
     let stopped = false
@@ -39,7 +45,7 @@ export default function BarcodeScanner({
       const ean = raw.replace(/\D/g, '')
       if (stopped || !/^\d{8,14}$/.test(ean)) return
       stopped = true
-      onDetect(ean)
+      onDetectRef.current(ean)
     }
 
     async function start() {
@@ -50,9 +56,13 @@ export default function BarcodeScanner({
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment' },
           })
-          if (stopped) return
+          if (stopped) {
+            stream.getTracks().forEach((track) => track.stop())
+            return
+          }
           video.srcObject = stream
           await video.play()
+          if (stopped) return
           const detector = new window.BarcodeDetector({ formats: EAN_FORMATS })
           timer = setInterval(() => {
             void detector
@@ -64,10 +74,17 @@ export default function BarcodeScanner({
           }, 300)
         } else {
           const { BrowserMultiFormatReader } = await import('@zxing/browser')
+          if (stopped) return
           const reader = new BrowserMultiFormatReader()
-          zxingControls = await reader.decodeFromVideoDevice(undefined, video, (result) => {
+          const controls = await reader.decodeFromVideoDevice(undefined, video, (result) => {
             if (result) found(result.getText())
           })
+          // Fechou-se antes de a câmara arrancar: desliga-a já em vez de a deixar ligada.
+          if (stopped) {
+            controls.stop()
+            return
+          }
+          zxingControls = controls
         }
       } catch {
         if (!stopped) setCameraError(true)
@@ -81,7 +98,7 @@ export default function BarcodeScanner({
       zxingControls?.stop()
       stream?.getTracks().forEach((track) => track.stop())
     }
-  }, [onDetect])
+  }, [])
 
   return (
     // Opaco e abaixo da barra de estado: a app por trás não se vê através da câmara.

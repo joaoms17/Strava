@@ -19,6 +19,7 @@ import { setActiveUser } from './lib/scoped'
 import { sessionEnded } from '../api/_lib/rules/pessoas'
 import RecoverPassword from './components/RecoverPassword'
 import { bootUrl } from './lib/boot-url'
+import { canGoBackInApp, installNavIndex } from './lib/nav-history'
 import TabBar from './components/TabBar'
 import BusyLayer from './components/ui/BusyLayer'
 import Icon from './components/ui/Icon'
@@ -92,6 +93,9 @@ const MesSheet = screen(() => import('./components/sheets/MesSheet'))
 const MedidasSheet = screen(() => import('./components/sheets/MedidasSheet'))
 const ComoMedirSheet = screen(() => import('./components/sheets/MedidasSheet').then((m) => ({ default: m.ComoMedirSheet })))
 
+// H12: cada entrada do histórico sabe se tem outra da app antes de si.
+if (typeof window !== 'undefined') installNavIndex()
+
 function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bg p-6">
@@ -140,7 +144,12 @@ function Header({ belowSwitcher = false }: { belowSwitcher?: boolean }) {
     >
       <div className="flex min-w-0 items-center gap-1">
         {parent && (
-          <button onClick={() => navigate(parent)} className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink">
+          <button
+            // H12: recua (Favoritas volta às Definições se veio de lá); só sem
+            // histórico da app (aberta por um link) é que vai para o pai.
+            onClick={() => (canGoBackInApp() ? window.history.back() : navigate(parent, { replace: true }))}
+            className="-ml-3 min-h-11 px-3 text-[17px] font-medium text-ink"
+          >
             ‹ Voltar
           </button>
         )}
@@ -208,13 +217,12 @@ function Sheets() {
 }
 
 function SheetFor(sheet: ReturnType<typeof useSheet>): ReactNode {
-  if (sheet.name === 'registar') return <CaptureSheet key="registar" />
+  if (sheet.name === 'registar') return <CaptureSheet />
   if (sheet.name === 'peso') return <WeighSheet key={sheet.params.get('data') ?? ''} />
   if (sheet.name === 'refeicao' && sheet.params.get('id')) {
     return <MealSheet key={sheet.params.get('id')} />
   }
   if (sheet.name === 'galeria') return <GallerySheet />
-  if (sheet.name === 'escrever') return <CaptureSheet key="escrever" focus />
   if (sheet.name === 'repetir') return <RepeatSheet />
   if (sheet.name === 'nova-favorita') return <NewFavoriteSheet key={sheet.params.get('momento') ?? ''} />
   if (sheet.name === 'dieta') return <DietSheet key={sheet.params.get('id') ?? 'nova'} />
@@ -250,7 +258,6 @@ function CaptureSync() {
           { label: 'Abrir', run: () => sheet.open('refeicao', { id: meal.id }) },
         ]),
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [toast],
   )
   return null
@@ -300,21 +307,25 @@ function Shell() {
   if (status === 'needs-migration') {
     return (
       <Centered>
-        <p className="text-[17px] font-semibold text-ink">Falta um passo no Supabase</p>
+        <p className="text-[17px] font-semibold text-ink">A app precisa de uma atualização</p>
         <p>
-          A app nova precisa de uma atualização da base de dados. No Supabase, abre o SQL Editor e corre,
-          por esta ordem, {missingMigrations.length === 1 ? 'o ficheiro' : 'os ficheiros'}:
+          Esta versão precisa de uma atualização dos dados que ainda não foi feita. Avisa quem gere a app e
+          tenta outra vez depois.
         </p>
-        <ul className="space-y-1">
-          {missingMigrations.map((file) => (
-            <li key={file}>
-              <code className="text-[13px] break-all text-ink">supabase/migrations/{file}</code>
-            </li>
-          ))}
-        </ul>
-        <p>Cola cada um, carrega em Run. Demora segundos e não apaga nada.</p>
-        <button onClick={() => void reload()} className="mt-2 rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
-          Já corri, tentar outra vez
+        {/* H13: o pormenor técnico fica escondido, para quem gere a app. */}
+        <details className="text-left text-[13px]">
+          <summary className="min-h-11 cursor-pointer py-2">Detalhes técnicos</summary>
+          <p>No SQL Editor do Supabase, correr por esta ordem:</p>
+          <ul className="space-y-1">
+            {missingMigrations.map((file) => (
+              <li key={file}>
+                <code className="break-all text-ink">supabase/migrations/{file}</code>
+              </li>
+            ))}
+          </ul>
+        </details>
+        <button onClick={() => void reload()} className="mt-2 min-h-12 rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
+          Tentar outra vez
         </button>
       </Centered>
     )
@@ -322,7 +333,7 @@ function Shell() {
   if (status === 'error') {
     return (
       <Centered>
-        <p>Não consegui ligar ao Supabase.</p>
+        <p>Não consegui carregar os teus dados. Verifica a internet.</p>
         <button onClick={() => void reload()} className="rounded-xl bg-cta px-4 py-3 font-semibold text-on-cta">
           Tentar outra vez
         </button>

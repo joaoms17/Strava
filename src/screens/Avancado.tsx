@@ -6,13 +6,14 @@ import { BusyButton } from '../lib/busy'
 import { useReadyProfile, useProfile } from '../lib/profile'
 import { fmtInt } from '../lib/format'
 import { USD_TO_EUR, kindLabel, nearMonthlyCap } from '../../api/_lib/rules/custos'
+import { DEFERRED_MIGRATIONS } from '../../api/_lib/rules/esquema'
 import type { CatalogExercise } from '../lib/types'
 import AiCheck from '../components/AiCheck'
 import AvisoNoite from '../components/AvisoNoite'
 
+// Só os tipos de chamada que a app ainda faz (L4); um antigo que ainda esteja
+// no mês conta em «outros pedidos».
 const KIND_LABEL: Record<string, string> = {
-  meal_parse_text: 'refeições por texto',
-  meal_parse_photo: 'fotos',
   meal_photo: 'fotos',
   meal_text: 'refeições por texto',
   meal_correct: 'correções',
@@ -25,9 +26,7 @@ const KIND_LABEL: Record<string, string> = {
   workout_said_audio: 'treinos ditos (áudio)',
   evolution: 'análises da evolução',
   ask: 'perguntas à app',
-  training_week: 'planos da semana',
   ai_check: 'verificações',
-  plan_generate: 'planos',
   weekly_review: 'resumos',
 }
 
@@ -73,7 +72,7 @@ async function monthTotal(from: string): Promise<number | null> {
 // O que é técnico ou pode causar ansiedade fica aqui, longe da vista.
 export default function Avancado() {
   const profile = useReadyProfile()
-  const { update } = useProfile()
+  const { update, pendingMigrations } = useProfile()
   const toast = useToast()
   const [costs, setCosts] = useState<{ eur: number; usd: number; byKind: Record<string, number> } | null>(null)
   const [usage, setUsage] = useState<AiUsage | null>(null)
@@ -99,7 +98,7 @@ export default function Avancado() {
       let summed = 0
       for (const call of calls) {
         summed += Number(call.cost_usd)
-        const label = KIND_LABEL[call.kind] ?? call.kind
+        const label = KIND_LABEL[call.kind] ?? 'outros pedidos'
         byKind[label] = (byKind[label] ?? 0) + 1
       }
       const usd = total ?? summed
@@ -132,7 +131,7 @@ export default function Avancado() {
     toast(failed ? 'Não consegui guardar tudo.' : 'Exercícios guardados.')
   }
 
-  const field = 'h-10 w-12 rounded-lg border border-line bg-bg text-center tabular-nums focus:border-eat focus:outline-none'
+  const field = 'h-11 w-12 rounded-lg border border-line bg-bg text-center tabular-nums focus:border-eat focus:outline-none'
 
   return (
     <div className="space-y-6 pt-1 pb-4">
@@ -294,13 +293,22 @@ export default function Avancado() {
       </section>
 
       <section className="space-y-2 rounded-2xl bg-surface p-4 text-[13px] text-dim">
-        <h2 className="text-[15px] font-semibold text-ink">Calendário (.ics)</h2>
-        <p>
-          O plano de 4 semanas saiu da app e o calendário deixou de existir. Se o subscreveste no iPhone, remove-o
-          em Definições › Calendário › Contas › Calendários subscritos.
-        </p>
-        <h2 className="pt-2 text-[15px] font-semibold text-ink">Versão</h2>
+        <h2 className="text-[15px] font-semibold text-ink">Versão</h2>
         <p>Daily Track · 6 funções no Vercel</p>
+        {/* Ideia 6: com a tabela schema_version, as migrações que faltam (não param a app). */}
+        {pendingMigrations.length > 0 && (
+          <div className="space-y-1">
+            <p>Por correr no SQL Editor do Supabase, por esta ordem:</p>
+            <ul className="space-y-1">
+              {pendingMigrations.map((file) => (
+                <li key={file}>
+                  <code className="break-all text-ink">supabase/migrations/{file}</code>
+                  {DEFERRED_MIGRATIONS[file] && <span> — {DEFERRED_MIGRATIONS[file]}</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
     </div>
   )

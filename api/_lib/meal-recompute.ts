@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CLOSE_DAY_PROFILE_COLUMNS, closeDay, maintenanceAnchor, type CloseDayProfile } from './close-day.js'
 import { nutritionalDay, shiftDate } from './rules/nutritional-day.js'
+import { lisbonDay } from './rules/momentos.js'
 import { PAST_RECOMPUTE_OLDEST_DAYS, pastRecomputePlan } from './rules/recalculo-passado.js'
 
 // M8: depois de uma escrita nas refeições, os dias passados que o trigger
@@ -13,7 +14,7 @@ export async function recomputeDirtyPast(admin: SupabaseClient, budgetMs = BUDGE
   const startedAt = Date.now()
   // Hoje com o corte mais cedo possível (0 h): um dia que ainda é hoje para
   // alguém volta a ser filtrado abaixo, com o corte de cada pessoa.
-  const roughToday = nutritionalDay(new Date(), 0)
+  const roughToday = lisbonDay()
   const { data: dirty, error } = await admin
     .from('days')
     .select('user_id,date')

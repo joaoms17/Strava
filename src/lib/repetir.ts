@@ -37,6 +37,17 @@ export function searchMeals<T extends RepeatSource>(meals: T[], query: string): 
   })
 }
 
+// H10: o «Repetir» procura também nas favoritas, pelo nome (sem acentos,
+// todas as palavras).
+export function searchByName<T extends { name: string }>(list: T[], query: string): T[] {
+  const words = fold(query).split(/\s+/).filter(Boolean)
+  if (words.length === 0) return list
+  return list.filter((entry) => {
+    const haystack = fold(entry.name)
+    return words.every((w) => haystack.includes(w))
+  })
+}
+
 // Por dia, do mais recente para o mais antigo; dentro do dia pela hora.
 export function groupByDay<T extends RepeatSource>(meals: T[]): { date: string; meals: T[] }[] {
   const byDay = new Map<string, T[]>()

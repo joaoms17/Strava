@@ -1,6 +1,7 @@
 // O sono da noite (Garmin via intervals.icu): horas, pontuação 0–100 e
 // qualidade 1–4 (a escala do intervals.icu: 1 ótima … 4 fraca). Sem imports:
 // o telemóvel usa as mesmas funções.
+import { mean } from './comum.js'
 
 export interface NightSleep {
   sleep_minutes: number | null
@@ -51,7 +52,4 @@ export function sleepDetail(night: NightSleep): string {
   return parts.join(' · ')
 }
 
-export function mean(values: (number | null | undefined)[]): number | null {
-  const v = values.filter((x): x is number => x != null && Number.isFinite(x))
-  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
-}
+export { mean }

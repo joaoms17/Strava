@@ -126,10 +126,8 @@ export function useChartColors(): ChartColors {
 export const AXIS_FONT = 12
 export const TICK = (colors: ChartColors) => ({ fill: colors.dim, fontSize: AXIS_FONT })
 
-// Os números do eixo: inteiros com espaço fino nos milhares; «8 mil» só
-// quando poupa espaço.
+// Os números do eixo: inteiros com espaço fino nos milhares.
 export const axisInt = (v: number) => fmtInt(v)
-export const axisThousands = (v: number) => (v === 0 ? '0' : v % 1000 === 0 ? `${v / 1000} mil` : `${String(v / 1000).replace('.', ',')} mil`)
 
 // O eixo do tempo contínuo (dias como números): as marcas e o texto delas.
 export function timeAxis(from: string, to: string, max = 4) {
@@ -475,11 +473,6 @@ export function Marks({
       </g>
     </ZIndexLayer>
   )
-}
-
-// Um rótulo numa linha de referência (alvo, média) sem marcos no gráfico.
-export function RefLabel({ y, text, colors, side = 'right', above = true }: RefText & { colors: ChartColors }) {
-  return <Marks marks={[]} color={colors.dim} colors={colors} x={(d) => d} refs={[{ y, text, side, above }]} />
 }
 
 // Um eixo de valores que não começa exatamente no alvo (a linha tracejada

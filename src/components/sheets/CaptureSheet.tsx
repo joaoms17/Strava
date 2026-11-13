@@ -41,14 +41,18 @@ import {
 } from '../../lib/when'
 import { favoritesGrid } from '../../../api/_lib/rules/favoritos'
 import { photoInstant } from '../../../api/_lib/rules/captura'
-import { SLOT_LABEL, lisbonClock } from '../../../api/_lib/rules/momentos'
+import { lisbonClock } from '../../../api/_lib/rules/momentos'
 import type { Diet, Favorite, Slot } from '../../lib/types'
 
-// Registar: tudo numa folha. Em cima o «Quando» (dia e refeição, com «Agora»
-// por defeito), logo a seguir o campo para escrever o que comeste, depois as
-// fotos, repetir uma refeição de qualquer dia e os favoritos. O que se
-// escolhe no «Quando» vale para tudo o que se regista daqui.
-export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
+// Registar: tudo numa folha, em duas camadas guiadas pelo uso real (H10). Em
+// cima o «Quando» (dia e refeição, com «Agora» por defeito), o campo para
+// escrever, Fotografar e Galeria; por baixo um «Repetir» só (favoritas e
+// histórico, com pesquisa) e uma linha de ícones para o código de barras e o
+// menu. O que se escolhe no «Quando» vale para tudo o que se regista daqui.
+// As favoritas à vista no ＋; as outras estão em «Procurar».
+const QUICK_FAVORITES = 4
+
+export default function CaptureSheet() {
   const profile = useReadyProfile()
   const sheet = useSheet()
   const toast = useToast()
@@ -98,10 +102,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
   const hasContent = text.trim().length > 0 || photos.length > 0
   const reviewing = photos.length > 0
 
-  useEffect(() => {
-    if (focus) textBox.current?.focus()
-  }, [focus])
-
   useEffect(() => clearPendingCamera(), [])
 
   useEffect(() => {
@@ -119,7 +119,6 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     return () => {
       alive = false
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // O rascunho acompanha o que se escreve e as fotos (e grava-se ao fechar).
@@ -191,12 +190,14 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     const byId = new Map((favorites ?? []).map((f) => [f.id, f]))
     return (diet?.meals[refSlot] ?? []).map((id) => byId.get(id)).filter((f): f is Favorite => !!f)
   }, [diet, favorites, refSlot])
-  // As da dieta já estão em cima: a grelha mostra as seguintes.
-  const ranked = useMemo(
-    () => favoritesGrid(favorites ?? [], refSlot, dietOptions.map((f) => f.id)),
-    [favorites, refSlot, dietOptions],
-  )
-  const favUrls = useSignedUrls([...ranked, ...dietOptions].map((f) => f.photo_path))
+  // H10: a dieta sai do destaque (nunca foi usada), mas quem a segue vê as
+  // dela primeiro na grelha do «Repetir»; continua em Favoritas › Dieta.
+  const quick = useMemo(() => {
+    const fromDiet = dietOptions.slice(0, QUICK_FAVORITES).map((favorite) => ({ favorite, dietSlot: refSlot as Slot | null }))
+    const rest = favoritesGrid(favorites ?? [], refSlot, dietOptions.map((f) => f.id), QUICK_FAVORITES - fromDiet.length)
+    return [...fromDiet, ...rest.map((favorite) => ({ favorite, dietSlot: null as Slot | null }))]
+  }, [favorites, refSlot, dietOptions])
+  const favUrls = useSignedUrls(quick.map((q) => q.favorite.photo_path))
   const weighDot = !weighedToday && lisbonClock(now).hour < 11
   const label = whenLabel(when, today)
 
@@ -286,7 +287,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
     )
   }
 
-  function open(name: 'barras' | 'repetir') {
+  function open(name: 'barras' | 'repetir' | 'menu') {
     sheet.open(name, whenParams(when, today))
   }
 
@@ -494,88 +495,20 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             Galeria
           </PhotoButton>
         </div>
-        {/* As outras formas de registar ficam logo aqui, sem deslizar. */}
-        <button
-          onClick={() => open('barras')}
-          className="-mt-1 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
-        >
-          <Icon name="barcode" size={18} /> Código de barras
-        </button>
-
-        {dietOptions.length > 0 && (
-          <div className="space-y-2" aria-label="Da tua dieta">
-            <div className="flex items-baseline justify-between">
-              <h3 className="label">Da tua dieta · {SLOT_LABEL[refSlot].toLowerCase()}</h3>
-              <button onClick={() => navigate('/favoritos?separador=dieta', { replace: true })} className="text-[13px] text-eat">
-                Dieta ›
-              </button>
-            </div>
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
-              {dietOptions.map((fav, i) => (
-                <button
-                  key={fav.id}
-                  onClick={() => pickFavorite(fav, refSlot)}
-                  className={`w-36 shrink-0 overflow-hidden rounded-2xl text-left ${i === 0 ? 'border-2 border-eat' : 'border border-line'}`}
-                >
-                  <Thumb url={fav.photo_path ? favUrls[fav.photo_path] : null} fill size={64} className="h-24 w-full rounded-none" />
-                  <span className="block px-2 pt-1.5 text-[14px] leading-tight">
-                    <span className="line-clamp-2">{fav.name}</span>
-                    <span className="block pb-2 text-[12px] text-dim tabular-nums">{fmtKcal(fav.kcal)} kcal</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <button
-            onClick={() => open('repetir')}
-            className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line bg-surface2 px-4 text-left"
-          >
-            <Icon name="repeat" size={22} className="shrink-0 text-eat" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[16px] font-semibold">Repetir uma refeição</span>
-              <span className="block text-[13px] text-dim">De qualquer dia, com pesquisa</span>
-            </span>
-            <Icon name="chevron" size={18} className="shrink-0 text-dim" />
-          </button>
-          <button
-            onClick={() => sheet.open('menu')}
-            className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-line bg-surface2 px-4 text-left"
-          >
-            <Icon name="menu" size={22} className="shrink-0 text-eat" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-[16px] font-semibold">Escolher pelo menu</span>
-              <span className="block text-[13px] text-dim">Os 3 melhores em calorias e proteína</span>
-            </span>
-            <Icon name="chevron" size={18} className="shrink-0 text-dim" />
-          </button>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-baseline justify-between gap-3">
-            <h3 className="label">Favoritas</h3>
-            <span className="flex gap-4">
-              <button onClick={() => sheet.open('nova-favorita')} className="text-[13px] text-eat">
-                ＋ Nova
-              </button>
-              <button onClick={() => navigate('/favoritos', { replace: true })} className="text-[13px] text-eat">
-                Todas ›
-              </button>
-            </span>
-          </div>
+        {/* H10: por baixo, um «Repetir» só (as favoritas desta hora e, em
+            «Procurar», todas as favoritas e o histórico com pesquisa). */}
+        <section className="space-y-2" aria-label="Repetir">
+          <h3 className="label">Repetir</h3>
           {favorites != null && favorites.length === 0 ? (
             <p className="rounded-xl bg-surface2 px-3 py-3 text-[13px] text-dim">
-              Guarda as refeições que repetes em «＋ Nova» (com foto) ou na ☆ de uma refeição. Depois registas com 1
-              toque.
+              Guarda as refeições que repetes na ☆ de uma refeição ou em «Nova favorita». Depois registas com 1 toque.
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              {ranked.map((favorite) => (
+              {quick.map(({ favorite, dietSlot }) => (
                 <button
                   key={favorite.id}
-                  onClick={() => pickFavorite(favorite)}
+                  onClick={() => pickFavorite(favorite, dietSlot)}
                   className="flex min-h-14 items-center gap-2 rounded-xl bg-surface2 p-1.5 pr-3 text-left"
                 >
                   <Thumb url={favorite.photo_path ? favUrls[favorite.photo_path] : null} size={42} />
@@ -587,6 +520,34 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
               ))}
             </div>
           )}
+          <button
+            onClick={() => open('repetir')}
+            className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"
+          >
+            <Icon name="repeat" size={20} className="shrink-0 text-eat" />
+            <span className="min-w-0 flex-1 text-[15px]">Procurar nas favoritas e no histórico</span>
+            <Icon name="chevron" size={18} className="shrink-0 text-dim" />
+          </button>
+        </section>
+
+        {/* As formas pouco usadas numa linha de ícones (código de barras e menu). */}
+        <div className="grid grid-cols-3 gap-2">
+          {(
+            [
+              ['barcode', 'Código de barras', () => open('barras')],
+              ['menu', 'Menu', () => open('menu')],
+              ['star', 'Nova favorita', () => sheet.open('nova-favorita')],
+            ] as const
+          ).map(([icon, text, run]) => (
+            <button
+              key={icon}
+              onClick={run}
+              className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl border border-line px-1 text-[13px] text-dim"
+            >
+              <Icon name={icon} size={20} className="text-ink" />
+              {text}
+            </button>
+          ))}
         </div>
 
         <div className="grid grid-cols-3 gap-2">

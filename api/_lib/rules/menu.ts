@@ -3,6 +3,7 @@
 // hoje (calorias e proteína). Sem supabase nem node.
 import { kcalTarget } from './targets.js'
 import { maintenanceTarget } from './manutencao.js'
+import { stripAccents } from './comum.js'
 
 export const MENU_TYPES = ['prato', 'entrada', 'sopa', 'sobremesa', 'bebida', 'acompanhamento', 'outro'] as const
 export type MenuType = (typeof MENU_TYPES)[number]
@@ -36,11 +37,7 @@ function num(v: unknown, min: number, max: number, digits = 0): number | null {
   const f = 10 ** digits
   return Math.round(n * f) / f
 }
-const fold = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
+const fold = (s: string) => stripAccents(s).toLowerCase()
 
 // O que a IA devolveu, com nomes e números plausíveis: sem nome ou sem
 // calorias o prato sai; a proteína nunca dá mais calorias do que o prato

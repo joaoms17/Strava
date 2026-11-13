@@ -9,8 +9,3 @@ export function mealIsEstimate(
   if (inputType === 'photo') return true
   return jantarFora || items.some((i) => i.estimated)
 }
-
-export function estimatePct(meals: { is_estimate: boolean }[]): number | null {
-  if (meals.length === 0) return null
-  return Math.round((meals.filter((m) => m.is_estimate).length / meals.length) * 100)
-}

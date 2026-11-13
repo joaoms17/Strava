@@ -35,10 +35,6 @@ export function parseDecimal(value: string): number {
 const WEEKDAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const WEEKDAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
 const MONTH_SHORT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-const MONTH_LONG = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-]
 
 function parts(date: string) {
   const d = new Date(`${date}T12:00:00Z`)
@@ -63,10 +59,6 @@ export function weekdayShort(date: string): string {
 
 export function weekdayLetter(date: string): string {
   return WEEKDAY_LETTER[parts(date).dow]!
-}
-
-export function monthLong(month: number): string {
-  return MONTH_LONG[month]!
 }
 
 // «22–28 set» ou «29 set – 5 out»

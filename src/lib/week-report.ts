@@ -21,7 +21,7 @@ export const INK = '#141414'
 export const DIM = '#6b6660'
 export const BG = '#f1eee8'
 export const CARD = '#ffffff'
-export const ACCENT = '#d9480f'
+export const ACCENT = '#b93a0a' // o laranja do tema claro (--color-eat, H15)
 export const FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
 export const fmt = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')

@@ -75,7 +75,6 @@ export function useAutoSync(): void {
         void reload()
       })
       .catch(() => void reload())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status?.connected, status?.last_sync_at])
 }
 
