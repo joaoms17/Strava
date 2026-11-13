@@ -181,7 +181,7 @@ export default function GallerySheet() {
             <section key={key} className="space-y-3 rounded-2xl bg-surface2 p-3">
               <div className="flex gap-2 overflow-x-auto">
                 {group.map((photo) => (
-                  <img key={photo.id} src={photo.url} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
+                  <img key={photo.id} loading="lazy" decoding="async" src={photo.url} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover" />
                 ))}
               </div>
               {at ? (

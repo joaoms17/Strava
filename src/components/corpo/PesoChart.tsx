@@ -82,7 +82,10 @@ export default function PesoChart({
     const trend = trendAll.filter((p) => p.date >= from)
     const waterDay = data.projection.input.waterDay
     const firstEver = data.firstWeighings[0]?.date ?? null
-    const ever = period === 'Tudo' ? startWeight(data.firstWeighings, waterDay) : null
+    // B1: o começo de sempre (a média da 1.ª semana, o do resumo) sempre que
+    // o período começa na primeira pesagem — em 1M e 3M numa conta nova, não
+    // só no «Tudo»: um só «início» no ecrã.
+    const ever = !week && firstEver != null && from <= firstEver ? startWeight(data.firstWeighings, waterDay) : null
     const start = ever && ever.start.date >= from ? ever.start : null
     const change = weightChange(trendAll, from, waterDay, start)
     const marks: Mark[] = week ? [] : weightMarks(trend, { firstEver: firstEver != null && firstEver >= from, lowestEver: period === 'Tudo', start })
@@ -94,7 +97,9 @@ export default function PesoChart({
     const horizon = projectionHorizon(from, today)
     const path =
       !week && p.status === 'ok' && targetKg != null && lastTrend && lastTrend.date >= shiftBack(today, 7)
-        ? projectionPath(projectionStart(data.projection.input.asOf, p.basis.currentKg), p.weight, targetKg, horizon)
+        ? // B11/ideia 16: a tracejada parte do último peso médio (7 dias), sem
+          // degrau: um só «peso médio» no gráfico; chega ao alvo na mesma data.
+          projectionPath(projectionStart(lastTrend.date, lastTrend.value), p.weight, targetKg, horizon)
         : null
     if (path && p.status === 'ok' && p.weight.kind === 'date') {
       marks.push({
@@ -127,8 +132,13 @@ export default function PesoChart({
     const points = [...byX.values()].sort((a, b) => a.x - b.x)
 
     const values = [...(calm ? [] : daily.map((w) => w.value)), ...trend.map((t) => t.value), ...(path?.points.map((q) => q.mid) ?? [])]
-    let showTarget = targetKg != null && values.length > 0 && (path != null || Math.min(...values) - targetKg < 4)
-    let scale = padBelowTarget(niceScale(Math.min(...values, showTarget ? targetKg! : Infinity), Math.max(...values), 5, 3), showTarget ? targetKg : null)
+    // B5: a meta só estica o eixo quando fica perto dos dados (até uma marca
+    // do eixo abaixo); longe, fica um «meta 78 ↓» no fundo, como na cintura.
+    // A tracejada da projeção conta como dados (chega à meta quando a
+    // alcança à vista).
+    const dataScale = niceScale(Math.min(...values), Math.max(...values), 5, 3)
+    let showTarget = targetKg != null && values.length > 0 && dataScale.domain[0] - targetKg <= dataScale.step
+    let scale = showTarget ? padBelowTarget(niceScale(Math.min(...values, targetKg!), Math.max(...values), 5, 3), targetKg) : dataScale
     if (week) {
       // Justo à volta da semana (±1 kg): 0,3 kg vê-se. A meta só se cair aí dentro.
       scale = niceScale(Math.min(...values) - 1, Math.max(...values) + 1, 5)
@@ -167,7 +177,14 @@ export default function PesoChart({
   const previousWeek = week ? prevWeekText(model.weekChange) : null
   const dotR = week ? 5 : 2.5
   // Os rótulos das linhas de referência (contam como obstáculos dos marcos).
-  const refs = model.showTarget ? [{ y: targetKg!, text: `meta ${kg(targetKg!)}`, side: 'left' as const }] : []
+  const refs =
+    targetKg == null
+      ? []
+      : model.showTarget
+        ? [{ y: targetKg, text: `meta ${kg(targetKg)}`, side: 'left' as const }]
+        : week
+          ? []
+          : [{ y: targetKg, text: `meta ${kg(targetKg)} ↓`, bottom: true }]
   return (
     <ChartCard
       kicker="Peso médio"

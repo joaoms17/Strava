@@ -209,7 +209,7 @@ export default function EvolucaoIA({ today }: { today: string }) {
           )}
           {open &&
             (review!.week_start === today ? (
-              <button disabled={busy} onClick={() => void analyse()} className="min-h-10 text-[14px] text-eat">
+              <button disabled={busy} onClick={() => void analyse()} className="min-h-11 text-[14px] text-eat">
                 {busy ? 'A analisar…' : 'Analisar outra vez'}
               </button>
             ) : (
@@ -219,12 +219,26 @@ export default function EvolucaoIA({ today }: { today: string }) {
               </button>
             ))}
           {open && (
-            <button onClick={() => setOpen(false)} aria-expanded className="block min-h-10 text-[14px] text-dim">
+            <button onClick={() => setOpen(false)} aria-expanded className="block min-h-11 text-[14px] text-dim">
               Mostrar menos
             </button>
           )}
         </>
       )}
+      {/* B18: a análise pode demorar mais de um minuto; o botão não chegava como sinal. */}
+      <div aria-live="polite">
+        {busy && (
+          <div className="space-y-1.5 rounded-xl bg-surface2 px-3 py-2.5">
+            <div className="h-1.5 overflow-hidden rounded-full bg-line" aria-hidden>
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-burn" />
+            </div>
+            <p className="text-[14px] text-dim">
+              A IA está a ver o peso, as medidas, a comida e o treino. Pode demorar até um minuto; podes sair daqui, a
+              análise fica guardada.
+            </p>
+          </div>
+        )}
+      </div>
       {error && <p className="text-[14px] text-pain">{error}</p>}
     </div>
   )

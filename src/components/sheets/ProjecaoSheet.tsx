@@ -1,12 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import { chip } from '../ui/Chips'
 import { useSheet } from '../../lib/sheet'
-import { localCalendarDate } from '../../lib/day'
+import { nutritionalDay } from '../../lib/day'
 import { fmt1, fmtInt } from '../../lib/format'
 import { TargetInput, useProjectionData } from '../Projecao'
 import { weekNote } from '../../lib/projecao'
-import { measuredNoteFromDays } from '../../../api/_lib/rules/gasto'
+import { useReadyProfile } from '../../lib/profile'
+import { loadExpenditure, type ExpenditureContext } from '../../lib/expenditure'
+import { capLabel } from '../../lib/balanco-semana'
+import { measuredNoteFromDays, measuredStateLabel } from '../../../api/_lib/rules/gasto'
+import { mondayOf } from '../../../api/_lib/rules/manutencao'
 import {
   SCENARIO_LABEL,
   fmtDayMon,
@@ -30,8 +34,21 @@ const perWeek = (kgDay: number) => {
 // que refaz a data no telemóvel a cada toque.
 export default function ProjecaoSheet() {
   const sheet = useSheet()
-  const today = localCalendarDate()
+  const profile = useReadyProfile()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour) // K10: o dia do Balanço
   const data = useProjectionData(today)
+  // Ideia 1 / K1: o estado do gasto, o mesmo do Balanço («medido», «a
+  // aprender (faltam N pesagens)», «fórmula»), e o limite de ±400 (K4).
+  const [exp, setExp] = useState<ExpenditureContext | null>(null)
+  useEffect(() => {
+    let alive = true
+    loadExpenditure(profile, mondayOf(today))
+      .then((e) => alive && setExp(e))
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [profile, today])
   const [chosen, setChosen] = useState<Scenario[]>([])
   const [editTarget, setEditTarget] = useState(false)
 
@@ -90,12 +107,13 @@ export default function ProjecaoSheet() {
             )}
             {changed && gain != null && gain !== 0 && (
               <p className="text-[15px] font-semibold text-eat">
-                {gain > 0 ? `${gain} dias mais cedo` : `${-gain} dias mais tarde`} ({fmtInt(Math.abs(sim!.delta))} kcal/dia)
+                {/* B10: «1 dia mais cedo», não «1 dias». */}
+                {Math.abs(gain)} {Math.abs(gain) === 1 ? 'dia' : 'dias'} {gain > 0 ? 'mais cedo' : 'mais tarde'} ({fmtInt(Math.abs(sim!.delta))} kcal/dia)
               </p>
             )}
             {changed && before == null && after && <p className="text-[15px] font-semibold text-eat">Assim já chegas lá.</p>}
             {!changed && note && <p className="text-[13px] text-dim">Desde a semana passada: {note.text}.</p>}
-            <button onClick={() => setEditTarget(true)} className="min-h-10 text-[13px] text-dim underline">
+            <button onClick={() => setEditTarget(true)} className="min-h-11 text-[14px] text-dim underline">
               Mudar o peso alvo
             </button>
           </div>
@@ -130,12 +148,17 @@ export default function ProjecaoSheet() {
               durante a semana {fmtInt(b.weekday)} · ao fim de semana {fmtInt(b.weekend)}
             </p>
           )}
-          <p>Gasto medido {fmtInt(b.tdee)} kcal/dia</p>
+          <p>
+            Gasto {exp && exp.state.kind !== 'medido' ? `(${measuredStateLabel(exp.state)}) ` : 'medido '}
+            {fmtInt(b.tdee)} kcal/dia
+            {exp && !exp.learning && capLabel(exp.flags) ? ` · ${capLabel(exp.flags)}` : ''}
+          </p>
           {gastoNote && <p className="text-[13px] text-dim">{gastoNote}</p>}
           <p className="text-dim">
             pelas contas {perWeek(b.energyKgDay)} · pelo peso médio {perWeek(b.observedKgDay)}
           </p>
-          <p>Peso médio hoje {fmt1(b.currentKg)} kg</p>
+          {/* B11: é o fim da reta das 4 semanas, não o peso médio de 7 dias do Corpo. */}
+          <p>Peso hoje pela reta das 4 semanas {fmt1(b.currentKg)} kg</p>
           {b.waistCm != null && b.waistDate && (
             <p>
               Cintura {fmt1(b.waistCm)} cm a {fmtDayMon(b.waistDate, today)}

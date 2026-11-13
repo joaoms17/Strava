@@ -106,8 +106,16 @@ export default function Ciclo({ today }: { today: string }) {
         </div>
       )}
 
-      <div className="space-y-2 border-t border-line/60 pt-3">
-        <label className="flex items-center justify-between gap-3 text-[15px]">
+      {/* B17: as opções (pílula) e os inícios marcados ficam recolhidos depois
+          de o ciclo estar a contar; o cartão deixa de ocupar ~330 px entre o
+          Peso e as Medidas. */}
+      <details open={starts.length === 0} className="group border-t border-line/60 pt-1">
+        <summary className="flex min-h-11 cursor-pointer items-center text-[15px] text-dim">
+          Opções{starts.length > 0 ? ' e inícios marcados' : ''} <span className="ml-1 group-open:hidden">›</span>
+          <span className="ml-1 hidden group-open:inline">▾</span>
+        </summary>
+      <div className="space-y-2 pt-2">
+        <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
           Tomo a pílula
           <input
             type="checkbox"
@@ -127,7 +135,7 @@ export default function Ciclo({ today }: { today: string }) {
               <button
                 key={days}
                 onClick={() => void runBusy('A guardar…', () => setOptions(true, days))}
-                className={`min-h-10 rounded-xl ${options.defaultLength === days ? 'bg-cta text-on-cta' : 'bg-surface2'}`}
+                className={`min-h-11 rounded-xl ${options.defaultLength === days ? 'bg-cta text-on-cta' : 'bg-surface2'}`}
               >
                 {text}
               </button>
@@ -140,7 +148,7 @@ export default function Ciclo({ today }: { today: string }) {
       </div>
 
       {starts.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-[13px] text-dim">
+        <div className="flex flex-wrap items-center gap-2 pt-2 text-[13px] text-dim">
           <span>Inícios marcados (toca para tirar):</span>
           {starts.slice(-4).reverse().map((d) => (
             <button
@@ -154,6 +162,7 @@ export default function Ciclo({ today }: { today: string }) {
           ))}
         </div>
       )}
+      </details>
     </section>
   )
 }

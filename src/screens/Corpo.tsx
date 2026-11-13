@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useReadyProfile } from '../lib/profile'
 import { useDataVersion } from '../lib/events'
-import { localCalendarDate } from '../lib/day'
+import { nutritionalDay } from '../lib/day'
 import { savePeriod, savedPeriod, useCorpoData } from '../lib/corpo'
 import { periodFrom, type Period } from '../../api/_lib/rules/graficos'
 import Ciclo from '../components/Ciclo'
@@ -34,7 +34,9 @@ function Block({ id, title, children }: { id: string; title: string; children: R
 export default function Corpo() {
   const profile = useReadyProfile()
   const version = useDataVersion()
-  const today = localCalendarDate()
+  // K10: o dia nutricional (corte às 4h), como o Balanço: entre as 00:00 e
+  // as 04:00 as janelas das duas páginas são as mesmas.
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
   const [period, setPeriod] = useState<Period>(savedPeriod)
   const { data, loading, error } = useCorpoData(profile, today, period, version)
 
@@ -68,6 +70,8 @@ export default function Corpo() {
   const sections: Section[] = [
     { id: 'peso', label: 'Peso' },
     { id: 'medidas', label: 'Medidas' },
+    // B17: a Evolução também tem botão na barra.
+    { id: 'evolucao', label: 'Evolução' },
     ...(hasTraining ? [{ id: 'treino', label: 'Treino' }] : []),
     ...(hasWatch ? [{ id: 'recuperacao', label: 'Recuperação' }] : []),
   ]
@@ -81,7 +85,6 @@ export default function Corpo() {
       <Ancoras
         sections={sections}
         track={['peso', 'medidas', 'evolucao', ...(hasTraining ? ['treino'] : []), ...(hasWatch ? ['recuperacao'] : [])]}
-        alias={{ evolucao: 'medidas' }}
         period={hasCharts ? period : null}
         onPeriod={(p) => {
           setPeriod(p)

@@ -37,28 +37,61 @@ export interface CaptureDraft {
 
 export const DRAFT_MAX_AGE_MS = 24 * 3_600_000
 
+// As fotos (até 4 originais de 3–8 MB) vão num registo à parte e só se
+// regravam quando mudam (P6): antes iam todas outra vez a cada pausa de
+// 400 ms a escrever a nota.
+const PHOTOS_SUFFIX = ':fotos'
+let savedPhotos: { key: string; files: File[] } | null = null
+
+function sameFiles(a: File[], b: File[]): boolean {
+  return a.length === b.length && a.every((f, i) => f === b[i])
+}
+
 export async function saveCaptureDraft(draft: CaptureDraft | null): Promise<void> {
   const key = scopedKey('registar')
   try {
     if (!draft || (draft.photos.length === 0 && !draft.text.trim())) {
+      savedPhotos = null
+      await inStore(STORES.drafts, 'readwrite', (s) => s.delete(key + PHOTOS_SUFFIX))
       await inStore(STORES.drafts, 'readwrite', (s) => s.delete(key))
-    } else {
-      await inStore(STORES.drafts, 'readwrite', (s) => s.put({ ...draft, key, saved_at: Date.now() }))
+      return
     }
+    if (!savedPhotos || savedPhotos.key !== key || !sameFiles(savedPhotos.files, draft.photos)) {
+      const files = [...draft.photos]
+      await inStore(STORES.drafts, 'readwrite', (s) => s.put({ key: key + PHOTOS_SUFFIX, photos: files }))
+      savedPhotos = { key, files }
+    }
+    await inStore(STORES.drafts, 'readwrite', (s) =>
+      s.put({ key, text: draft.text, tags: draft.tags, saved_at: Date.now() }),
+    )
   } catch {
     // sem base local: o rascunho fica só na folha aberta
+    savedPhotos = null
   }
 }
 
 export async function loadCaptureDraft(): Promise<CaptureDraft | null> {
+  const key = scopedKey('registar')
   try {
     const row = await inStore(
       STORES.drafts,
       'readonly',
-      (s) => s.get(scopedKey('registar')) as IDBRequest<(CaptureDraft & { saved_at: number }) | undefined>,
+      (s) => s.get(key) as IDBRequest<(Partial<CaptureDraft> & { saved_at: number }) | undefined>,
     )
     if (!row || Date.now() - row.saved_at > DRAFT_MAX_AGE_MS) return null
-    return { photos: row.photos ?? [], text: row.text ?? '', tags: row.tags ?? [] }
+    // Um rascunho de antes desta versão tem as fotos no mesmo registo.
+    const photos =
+      row.photos ??
+      (
+        await inStore(
+          STORES.drafts,
+          'readonly',
+          (s) => s.get(key + PHOTOS_SUFFIX) as IDBRequest<{ photos?: File[] } | undefined>,
+        )
+      )?.photos ??
+      []
+    savedPhotos = row.photos ? null : { key, files: photos }
+    return { photos, text: row.text ?? '', tags: row.tags ?? [] }
   } catch {
     return null
   }

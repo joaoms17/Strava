@@ -325,7 +325,7 @@ export default function CaptureSheet({ focus = false }: { focus?: boolean }) {
             <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none]">
               {photos.map((p, i) => (
                 <div key={p.url} className="relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl">
-                  <img src={p.url} alt="" className="h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={p.url} alt="" className="h-full w-full object-cover" />
                   <button
                     onClick={() => removePhoto(i)}
                     aria-label={`Tirar a foto ${i + 1}`}

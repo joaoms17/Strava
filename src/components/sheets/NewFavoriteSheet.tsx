@@ -154,7 +154,10 @@ export default function NewFavoriteSheet() {
         '/api/meal/recipe',
         link ? { url: link } : { text: input },
       )
-      setRecipe({ items: result.items, doses: result.doses ?? 4, dosesKnown: result.doses != null })
+      // Sem doses (vazio, ou «1 bolo»: a receita inteira), pergunta-se antes de
+      // guardar (M17): antes ficava 4 calado, ou o bolo inteiro numa dose.
+      const known = typeof result.doses === 'number' && result.doses >= 1
+      setRecipe({ items: result.items, doses: known ? result.doses! : 4, dosesKnown: known })
       if (!name.trim() && result.title) setName(result.title.slice(0, 60))
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui ler a receita. Tenta outra vez.')
@@ -257,8 +260,8 @@ export default function NewFavoriteSheet() {
     )
   } else if (mode === 'receita') {
     footer = recipe ? (
-      <BusyButton busy="A guardar…" onClick={saveRecipe} className={big}>
-        Guardar · 1 dose
+      <BusyButton busy="A guardar…" disabled={!recipe.dosesKnown} onClick={saveRecipe} className={big}>
+        {recipe.dosesKnown ? 'Guardar · 1 dose' : 'Escolhe as doses'}
       </BusyButton>
     ) : (
       <BusyButton busy="A ler a receita…" disabled={!source.trim()} onClick={readRecipe} className={big}>
@@ -291,7 +294,7 @@ export default function NewFavoriteSheet() {
             <div className="flex gap-3">
               <label className="relative flex h-24 w-24 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl border border-dashed border-line text-[13px] text-dim">
                 {photo ? (
-                  <img src={photo.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  <img loading="lazy" decoding="async" src={photo.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
                   <>
                     <Icon name="camera" size={26} />
@@ -391,7 +394,7 @@ export default function NewFavoriteSheet() {
                       <span className="min-w-0 flex-1">
                         <span className="block text-[16px] font-semibold">Doses</span>
                         {!recipe.dosesKnown && (
-                          <span className="block text-[13px] text-attn">A receita não diz para quantos. Confirma.</span>
+                          <span className="block text-[14px] text-attn">A receita não diz para quantos. Em quantas doses se divide?</span>
                         )}
                       </span>
                       <button
@@ -412,6 +415,19 @@ export default function NewFavoriteSheet() {
                         +
                       </button>
                     </div>
+                    {!recipe.dosesKnown && (
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Em quantas doses se divide">
+                        {[1, 2, 4, 6, 8].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setRecipe({ ...recipe, doses: n, dosesKnown: true })}
+                            className="min-h-11 min-w-11 rounded-xl border border-line px-3 text-[15px]"
+                          >
+                            {n === 1 ? '1 (tudo)' : n}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[14px] tabular-nums">
                       <span className="text-dim">Por dose: </span>
                       <span className="font-semibold">{fmtKcal(perDose.kcal)} kcal</span>

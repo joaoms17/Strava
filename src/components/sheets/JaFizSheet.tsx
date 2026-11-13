@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLocation } from 'wouter'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
@@ -15,6 +16,7 @@ import type { Favorite, Workout } from '../../lib/types'
 import BottomSheet from '../ui/BottomSheet'
 import { DayChips, chip } from '../ui/Chips'
 import SameSession from '../SameSession'
+import { useWattsChoices } from '../../lib/use-watts'
 
 type Kind = 'bike' | 'strength' | OtherSport
 
@@ -37,10 +39,12 @@ const toInt = (text: string): number | null => {
   return Number.isFinite(n) ? n : null
 }
 
-// «Já fiz»: um treino à mão em poucos toques, em qualquer dia, com o tipo,
-// a duração e os watts da última vez já escolhidos.
+// «À mão» (antes «Já fiz»): um treino sem IA em poucos toques, em qualquer
+// dia, com o tipo, a duração e os watts da última vez já escolhidos. No
+// ginásio, as séries registam-se no Ginásio (T12).
 export default function JaFizSheet() {
   const sheet = useSheet()
+  const [, navigate] = useLocation()
   const toast = useToast()
   const profile = useReadyProfile()
   const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour)
@@ -58,7 +62,8 @@ export default function JaFizSheet() {
   const [deviceKcal, setDeviceKcal] = useState('')
   // Um treino parecido já registado nesse dia (o do relógio): é o mesmo?
   const [match, setMatch] = useState<Workout | null>(null)
-  const wattsOptions = profile.bike_watts_options?.length ? profile.bike_watts_options : [130, 140, 150]
+  // As tuas potências (Definições) ou as das últimas sessões; nunca fixas (T15).
+  const wattsOptions = useWattsChoices()
 
   // Uma duração fora dos botões (ex.: 52 min do relógio) vai para «outro»,
   // para se ver qual fica escolhida.
@@ -164,7 +169,7 @@ export default function JaFizSheet() {
 
   return (
     <BottomSheet
-      title="Já fiz"
+      title="Registar à mão"
       onClose={sheet.close}
       footer={
         match ? (
@@ -189,6 +194,17 @@ export default function JaFizSheet() {
             </button>
           ))}
         </div>
+        {type === 'strength' && (
+          <button
+            onClick={() =>
+              // Substitui a entrada da folha (fechar e navegar desfazia a navegação, T5).
+              navigate(`/treino/ginasio${day !== today ? `?data=${day}` : ''}`, { replace: true })
+            }
+            className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-line text-[15px]"
+          >
+            Registar as séries no Ginásio
+          </button>
+        )}
 
         <div className="space-y-2">
           <p className="label">Quando</p>
@@ -231,7 +247,7 @@ export default function JaFizSheet() {
                   setOtherMinutes(e.target.value.replace(/\D/g, ''))
                   setMinutes(null)
                 }}
-                className={`h-9 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
                   otherMinutes ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
                 }`}
                 aria-label="Outra duração em minutos"
@@ -246,13 +262,27 @@ export default function JaFizSheet() {
             <div className="space-y-2">
               <p className="label">Potência</p>
               <div className="flex flex-wrap gap-2">
-                {[...new Set([...wattsOptions, ...(watts ? [watts] : [])])]
-                  .sort((a, b) => a - b)
-                  .map((w) => (
-                    <button key={w} onClick={() => setWatts(w)} className={chip(watts === w, 'cta')}>
-                      {w} W
-                    </button>
-                  ))}
+                {wattsOptions.map((w) => (
+                  <button key={w} onClick={() => setWatts(watts === w ? null : w)} className={chip(watts === w, 'cta')}>
+                    {w} W
+                  </button>
+                ))}
+                <label className="flex items-center gap-1.5 text-[15px] text-dim">
+                  <input
+                    inputMode="numeric"
+                    aria-label="Outra potência em watts"
+                    value={watts != null && !wattsOptions.includes(watts) ? String(watts) : ''}
+                    placeholder="outra"
+                    onChange={(e) => {
+                      const n = Number.parseInt(e.target.value.replace(/\D/g, '').slice(0, 3), 10)
+                      setWatts(Number.isFinite(n) && n > 0 ? n : null)
+                    }}
+                    className={`h-11 w-20 rounded-full border px-3 text-[15px] tabular-nums placeholder:text-dim ${
+                      watts != null && !wattsOptions.includes(watts) ? 'border-cta bg-cta text-on-cta' : 'border-line bg-transparent text-ink'
+                    }`}
+                  />
+                  W
+                </label>
               </div>
             </div>
             <div className="space-y-1">

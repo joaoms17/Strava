@@ -1,9 +1,10 @@
+import { useMemo } from 'react'
 import { useSheet } from '../../lib/sheet'
 import { useReadyProfile } from '../../lib/profile'
 import { shiftDate } from '../../lib/day'
 import { fmt1, fmtDayMonth, fmtDayShort } from '../../lib/format'
 import type { CorpoData } from '../../lib/corpo'
-import { FAST_LOSS_KG_WEEK, MIN_WEIGHINGS_FOR_TREND, trend7, weeklyRate } from '../../../api/_lib/rules/weight'
+import { FAST_LOSS_KG_WEEK, MIN_WEIGHINGS_FOR_TREND, trend7, weeklyRateAsOf } from '../../../api/_lib/rules/weight'
 import { inWaterPhase } from '../../../api/_lib/rules/manutencao'
 import { composition, sameWaistSite, withReferenceNeck } from '../../../api/_lib/rules/composicao'
 import { signed1, sinceStart, weekShort, weekTrendChange } from '../../../api/_lib/rules/leituras'
@@ -22,9 +23,13 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
   const profile = useReadyProfile()
   const sheet = useSheet()
   const weights = data.weights
-  const series = weights.map((w) => ({ date: w.date, value: w.kg }))
-  const trend = trend7(series)
-  const rate = weeklyRate(series)
+  // P4: o peso médio uma vez por carregamento (não a cada render).
+  // B2: o ritmo só com uma pesagem recente (decisão 232, como o Balanço):
+  // três semanas sem pesagens não ficam a dizer «a descer 1,1 kg por semana».
+  const { trend, rate } = useMemo(() => {
+    const series = weights.map((w) => ({ date: w.date, value: w.kg }))
+    return { trend: trend7(series), rate: weeklyRateAsOf(series, today) }
+  }, [weights, today])
   const last = trend[trend.length - 1]
   const threeWeeksAgo = last ? trend.find((p) => p.date >= shiftDate(last.date, -21)) : undefined
   const stable =
@@ -135,7 +140,7 @@ export default function Resumo({ data, today }: { data: CorpoData; today: string
           <div className="grid grid-cols-3 gap-2">
             {tiles.map((t) => (
               <div key={t.label} className="rounded-xl bg-surface2 px-2.5 py-2">
-                <p className={`font-display text-[24px] leading-tight font-bold ${t.good ? 'text-ok' : 'text-ink'}`}>
+                <p className={`font-display text-[24px] leading-tight font-bold ${t.good ? 'text-ok-text' : 'text-ink'}`}>
                   {t.value}
                   {t.good && <span className="sr-only"> (a melhorar)</span>}
                 </p>

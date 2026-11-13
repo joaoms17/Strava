@@ -7,6 +7,8 @@ import { BusyButton } from '../../lib/busy'
 import { emitDataChanged } from '../../lib/events'
 import { useReadyProfile } from '../../lib/profile'
 import { localCalendarDate, shiftDate } from '../../lib/day'
+import { oddMeasurement } from '../../lib/medidas-check'
+import { checkWeighing } from '../../../api/_lib/rules/weight'
 import { fmt1, fmtDayMonth, parseDecimal } from '../../lib/format'
 import { isMaintenanceWeek } from '../../../api/_lib/rules/manutencao'
 import {
@@ -87,9 +89,14 @@ export default function MedidasSheet() {
   const [weightText, setWeightText] = useState('')
   const [confirmReplace, setConfirmReplace] = useState(false)
   const [saved, setSaved] = useState<BodyMeasurement | null>(null)
+  // B6: os avisos que pedem um toque antes de gravar.
+  const [odd, setOdd] = useState<string[] | null>(null)
+  // A última pesagem conhecida (para apanhar 824 em vez de 82,4 no «Peso de hoje»).
+  const [lastKg, setLastKg] = useState<number | null>(null)
 
   useEffect(() => {
     void (async () => {
+      setLoaded(false)
       let day = date
       let editing: BodyMeasurement | null = null
       if (editId) {
@@ -112,7 +119,7 @@ export default function MedidasSheet() {
           setReadings(r)
         }
       }
-      const [{ data: same }, { data: before }, { data: w }, { data: yMeals }] = await Promise.all([
+      const [{ data: same }, { data: before }, { data: w }, { data: yMeals }, { data: last }] = await Promise.all([
         supabase.from('body_measurements').select('*').eq('date', day).maybeSingle(),
         supabase
           .from('body_measurements')
@@ -122,15 +129,18 @@ export default function MedidasSheet() {
           .limit(6),
         supabase.from('weights').select('date,kg').gte('date', shiftDate(day, -6)).lte('date', day),
         supabase.from('meals').select('tags').eq('date', shiftDate(day, -1)).is('deleted_at', null),
+        supabase.from('weights').select('kg').lte('date', day).order('date', { ascending: false }).limit(1),
       ])
+      setLastKg(last?.[0]?.kg != null ? Number(last[0].kg) : null)
       setExisting(editing ?? ((same ?? null) as BodyMeasurement | null))
       setPreviousRows((before ?? []) as BodyMeasurement[])
       setWeights(((w ?? []) as { date: string; kg: number }[]).map((x) => ({ date: x.date, kg: Number(x.kg) })))
       setDinnerOut((yMeals ?? []).some((m) => ((m.tags as string[] | null) ?? []).includes('jantar_fora')))
       setLoaded(true)
     })()
+    // Ideia 15: numa medição nova, Hoje/Ontem relê o dia escolhido.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editId])
+  }, [editId, editId ? null : date])
 
   const height = Number(profile.height_cm ?? 183)
   const reference = existing && editId ? Number(existing.weight_used_kg) : referenceWeight(weights, date)
@@ -168,8 +178,26 @@ export default function MedidasSheet() {
     setReadings(next)
   }
 
-  async function save(replace = false, choice: NeckChoice | null = keptChoice) {
+  const typedKg = reference == null ? parse(weightText) : null
+  const typedCheck = typedKg != null ? checkWeighing(typedKg, lastKg) : null
+
+  async function save(replace = false, choice: NeckChoice | null = keptChoice, checked = false) {
     if (!canSave || neck == null || waist == null || weightUsed == null) return
+    // B6: fora dos limites, cintura ≤ pescoço, %G fora de 5–45 ou um peso
+    // muito longe da última pesagem: um toque de confirmação, como a pesagem.
+    if (!checked) {
+      const warnings = oddMeasurement({
+        zones: Object.fromEntries(ALL_ZONES.map((z) => [z, value(z)])),
+        pct: liveComposition?.pct ?? null,
+        typedKg,
+        lastKg,
+      })
+      if (warnings.length) {
+        setOdd(warnings)
+        return
+      }
+    }
+    setOdd(null)
     if (existing && !editId && !replace) {
       setConfirmReplace(true)
       return
@@ -228,6 +256,18 @@ export default function MedidasSheet() {
       },
     }
     for (const zone of ALL_ZONES) row[ZONE_COLUMN[zone]] = value(zone)
+    // B6: substituir a medição do dia não apaga as zonas opcionais que ficaram em branco.
+    if (existing && !editId) {
+      const kept = (existing.readings ?? {}) as Record<string, unknown>
+      const readingsRow = row.readings as Record<string, unknown>
+      for (const zone of OPTIONAL) {
+        if (value(zone) != null) continue
+        const old = existing[ZONE_COLUMN[zone]] as number | null
+        if (old == null) continue
+        row[ZONE_COLUMN[zone]] = old
+        if (kept[zone] != null) readingsRow[zone] = kept[zone]
+      }
+    }
     const { data, error } = await supabase
       .from('body_measurements')
       .upsert(row, { onConflict: 'user_id,date,method' })
@@ -326,10 +366,9 @@ export default function MedidasSheet() {
         onClose={sheet.close}
         footer={
           <button
-            onClick={() => {
-              sheet.close()
-              navigate('/corpo')
-            }}
+            // T5: navegar a substituir a entrada da folha; um sheet.close()
+            // (history.back() assíncrono) antes desfazia a navegação.
+            onClick={() => navigate('/corpo', { replace: true })}
             className="min-h-14 w-full rounded-2xl bg-cta font-display text-[19px] font-bold tracking-[0.06em] text-on-cta uppercase"
           >
             Ver no Corpo
@@ -457,11 +496,27 @@ export default function MedidasSheet() {
               Medir outra vez
             </button>
             <div className="grid grid-cols-2 gap-2">
-              <BusyButton busy="A guardar…" onClick={() => save(true, 'confirmado')} className="min-h-12 rounded-xl border border-line px-2 text-[15px]">
+              <BusyButton busy="A guardar…" onClick={() => save(true, 'confirmado', true)} className="min-h-12 rounded-xl border border-line px-2 text-[15px]">
                 Está certo
               </BusyButton>
-              <BusyButton busy="A guardar…" onClick={() => save(true, 'habitual')} className="min-h-12 rounded-xl border border-line px-2 text-[15px] leading-tight">
+              <BusyButton busy="A guardar…" onClick={() => save(true, 'habitual', true)} className="min-h-12 rounded-xl border border-line px-2 text-[15px] leading-tight">
                 Usar o pescoço habitual ({neckCheck.usual != null ? fmtCm(neckCheck.usual) : ''})
+              </BusyButton>
+            </div>
+          </div>
+        ) : odd ? (
+          <div className="space-y-2" role="group" aria-label="Confirmar a medição">
+            {odd.map((w) => (
+              <p key={w} className="text-[15px] text-attn">
+                {w}
+              </p>
+            ))}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setOdd(null)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
+                Corrigir
+              </button>
+              <BusyButton busy="A guardar…" onClick={() => save(false, keptChoice, true)} className="min-h-12 rounded-xl border border-line px-2 text-[15px]">
+                Está certo, guardar
               </BusyButton>
             </div>
           </div>
@@ -469,7 +524,7 @@ export default function MedidasSheet() {
           <div className="space-y-2">
             <p className="text-[15px]">Já mediste {date === today ? 'hoje' : 'nesse dia'}. Substituir a medição?</p>
             <div className="grid grid-cols-2 gap-2">
-              <BusyButton busy="A guardar…" onClick={() => save(true)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
+              <BusyButton busy="A guardar…" onClick={() => save(true, keptChoice, true)} className="min-h-12 rounded-xl bg-cta font-semibold text-on-cta">
                 Substituir
               </BusyButton>
               <button onClick={() => setConfirmReplace(false)} className="min-h-12 rounded-xl border border-line">
@@ -502,7 +557,25 @@ export default function MedidasSheet() {
             <Icon name="info" size={18} /> Como medir
           </button>
         </div>
-        <label className="flex items-center justify-between gap-3 text-[15px]">
+        {/* Ideia 15: o dia da medição, como na pesagem (Hoje/Ontem). */}
+        {!editId && (
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Dia da medição">
+            {[
+              [today, 'Hoje'],
+              [shiftDate(today, -1), 'Ontem'],
+            ].map(([d, label]) => (
+              <button
+                key={d}
+                aria-pressed={date === d}
+                onClick={() => setDate(d!)}
+                className={`min-h-11 rounded-xl border text-[15px] ${date === d ? 'border-ink font-semibold' : 'border-line text-dim'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="flex min-h-11 items-center justify-between gap-3 text-[15px]">
           Medir 2 vezes (mais rigor)
           <input type="checkbox" checked={twice} onChange={(e) => setTwice(e.target.checked)} className="h-5 w-5 accent-cta" />
         </label>
@@ -511,14 +584,25 @@ export default function MedidasSheet() {
 
         {reference == null && (
           <label className="block space-y-1">
-            <span className="label">Peso de hoje</span>
+            <span className="label">{date === today ? 'Peso de hoje' : `Peso de ${fmtDayMonth(date)}`}</span>
             <input
               inputMode="decimal"
               value={weightText}
               onChange={(e) => setWeightText(e.target.value.replace(/[^\d,.]/g, ''))}
               placeholder="kg"
-              className="h-12 w-full rounded-xl border border-line bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:border-eat focus:outline-none"
+              className={`h-12 w-full rounded-xl border bg-bg px-3 text-[17px] tabular-nums placeholder:text-dim focus:outline-none ${
+                typedCheck && typedCheck.kind !== 'ok' ? 'border-attn' : 'border-line focus:border-eat'
+              }`}
             />
+            {/* B6: o mesmo detetor de erro de dedo da pesagem (824 → 82,4). */}
+            {typedCheck?.kind === 'suggest' && (
+              <button
+                onClick={() => setWeightText(String(typedCheck.value).replace('.', ','))}
+                className="min-h-11 rounded-xl border border-attn px-3 text-[15px] text-attn"
+              >
+                Queres dizer {fmt1(typedCheck.value)} kg?
+              </button>
+            )}
             <span className="block text-[13px] text-dim">Não há pesagem nos últimos 7 dias; fica também como pesagem.</span>
           </label>
         )}
@@ -533,7 +617,7 @@ export default function MedidasSheet() {
           </p>
         )}
 
-        <button onClick={() => setShowOptional(!showOptional)} className="text-[15px] text-dim">
+        <button onClick={() => setShowOptional(!showOptional)} className="min-h-11 text-[15px] text-dim">
           Opcionais: {needsHips ? 'peito, braço, coxa, gémeo' : 'peito, anca, braço, coxa, gémeo'} {showOptional ? '▾' : '›'}
         </button>
         {showOptional && OPTIONAL.map((z) => zoneInput(z, false))}

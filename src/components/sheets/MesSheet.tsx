@@ -4,8 +4,9 @@ import { BusyButton } from '../../lib/busy'
 import { useSheet } from '../../lib/sheet'
 import { useToast } from '../../lib/toast'
 import { useReadyProfile } from '../../lib/profile'
-import { localCalendarDate, shiftDate } from '../../lib/day'
+import { nutritionalDay, shiftDate } from '../../lib/day'
 import { loadMonth } from '../../lib/projecao'
+import { supabase } from '../../lib/supabase'
 import { drawMonthReport, shareMonthReport } from '../../lib/month-report'
 import { monthLabel, monthBounds, previousMonth, type MonthSummary } from '../../../api/_lib/rules/mes'
 
@@ -17,11 +18,21 @@ export default function MesSheet() {
   const sheet = useSheet()
   const profile = useReadyProfile()
   const toast = useToast()
-  const today = localCalendarDate()
+  const today = nutritionalDay(new Date(), profile.nutrition_day_cutoff_hour) // K10: o dia do Balanço
   const thisMonth = today.slice(0, 7)
   const [month, setMonth] = useState(sheet.params.get('mes') ?? previousMonth(today))
   const [summary, setSummary] = useState<MonthSummary | null | 'erro'>(null)
   const [image, setImage] = useState<string | null>(null)
+  // B12: ‹ não recua para lá do mês da primeira refeição (meses vazios).
+  const [firstMonth, setFirstMonth] = useState<string | null>(null)
+  useEffect(() => {
+    void supabase
+      .from('meals_counted')
+      .select('date')
+      .order('date')
+      .limit(1)
+      .then(({ data }) => setFirstMonth(((data?.[0]?.date as string | undefined) ?? today).slice(0, 7)))
+  }, [today])
 
   useEffect(() => {
     let alive = true
@@ -64,7 +75,12 @@ export default function MesSheet() {
     >
       <div className="space-y-3 pb-2">
         <div className="flex items-center justify-between">
-          <button onClick={() => setMonth(previousMonth(`${month}-01`))} className="h-11 w-11 text-xl text-dim" aria-label="Mês anterior">
+          <button
+            disabled={firstMonth != null && month <= firstMonth}
+            onClick={() => setMonth(previousMonth(`${month}-01`))}
+            className="h-11 w-11 text-xl text-dim disabled:opacity-30"
+            aria-label="Mês anterior"
+          >
             ‹
           </button>
           <p className="text-[17px] font-semibold">{monthLabel(month)}</p>

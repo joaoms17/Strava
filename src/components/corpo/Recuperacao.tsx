@@ -28,6 +28,31 @@ import { ChartCard, EmptyChart, Key, Legend, Marks, TICK, TipBox, WEEK_AXIS_HEIG
 const DAILY_MAX = 120
 const DAILY_BARS_MAX = 92
 const HEIGHT = 150
+// B13: um buraco de até 2 dias (ou 1 semana, nas médias) liga-se; mais do que
+// isso a linha parte, para duas semanas sem relógio não parecerem uma descida.
+const BRIDGE_DAYS = 2
+const BRIDGE_WEEKS = 1
+
+// A linha desenhada: os valores, com os buracos curtos ligados e os longos
+// em branco. Um ponto sozinho entre dois buracos longos fica com um ponto.
+function withLine(points: { date: string; value: number | null }[], maxGap: number) {
+  const out = points.map((p) => ({ ...p, line: p.value, lone: false }))
+  let prev = -1
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]!.value == null) continue
+    if (prev >= 0 && i - prev - 1 > 0 && i - prev - 1 <= maxGap) {
+      const a = out[prev]!.value!
+      const b = out[i]!.value!
+      for (let j = prev + 1; j < i; j++) out[j]!.line = a + ((b - a) * (j - prev)) / (i - prev)
+    }
+    prev = i
+  }
+  for (let i = 0; i < out.length; i++) {
+    if (out[i]!.value == null) continue
+    out[i]!.lone = (i === 0 || out[i - 1]!.line == null) && (i === out.length - 1 || out[i + 1]!.line == null)
+  }
+  return out
+}
 
 interface Row {
   date: string
@@ -102,8 +127,8 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
     marks: Mark[]
     tip: (r: Row | { date: string; value: number | null }) => string[]
   }) => {
-    const points = model.shown(opts.key)
     const wk = opts.key === 'steps' ? model.weeklyBars : model.weekly
+    const points = withLine(model.shown(opts.key), wk ? BRIDGE_WEEKS : BRIDGE_DAYS)
     const known = points.filter((p) => p.value != null)
     if (model.series(opts.key).length === 0) return null
     const axis = categoryTicks(points.map((p) => p.date))
@@ -184,11 +209,20 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
           {tooltip}
           {ref}
           <Line
-            dataKey="value"
+            dataKey={week ? 'value' : 'line'}
             stroke={opts.color}
             strokeWidth={2}
-            dot={week ? { r: 4.5, fill: opts.color, stroke: colors.surface, strokeWidth: 2 } : false}
-            connectNulls
+            dot={
+              week
+                ? { r: 4.5, fill: opts.color, stroke: colors.surface, strokeWidth: 2 }
+                : (props: { cx?: number; cy?: number; index?: number; payload?: { lone: boolean } }) =>
+                    props.payload?.lone && props.cx != null && props.cy != null ? (
+                      <circle key={props.index} cx={props.cx} cy={props.cy} r={2.5} fill={opts.color} />
+                    ) : (
+                      <g key={props.index} />
+                    )
+            }
+            connectNulls={week}
             isAnimationActive={false}
             activeDot={{ r: 5, fill: opts.color, stroke: colors.surface, strokeWidth: 2 }}
           />
@@ -231,8 +265,15 @@ export default function Recuperacao({ data, period, from, today }: { data: Corpo
   }
 
   const inWindow = (key: Key) => model.series(key).filter((p) => p.date >= from)
-  const maxOf = (key: Key) => Math.max(0, ...inWindow(key).map((p) => p.value))
-  const minOf = (key: Key) => Math.min(...inWindow(key).map((p) => p.value))
+  // B5: o eixo vem do que se desenha (no «Tudo» longo, as médias semanais),
+  // não dos extremos de cada dia.
+  const plotted = (key: Key) =>
+    model
+      .shown(key)
+      .map((p) => p.value)
+      .filter((v): v is number => v != null)
+  const maxOf = (key: Key) => Math.max(0, ...plotted(key))
+  const minOf = (key: Key) => Math.min(...plotted(key))
   const cmp = (key: Key, excludeToday = false) => compareWindows(model.series(key), today, period, from, { excludeToday, days: week ? 7 : undefined })
   // A frase de cada um: a comparação; sem os últimos 30 dias, a média do
   // período (com 7 dias ou mais); só depois «poucos dados».

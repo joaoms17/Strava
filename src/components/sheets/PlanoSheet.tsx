@@ -6,8 +6,8 @@ import { ExerciseList, dayTone, kicker } from '../plano/PlanoViews'
 import { dayLabel } from '../../../api/_lib/rules/plano-treino'
 
 // «Ver plano» durante a sessão do Ginásio (?folha=plano&dia=2; decisão 305):
-// o dia do plano com as séries e as notas do treinador, e os cuidados com o
-// joelho em cima. Sem rede também (vem do perfil guardado).
+// o dia do plano com as séries e as notas do treinador, e os cuidados (a
+// zona vem do plano) em cima. Sem rede também (vem do perfil guardado).
 export default function PlanoSheet() {
   const sheet = useSheet()
   const plan = usePlanoTreino()
@@ -26,7 +26,7 @@ export default function PlanoSheet() {
             {day.subtitulo ? ` · ${day.subtitulo}` : ''}
           </p>
           {c && (
-            <section className="rounded-[18px] border border-attn/50 bg-attn/8 p-3" aria-label="Cuidados com o joelho">
+            <section className="rounded-[18px] border border-attn/50 bg-attn/8 p-3" aria-label={`Cuidados: ${c.zona}`}>
               <p className={`${kicker} flex items-center gap-2 text-attn`}>
                 <Icon name="alert" size={16} /> {c.zona}
               </p>

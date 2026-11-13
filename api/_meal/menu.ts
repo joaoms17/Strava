@@ -7,7 +7,7 @@ import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from '../_lib/ant
 import { PROMPT_MENU_PICK, promptVersion, readPrompt } from '../_lib/prompts.js'
 import { aiLimitReached } from '../_lib/meal-analysis.js'
 import { nutritionalDay } from '../_lib/rules/nutritional-day.js'
-import { isMaintenanceWeek } from '../_lib/rules/manutencao.js'
+import { isMaintenanceWeek, maintenanceFallback } from '../_lib/rules/manutencao.js'
 import { storedExerciseKcal, type WorkoutType } from '../_lib/rules/targets.js'
 import { MAX_DISHES, MENU_TYPES, cleanMenu, dayLeft, rankDishes } from '../_lib/rules/menu.js'
 
@@ -116,13 +116,13 @@ async function pick(
     ),
     db.from('meals_counted').select('kcal,protein').eq('date', today),
     db.from('workouts_active').select('type,minutes,watts,raw,kcal_est').eq('date', today),
+    // `*`: a fórmula guardada (formula_base) pode não existir sem a migração.
     db
       .from('days')
-      .select('tdee_est')
+      .select('*')
       .lt('date', today)
-      .not('tdee_est', 'is', null)
       .order('date', { ascending: false })
-      .limit(1),
+      .limit(60),
   ])
 
   const dishes = output.e_menu ? cleanMenu(output.pratos) : []
@@ -143,6 +143,11 @@ async function pick(
     })),
   )
   const counted = meals.data ?? []
+  // Os dias antes de hoje (o mais recente primeiro): o último gasto medido e,
+  // sem ele, a fórmula mais o treino médio (K5).
+  type PastDay = Parameters<typeof maintenanceFallback>[0][number] & { tdee_est?: number | string | null }
+  const pastDays = (tdee.data ?? []) as PastDay[]
+  const lastTdee = pastDays.find((d) => d.tdee_est != null)?.tdee_est
   const left = dayLeft({
     baseKcal: Number(profile.base_kcal),
     exerciseKcal,
@@ -150,7 +155,8 @@ async function pick(
       profile.maintenance_enabled !== false &&
       profile.maintenance_anchor != null &&
       isMaintenanceWeek(profile.maintenance_anchor as string, today),
-    tdee: tdee.data?.[0]?.tdee_est != null ? Number(tdee.data[0].tdee_est) : null,
+    tdee: lastTdee != null ? Number(lastTdee) : null,
+    tdeeFallback: maintenanceFallback(pastDays, today),
     kcalIn: counted.reduce((a, m) => a + Number(m.kcal), 0),
     proteinIn: counted.reduce((a, m) => a + Number(m.protein), 0),
     proteinTarget: profile.protein_g != null ? Number(profile.protein_g) : null,

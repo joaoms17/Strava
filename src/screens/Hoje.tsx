@@ -6,14 +6,15 @@ import { postApi } from '../lib/api'
 import { useReadyProfile, useProfile } from '../lib/profile'
 import { useSheet } from '../lib/sheet'
 import { useToast } from '../lib/toast'
-import { emitDataChanged, useDataVersion } from '../lib/events'
+import { emitDataChanged, onDataChanged } from '../lib/events'
+import { activeUserId } from '../lib/scoped'
 import { signedUrls } from '../lib/photos'
 import { loadActiveDiet } from '../lib/diets'
 import DietToday from '../components/DietToday'
 import Sequencia from '../components/Sequencia'
 import AvisarAnalise from '../components/AvisarAnalise'
 import { localCalendarDate, nutritionalDay, shiftDate } from '../lib/day'
-import { fmt1, fmtDayShort, fmtInt, fmtKcal, timeOf, weekdayShort } from '../lib/format'
+import { fmt1, fmtDayShort, fmtInt, fmtKcal, kcalLeftShown, timeOf, weekdayShort } from '../lib/format'
 import { deleteMeal, logFavorite, retryAnalysis } from '../lib/meal-actions'
 import { retryContext, retryIfDue, useAutoRetrying } from '../lib/analise-auto'
 import { workoutTitle } from '../lib/workout-actions'
@@ -63,13 +64,14 @@ interface DayData {
   meals: (Meal & { created_at: string })[]
   deleted: Meal[]
   workouts: Workout[]
-  yesterdayWorkouts: Workout[]
   weights: WeightRow[]
   // Ontem: refeições contadas e as kcal, e as fotos ainda sem números.
   yesterday: { meals: number; kcal: number; uncounted: Meal[]; flags: string[] }
   // O plano base guardado no fecho deste dia (null: o de hoje), as respostas
   // «Foi tudo?» deste dia e os dias da semana até este.
   dayBase: number | null
+  // O gasto guardado pelo fecho deste dia (K9: um dia passado mostra o mesmo do Balanço).
+  dayOut: number | null
   flags: string[]
   week: WeekSoFarDay[]
   latestTdee: number | null
@@ -86,7 +88,30 @@ interface DayData {
   expenditure: ExpenditureContext | null
   hasAnyWeight: boolean
   hasAnyMeal: boolean
-  offline: boolean
+  offline: boolean // não se sabe o dia (sem rede ou um pedido essencial falhou): «—»
+  loadError: 'rede' | 'erro' | null
+}
+
+// P1: os dias já vistos, por pessoa e data. Abrir um dia mostra logo o que se
+// tinha e atualiza por trás; voltar à app com menos de 30 s não recarrega.
+const dayCache = new Map<string, { data: DayData; at: number }>()
+const DAY_FRESH_MS = 30_000
+const DAY_CACHE_MAX = 14
+
+function dayCacheKey(date: string): string {
+  return `${activeUserId() ?? ''}:${date}`
+}
+
+function rememberDay(key: string, data: DayData) {
+  dayCache.delete(key)
+  dayCache.set(key, { data, at: Date.now() })
+  while (dayCache.size > DAY_CACHE_MAX) dayCache.delete(dayCache.keys().next().value!)
+}
+
+// Os dados mudaram: tudo o que está guardado fica por recarregar (mas
+// continua a aparecer enquanto isso).
+function staleDays() {
+  for (const entry of dayCache.values()) entry.at = 0
 }
 
 const WORKOUT_ICON = { bike: 'bike', strength: 'dumbbell', other: 'walk' } as const
@@ -128,7 +153,6 @@ export default function Hoje() {
   const [, navigate] = useLocation()
   const sheet = useSheet()
   const toast = useToast()
-  const version = useDataVersion()
   const now = new Date()
   const today = nutritionalDay(now, profile.nutrition_day_cutoff_hour)
   const date = params.date && params.date <= today ? params.date : today
@@ -147,18 +171,27 @@ export default function Hoje() {
   // Só a resposta do último pedido conta: ao mudar de dia depressa, a de um
   // dia anterior pode chegar depois.
   const loads = useRef(0)
+  // H2: um pedido essencial falhou e ficaram os dados de antes.
+  const [refreshFailed, setRefreshFailed] = useState(false)
 
-  const load = useCallback(async () => {
+  // `force`: os dados mudaram (recarrega sempre). Sem ele (voltar à app, abrir
+  // o dia), não recarrega se o último carregamento tem menos de 30 s (P1).
+  const load = useCallback(async (force = true) => {
+    const key = dayCacheKey(date)
+    const cached = dayCache.get(key)
+    if (!force && cached && Date.now() - cached.at < DAY_FRESH_MS) return
     const request = ++loads.current
     const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString()
+    const yesterday = shiftDate(date, -1)
+    const calendarToday = localCalendarDate()
+    // Os dias desta semana até este e o de ontem (que pode ser da semana anterior) num só pedido.
+    const daysFrom = mondayOf(date) < yesterday ? mondayOf(date) : yesterday
     const [
       { data: meals, error: mealsError, status: mealsStatus },
       { data: deleted },
-      { data: workouts },
-      { data: yWorkouts },
+      { data: workouts, error: workoutsError, status: workoutsStatus },
       { data: weights },
-      { data: yMeals },
-      { data: yDay },
+      { data: yMeals, error: yMealsError, status: yMealsStatus },
       { data: tdeeRows },
       { data: favorites },
       { data: todayWeights },
@@ -167,8 +200,7 @@ export default function Hoje() {
       { data: imports },
       { data: lastMeasure },
       { data: health },
-      { data: stepRows },
-      { data: weekRows },
+      { data: dayRows, error: daysError, status: daysStatus },
       expenditure,
       diet,
     ] = await Promise.all([
@@ -180,10 +212,8 @@ export default function Hoje() {
         .not('deleted_at', 'is', null)
         .gte('deleted_at', weekAgo),
       supabase.from('workouts_active').select('*').eq('date', date).order('created_at'),
-      supabase.from('workouts_active').select('*').eq('date', shiftDate(date, -1)),
       supabase.from('weights').select('date,kg,measured_at,created_at').eq('date', date),
-      supabase.from('meals').select('*').eq('date', shiftDate(date, -1)).is('deleted_at', null).order('logged_at'),
-      supabase.from('days').select('flags').eq('date', shiftDate(date, -1)).maybeSingle(),
+      supabase.from('meals').select('*').eq('date', yesterday).is('deleted_at', null).order('logged_at'),
       supabase
         .from('days')
         .select('tdee_est')
@@ -192,7 +222,10 @@ export default function Hoje() {
         .order('date', { ascending: false })
         .limit(1),
       supabase.from('favorites').select('*').eq('kind', 'meal').eq('archived', false),
-      supabase.from('weights').select('date').eq('date', localCalendarDate()),
+      // Pesou-se hoje (dia do calendário): quando é o dia que se vê, serve o pedido de cima.
+      calendarToday === date
+        ? Promise.resolve({ data: null })
+        : supabase.from('weights').select('date').eq('date', calendarToday),
       supabase.from('weights').select('date', { count: 'exact', head: true }),
       supabase.from('meals_counted').select('id', { count: 'exact', head: true }),
       // Prints lidos à espera de «Guardar» (a tabela só existe com a migração 4),
@@ -204,26 +237,39 @@ export default function Hoje() {
         .order('created_at', { ascending: false })
         .limit(5),
       supabase.from('body_measurements').select('date').order('date', { ascending: false }).limit(1),
-      // O sono da noite que acabou neste dia (Garmin via intervals.icu) e das
-      // três noites antes, para dizer qual foi a última quando esta falta.
+      // O relógio (Garmin via intervals.icu) num só pedido: o sono da noite que
+      // acabou neste dia e das três antes, e os passos do dia e dos 30 antes.
       supabase
         .from('health_daily')
         .select('*')
         .lte('date', date)
-        .gte('date', shiftDate(date, -3))
+        .gte('date', shiftDate(date, -STEPS_AVG_DAYS))
         .order('date', { ascending: false }),
-      // Os passos do dia e dos 30 antes (para a média).
-      supabase
-        .from('health_daily')
-        .select('date,steps')
-        .lte('date', date)
-        .gte('date', shiftDate(date, -STEPS_AVG_DAYS)),
-      // Os dias desta semana até este: o plano base de cada um e a semana até agora.
-      supabase.from('days').select('*').gte('date', mondayOf(date)).lte('date', date),
+      // Os dias desta semana até este (o plano base de cada um e a semana até
+      // agora) e o de ontem («Foi tudo?»).
+      supabase.from('days').select('*').gte('date', daysFrom).lte('date', date),
       loadExpenditure(profile, mondayOf(date)).catch(() => null),
       // A dieta que segue (migração 10; sem ela fica null).
       loadActiveDiet(),
     ])
+    // H2: sem as refeições, os treinos ou os dias não se sabe o dia. Ficam os
+    // dados de antes (com «Não consegui atualizar · Tentar»); sem nada antes,
+    // o dia fica «—» em vez de zeros («O teu dia começa aqui» era falso).
+    const essential = [
+      { error: mealsError, status: mealsStatus },
+      { error: workoutsError, status: workoutsStatus },
+      { error: yMealsError, status: yMealsStatus },
+      { error: daysError, status: daysStatus },
+    ].find((r) => r.error != null)
+    if (essential) {
+      if (request !== loads.current) return
+      const previous = dayCache.get(key)?.data
+      if (previous) {
+        setData(previous)
+        setRefreshFailed(true)
+        return
+      }
+    }
     const mealRows = (meals ?? []) as (Meal & { created_at: string })[]
     const favoriteRows = (favorites ?? []) as Favorite[]
     const photos = await signedUrls(
@@ -232,16 +278,21 @@ export default function Hoje() {
     if (request !== loads.current) return
     const yesterdayRows = (yMeals ?? []) as Meal[]
     const yesterdayCounted = yesterdayRows.filter((m) => m.status === 'ok' || m.status === 'por_rever')
-    const dayRow = ((weekRows ?? []) as { date: string; base_kcal?: number | null; flags?: unknown }[]).find(
-      (d) => d.date === date,
-    )
-    setData({
+    const allDays = (dayRows ?? []) as (WeekSoFarDay & {
+      base_kcal?: number | null
+      kcal_out_est?: number | null
+      flags?: unknown
+    })[]
+    const dayRow = allDays.find((d) => d.date === date)
+    const yDay = allDays.find((d) => d.date === yesterday)
+    const healthRows = (health ?? []) as (Partial<NightSleep> & { date: string; steps?: number | null })[]
+    const dayWeights = ((weights ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) }))
+    const next: DayData = {
       date,
       meals: mealRows,
       deleted: (deleted ?? []) as Meal[],
       workouts: (workouts ?? []) as Workout[],
-      yesterdayWorkouts: (yWorkouts ?? []) as Workout[],
-      weights: ((weights ?? []) as WeightRow[]).map((w) => ({ ...w, kg: Number(w.kg) })),
+      weights: dayWeights,
       yesterday: {
         meals: yesterdayCounted.length,
         kcal: yesterdayCounted.reduce((a, m) => a + Number(m.kcal), 0),
@@ -249,28 +300,79 @@ export default function Hoje() {
         flags: Array.isArray(yDay?.flags) ? (yDay.flags as string[]) : [],
       },
       dayBase: dayRow?.base_kcal != null ? Number(dayRow.base_kcal) : null,
+      dayOut:
+        dayRow?.kcal_out_est != null && Number.isFinite(Number(dayRow.kcal_out_est)) ? Number(dayRow.kcal_out_est) : null,
       flags: Array.isArray(dayRow?.flags) ? (dayRow.flags as string[]) : [],
-      week: (weekRows ?? []) as WeekSoFarDay[],
+      week: allDays.filter((d) => d.date >= mondayOf(date)),
       latestTdee: tdeeRows?.[0]?.tdee_est != null ? Number(tdeeRows[0].tdee_est) : null,
       favorites: favoriteRows,
       diet,
       photos,
-      weighedToday: (todayWeights ?? []).length > 0,
+      weighedToday: calendarToday === date ? dayWeights.length > 0 : (todayWeights ?? []).length > 0,
       importsToConfirm: (imports ?? []).map((i) => i.id as string),
       weightCount: weightCount ?? 0,
       lastMeasureDate: (lastMeasure?.[0]?.date as string | undefined) ?? null,
-      ...pickNights(date, (health ?? []) as (Partial<NightSleep> & { date: string })[]),
-      steps: daySteps((stepRows ?? []) as { date: string; steps: number | null }[], date),
+      ...pickNights(
+        date,
+        healthRows.filter((r) => r.date >= shiftDate(date, -3)),
+      ),
+      steps: daySteps(healthRows, date),
       expenditure,
       hasAnyWeight: (weightCount ?? 0) > 0,
       hasAnyMeal: (mealCount ?? 0) > 0,
-      offline: mealsError != null && isTransientFailure({ message: mealsError.message, status: mealsStatus }),
-    })
+      offline: essential != null,
+      loadError:
+        essential == null
+          ? null
+          : isTransientFailure({ message: essential.error?.message, status: essential.status })
+            ? 'rede'
+            : 'erro',
+    }
+    setData(next)
+    setRefreshFailed(false)
+    // Um dia que não se conseguiu ler não fica guardado.
+    if (!essential) rememberDay(key, next)
   }, [date])
 
+  // Ao abrir um dia já visto, aparece logo o que se tinha e atualiza por trás.
   useEffect(() => {
-    void load()
-  }, [load, version])
+    const cached = dayCache.get(dayCacheKey(date))
+    if (cached) setData(cached.data)
+    setRefreshFailed(false)
+    void load(false)
+  }, [load])
+
+  // Os dados mudaram (uma folha gravou, a fila enviou uma foto) ou a app
+  // voltou ao primeiro plano: uma só recarga ~300 ms depois da última (3
+  // fotos da fila a sair eram 3 recargas completas; P1).
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let forced = false
+    const schedule = (force: boolean) => {
+      forced = forced || force
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        const f = forced
+        forced = false
+        void load(f)
+      }, 300)
+    }
+    const offData = onDataChanged(() => {
+      // Os outros dias guardados também podem ter mudado: ficam para recarregar.
+      staleDays()
+      schedule(true)
+    })
+    const onVisible = () => {
+      if (!document.hidden) schedule(false)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      if (timer) clearTimeout(timer)
+      offData()
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [load])
 
   // Fotos a analisar: pergunta só pelo estado delas de 3 em 3 s (de 15 em 15 s
   // depois de 2 min) e recarrega o dia quando alguma muda; as que pararam de
@@ -324,7 +426,7 @@ export default function Hoje() {
                 (splitting.includes(m) && (row.share_with?.length ?? 0) === 0)
               )
             })
-            if (changed) void load()
+            if (changed) void load(true)
             else setPollTick((t) => t + 1)
           }, now - oldest > 120_000 ? 15_000 : 3_000)
         : null
@@ -372,7 +474,7 @@ export default function Hoje() {
     data.meals.filter((m) => m.status === 'a_analisar' && !stuckNow(m)).length +
     localCaptures.filter((c) => c.state === 'pendente').length
   // Regra 2 ao vivo: a meta do dia sobe com o treino. Regra 7: na semana de
-  // pausa da dieta, a meta é o gasto estimado (ou 2000), fixa. Um dia passado
+  // pausa da dieta, a meta é o gasto estimado (ou a fórmula + treino), fixa. Um dia passado
   // usa o plano base desse dia (mudar o plano não reescreve os dias antigos).
   // Um treino partido em dois pelo relógio aparece (e conta) como um.
   const workoutKcals = mergeSessions(data.workouts).map((w) => ({
@@ -393,10 +495,25 @@ export default function Hoje() {
     profile.maintenance_anchor != null &&
     isMaintenanceWeek(profile.maintenance_anchor, date)
   const dayBase = isToday ? profile.base_kcal : (data.dayBase ?? profile.base_kcal)
-  const plan = maintenance ? maintenanceTarget(data.latestTdee) : dayBase + kcalExercise
+  // Sem gasto medido, a fórmula da pessoa mais o treino médio (K5), como no fecho.
+  const plan = maintenance
+    ? maintenanceTarget(
+        data.latestTdee,
+        data.expenditure ? data.expenditure.formula + data.expenditure.avgTraining : null,
+      )
+    : dayBase + kcalExercise
   const left = plan - kcalIn
-  // Gasto de hoje (só para mostrar): base sem treino + treino do dia.
-  const outToday = data.expenditure ? kcalOut(data.expenditure.base, kcalExercise) : null
+  // O que se mostra: Plano − Comido com os números já arredondados (K16).
+  const leftShown = kcalLeftShown(plan, kcalIn)
+  // Gasto de hoje (só para mostrar): base sem treino + treino do dia. Um dia
+  // passado usa o guardado pelo fecho, como o Balanço (K9): recalculado aqui,
+  // com os pesos e o perfil de hoje, podia trocar o veredicto na margem.
+  const outToday =
+    !isToday && data.dayOut != null
+      ? data.dayOut
+      : data.expenditure
+        ? kcalOut(data.expenditure.base, kcalExercise)
+        : null
   const underSpend = outToday != null ? kcalIn < outToday : data.latestTdee != null && kcalIn < data.latestTdee
   // Contra o plano, com a regra do Balanço (decisões 289, 301 e 309): até 100
   // kcal acima é «no alvo» (sem âmbar), acima disso âmbar e, acima do gasto, o
@@ -666,6 +783,8 @@ export default function Hoje() {
               <span className="w-12 shrink-0 font-display text-[17px] font-semibold text-dim tabular-nums">{timeOf(meal.logged_at)}</span>
               {thumb ? (
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={thumb}
                   alt=""
                   className={`h-12 w-12 shrink-0 rounded-xl object-cover ${pending ? 'animate-pulse' : ''} ${failed ? 'opacity-60' : ''}`}
@@ -751,7 +870,7 @@ export default function Hoje() {
             {timeOf(capture.taken_at ?? capture.created_at)}
           </span>
           {capture.preview ? (
-            <img src={capture.preview} alt="" className="h-12 w-12 shrink-0 animate-pulse rounded-xl object-cover" />
+            <img loading="lazy" decoding="async" src={capture.preview} alt="" className="h-12 w-12 shrink-0 animate-pulse rounded-xl object-cover" />
           ) : (
             <span className="flex h-12 w-12 shrink-0 animate-pulse items-center justify-center rounded-xl bg-surface2 text-dim">
               <Icon name="pencil" />
@@ -828,9 +947,34 @@ export default function Hoje() {
       <WeekStrip selected={date} today={today} onPick={pickDay} />
 
       {data.offline && (
-        <p className="rounded-xl border border-attn/50 bg-attn/10 px-3 py-2 text-[15px]" role="status">
-          Sem rede: não consigo mostrar o dia. O que registares no ＋ fica guardado e segue quando houver rede.
-        </p>
+        <div
+          className="flex items-center gap-2 rounded-xl border border-attn/50 bg-attn/10 py-1 pr-1 pl-3 text-[15px]"
+          role="status"
+        >
+          <p className="flex-1 py-1">
+            {data.loadError === 'erro'
+              ? 'Não consegui carregar o dia.'
+              : 'Sem rede: não consigo mostrar o dia. O que registares no ＋ fica guardado e segue quando houver rede.'}
+          </p>
+          <button
+            onClick={() => void runBusy('A carregar…', () => load(true))}
+            className="min-h-11 shrink-0 rounded-lg px-3 font-semibold underline"
+          >
+            Tentar
+          </button>
+        </div>
+      )}
+      {/* H2: um pedido falhou ao atualizar; fica o que se tinha (não um dia vazio). */}
+      {refreshFailed && !data.offline && (
+        <div className="flex items-center gap-2 text-[15px] text-dim" role="status">
+          <p className="flex-1">Não consegui atualizar</p>
+          <button
+            onClick={() => void runBusy('A atualizar…', () => load(true))}
+            className="min-h-11 shrink-0 rounded-lg px-3 font-semibold text-ink underline"
+          >
+            Tentar
+          </button>
+        </div>
       )}
 
       <button
@@ -878,8 +1022,8 @@ export default function Hoje() {
               : !isToday && !dayComplete
                 ? fmtKcal(kcalIn)
                 : over || inMargin
-                  ? `+${fmtKcal(-left)}`
-                  : fmtKcal(left)}
+                  ? `+${fmtKcal(-leftShown)}`
+                  : fmtKcal(leftShown)}
           </span>
           <span className="num text-[22px] text-dim">
             {inMargin && !unknown && (isToday || dayComplete) ? 'KCAL · DENTRO DA MARGEM' : 'KCAL'}
@@ -1076,7 +1220,9 @@ export default function Hoje() {
         <div className="space-y-4 rounded-2xl border border-line p-5 text-center">
           <p className="text-[15px] text-dim">
             {data.offline
-              ? 'Sem rede: tira a foto na mesma, fica guardada e segue quando houver rede.'
+              ? data.loadError === 'erro'
+                ? 'Não consegui carregar o dia. O que registares no ＋ fica guardado.'
+                : 'Sem rede: tira a foto na mesma, fica guardada e segue quando houver rede.'
               : isToday
                 ? 'O teu dia começa aqui. Toca em + e tira uma foto ao que comes. Eu faço as contas.'
                 : `Nada registado em ${weekdayShort(date)}. Toca em + para registar nesse dia.`}
@@ -1201,9 +1347,9 @@ export default function Hoje() {
             ) : (
               <p className="tabular-nums">
                 Comeste {fmtKcal(kcalIn)}&nbsp;kcal
-                {isToday && state === 'dentro' && <> · Podes comer mais {fmtKcal(left)}&nbsp;kcal</>}
-                {inMargin && <> · {fmtKcal(-left)}&nbsp;kcal acima do plano, no alvo</>}
-                {over && <> · Passaste {fmtKcal(-left)}&nbsp;kcal do plano</>}
+                {isToday && state === 'dentro' && <> · Podes comer mais {fmtKcal(leftShown)}&nbsp;kcal</>}
+                {inMargin && <> · {fmtKcal(-leftShown)}&nbsp;kcal acima do plano, no alvo</>}
+                {over && <> · Passaste {fmtKcal(-leftShown)}&nbsp;kcal do plano</>}
               </p>
             )}
             {week && weekText && (

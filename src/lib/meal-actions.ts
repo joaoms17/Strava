@@ -113,6 +113,7 @@ export async function repeatMeal(
   text: string,
   toast: ShowToast,
   slot: Slot | null = null,
+  now = false, // «Agora»: fica a hora real (M18)
 ): Promise<boolean> {
   const target = `repetir:${mealId}:${date ?? ''}:${slot ?? ''}`
   try {
@@ -121,6 +122,7 @@ export async function repeatMeal(
       client_id: idempotencyKey(target),
       ...(date ? { date } : {}),
       ...(slot ? { slot } : {}),
+      ...(now ? { now: true } : {}),
     })
     settleKey(target)
     emitDataChanged()

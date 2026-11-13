@@ -240,7 +240,7 @@ export default function ReviewSheet() {
             {!correcting && portions}
           </>
         )}
-        {photo && <img src={photo} alt="" className="max-h-64 w-full rounded-2xl object-cover" />}
+        {photo && <img loading="lazy" decoding="async" src={photo} alt="" className="max-h-64 w-full rounded-2xl object-cover" />}
         {!from && (
           <>
             <p className="text-[15px] text-dim">{when}</p>

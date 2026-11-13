@@ -131,7 +131,7 @@ export default function GorduraChart({ rows, from, today, week = false }: { rows
                   disabled={pos <= 0}
                   onClick={() => setPicked(model.shown[pos - 1]!.index)}
                   aria-label="Medição anterior"
-                  className="h-10 w-10 rounded-lg text-[19px] text-dim disabled:opacity-30"
+                  className="h-11 w-11 rounded-lg text-[19px] text-dim disabled:opacity-30"
                 >
                   ‹
                 </button>
@@ -139,7 +139,7 @@ export default function GorduraChart({ rows, from, today, week = false }: { rows
                   disabled={pos >= model.shown.length - 1}
                   onClick={() => setPicked(model.shown[pos + 1]!.index)}
                   aria-label="Medição seguinte"
-                  className="h-10 w-10 rounded-lg text-[19px] text-dim disabled:opacity-30"
+                  className="h-11 w-11 rounded-lg text-[19px] text-dim disabled:opacity-30"
                 >
                   ›
                 </button>

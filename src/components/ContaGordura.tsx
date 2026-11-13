@@ -18,6 +18,7 @@ export default function ContaGordura({ today }: { today: string }) {
   const toast = useToast()
   const version = useDataVersion()
   const [tally, setTally] = useState<FatTally | null>(null)
+  const [failed, setFailed] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const saved = typeof profile.goals?.contagem_desde === 'string' ? (profile.goals.contagem_desde as string) : null
 
@@ -34,8 +35,14 @@ export default function ContaGordura({ today }: { today: string }) {
         supabase.from('weights').select('date,kg').gte('date', shiftDate(since, -14)).lte('date', today).order('date'),
       ])
       if (!alive) return
+      // B8: um erro não é «a contagem começa com o primeiro dia completo».
+      if (days.error || weights.error) {
+        setFailed(true)
+        return
+      }
+      setFailed(false)
       setTally(fatTally((days.data ?? []) as TallyDay[], (weights.data ?? []) as { date: string; kg: number }[], since, today))
-    })()
+    })().catch(() => alive && setFailed(true))
     return () => {
       alive = false
     }
@@ -54,7 +61,12 @@ export default function ContaGordura({ today }: { today: string }) {
     ])
   }
 
-  if (!tally) return null
+  // B18: o lugar do cartão fica reservado enquanto chega (o calendário por
+  // baixo não salta); sem rede e sem nada lido, o cartão não aparece.
+  if (!tally) {
+    if (failed) return null
+    return <div className="h-[220px] animate-pulse rounded-[18px] border border-line bg-surface" aria-hidden />
+  }
   const { previstoKg: kg, realKg } = tally
   const headline =
     tally.diasContados === 0
@@ -115,7 +127,7 @@ export default function ContaGordura({ today }: { today: string }) {
           </button>
         </div>
       ) : (
-        <button onClick={() => setConfirm(true)} className="min-h-10 text-[14px] text-eat">
+        <button onClick={() => setConfirm(true)} className="min-h-11 text-[14px] text-eat">
           Recomeçar a contagem
         </button>
       )}
