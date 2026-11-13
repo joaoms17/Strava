@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_ITEM_GRAMS, diffText, setItemGrams, stepItem } from '../src/lib/meal-diff'
+import type { MealItem } from '../src/lib/types'
 
 const arroz = { name: 'Arroz', grams: 180, kcal: 230, protein: 4.3, carbs: 50, fat: 0.5, food_id: null, estimated: true }
 const queijo = { name: 'Queijo', grams: 30, kcal: 110, protein: 7, carbs: 0, fat: 9, food_id: null, estimated: true }
@@ -48,5 +49,15 @@ describe('gramas escritas à mão', () => {
   })
   it('decimais com uma casa', () => {
     expect(setItemGrams(arroz, 92.46).grams).toBe(92.5)
+  })
+})
+
+describe('muitos toques no − / + (M19)', () => {
+  it('ir e voltar 20 vezes devolve os valores do início', () => {
+    let item: MealItem = { name: 'Arroz', grams: 33, kcal: 43.7, protein: 0.9, carbs: 9.4, fat: 0.1, food_id: null, estimated: true }
+    const start = item
+    for (let i = 0; i < 20; i++) item = stepItem(item, 10)
+    for (let i = 0; i < 20; i++) item = stepItem(item, -10)
+    expect(item).toMatchObject({ grams: 33, kcal: start.kcal, protein: start.protein, carbs: start.carbs })
   })
 })

@@ -1,0 +1,21 @@
+-- =====================================================================
+-- As etiquetas que os números de uma refeição já leram (M1).
+--
+-- «Comi metade», «Com azeite», «Sem molho» e «Porção grande» mudam as
+-- quantidades como uma nota. Até aqui só a nota ficava guardada como lida
+-- (`analysis_note`); um chip tocado a meio da análise, ou numa refeição já
+-- analisada, ficava na refeição sem mudar os números. Com esta coluna, a
+-- escrita protegida e a correção comparam também as etiquetas e aplicam só o
+-- que mudou.
+--
+-- analysis_tags: as etiquetas que a análise (ou a última correção) aplicou.
+-- Vazia (null) nas refeições antigas: conta como «as etiquetas que lá estão
+-- já foram aplicadas», como até aqui.
+--
+-- COMO CORRER: Supabase → SQL Editor → New query → colar este ficheiro
+-- inteiro → Run. Pode correr-se mais do que uma vez. Sem ela tudo funciona:
+-- a app compara as etiquetas com as que a refeição tinha antes da mudança.
+-- Corre depois a 20261113000021 (a vista meals_counted fica com esta coluna).
+-- =====================================================================
+
+alter table public.meals add column if not exists analysis_tags text[];

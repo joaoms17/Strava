@@ -14,6 +14,7 @@ import {
   slotScope,
   slotScopeLabel,
   splitFactors,
+  resplitFactors,
   splitFor,
   splitLabel,
   splitText,
@@ -270,5 +271,17 @@ describe('avisos', () => {
     expect(joinNames(['Joana'])).toBe('Joana')
     expect(joinNames(['Joana', 'Rita'])).toBe('Joana e Rita')
     expect(joinNames(['Joana', 'Rita', 'Miguel'])).toBe('Joana, Rita e Miguel')
+  })
+})
+
+describe('partilhar outra vez depois de a cópia ser apagada (M12)', () => {
+  it('a meias outra vez: a minha parte fica e a cópia leva o mesmo', () => {
+    expect(resplitFactors(0.5, 0.5)).toEqual({ own: 0.5, copy: 0.5 })
+  })
+  it('60/40: a cópia leva os 40 da mesa', () => {
+    expect(resplitFactors(0.6, 0.6)).toEqual({ own: 0.6, copy: 0.4 })
+  })
+  it('sem divisão: cada um com a refeição como está', () => {
+    expect(resplitFactors(0.5, null)).toEqual({ own: 0.5, copy: 0.5 })
   })
 })

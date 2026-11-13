@@ -97,6 +97,10 @@ describe('schema.org Recipe', () => {
     expect(parseServings('0')).toBeNull()
     expect(parseServings('100 g')).toBeNull()
     expect(parseServings(null)).toBeNull()
+    // M17: as fatias de uma tarte contam; «1 bolo» não é uma dose
+    expect(parseServings('1 tarte (8 fatias)')).toBe(8)
+    expect(parseServings('1 bolo')).toBeNull()
+    expect(parseServings('Serves 1 person')).toBe(1)
   })
 })
 

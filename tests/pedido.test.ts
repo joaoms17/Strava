@@ -79,6 +79,14 @@ describe('linhas que não são comida', () => {
     expect(nonFoodLine(line('   ', 100, 100))).toBe(true)
   })
 
+  it('M16: fora de um pedido, «Total 0% Fage» e «Serviço de pão» com kcal ficam', () => {
+    const fage = { name: 'Total 0% Fage', grams: 170, kcal: 97 }
+    const pao = { name: 'Serviço de pão e azeitonas', grams: 80, kcal: 230 }
+    const taxa = { name: 'Taxa de entrega', grams: 0, kcal: 0 }
+    expect(dropNonFood([fage, pao, taxa], false).map((i) => i.name)).toEqual(['Total 0% Fage', 'Serviço de pão e azeitonas'])
+    expect(dropNonFood([fage, pao, taxa]).map((i) => i.name)).toEqual([])
+  })
+
   it('dropNonFood tira só essas linhas e mantém a ordem', () => {
     const items = [line('2× Poke de salmão', 900, 1300), line('Taxa de entrega', 0, 0), line('Coca-Cola 33 cl', 330, 139), line('Saco', 0, 0)]
     expect(dropNonFood(items).map((i) => i.name)).toEqual(['2× Poke de salmão', 'Coca-Cola 33 cl'])

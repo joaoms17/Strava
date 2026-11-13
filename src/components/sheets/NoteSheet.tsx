@@ -9,7 +9,8 @@ import { BusyButton } from '../../lib/busy'
 import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
 import { timeOf } from '../../lib/format'
-import type { Meal } from '../../lib/types'
+import { diffText } from '../../lib/meal-diff'
+import type { Meal, MealItem } from '../../lib/types'
 
 // «Uma ou outra coisa escrita» sobre uma foto já enviada, a qualquer momento.
 export default function NoteSheet() {
@@ -37,10 +38,38 @@ export default function NoteSheet() {
   async function save() {
     if (!meal) return
     try {
-      await postApi('/api/meal/update', { meal_id: meal.id, note: note.trim() || null, tags })
+      const result = await postApi<{
+        meal: Meal
+        previous: { items: MealItem[]; note: string | null; tags: string[] | null }
+        corrected?: boolean
+      }>('/api/meal/update', { meal_id: meal.id, note: note.trim() || null, tags })
       emitDataChanged()
       sheet.close()
-      toast(meal.status === 'a_analisar' ? 'Nota guardada · entra na análise' : 'Nota aplicada')
+      // «Nota aplicada» só quando os números mudaram mesmo (M1); a analisar,
+      // entra na análise (a escrita protegida vê a nota e as etiquetas).
+      if (meal.status === 'a_analisar') toast('Nota guardada · entra na análise')
+      else if (result.corrected) {
+        const previous = result.previous
+        toast(`Nota aplicada · ${diffText(previous.items, result.meal.items)}`, [
+          {
+            label: 'Anular',
+            run: async () => {
+              try {
+                await postApi('/api/meal/update', {
+                  meal_id: meal.id,
+                  items: previous.items,
+                  note: previous.note,
+                  tags: previous.tags ?? [],
+                  undo: true,
+                })
+                emitDataChanged()
+              } catch (err) {
+                toast(err instanceof Error ? err.message : 'Não consegui anular.')
+              }
+            },
+          },
+        ])
+      } else toast('Nota guardada')
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Não consegui guardar a nota.')
     }
@@ -79,7 +108,9 @@ export default function NoteSheet() {
         />
         {meal && (
           <p className="text-[13px] text-dim">
-            {meal.status === 'a_analisar' ? 'Junto a nota à análise.' : 'Vou corrigir a refeição com esta nota.'}
+            {meal.status === 'a_analisar'
+              ? 'Junto a nota e as etiquetas à análise.'
+              : 'Vou corrigir a refeição com o que mudou na nota e nas etiquetas.'}
           </p>
         )}
       </div>

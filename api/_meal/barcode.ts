@@ -12,6 +12,7 @@ import {
   SEARCH_MIN_CHARS,
   labelFood,
   offFood,
+  offMacrosMissing,
   offSearchResults,
   searchKey,
   withoutExtras,
@@ -119,7 +120,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const values = offFood(json.product, ean)
     if (!values) throw new HttpError(422, 'O produto está no Open Food Facts, mas sem a tabela nutricional.')
     const food = await saveFood(db, user.id, ean, values, 'off')
-    res.status(200).json({ food, from: 'off' })
+    // Energia sem macros: entra com proteína 0; a folha avisa (M15).
+    const warning = offMacrosMissing(json.product)
+      ? 'O Open Food Facts não tem a proteína, os hidratos e a gordura deste produto: ficam a 0. Confirma no rótulo.'
+      : null
+    res.status(200).json({ food, from: 'off', ...(warning ? { warning } : {}) })
   } catch (err) {
     respondError(res, err)
   }

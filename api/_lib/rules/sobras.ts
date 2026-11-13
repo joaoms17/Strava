@@ -141,6 +141,35 @@ export function statusAfterLeftovers(current: 'ok' | 'por_rever', shares: EatenS
   return shares.some((s) => s.fraction < 1 && s.confidence === 'baixa') ? 'por_rever' : current
 }
 
+// Mudar a porção (ou dividir a meias) depois de descontar o que sobrou: as
+// kcal que ficaram no prato escalam como os itens, para a folha não dizer
+// «Sobraram ≈ 378 kcal» de uma refeição que agora tem 65 (M7).
+export function rescaleLeftoverKcal(leftKcal: number | null | undefined, from: number, to: number): number | null {
+  if (leftKcal == null || !Number.isFinite(Number(leftKcal))) return null
+  if (from <= 0) return Math.round(Number(leftKcal) * to * 10) / 10
+  return Math.round(((Number(leftKcal) * to) / from) * 10) / 10
+}
+
+// O que já está descontado nos itens antes da foto do depois (M5): as
+// etiquetas e a porção, para a IA comparar o que sobrou com a parte que a
+// pessoa registou e não cortar duas vezes.
+const TAG_FOR_LEFTOVERS: Record<string, string> = {
+  comi_metade: 'comi metade',
+  porcao_grande: 'porção grande',
+  sem_molho: 'sem molho',
+  azeite: 'com azeite',
+}
+
+export function leftoversContext(
+  tags: readonly string[] | null | undefined,
+  portion: number | null | undefined,
+): { etiquetas: string[]; porcao: number } {
+  return {
+    etiquetas: (tags ?? []).map((t) => TAG_FOR_LEFTOVERS[t]).filter((t): t is string => !!t),
+    porcao: portion != null && Number.isFinite(Number(portion)) && Number(portion) > 0 ? Number(portion) : 1,
+  }
+}
+
 // «Juntar foto» ou «Analisar outra vez» numa refeição já descontada: as
 // fotos do antes ainda mostram o prato cheio, e a IA (prompt de juntar) podia
 // devolver um item descontado com os gramas todos (os descontados ficam

@@ -130,9 +130,20 @@ export function parseServings(value: unknown): number | null {
     }
     return null
   }
-  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(/(\d+)/.exec(value)?.[1]) : NaN
+  let n = typeof value === 'number' ? value : NaN
+  if (typeof value === 'string') {
+    // «1 tarte (8 fatias)»: contam as fatias, doses ou pessoas (M17).
+    const pieces = PIECES.exec(value)
+    n = Number(pieces?.[1] ?? /(\d+)/.exec(value)?.[1])
+    // «1 bolo», «1 tabuleiro»: é a receita inteira, não uma dose. Sem saber
+    // em quantas se divide, a folha pergunta (não fica 1 dose calada).
+    if (!pieces && n === 1 && WHOLE.test(value)) return null
+  }
   return Number.isInteger(n) && n >= 1 && n <= MAX_DOSES ? n : null
 }
+
+const PIECES = /(\d+)\s*(fatias?|por[cç](?:õ|o)es|por[cç][aã]o|doses?|pessoas?|peda[cç]os?|unidades?|servings?|slices?|portions?|people|pieces?)\b/i
+const WHOLE = /\b(bolos?|tartes?|tabuleiros?|p[aã]es?|travessas?|tachos?|panelas?|formas?|quiches?|cakes?|pies?|loaf|loaves|tray|batch)\b/i
 
 export interface RecipeData {
   name: string | null
