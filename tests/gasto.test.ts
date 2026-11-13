@@ -147,3 +147,12 @@ describe('trustedTdee: limite do gasto medido', () => {
     expect(trustedTdee(null, 2190)).toBeNull()
   })
 })
+
+describe('B10: a frase de uma semana que já passou', () => {
+  it('«Nessa semana…» e o peso no passado', () => {
+    expect(weekSentence(1900, 2500, -0.4, false)).toBe(
+      'Nessa semana comeste cerca de 600 kcal por dia menos do que gastaste. O peso médio estava a descer 0,4 kg por semana.',
+    )
+    expect(weekSentence(2480, 2500, 0, false)).toBe('Nessa semana comeste cerca do que gastaste. O peso médio esteve estável.')
+  })
+})

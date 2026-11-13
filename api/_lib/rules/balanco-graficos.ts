@@ -173,7 +173,9 @@ export function monthCalendar(month: string, days: MonthDay[], today: string): M
     let result: CalResult
     if (date > today) result = 'futuro'
     else if (date === today) result = 'hoje'
-    else if (d && counted(d)) {
+    // K11: um dia completo com alvo 0 (criado pelo gatilho, ainda por
+    // recalcular) não tem veredicto: fica de fora em vez de «acima do alvo».
+    else if (d && counted(d) && Number(d.kcal_target) > 0) {
       countedDays++
       const out = d.kcal_out_est != null ? Number(d.kcal_out_est) : null
       result = onTarget(d) ? 'no_alvo' : (overLevel(Number(d.kcal_in), Number(d.kcal_target), out) ?? 'acima_alvo')
@@ -230,7 +232,7 @@ export function daysAgainstTarget(rows: TargetRow[]): { completos: number; no_al
       flags: r.flags ?? [],
       kcal_out_est: r.kcal_out_est,
     }
-    if (!counted(d)) continue
+    if (!counted(d) || !(d.kcal_target > 0)) continue
     res.completos++
     if (onTarget(d)) res.no_alvo++
     else if (overLevel(d.kcal_in, d.kcal_target, d.kcal_out_est != null ? Number(d.kcal_out_est) : null) === 'acima_gasto') res.acima_do_gasto++
@@ -257,6 +259,7 @@ export interface WeekBalance {
   days: number // dias completos que contam
   kg: number | null // média das pesagens dessa semana
   water: boolean // semana de água do ciclo (o peso sobe sem ser gordura)
+  partial: boolean // B4: a semana em curso (ainda não acabou): fica fora das frases e a barra marca-se
 }
 
 export const MIN_WEEK_DAYS = 3
@@ -292,6 +295,7 @@ export function weeklyBalance(
       days: used.length,
       kg: kg != null ? Math.round(kg * 10) / 10 : null,
       water: waterDay != null && ws.some((w) => waterDay(w.date)),
+      partial: sunday >= today,
     }
   })
 }
@@ -302,11 +306,15 @@ export function mondaysUpTo(today: string, count: number): string[] {
   return Array.from({ length: count }, (_, i) => shiftDate(current, -7 * (count - 1 - i)))
 }
 
-export function weeklyReading(weeks: WeekBalance[]): string {
+// B4: só com semanas acabadas — a semana em curso, com 2 ou 3 dias, pesava
+// tanto como uma semana inteira.
+export function weeklyReading(allWeeks: WeekBalance[]): string {
+  const weeks = allWeeks.filter((w) => !w.partial)
   const withDeficit = weeks.filter((w) => w.deficit != null && w.days >= MIN_WEEK_DAYS)
   if (withDeficit.length < 2) return 'Ainda poucas semanas completas: volta daqui a 1 semana'
   const firstMonday = withDeficit[0]!.monday
   const n = Math.round(daysBetween(firstMonday, weeks[weeks.length - 1]!.monday) / 7) + 1
+  const inWeeks = `Em ${n} ${n === 1 ? 'semana' : 'semanas'}`
   const avg = meanOf(withDeficit.map((w) => w.deficit!))!
   const deficit =
     avg >= 50
@@ -317,22 +325,31 @@ export function weeklyReading(weeks: WeekBalance[]): string {
   const kgs = weeks.filter((w) => w.kg != null && !w.water && w.monday >= firstMonday)
   const a = kgs[0]
   const b = kgs[kgs.length - 1]
-  if (!a || !b || a.monday === b.monday) return `Em ${n} semanas: ${deficit}`
+  if (!a || !b || a.monday === b.monday) return `${inWeeks}: ${deficit}`
   const kg = Math.round((b.kg! - a.kg!) * 10) / 10
   const weight = Math.abs(kg) < 0.2 ? 'peso médio estável' : `${signed1(kg)} kg no peso médio`
-  return `Em ${n} semanas: ${deficit} e ${weight}`
+  return `${inWeeks}: ${deficit} e ${weight}`
 }
 
 // A semana com o maior défice médio (com 4 dias completos ou mais).
 export function bestDeficitWeek(weeks: WeekBalance[]): WeekBalance | null {
-  const ok = weeks.filter((w) => w.deficit != null && w.days >= 4)
+  const ok = weeks.filter((w) => w.deficit != null && w.days >= 4 && !w.partial)
   if (ok.length < 3) return null
   return ok.reduce((best, w) => (w.deficit! >= best.deficit! ? w : best))
 }
 
 // --- «Para esta semana»: uma ação só -------------------------------------
 
-export type ActionKind = 'acima_gasto' | 'fechar_dias' | 'semana' | 'fim_de_semana' | 'proteina' | 'pesar' | 'manter'
+export type ActionKind =
+  | 'acima_gasto'
+  | 'acima_alvo'
+  | 'fechar_dias'
+  | 'semana'
+  | 'fim_de_semana'
+  | 'proteina'
+  | 'pesar'
+  | 'ritmo'
+  | 'manter'
 
 export interface WeekAction {
   kind: ActionKind
@@ -356,6 +373,10 @@ export interface SpentDay {
 
 export interface ActionInput {
   aboveSpent?: SpentDay[] // dias acabados desta semana acima do gasto (decisão 301)
+  // B3: os dias acabados desta semana acima do alvo (ainda abaixo do gasto)
+  // e quantos dias completos acabados há; sem eles, não se sabe deles.
+  aboveTarget?: string[]
+  completeDays?: number
   leftOut: string[] // dias acabados desta semana com refeições que não contam
   note: MoveNote | null // a projeção contra a da semana passada
   weekday: number | null // kcal/dia nos dias de semana (28 dias)
@@ -366,7 +387,13 @@ export interface ActionInput {
   perMeal: number
   weighings7: number // pesagens nos últimos 7 dias
   projection: string | null // «A este ritmo: …»
+  // B3: o tipo da projeção do peso; «never» não deixa dizer «Continua assim».
+  projectionKind?: 'reached' | 'never' | 'date' | null
 }
+
+// B3: «acima do alvo» manda quando são 2 dias ou mais e pelo menos metade
+// dos dias completos acabados da semana.
+export const ABOVE_TARGET_MIN_DAYS = 2
 
 // Pela ordem: um dia acima do gasto (o falhar grave, decisão 301), os dados
 // (dias de fora), o que atrasou a projeção, o fim de semana, a proteína da
@@ -383,6 +410,17 @@ export function weekAction(input: ActionInput): WeekAction {
       title: 'Fica abaixo do que gastas, todos os dias',
       detail: `${joined}: ${many ? 'nesses dias' : 'nesse dia'} comeste mais do que gastaste, sem défice. Acima do alvo ainda se perde, só mais devagar; acima do gasto, não. Abre o dia e vê o que o fez subir.`,
       date: spent[0]!.date,
+    }
+  }
+  const above = input.aboveTarget ?? []
+  if (above.length >= ABOVE_TARGET_MIN_DAYS && above.length * 2 >= (input.completeDays ?? above.length)) {
+    const list = above.map((d) => `${weekdayShort(d)} ${Number(d.slice(8, 10))}`)
+    const joined = `${list.slice(0, -1).join(', ')} e ${list[list.length - 1]}`
+    return {
+      kind: 'acima_alvo',
+      title: 'Come perto do alvo do dia',
+      detail: `${joined}: comeste acima do alvo. Ainda abaixo do gasto, por isso perdes na mesma, só mais devagar. Abre um desses dias e vê o que o fez subir.`,
+      date: above[0],
     }
   }
   if (leftOut.length >= LEFT_OUT_MIN) {
@@ -438,6 +476,13 @@ export function weekAction(input: ActionInput): WeekAction {
       kind: 'pesar',
       title: 'Pesa-te 3 vezes esta semana',
       detail: 'De manhã, antes de comer. Com poucas pesagens, o peso médio e a data da projeção ficam menos certos.',
+    }
+  }
+  if (input.projectionKind === 'never') {
+    return {
+      kind: 'ritmo',
+      title: 'A este ritmo, o peso alvo não chega',
+      detail: `Com o que comes e gastas agora, o peso médio não desce o suficiente para chegar aos ${kgText}. No «E se…» da projeção vês o que muda com menos 100 a 200 kcal por dia.`,
     }
   }
   return {

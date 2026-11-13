@@ -491,7 +491,7 @@ export default function Balanco() {
         <>
           <section className="space-y-2 rounded-[18px] border border-line bg-surface p-5">
             {averages && avgOut != null ? (
-              <p className="text-[20px] leading-snug font-semibold">{weekSentence(averages.eaten, avgOut, rate)}</p>
+              <p className="text-[20px] leading-snug font-semibold">{weekSentence(averages.eaten, avgOut, rate, thisWeek)}</p>
             ) : leftOut > 0 ? (
               <p className="text-[17px] text-dim">
                 {thisWeek ? 'Ainda não há dias completos esta semana.' : 'Nenhum dia completo nesta semana.'}

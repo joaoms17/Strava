@@ -199,15 +199,18 @@ describe('semana a semana', () => {
 
   it('a frase: o défice e o que o peso médio fez', () => {
     const weeks = weeklyBalance(days, weights, mondays, TODAY)
-    expect(weeklyReading(weeks)).toBe('Em 4 semanas: défice médio de 490 kcal por dia e −1,5 kg no peso médio')
+    // B4: a semana em curso fica de fora da frase (e marcada).
+    expect(weeks[3]!.partial).toBe(true)
+    expect(weeks[2]!.partial).toBe(false)
+    expect(weeklyReading(weeks)).toBe('Em 3 semanas: défice médio de 490 kcal por dia e −1,0 kg no peso médio')
     expect(bestDeficitWeek(weeks)!.monday).toBe(mondays[0])
   })
 
   it('a semana de água não é ponta da conta do peso', () => {
-    const water = (d: string) => d >= mondays[3]!
+    const water = (d: string) => d >= mondays[2]! && d < mondays[3]!
     const weeks = weeklyBalance(days, weights, mondays, TODAY, water)
-    expect(weeks[3]!.water).toBe(true)
-    expect(weeklyReading(weeks)).toMatch(/−1,0 kg no peso médio$/)
+    expect(weeks[2]!.water).toBe(true)
+    expect(weeklyReading(weeks)).toMatch(/−0,5 kg no peso médio$/)
   })
 
   it('poucas semanas', () => {
@@ -356,5 +359,42 @@ describe('proteinReached', () => {
     expect(proteinReached(120, 120)).toBe(true)
     expect(proteinReached(90, 120)).toBe(false)
     expect(proteinReached(10, 0)).toBe(false)
+  })
+})
+
+describe('K11 e B3', () => {
+  it('K11: um dia completo com alvo 0 fica de fora, não «acima do alvo»', () => {
+    const cal = monthCalendar('2026-11', [{ date: '2026-11-03', kcal_in: 1800, kcal_target: 0, is_complete: true, flags: [] }], '2026-11-10')
+    const cell = cal.weeks.flat().find((c) => c?.date === '2026-11-03')!
+    expect(cell.result).toBe('fora')
+    expect(cal.aboveTarget).toBe(0)
+    expect(daysAgainstTarget([{ kcal_in: 1800, kcal_target: 0, kcal_out_est: 2200, is_complete: true }]).completos).toBe(0)
+  })
+
+  const base: ActionInput = {
+    leftOut: [],
+    note: null,
+    weekday: 1900,
+    weekend: 1950,
+    fdsDaysEarlier: 1,
+    targetKg: 82,
+    protein: [],
+    perMeal: 35,
+    weighings7: 6,
+    projection: 'A este ritmo: 82 kg a 6 jan',
+  }
+
+  it('B3: com a maioria dos dias acima do alvo, não diz «Continua assim»', () => {
+    const a = weekAction({ ...base, aboveTarget: ['2026-11-02', '2026-11-03', '2026-11-04'], completeDays: 4 })
+    expect(a.kind).toBe('acima_alvo')
+    expect(a.detail).toMatch(/^seg 2, ter 3 e qua 4: comeste acima do alvo/)
+    expect(weekAction({ ...base, aboveTarget: ['2026-11-02'], completeDays: 5 }).kind).toBe('manter')
+  })
+
+  it('B3: quando a projeção não chega, não diz «Continua assim»', () => {
+    const a = weekAction({ ...base, projectionKind: 'never', projection: 'A este ritmo: não chega aos 82 kg' })
+    expect(a.kind).toBe('ritmo')
+    expect(a.detail).toMatch(/82 kg/)
+    expect(weekAction({ ...base, projectionKind: 'date' }).kind).toBe('manter')
   })
 })

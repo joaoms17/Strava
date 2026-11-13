@@ -208,17 +208,24 @@ function fmtKg(n: number): string {
 }
 
 // Frase da semana: comer contra gasto (média dos dias completos) e o peso.
-export function weekSentence(avgEaten: number, avgOut: number, rateKgWeek: number | null): string {
+// Numa semana que já passou (`current` falso), «Nessa semana…» e o peso no
+// passado (B10: antes dizia «Esta semana comeste…» numa semana de há um mês).
+export function weekSentence(avgEaten: number, avgOut: number, rateKgWeek: number | null, current = true): string {
   const diff = round10(avgEaten - avgOut)
+  const lead = current ? 'Esta semana' : 'Nessa semana'
   const first =
     Math.abs(diff) < 50
-      ? 'Esta semana comeste cerca do que gastaste.'
-      : `Esta semana comeste cerca de ${fmtThousands(Math.abs(diff))} kcal por dia ${diff < 0 ? 'menos' : 'mais'} do que gastaste.`
+      ? `${lead} comeste cerca do que gastaste.`
+      : `${lead} comeste cerca de ${fmtThousands(Math.abs(diff))} kcal por dia ${diff < 0 ? 'menos' : 'mais'} do que gastaste.`
   if (rateKgWeek == null) return first
   const second =
     Math.abs(rateKgWeek) < 0.05
-      ? 'O peso médio está estável.'
-      : `O peso médio está a ${rateKgWeek < 0 ? 'descer' : 'subir'} ${fmtKg(rateKgWeek)} kg por semana.`
+      ? current
+        ? 'O peso médio está estável.'
+        : 'O peso médio esteve estável.'
+      : current
+        ? `O peso médio está a ${rateKgWeek < 0 ? 'descer' : 'subir'} ${fmtKg(rateKgWeek)} kg por semana.`
+        : `O peso médio estava a ${rateKgWeek < 0 ? 'descer' : 'subir'} ${fmtKg(rateKgWeek)} kg por semana.`
   return `${first} ${second}`
 }
 
