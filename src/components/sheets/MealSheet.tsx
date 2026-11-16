@@ -771,7 +771,9 @@ export default function MealSheet() {
                 </div>
               )}
               <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
-              {current.deleted_at == null && current.status !== 'a_analisar' && (
+              {/* Só nas refeições analisadas: numa que falhou, «Tentar outra vez»
+                  trocaria os alimentos juntados. */}
+              {current.deleted_at == null && (current.status === 'ok' || current.status === 'por_rever') && (
                 <button
                   onClick={() => sheet.open('barras', { refeicao: current.id })}
                   disabled={dirty}

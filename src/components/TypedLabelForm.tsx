@@ -5,7 +5,8 @@ import { useToast } from '../lib/toast'
 import { BusyButton } from '../lib/busy'
 import { cleanDecimalText, decimalFromText } from '../lib/campo-numero'
 import { fmtInt } from '../lib/format'
-import { typedFood, type TypedLabel } from '../../api/_lib/rules/off'
+import { typedFood } from '../../api/_lib/rules/off'
+import { typedLabelFromText } from '../lib/rotulo'
 import type { Food } from '../lib/types'
 
 const BAD_VALUES = 'Esses valores não batem certo. Confirma as kcal e a proteína por 100 g.'
@@ -27,13 +28,7 @@ export default function TypedLabelForm({
   const set = (key: keyof typeof text) => (value: string) =>
     setText({ ...text, [key]: key === 'name' ? value : cleanDecimalText(value, 1) })
 
-  const optional = (t: string) => (t.trim() ? decimalFromText(t, 0, 100) : null)
-  const label: TypedLabel | null = (() => {
-    const kcal = decimalFromText(text.kcal, 0, 900)
-    const protein = decimalFromText(text.protein, 0, 100)
-    if (!text.name.trim() || kcal == null || protein == null) return null
-    return { name: text.name, kcal_100g: kcal, protein_100g: protein, carbs_100g: optional(text.carbs), fat_100g: optional(text.fat) }
-  })()
+  const { label, problem } = typedLabelFromText(text)
   const grams = decimalFromText(text.grams, 1, 5000)
   const ready = label != null && grams != null
 
@@ -41,18 +36,19 @@ export default function TypedLabelForm({
     if (!label || grams == null) return
     try {
       let food: Food
+      const values = { ...label, portion_g: Math.round(grams) }
       if (ean) {
-        ;({ food } = await postApi<{ food: Food }>('/api/meal/label', { ean, values: label }))
+        ;({ food } = await postApi<{ food: Food }>('/api/meal/label', { ean, values }))
       } else {
-        const values = typedFood(label)
-        if (!values) throw new Error(BAD_VALUES)
+        const row = typedFood(values)
+        if (!row) throw new Error(BAD_VALUES)
         const {
           data: { user },
         } = await supabase.auth.getUser()
         if (!user) throw new Error('Sessão expirada. Volta a entrar.')
         const { data, error } = await supabase
           .from('foods')
-          .insert({ ...values, user_id: user.id, source: 'user', use_count: 0 })
+          .insert({ ...row, user_id: user.id, source: 'user', use_count: 0 })
           .select()
           .single()
         if (error || !data) throw new Error('Não consegui guardar o alimento. Tenta outra vez.')
@@ -90,6 +86,7 @@ export default function TypedLabelForm({
         {field('fat', 'Gordura (g) · opcional', { decimal: true })}
       </div>
       {field('grams', 'Quanto comeste (g)', { decimal: true })}
+      {problem && <p className="text-[0.9375rem] text-attn">{problem}</p>}
       {label && grams != null && (
         <p className="text-[0.9375rem] text-dim tabular-nums">
           {fmtInt((label.kcal_100g * grams) / 100)} kcal ·{' '}

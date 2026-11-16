@@ -548,30 +548,30 @@ export default function BarcodeSheet() {
           </div>
         )}
 
-        {!food && !error && !searching && !typing && !choosing && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  ['Código', () => setScanning(true)],
-                  ['Procurar', () => setSearching(true)],
-                  ['Escrever rótulo', () => setTyping({ ean: null })],
-                ] as const
-              ).map(([text, run]) => (
-                <button key={text} onClick={run} className="min-h-12 rounded-xl bg-surface2 px-1 text-[0.875rem]">
-                  {text}
-                </button>
-              ))}
-            </div>
-            <FoodQuickList
-              slot={listSlot}
-              onPick={(picked, g) => {
-                showFood(picked)
-                changeGrams(g)
-              }}
-            />
+        {/* Fica montada (só escondida) enquanto se vê um produto: escolher
+            vários seguidos não volta a carregar a lista nem perde a pesquisa. */}
+        <div className={!food && !error && !searching && !typing && !choosing ? 'space-y-3' : 'hidden'}>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                ['Código', () => setScanning(true)],
+                ['Procurar', () => setSearching(true)],
+                ['Escrever rótulo', () => setTyping({ ean: null })],
+              ] as const
+            ).map(([text, run]) => (
+              <button key={text} onClick={run} className="min-h-12 rounded-xl bg-surface2 px-1 text-[0.875rem]">
+                {text}
+              </button>
+            ))}
           </div>
-        )}
+          <FoodQuickList
+            slot={listSlot}
+            onPick={(picked, g) => {
+              showFood(picked)
+              changeGrams(g)
+            }}
+          />
+        </div>
 
         {items.length > 0 && !choosing && (
           <>
