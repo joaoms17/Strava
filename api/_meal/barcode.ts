@@ -15,6 +15,7 @@ import {
   offMacrosMissing,
   offSearchResults,
   searchKey,
+  typedFood,
   withoutExtras,
   type FoodValues,
   type OffHit,
@@ -134,11 +135,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // Rótulo fotografado: a foto (JPEG até 2048 px) sobe antes para
 // <user>/rotulo/ e apaga-se depois de lida.
 // ---------------------------------------------------------------------
-const LabelBody = z.object({
+const PhotoLabelBody = z.object({
   ean: z.string().regex(EAN),
   photo_path: z.string().max(200),
   name: z.string().trim().max(80).optional(),
 })
+// O rótulo escrito à mão (a foto não deu): sem foto e sem IA.
+const TypedLabelBody = z.object({
+  ean: z.string().regex(EAN),
+  values: z.object({
+    name: z.string().trim().max(120),
+    kcal_100g: z.number(),
+    protein_100g: z.number(),
+    carbs_100g: z.number().nullable().optional(),
+    fat_100g: z.number().nullable().optional(),
+    portion_g: z.number().nullable().optional(),
+  }),
+})
+const LabelBody = z.union([TypedLabelBody, PhotoLabelBody])
 
 const n = () => z.number().nullable()
 const LabelSchema = z.object({
@@ -162,6 +176,13 @@ export async function label(req: VercelRequest, res: VercelResponse) {
     const { user, db } = await requireUser(req)
     const body = LabelBody.safeParse(req.body ?? {})
     if (!body.success) throw new HttpError(400, 'Pedido inválido.')
+    if ('values' in body.data) {
+      const values = typedFood(body.data.values)
+      if (!values) throw new HttpError(422, 'Esses valores não batem certo. Confirma as kcal e a proteína por 100 g.')
+      const food = await saveFood(db, user.id, body.data.ean, values, 'user', true)
+      res.status(200).json({ food })
+      return
+    }
     const { ean, photo_path: path, name } = body.data
     // O download usa service role (o bucket é privado): só fotos da pessoa.
     if (!path.startsWith(`${user.id}/rotulo/`) || path.includes('..')) throw new HttpError(403, 'Foto inválida.')
