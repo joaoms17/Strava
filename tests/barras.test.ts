@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { basketFromStore, basketToStore, gramsFromInput } from '../src/lib/barras'
+import { BASKET_KEY, basketFromStore, basketKey, basketToStore, gramsFromInput } from '../src/lib/barras'
 import type { MealItem } from '../src/lib/types'
 
 const item: MealItem = { name: 'Iogurte', grams: 125, kcal: 80, protein: 10, carbs: 6, fat: 0, food_id: 'f1', estimated: false }
@@ -33,5 +33,12 @@ describe('código de barras: gramas de 1 em 1 (H17)', () => {
     expect(gramsFromInput('')).toBeNull()
     expect(gramsFromInput('0')).toBeNull()
     expect(gramsFromInput('abc')).toBeNull()
+  })
+})
+
+describe('cesto ligado a uma refeição', () => {
+  it('cada refeição tem o seu cesto; sem refeição, o geral', () => {
+    expect(basketKey(null)).toBe(BASKET_KEY)
+    expect(basketKey('abc')).toBe('regresso.cesto-barras.abc')
   })
 })

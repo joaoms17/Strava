@@ -16,7 +16,7 @@ import { fmtInt } from '../../lib/format'
 import { prepareMenuPhoto } from '../../lib/image'
 import { foodExtrasText } from '../../lib/food-extras'
 import { dayLabel, whenFromParams, whenParams } from '../../lib/when'
-import { BASKET_KEY, basketFromStore, basketToStore, gramsFromInput } from '../../lib/barras'
+import { basketFromStore, basketKey, basketToStore, gramsFromInput } from '../../lib/barras'
 import { readScoped, writeScoped } from '../../lib/scoped'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { round1 } from '../../../api/_lib/rules/meal-totals'
@@ -54,10 +54,14 @@ export default function BarcodeSheet() {
   // O «Quando» escolhido no Registar (?data=…&momento=…); sem ele, agora.
   const when = whenFromParams(sheet.params, today)
   const date = when.date
+  // Aberta a partir de uma refeição (＋ Alimento): junta-se diretamente a ela,
+  // com um cesto só dela.
+  const mealId = sheet.params.get('refeicao')
+  const storeKey = basketKey(mealId)
   // Os produtos lidos de antes (fechou-se sem guardar) voltam (H17); com eles
   // abre-se a lista (ler outro está lá).
   const [basket, setBasket] = useState<MealItem[]>(() =>
-    basketFromStore(typeof localStorage === 'undefined' ? null : readScoped(localStorage, BASKET_KEY), new Date()),
+    basketFromStore(typeof localStorage === 'undefined' ? null : readScoped(localStorage, storeKey), new Date()),
   )
   const [restored] = useState(() => basket.length)
   // Do ícone «Código de barras» do ＋ (?ler=1) abre logo a câmara; de resto,
@@ -65,7 +69,8 @@ export default function BarcodeSheet() {
   const [scanning, setScanning] = useState(restored === 0 && sheet.params.get('ler') === '1')
   // O rótulo escrito à mão: com o código não encontrado, ou sem código.
   const [typing, setTyping] = useState<{ ean: string | null } | null>(null)
-  const listSlot = when.slot && when.slot !== 'agora' ? when.slot : slotOf(new Date())
+  const [target, setTarget] = useState<Target | null>(null)
+  const listSlot = target ? mealSlot(target) : when.slot && when.slot !== 'agora' ? when.slot : slotOf(new Date())
   const [food, setFood] = useState<Food | null>(null)
   const [grams, setGrams] = useState(100)
   // O que está escrito no campo das gramas (de 1 em 1; H17).
@@ -85,6 +90,29 @@ export default function BarcodeSheet() {
   const [dayMeals, setDayMeals] = useState<Target[]>([])
 
   const columns = 'id,items,status,slot,logged_at,date,input_type,raw_text'
+
+  useEffect(() => {
+    if (!mealId) return
+    let alive = true
+    void supabase
+      .from('meals')
+      .select(`${columns},deleted_at`)
+      .eq('id', mealId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        const meal = data as (Target & { deleted_at: string | null }) | null
+        if (!meal || meal.deleted_at || meal.status === 'a_analisar') {
+          toast(meal?.status === 'a_analisar' ? 'Essa refeição ainda está a ser analisada. Espera um pouco.' : 'Não encontrei essa refeição.')
+          sheet.close()
+          return
+        }
+        setTarget(meal)
+      })
+    return () => {
+      alive = false
+    }
+  }, [mealId])
 
   useEffect(() => {
     if (!choosing) return
@@ -176,16 +204,16 @@ export default function BarcodeSheet() {
   // Tudo o que está lido (também o produto à vista) fica no telemóvel até se gravar.
   const itemsKey = JSON.stringify(items)
   useEffect(() => {
-    writeScoped(localStorage, BASKET_KEY, basketToStore(JSON.parse(itemsKey) as MealItem[], new Date()))
-  }, [itemsKey])
+    writeScoped(localStorage, storeKey, basketToStore(JSON.parse(itemsKey) as MealItem[], new Date()))
+  }, [itemsKey, storeKey])
   function forgetBasket() {
-    writeScoped(localStorage, BASKET_KEY, null)
+    writeScoped(localStorage, storeKey, null)
   }
 
   // Fechar com produtos lidos: ficam guardados e o aviso leva lá.
   function close() {
     if (items.length > 0) {
-      const params = whenParams(when, today)
+      const params = { ...whenParams(when, today), ...(mealId ? { refeicao: mealId } : {}) }
       toast(
         items.length === 1 ? 'O produto lido ficou guardado.' : `Os ${items.length} produtos lidos ficaram guardados.`,
         [{ label: 'Abrir', run: () => sheet.open('barras', params) }],
@@ -284,7 +312,13 @@ export default function BarcodeSheet() {
       title="Adicionar alimento"
       onClose={close}
       footer={
-        items.length > 0 && !choosing ? (
+        mealId ? (
+          items.length > 0 && target ? (
+            <BusyButton busy="A juntar…" onClick={() => addTo(target)} className={primary}>
+              {`Juntar${items.length > 1 ? ` ${items.length}` : ''} · ${fmtInt(kcal)} kcal`}
+            </BusyButton>
+          ) : undefined
+        ) : items.length > 0 && !choosing ? (
           <BusyButton busy="A guardar…" onClick={saveNew} className={primary}>
             {`Guardar${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
           </BusyButton>
@@ -546,9 +580,11 @@ export default function BarcodeSheet() {
                 Total: {fmtInt(kcal)} kcal · proteína {fmtInt(protein)} g
               </p>
             )}
-            <button onClick={() => setChoosing(true)} className="min-h-11 text-[0.9375rem] text-eat">
-              Juntar a uma refeição já registada
-            </button>
+            {!mealId && (
+              <button onClick={() => setChoosing(true)} className="min-h-11 text-[0.9375rem] text-eat">
+                Juntar a uma refeição já registada
+              </button>
+            )}
           </>
         )}
 
