@@ -288,8 +288,8 @@ export default function CaptureSheet() {
     )
   }
 
-  function open(name: 'barras' | 'repetir' | 'menu') {
-    sheet.open(name, whenParams(when, today))
+  function open(name: 'barras' | 'repetir' | 'menu', extra: Record<string, string> = {}) {
+    sheet.open(name, { ...whenParams(when, today), ...extra })
   }
 
   const big =
@@ -535,7 +535,7 @@ export default function CaptureSheet() {
         <div className="grid grid-cols-3 gap-2">
           {(
             [
-              ['barcode', 'Código de barras', () => open('barras')],
+              ['barcode', 'Código de barras', () => open('barras', { ler: '1' })],
               ['menu', 'Menu', () => open('menu')],
               ['star', 'Nova favorita', () => sheet.open('nova-favorita')],
             ] as const

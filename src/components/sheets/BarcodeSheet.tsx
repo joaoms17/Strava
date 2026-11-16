@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import BarcodeScanner from '../BarcodeScanner'
+import FoodQuickList from '../FoodQuickList'
+import TypedLabelForm from '../TypedLabelForm'
 import { ApiError, getApi, postApi } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
@@ -38,8 +40,9 @@ function itemOf(food: Food, grams: number): MealItem {
   }
 }
 
-// Código de barras (Open Food Facts, sem IA): lê vários produtos para a mesma
-// refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
+// Adicionar alimento (sem IA): os mais usados no momento, o código de barras
+// (Open Food Facts) e o rótulo escrito à mão. Junta vários produtos para a
+// mesma refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
 // juntos a uma já registada (escolhida aqui entre as desse dia). Também se procura pelo nome, e um
 // produto que o Open Food Facts não tem lê-se pela foto do rótulo (fica
 // ligado ao código para a próxima vez, também para a outra pessoa).
@@ -57,7 +60,12 @@ export default function BarcodeSheet() {
     basketFromStore(typeof localStorage === 'undefined' ? null : readScoped(localStorage, BASKET_KEY), new Date()),
   )
   const [restored] = useState(() => basket.length)
-  const [scanning, setScanning] = useState(restored === 0)
+  // Do ícone «Código de barras» do ＋ (?ler=1) abre logo a câmara; de resto,
+  // a lista dos mais usados.
+  const [scanning, setScanning] = useState(restored === 0 && sheet.params.get('ler') === '1')
+  // O rótulo escrito à mão: com o código não encontrado, ou sem código.
+  const [typing, setTyping] = useState<{ ean: string | null } | null>(null)
+  const listSlot = when.slot && when.slot !== 'agora' ? when.slot : slotOf(new Date())
   const [food, setFood] = useState<Food | null>(null)
   const [grams, setGrams] = useState(100)
   // O que está escrito no campo das gramas (de 1 em 1; H17).
@@ -111,6 +119,7 @@ export default function BarcodeSheet() {
   }
 
   function showFood(found: Food) {
+    setTyping(null)
     setFood(found)
     changeGrams(Number(found.default_portion_g) || 100)
     setSearching(false)
@@ -254,7 +263,7 @@ export default function BarcodeSheet() {
     return (
       <BarcodeScanner
         onDetect={(ean) => void runBusy('A procurar o produto…', () => lookup(ean))}
-        onClose={() => (basket.length > 0 ? setScanning(false) : close())}
+        onClose={() => (basket.length > 0 || sheet.params.get('ler') !== '1' ? setScanning(false) : close())}
         onSearch={() => {
           setScanning(false)
           setError(null)
@@ -272,7 +281,7 @@ export default function BarcodeSheet() {
 
   return (
     <BottomSheet
-      title="Código de barras"
+      title="Adicionar alimento"
       onClose={close}
       footer={
         items.length > 0 && !choosing ? (
@@ -314,6 +323,16 @@ export default function BarcodeSheet() {
                     }}
                   />
                 </label>
+                <button
+                  onClick={() => {
+                    setTyping({ ean: missing })
+                    setError(null)
+                    setMissing(null)
+                  }}
+                  className="min-h-12 w-full rounded-xl border border-line text-[1rem]"
+                >
+                  Escrever os valores
+                </button>
               </>
             )}
             <div className="grid grid-cols-2 gap-2">
@@ -383,15 +402,37 @@ export default function BarcodeSheet() {
                   ))}
                 </ul>
               ))}
-            <button onClick={() => setScanning(true)} className="min-h-11 text-[0.9375rem] text-eat">
-              Ler o código
-            </button>
+            <div className="flex gap-4">
+              <button onClick={() => setScanning(true)} className="min-h-11 text-[0.9375rem] text-eat">
+                Ler o código
+              </button>
+              <button
+                onClick={() => {
+                  setSearching(false)
+                  setResults(null)
+                }}
+                className="min-h-11 text-[0.9375rem] text-dim"
+              >
+                Voltar à lista
+              </button>
+            </div>
             <p className="text-[0.75rem] text-dim">Dados: Open Food Facts (ODbL)</p>
           </div>
         )}
 
+        {typing && (
+          <TypedLabelForm
+            ean={typing.ean}
+            onCancel={() => setTyping(null)}
+            onSaved={(saved, g) => {
+              showFood(saved)
+              changeGrams(g)
+            }}
+          />
+        )}
+
         {basket.length > 0 && (
-          <ul className="divide-y divide-line rounded-2xl bg-surface2" aria-label="Produtos lidos">
+          <ul className="divide-y divide-line rounded-2xl bg-surface2" aria-label="Produtos escolhidos">
             {basket.map((item, i) => (
               <li key={`${item.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1">
@@ -456,17 +497,50 @@ export default function BarcodeSheet() {
           </div>
         )}
 
-        {items.length > 0 && !choosing && (
-          <>
+        {food && !choosing && (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={addCurrent} className="min-h-12 rounded-xl border border-line text-[0.9375rem]">
+              ＋ Juntar e escolher outro
+            </button>
             <button
               onClick={() => {
                 addCurrent()
                 setScanning(true)
               }}
-              className="min-h-12 w-full rounded-xl border border-line text-[1rem]"
+              className="min-h-12 rounded-xl border border-line text-[0.9375rem]"
             >
-              ＋ Ler outro produto
+              Ler outro código
             </button>
+          </div>
+        )}
+
+        {!food && !error && !searching && !typing && !choosing && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  ['Código', () => setScanning(true)],
+                  ['Procurar', () => setSearching(true)],
+                  ['Escrever rótulo', () => setTyping({ ean: null })],
+                ] as const
+              ).map(([text, run]) => (
+                <button key={text} onClick={run} className="min-h-12 rounded-xl bg-surface2 px-1 text-[0.875rem]">
+                  {text}
+                </button>
+              ))}
+            </div>
+            <FoodQuickList
+              slot={listSlot}
+              onPick={(picked, g) => {
+                showFood(picked)
+                changeGrams(g)
+              }}
+            />
+          </div>
+        )}
+
+        {items.length > 0 && !choosing && (
+          <>
             {items.length > 1 && (
               <p className="text-[0.875rem] text-dim tabular-nums">
                 Total: {fmtInt(kcal)} kcal · proteína {fmtInt(protein)} g
