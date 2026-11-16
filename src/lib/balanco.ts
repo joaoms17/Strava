@@ -4,6 +4,7 @@
 // semana vista, o gasto dela e a proteína por refeição saem daqui em memória
 // (lib/balanco-semana.ts): ‹ › é instantâneo. Uma semana mais antiga lê o seu
 // bloco de 4 semanas, uma vez.
+import { withAnchor } from './projecao-ancora'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabase'
 import { shiftDate } from './day'
@@ -120,12 +121,15 @@ export function longoFrom(profile: Profile, rows: BalancoRows, today: string): B
   }))
   const weights = rows.weights.map((x) => ({ date: x.date, value: x.kg }))
   const recent = shiftDate(today, -40)
-  const projection = projectionFrom(profile, today, {
+  const projected = projectionFrom(profile, today, {
     weights: rows.weights.filter((x) => x.date >= recent),
     days: days.filter((x) => x.date >= recent) as ProjectionRows['days'],
     workouts: rows.workouts.filter((x) => x.date >= recent).map((w) => ({ date: w.date, minutes: w.minutes, kcal_est: w.kcal_est })),
     measurements: [],
+    startDate: rows.firstDate,
   })
+  // A data de hoje fica até mudar mais de uma semana (projecao-ancora).
+  const projection = { ...projected, input: withAnchor(projected.input) }
   return { from: rows.daysFrom, days, weights, health: rows.health, projection, firstDate: rows.firstDate }
 }
 

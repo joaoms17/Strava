@@ -77,7 +77,7 @@ describe('projeção', () => {
     expect(p.weight.early <= p.weight.date).toBe(true)
     expect(p.weight.late! >= p.weight.date).toBe(true)
     expect(p.waist?.kind).toBe('date')
-    expect(projectionLine(p, 78, 88, AS_OF)).toMatch(/^A este ritmo: 78 kg a \d+ (dez|jan)/)
+    expect(projectionLine(p, 78, 88, AS_OF)).toMatch(/^A este ritmo: 78 kg entre \d+ (nov|dez) e \d+ (dez|jan)/)
     expect(projectionLine(p, 78, 88, AS_OF)).toMatch(/cintura 88 cm em/)
     expect(rangeText(p.weight, AS_OF)).toMatch(/^entre /)
   })
@@ -175,5 +175,80 @@ describe('projeção: K6, K8, K15 e frases (B10)', () => {
   it('B10: a frase de quem não chega ao alvo', () => {
     const p = project(input({ kgDay: 0.1 / 7, tdee: 2000 }))
     expect(projectionLine(p, 78, null, AS_OF)).toBe('A este ritmo: não chega aos 78 kg')
+  })
+})
+
+// Uma dieta que começa com a descida de água: 3 kg nas 2 primeiras semanas,
+// depois 0,6 kg/semana; come 1500 com gasto 2200 (0,64 kg/semana pelas contas).
+function dietStart(totalDays: number, asOf = AS_OF): ProjInput {
+  const days: ProjDay[] = []
+  const weights = []
+  for (let i = totalDays; i >= 1; i--) {
+    const date = shiftDate(asOf, -i)
+    const d = totalDays - i // dias desde o início
+    const kg = d < 14 ? 86 - (3 * d) / 14 : 83 - (0.6 / 7) * (d - 14)
+    days.push({ date, kcal_in: 1500, is_complete: true, flags: [], tdee_est: 2200 })
+    weights.push({ date, value: kg })
+  }
+  return { asOf, days, weights, workouts: [], waist: [], targetKg: 75, targetWaistCm: null, startDate: days[0]!.date }
+}
+
+describe('projeção: o início da dieta não promete datas (expectativas)', () => {
+  it('nas primeiras 4 semanas não há data: ainda a medir o ritmo real', () => {
+    const p = project(dietStart(21))
+    expect(p.status).toBe('insuficiente')
+    if (p.status === 'insuficiente') expect(p.missing).toMatch(/ritmo real/)
+  })
+
+  it('a descida de água das 2 primeiras semanas não entra no ritmo pelo peso', () => {
+    const p = project(dietStart(35))
+    expect(p.status).toBe('ok')
+    if (p.status !== 'ok') return
+    // Sem a água, ~0,6 kg/semana; com ela, a janela de 28 dias dava ~1 kg/semana.
+    expect(p.basis.observedKgDay * 7).toBeGreaterThan(-0.7)
+    expect(p.basis.observedKgDay * 7).toBeLessThan(-0.5)
+  })
+
+  it('o peso a descer muito mais depressa do que as contas explicam conta no máximo 1,3× as contas', () => {
+    const fast = input({ kgDay: -1.5 / 7, tdee: 2600, weekday: 2050, weekend: 2050 })
+    const p = project(fast)
+    expect(p.status).toBe('ok')
+    if (p.status !== 'ok') return
+    const energy = p.basis.energyKgDay
+    expect(p.basis.rateKgDay).toBeGreaterThanOrEqual((energy + 1.3 * energy) / 2 - 1e-9)
+  })
+})
+
+describe('projeção: a data não anda todos os dias', () => {
+  it('a data mostrada antes fica enquanto a nova estiver a menos de uma semana dela', () => {
+    const fresh = project(input())
+    if (fresh.status !== 'ok' || fresh.weight.kind !== 'date') throw new Error('sem data')
+    const anchor = { date: shiftDate(fresh.weight.date, 5), early: shiftDate(fresh.weight.date, -10), late: shiftDate(fresh.weight.date, 20) }
+    const kept = project({ ...input(), anchor })
+    expect(kept.status === 'ok' && kept.weight).toEqual({ kind: 'date', ...anchor })
+  })
+
+  it('a mais de uma semana, a data muda', () => {
+    const fresh = project(input())
+    if (fresh.status !== 'ok' || fresh.weight.kind !== 'date') throw new Error('sem data')
+    const anchor = { date: shiftDate(fresh.weight.date, 9), early: shiftDate(fresh.weight.date, 2), late: null }
+    expect(project({ ...input(), anchor })).toEqual(fresh)
+  })
+
+  it('o «E se…» e uma âncora já passada não usam a âncora', () => {
+    const fresh = project(input(), -200)
+    if (fresh.status !== 'ok' || fresh.weight.kind !== 'date') throw new Error('sem data')
+    const anchor = { date: shiftDate(fresh.weight.date, 3), early: fresh.weight.early, late: fresh.weight.late }
+    expect(project({ ...input(), anchor }, -200)).toEqual(fresh)
+    const past = { date: shiftDate(AS_OF, -1), early: shiftDate(AS_OF, -5), late: AS_OF }
+    expect(project({ ...input(), anchor: past })).toEqual(project(input()))
+  })
+})
+
+describe('projeção: a frase dá o intervalo, não um dia', () => {
+  it('«entre … e …» em vez de «a 9 jan»', () => {
+    const p = project(input())
+    if (p.status !== 'ok' || p.weight.kind !== 'date') throw new Error('sem data')
+    expect(projectionLine(p, 78, null, AS_OF)).toMatch(/^A este ritmo: 78 kg entre .+ e .+$/)
   })
 })

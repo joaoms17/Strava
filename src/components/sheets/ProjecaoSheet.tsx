@@ -16,7 +16,6 @@ import {
   fmtDayMon,
   project,
   projectionLine,
-  rangeText,
   scenarioDelta,
   scenariosDelta,
   type Scenario,
@@ -89,7 +88,9 @@ export default function ProjecaoSheet() {
     const { targetKg, targetWaistCm } = data.input
     const p = sim?.p ?? base
     const changed = chosen.length > 0 && sim != null
-    const before = base.status === 'ok' && base.weight.kind === 'date' ? base.weight.date : null
+    // O «E se…» compara com a data de hoje sem âncora (a âncora só segura o que se mostra).
+    const raw = project({ ...data.input, anchor: null })
+    const before = raw.status === 'ok' && raw.weight.kind === 'date' ? raw.weight.date : null
     const after = p.status === 'ok' && p.weight.kind === 'date' ? p.weight.date : null
     const gain = before && after ? Math.round((Date.parse(before) - Date.parse(after)) / 86_400_000) : null
     body = (
@@ -102,9 +103,6 @@ export default function ProjecaoSheet() {
         ) : (
           <div className="space-y-1">
             <p className="text-[1.1875rem] font-semibold">{projectionLine(p, targetKg, targetWaistCm, today)}</p>
-            {p.status === 'ok' && rangeText(p.weight, today) && (
-              <p className="text-[0.9375rem] text-dim">Peso {rangeText(p.weight, today)}</p>
-            )}
             {changed && gain != null && gain !== 0 && (
               <p className="text-[0.9375rem] font-semibold text-eat">
                 {/* B10: «1 dia mais cedo», não «1 dias». */}
