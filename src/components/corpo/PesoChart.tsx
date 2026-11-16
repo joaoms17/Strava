@@ -106,7 +106,12 @@ export default function PesoChart({
         id: 'meta',
         date: path.end.date,
         value: path.end.value,
-        label: path.reachesInView ? `${kg(targetKg!)} kg a ${fmtDayMon(p.weight.date, today)}` : `→ ${kg(targetKg!)} kg a ${fmtDayMon(p.weight.date, today)}`,
+        // Um intervalo, não um dia (a data exata prometia mais do que se sabe).
+        label: `${path.reachesInView ? '' : '→ '}${kg(targetKg!)} kg · ${
+          p.weight.late == null
+            ? `a partir de ${fmtDayMon(p.weight.early, today)}`
+            : `${fmtDayMon(p.weight.early, today)}–${fmtDayMon(p.weight.late, today)}`
+        }`,
         priority: 3.5,
         prefer: 'below',
       })

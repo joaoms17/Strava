@@ -2,6 +2,7 @@
 // medidas, a projeção, o treino e o relógio) e partilhados pelos gráficos:
 // sem pedidos por gráfico. 1M e 3M usam o mesmo lote (os últimos 5 meses);
 // «Tudo» pede o resto às páginas, uma vez.
+import { withAnchor } from './projecao-ancora'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from './supabase'
 import { shiftDate } from './day'
@@ -78,12 +79,15 @@ export async function loadCorpo(profile: Profile, today: string, scope: 'recente
   const cleanWeights = weights.map((w) => ({ date: w.date, kg: Number(w.kg), body_fat_pct: w.body_fat_pct != null ? Number(w.body_fat_pct) : null }))
   const rows = (measurements.data ?? []) as BodyMeasurement[]
   const recent40 = shiftDate(today, -40)
-  const projection = projectionFrom(profile, today, {
+  const projected = projectionFrom(profile, today, {
     weights: cleanWeights.filter((w) => w.date >= recent40),
     days: (days.data ?? []) as ProjectionRows['days'],
     workouts: workouts.filter((w) => w.date >= recent40).map((w) => ({ date: w.date, minutes: w.minutes, kcal_est: w.kcal_est })),
     measurements: rows,
+    startDate: (first.data ?? [])[0]?.date as string | undefined,
   })
+  // A data de hoje fica até mudar mais de uma semana (projecao-ancora).
+  const projection = { ...projected, input: withAnchor(projected.input) }
   return {
     scope,
     today,

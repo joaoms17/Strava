@@ -2,7 +2,12 @@
 // com os dados da própria pessoa. Duas medidas do ritmo, que se juntam:
 //  - pelas contas: média do que comeu (dias completos) − gasto medido, ÷ 7700;
 //  - pelo peso: declive do peso médio (7 dias) nas últimas 4 semanas, sem as
-//    pesagens da semana de água do ciclo.
+//    pesagens da semana de água do ciclo nem as 2 primeiras semanas da dieta
+//    (sobretudo água), e no máximo 1,3× o ritmo pelas contas (mais do que
+//    isso é água a sair, não gordura).
+// Nas primeiras 4 semanas não há data (as expectativas fazem-se com o ritmo
+// real), e a data já mostrada só muda quando a nova fica a mais de uma
+// semana dela (a âncora).
 // O centro é a média das duas; o intervalo, a distância entre elas (com um
 // mínimo de 15 % do ritmo). O «E se…» soma kcal por dia ao ritmo pelas contas.
 // Sem imports do servidor: o telemóvel corre tudo isto.
@@ -17,6 +22,10 @@ export const PROJ_MIN_WEIGHINGS = 8
 export const PROJ_MAX_DAYS = 730
 export const WAIST_WINDOW_DAYS = 120
 export const MOVE_NOTE_DAYS = 5
+export const START_WATER_DAYS = 14 // as 2 primeiras semanas da dieta: sobretudo água
+export const START_NO_DATE_DAYS = 28 // sem data antes de 4 semanas de dieta
+export const OBSERVED_MAX_SHARE = 1.3 // o peso conta no máximo 1,3× as contas
+export const ANCHOR_DAYS = 7 // a data mostrada só muda a mais de uma semana
 const MIN_SPREAD_SHARE = 0.15
 const STABLE_KG_DAY = 0.02 / 7 // menos de 20 g por semana: estável
 
@@ -42,6 +51,14 @@ export interface ProjInput {
   targetKg: number | null
   targetWaistCm: number | null
   waterDay?: (date: string) => boolean // semana de água do ciclo
+  anchor?: EtaAnchor | null // a data já mostrada (fica até mudar mais de uma semana)
+  startDate?: string | null // o início da dieta (o primeiro registo de sempre)
+}
+
+export interface EtaAnchor {
+  date: string
+  early: string
+  late: string | null
 }
 
 export interface Basis {
@@ -108,6 +125,15 @@ export function projectionBasis(input: ProjInput): Basis | { missing: string; co
     missingParts.push({ text: `pesagens em ${n} ${n === 1 ? 'dia' : 'dias'}`, plural: true })
   }
   if (!missingParts.length && tdee == null) missingParts.push({ text: 'o gasto medido', plural: false })
+  // O início da dieta (o primeiro registo de sempre); sem ele, não se sabe.
+  const start = input.startDate ?? null
+  if (!missingParts.length && start != null && dayDiff(start, input.asOf) < START_NO_DATE_DAYS) {
+    return {
+      missing: `Ainda a medir o teu ritmo real: as primeiras semanas são sobretudo água. A data aparece a ${fmtDayMon(shiftDate(start, START_NO_DATE_DAYS), input.asOf)}.`,
+      countedDays: good.length,
+      weighingDays: weighDates.length,
+    }
+  }
   if (missingParts.length) {
     const verb = missingParts.length > 1 || missingParts[0]!.plural ? 'Faltam' : 'Falta'
     return {
@@ -123,13 +149,17 @@ export function projectionBasis(input: ProjInput): Basis | { missing: string; co
   // K6: a média móvel calcula-se sobre todas as pesagens (as de antes da
   // janela também) e só depois se corta à janela; cortar antes tirava o
   // atraso da média aos primeiros pontos e achatava o declive.
-  const trend = trend7(input.weights.filter((w) => w.date <= input.asOf)).filter((p) => p.date >= from)
+  const afterWater = start != null ? shiftDate(start, START_WATER_DAYS) : from
+  const slopeFrom = afterWater > from ? afterWater : from
+  const trend = trend7(input.weights.filter((w) => w.date <= input.asOf)).filter((p) => p.date >= slopeFrom)
   const clean = input.waterDay ? trend.filter((p) => !input.waterDay!(p.date)) : trend
   const slopeOn = clean.length >= PROJ_MIN_WEIGHINGS ? clean : trend
   const observed = linearSlope(slopeOn)
   const energy = (intake - tdee!) / KCAL_PER_KG
-  const rate = (energy + observed) / 2
-  const spread = Math.max(Math.abs(energy - observed) / 2, Math.abs(rate) * MIN_SPREAD_SHARE)
+  // A descer muito mais depressa do que as contas explicam é água: conta no máximo 1,3×.
+  const observedUsed = energy < 0 && observed < OBSERVED_MAX_SHARE * energy ? OBSERVED_MAX_SHARE * energy : observed
+  const rate = (energy + observedUsed) / 2
+  const spread = Math.max(Math.abs(energy - observedUsed) / 2, Math.abs(rate) * MIN_SPREAD_SHARE)
   // O peso de hoje: o fim da reta (não a última pesagem, que salta com água).
   const lastDay = dayNum(slopeOn[slopeOn.length - 1]!.date)
   const meanX = slopeOn.reduce((a, p) => a + dayNum(p.date), 0) / slopeOn.length
@@ -208,7 +238,13 @@ export function project(input: ProjInput, deltaKcalDay = 0): Projection {
   if (!('tdee' in basis)) return { status: 'insuficiente', ...basis }
   if (input.targetKg == null || !(input.targetKg > 0)) return { status: 'sem_alvo', basis }
   const sim = simulate(basis, deltaKcalDay)
-  const weight = etaFor(input.asOf, basis.currentKg, input.targetKg, sim.rate, basis.spreadKgDay)
+  let weight = etaFor(input.asOf, basis.currentKg, input.targetKg, sim.rate, basis.spreadKgDay)
+  // A data já mostrada fica enquanto a nova estiver a menos de uma semana
+  // dela (o «E se…» compara com a de hoje, sem âncora).
+  const a = input.anchor
+  if (deltaKcalDay === 0 && a && a.date >= input.asOf && weight.kind === 'date' && Math.abs(dayDiff(a.date, weight.date)) <= ANCHOR_DAYS) {
+    weight = { kind: 'date', date: a.date, early: a.early, late: a.late }
+  }
   let waist: GoalEta | null = null
   if (input.targetWaistCm != null && basis.waistCm != null && basis.waistDate) {
     if (basis.waistCm <= input.targetWaistCm) waist = { kind: 'reached' }
@@ -344,7 +380,10 @@ export function projectionLine(p: Projection, targetKg: number | null, targetWai
   if (w.kind === 'reached') parts.push(`${kg1(targetKg)} kg atingido`)
   // B10: antes «A este ritmo: 80 kg: a este ritmo não chega».
   else if (w.kind === 'never') parts.push(`não chega aos ${kg1(targetKg)} kg`)
-  else parts.push(`${kg1(targetKg)} kg a ${fmtDayMon(w.date, asOf)}`)
+  // Um intervalo, não um dia: a data exata prometia mais do que se sabe.
+  else if (w.late == null) parts.push(`${kg1(targetKg)} kg a partir de ${fmtDayMon(w.early, asOf)}`)
+  else if (w.early === w.late) parts.push(`${kg1(targetKg)} kg a ${fmtDayMon(w.date, asOf)}`)
+  else parts.push(`${kg1(targetKg)} kg entre ${fmtDayMon(w.early, asOf)} e ${fmtDayMon(w.late, asOf)}`)
   if (p.waist && targetWaistCm != null) {
     const cm = Math.round(targetWaistCm)
     if (p.waist.kind === 'reached') parts.push(`cintura ${cm} cm atingida`)

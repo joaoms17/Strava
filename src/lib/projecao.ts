@@ -8,6 +8,7 @@ import { cleanStarts, cycleInfo, cycleOptions } from '../../api/_lib/rules/ciclo
 import { targetBodyFatPct, targetWaist, withReferenceNeck, wrongWaistSite } from '../../api/_lib/rules/composicao'
 import { moveNote, project, projectionLine, type ProjInput, type Projection } from '../../api/_lib/rules/projecao'
 import { monthBounds, monthSummary, type MonthSummary } from '../../api/_lib/rules/mes'
+import { withAnchor } from './projecao-ancora'
 
 export interface ProjectionData {
   input: ProjInput
@@ -42,6 +43,7 @@ export interface ProjectionRows {
   days: { date: string; kcal_in: number | null; kcal_target?: number | null; kcal_out_est?: number | null; is_complete: boolean | null; flags: string[] | null; tdee_est: number | null }[]
   workouts: { date: string; minutes: number | null; kcal_est: number | null }[]
   measurements: BodyMeasurement[]
+  startDate?: string | null // o início da dieta: o primeiro registo de sempre
 }
 
 // Os dados da projeção a partir das linhas (o Corpo lê-as uma vez para a
@@ -75,17 +77,19 @@ export function projectionFrom(profile: Profile, asOf: string, rows: ProjectionR
       targetKg: Number.isFinite(target) && target > 0 ? target : null,
       targetWaistCm,
       waterDay: waterDayFor(profile),
+      startDate: rows.startDate ?? null,
     },
   }
 }
 
 // De `from` a `to`: pesagens, dias, treinos e medições.
 async function loadRange(profile: Profile, from: string, to: string, asOf: string): Promise<ProjectionData> {
-  const [w, d, wk, m] = await Promise.all([
+  const [w, d, wk, m, first] = await Promise.all([
     supabase.from('weights').select('date,kg').gte('date', from).lte('date', to).order('date'),
     supabase.from('days').select('date,kcal_in,kcal_target,kcal_out_est,is_complete,flags,tdee_est').gte('date', from).lte('date', to).order('date'),
     supabase.from('workouts_active').select('date,minutes,kcal_est').gte('date', from).lte('date', to),
     supabase.from('body_measurements').select('*').order('date'),
+    supabase.from('weights').select('date').order('date').limit(1),
   ])
   if (w.error || d.error) throw new Error(w.error?.message ?? d.error?.message)
   return projectionFrom(profile, asOf, {
@@ -93,12 +97,14 @@ async function loadRange(profile: Profile, from: string, to: string, asOf: strin
     days: (d.data ?? []) as ProjectionRows['days'],
     workouts: (wk.data ?? []) as ProjectionRows['workouts'],
     measurements: (m.data ?? []) as BodyMeasurement[],
+    startDate: (first.data?.[0]?.date as string | undefined) ?? null,
   })
 }
 
 export async function loadProjection(profile: Profile, today: string): Promise<ProjectionData> {
   // 28 dias de agora e os 28 de há uma semana (a nota da semana).
-  return loadRange(profile, shiftDate(today, -40), today, today)
+  const data = await loadRange(profile, shiftDate(today, -40), today, today)
+  return { ...data, input: withAnchor(data.input) }
 }
 
 export function weekAgo(data: ProjectionData): Projection {
@@ -107,6 +113,7 @@ export function weekAgo(data: ProjectionData): Projection {
   const i = data.input
   return project({
     ...i,
+    anchor: null,
     asOf,
     weights: i.weights.filter((w) => w.date <= asOf),
     days: i.days.filter(cut),
@@ -126,7 +133,7 @@ export async function loadMonth(profile: Profile, month: string, today: string):
   const asOf = shiftDate(last, 1) < today ? shiftDate(last, 1) : today
   const data = await loadRange(profile, shiftDate(first, -30), last, asOf)
   const { data: meals } = await supabase.from('meals_counted').select('date,items').gte('date', first).lte('date', last)
-  const p = project({ ...data.input, days: data.input.days.filter((d) => d.date < asOf) })
+  const p = project({ ...data.input, anchor: null, days: data.input.days.filter((d) => d.date < asOf) })
   const i = data.input
   // B12: num mês antigo, uma data de chegada que já passou não se mostra.
   const stale = p.status === 'ok' && p.weight.kind === 'date' && p.weight.date < today

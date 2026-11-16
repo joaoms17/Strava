@@ -6,7 +6,7 @@ import { useDataVersion } from '../lib/events'
 import { BusyButton } from '../lib/busy'
 import { parseDecimal } from '../lib/format'
 import { loadProjection, weekNote, type ProjectionData } from '../lib/projecao'
-import { project, projectionLine, rangeText } from '../../api/_lib/rules/projecao'
+import { project, projectionLine } from '../../api/_lib/rules/projecao'
 
 export function useProjectionData(today: string, enabled = true): ProjectionData | null | 'erro' {
   const profile = useReadyProfile()
@@ -92,7 +92,9 @@ export default function Projecao({
         <>
           <p className="text-[0.9375rem]">Dados insuficientes para uma data honesta.</p>
           <p className="text-[0.8125rem] text-dim">
-            Precisa de 14 dias completos e de pesagens ao longo de 14 dias (nas últimas 4 semanas). {p.missing}
+            {p.missing.startsWith('Ainda a medir')
+              ? p.missing
+              : `Precisa de 14 dias completos e de pesagens ao longo de 14 dias (nas últimas 4 semanas). ${p.missing}`}
           </p>
         </>
       ) : p.status === 'sem_alvo' ? (
@@ -103,7 +105,6 @@ export default function Projecao({
       ) : (
         <button onClick={() => sheet.open('projecao')} className="block w-full space-y-1 text-left">
           <p className="text-[1.0625rem] font-semibold">{projectionLine(p, targetKg, targetWaistCm, today)}</p>
-          {rangeText(p.weight, today) && <p className="text-[0.8125rem] text-dim">Peso {rangeText(p.weight, today)}</p>}
           {note && (
             <p className={`text-[0.8125rem] ${note.days > 0 ? 'text-attn' : 'text-dim'}`}>
               Desde a semana passada: {note.text}.
