@@ -67,3 +67,10 @@ export function rankFoodsForSlot<F extends RankableFood>(
     .sort((a, b) => b.inSlot - a.inSlot || b.food.use_count - a.food.use_count)
     .slice(0, max)
 }
+
+// Um alimento com o mesmo nome (sem acentos nem maiúsculas): escrever o rótulo
+// de algo que já existe atualiza-o em vez de criar outro igual.
+export function sameNameFood<F extends { name: string }>(foods: F[], name: string): F | undefined {
+  const wanted = normalizeFoodName(name)
+  return foods.find((f) => normalizeFoodName(f.name) === wanted)
+}

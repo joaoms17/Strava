@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BASKET_KEY, basketFromStore, basketKey, basketToStore, gramsFromInput } from '../src/lib/barras'
+import { BASKET_KEY, basketFromStore, basketKey, basketToStore, expiredBasketKeys, gramsFromInput } from '../src/lib/barras'
 import type { MealItem } from '../src/lib/types'
 
 const item: MealItem = { name: 'Iogurte', grams: 125, kcal: 80, protein: 10, carbs: 6, fat: 0, food_id: 'f1', estimated: false }
@@ -40,5 +40,24 @@ describe('cesto ligado a uma refeição', () => {
   it('cada refeição tem o seu cesto; sem refeição, o geral', () => {
     expect(basketKey(null)).toBe(BASKET_KEY)
     expect(basketKey('abc')).toBe('regresso.cesto-barras.abc')
+  })
+})
+
+describe('cestos por refeição expirados saem do telemóvel', () => {
+  it('só os cestos de refeições vazios ou expirados', () => {
+    const now = new Date('2026-11-13T12:00:00Z')
+    const old = basketToStore([item], new Date('2026-11-12T00:00:00Z'))
+    const fresh = basketToStore([item], now)
+    const store: Record<string, string | null> = {
+      'regresso.cesto-barras.a:u1': old,
+      'regresso.cesto-barras.b:u1': fresh,
+      'regresso.cesto-barras.c': '{lixo',
+      'regresso.cesto-barras:u1': old,
+      'outra.coisa': old,
+    }
+    expect(expiredBasketKeys(Object.keys(store), (k) => store[k] ?? null, now).sort()).toEqual([
+      'regresso.cesto-barras.a:u1',
+      'regresso.cesto-barras.c',
+    ])
   })
 })
