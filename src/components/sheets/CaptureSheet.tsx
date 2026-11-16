@@ -521,6 +521,16 @@ export default function CaptureSheet() {
               ))}
             </div>
           )}
+          {/* ＋ Alimento: os alimentos mais usados neste momento, vários de uma
+              vez (a mesma folha do código de barras, a abrir na lista). */}
+          <button
+            onClick={() => open('barras')}
+            className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"
+          >
+            <Icon name="plus" size={20} className="shrink-0 text-eat" />
+            <span className="min-w-0 flex-1 text-[0.9375rem]">Alimento · os teus mais usados</span>
+            <Icon name="chevron" size={18} className="shrink-0 text-dim" />
+          </button>
           <button
             onClick={() => open('repetir')}
             className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-line px-3 text-left"
