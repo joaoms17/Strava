@@ -51,7 +51,7 @@ import { favoriteThumb } from '../../lib/favorites'
 // histórico, com pesquisa) e uma linha de ícones para o código de barras e o
 // menu. O que se escolhe no «Quando» vale para tudo o que se regista daqui.
 // As favoritas à vista no ＋; as outras estão em «Procurar».
-const QUICK_FAVORITES = 4
+const QUICK_FAVORITES = 8
 
 export default function CaptureSheet() {
   const profile = useReadyProfile()
