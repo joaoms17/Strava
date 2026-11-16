@@ -771,6 +771,17 @@ export default function MealSheet() {
                 </div>
               )}
               <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
+              {/* Só nas refeições analisadas: numa que falhou, «Tentar outra vez»
+                  trocaria os alimentos juntados. */}
+              {current.deleted_at == null && (current.status === 'ok' || current.status === 'por_rever') && (
+                <button
+                  onClick={() => sheet.open('barras', { refeicao: current.id })}
+                  disabled={dirty}
+                  className="min-h-11 w-full rounded-xl border border-line text-[0.9375rem] text-eat disabled:text-dim"
+                >
+                  {dirty ? 'Guarda as alterações para juntar alimentos' : '＋ Alimento'}
+                </button>
+              )}
               <LeftoversNote meal={current} />
               {current.deleted_at == null && (
                 <>

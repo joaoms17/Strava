@@ -227,6 +227,41 @@ export function labelFood(raw: LabelRead, fallbackName: string): FoodValues | nu
   }
 }
 
+// O rótulo escrito à mão (a foto não deu): kcal e macros por 100 g; os
+// macros que se deixam em branco valem 0. Valores impossíveis: null.
+export interface TypedLabel {
+  name: string
+  kcal_100g: number
+  protein_100g: number
+  carbs_100g?: number | null
+  fat_100g?: number | null
+  portion_g?: number | null
+}
+
+export function typedFood(t: TypedLabel): FoodValues | null {
+  const name = clip(t.name, 120)
+  const kcal = num(t.kcal_100g, 900)
+  const protein = num(t.protein_100g, 100)
+  const carbs = t.carbs_100g == null ? 0 : num(t.carbs_100g, 100)
+  const fat = t.fat_100g == null ? 0 : num(t.fat_100g, 100)
+  if (!name || kcal == null || protein == null || carbs == null || fat == null) return null
+  if (protein + carbs + fat > 105 || implausibleItem({ grams: 100, kcal, protein, carbs, fat })) return null
+  return {
+    name,
+    default_portion_g: t.portion_g == null ? null : num(t.portion_g, 2000) || null,
+    kcal_100g: kcal,
+    protein_100g: protein,
+    carbs_100g: carbs,
+    fat_100g: fat,
+    fiber_100g: null,
+    sugars_100g: null,
+    sat_fat_100g: null,
+    salt_100g: null,
+    nutriscore: null,
+    serving_label: null,
+  }
+}
+
 // Sem a migração, as colunas extra não existem: grava-se só o essencial.
 export function withoutExtras<T extends Record<string, unknown>>(row: T): Partial<T> {
   const copy: Record<string, unknown> = { ...row }

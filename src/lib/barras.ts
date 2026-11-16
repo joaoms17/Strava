@@ -4,6 +4,12 @@ import type { MealItem } from './types'
 // até se gravarem: fechar a folha (ou o gesto de voltar) já não os perde.
 // Ao fim de 12 horas deixam de valer (já não são desta refeição).
 export const BASKET_KEY = 'regresso.cesto-barras'
+// O cesto de quem junta a uma refeição (＋ Alimento) é só dessa refeição: o
+// cesto geral não vai parar a ela por engano.
+export function basketKey(mealId: string | null): string {
+  return mealId ? `${BASKET_KEY}.${mealId}` : BASKET_KEY
+}
+
 const MAX_AGE_MS = 12 * 60 * 60 * 1000
 
 export function basketToStore(items: MealItem[], now: Date): string | null {

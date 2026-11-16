@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import BarcodeScanner from '../BarcodeScanner'
+import FoodQuickList from '../FoodQuickList'
+import TypedLabelForm from '../TypedLabelForm'
 import { ApiError, getApi, postApi } from '../../lib/api'
 import { supabase } from '../../lib/supabase'
 import { useSheet } from '../../lib/sheet'
@@ -14,7 +16,7 @@ import { fmtInt } from '../../lib/format'
 import { prepareMenuPhoto } from '../../lib/image'
 import { foodExtrasText } from '../../lib/food-extras'
 import { dayLabel, whenFromParams, whenParams } from '../../lib/when'
-import { BASKET_KEY, basketFromStore, basketToStore, gramsFromInput } from '../../lib/barras'
+import { basketFromStore, basketKey, basketToStore, gramsFromInput } from '../../lib/barras'
 import { readScoped, writeScoped } from '../../lib/scoped'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { round1 } from '../../../api/_lib/rules/meal-totals'
@@ -38,8 +40,9 @@ function itemOf(food: Food, grams: number): MealItem {
   }
 }
 
-// Código de barras (Open Food Facts, sem IA): lê vários produtos para a mesma
-// refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
+// Adicionar alimento (sem IA): os mais usados no momento, o código de barras
+// (Open Food Facts) e o rótulo escrito à mão. Junta vários produtos para a
+// mesma refeição, um a seguir ao outro, e grava-os juntos — numa refeição nova ou
 // juntos a uma já registada (escolhida aqui entre as desse dia). Também se procura pelo nome, e um
 // produto que o Open Food Facts não tem lê-se pela foto do rótulo (fica
 // ligado ao código para a próxima vez, também para a outra pessoa).
@@ -51,13 +54,23 @@ export default function BarcodeSheet() {
   // O «Quando» escolhido no Registar (?data=…&momento=…); sem ele, agora.
   const when = whenFromParams(sheet.params, today)
   const date = when.date
+  // Aberta a partir de uma refeição (＋ Alimento): junta-se diretamente a ela,
+  // com um cesto só dela.
+  const mealId = sheet.params.get('refeicao')
+  const storeKey = basketKey(mealId)
   // Os produtos lidos de antes (fechou-se sem guardar) voltam (H17); com eles
   // abre-se a lista (ler outro está lá).
   const [basket, setBasket] = useState<MealItem[]>(() =>
-    basketFromStore(typeof localStorage === 'undefined' ? null : readScoped(localStorage, BASKET_KEY), new Date()),
+    basketFromStore(typeof localStorage === 'undefined' ? null : readScoped(localStorage, storeKey), new Date()),
   )
   const [restored] = useState(() => basket.length)
-  const [scanning, setScanning] = useState(restored === 0)
+  // Do ícone «Código de barras» do ＋ (?ler=1) abre logo a câmara; de resto,
+  // a lista dos mais usados.
+  const [scanning, setScanning] = useState(restored === 0 && sheet.params.get('ler') === '1')
+  // O rótulo escrito à mão: com o código não encontrado, ou sem código.
+  const [typing, setTyping] = useState<{ ean: string | null } | null>(null)
+  const [target, setTarget] = useState<Target | null>(null)
+  const listSlot = target ? mealSlot(target) : when.slot && when.slot !== 'agora' ? when.slot : slotOf(new Date())
   const [food, setFood] = useState<Food | null>(null)
   const [grams, setGrams] = useState(100)
   // O que está escrito no campo das gramas (de 1 em 1; H17).
@@ -77,6 +90,29 @@ export default function BarcodeSheet() {
   const [dayMeals, setDayMeals] = useState<Target[]>([])
 
   const columns = 'id,items,status,slot,logged_at,date,input_type,raw_text'
+
+  useEffect(() => {
+    if (!mealId) return
+    let alive = true
+    void supabase
+      .from('meals')
+      .select(`${columns},deleted_at`)
+      .eq('id', mealId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        const meal = data as (Target & { deleted_at: string | null }) | null
+        if (!meal || meal.deleted_at || meal.status === 'a_analisar') {
+          toast(meal?.status === 'a_analisar' ? 'Essa refeição ainda está a ser analisada. Espera um pouco.' : 'Não encontrei essa refeição.')
+          sheet.close()
+          return
+        }
+        setTarget(meal)
+      })
+    return () => {
+      alive = false
+    }
+  }, [mealId])
 
   useEffect(() => {
     if (!choosing) return
@@ -111,6 +147,7 @@ export default function BarcodeSheet() {
   }
 
   function showFood(found: Food) {
+    setTyping(null)
     setFood(found)
     changeGrams(Number(found.default_portion_g) || 100)
     setSearching(false)
@@ -167,16 +204,16 @@ export default function BarcodeSheet() {
   // Tudo o que está lido (também o produto à vista) fica no telemóvel até se gravar.
   const itemsKey = JSON.stringify(items)
   useEffect(() => {
-    writeScoped(localStorage, BASKET_KEY, basketToStore(JSON.parse(itemsKey) as MealItem[], new Date()))
-  }, [itemsKey])
+    writeScoped(localStorage, storeKey, basketToStore(JSON.parse(itemsKey) as MealItem[], new Date()))
+  }, [itemsKey, storeKey])
   function forgetBasket() {
-    writeScoped(localStorage, BASKET_KEY, null)
+    writeScoped(localStorage, storeKey, null)
   }
 
   // Fechar com produtos lidos: ficam guardados e o aviso leva lá.
   function close() {
     if (items.length > 0) {
-      const params = whenParams(when, today)
+      const params = { ...whenParams(when, today), ...(mealId ? { refeicao: mealId } : {}) }
       toast(
         items.length === 1 ? 'O produto lido ficou guardado.' : `Os ${items.length} produtos lidos ficaram guardados.`,
         [{ label: 'Abrir', run: () => sheet.open('barras', params) }],
@@ -254,7 +291,7 @@ export default function BarcodeSheet() {
     return (
       <BarcodeScanner
         onDetect={(ean) => void runBusy('A procurar o produto…', () => lookup(ean))}
-        onClose={() => (basket.length > 0 ? setScanning(false) : close())}
+        onClose={() => (basket.length > 0 || sheet.params.get('ler') !== '1' ? setScanning(false) : close())}
         onSearch={() => {
           setScanning(false)
           setError(null)
@@ -272,10 +309,16 @@ export default function BarcodeSheet() {
 
   return (
     <BottomSheet
-      title="Código de barras"
+      title="Adicionar alimento"
       onClose={close}
       footer={
-        items.length > 0 && !choosing ? (
+        mealId ? (
+          items.length > 0 && target ? (
+            <BusyButton busy="A juntar…" onClick={() => addTo(target)} className={primary}>
+              {`Juntar${items.length > 1 ? ` ${items.length}` : ''} · ${fmtInt(kcal)} kcal`}
+            </BusyButton>
+          ) : undefined
+        ) : items.length > 0 && !choosing ? (
           <BusyButton busy="A guardar…" onClick={saveNew} className={primary}>
             {`Guardar${items.length > 1 ? ` ${items.length} produtos` : ''} · ${fmtInt(kcal)} kcal`}
           </BusyButton>
@@ -314,6 +357,16 @@ export default function BarcodeSheet() {
                     }}
                   />
                 </label>
+                <button
+                  onClick={() => {
+                    setTyping({ ean: missing })
+                    setError(null)
+                    setMissing(null)
+                  }}
+                  className="min-h-12 w-full rounded-xl border border-line text-[1rem]"
+                >
+                  Escrever os valores
+                </button>
               </>
             )}
             <div className="grid grid-cols-2 gap-2">
@@ -383,15 +436,37 @@ export default function BarcodeSheet() {
                   ))}
                 </ul>
               ))}
-            <button onClick={() => setScanning(true)} className="min-h-11 text-[0.9375rem] text-eat">
-              Ler o código
-            </button>
+            <div className="flex gap-4">
+              <button onClick={() => setScanning(true)} className="min-h-11 text-[0.9375rem] text-eat">
+                Ler o código
+              </button>
+              <button
+                onClick={() => {
+                  setSearching(false)
+                  setResults(null)
+                }}
+                className="min-h-11 text-[0.9375rem] text-dim"
+              >
+                Voltar à lista
+              </button>
+            </div>
             <p className="text-[0.75rem] text-dim">Dados: Open Food Facts (ODbL)</p>
           </div>
         )}
 
+        {typing && (
+          <TypedLabelForm
+            ean={typing.ean}
+            onCancel={() => setTyping(null)}
+            onSaved={(saved, g) => {
+              showFood(saved)
+              changeGrams(g)
+            }}
+          />
+        )}
+
         {basket.length > 0 && (
-          <ul className="divide-y divide-line rounded-2xl bg-surface2" aria-label="Produtos lidos">
+          <ul className="divide-y divide-line rounded-2xl bg-surface2" aria-label="Produtos escolhidos">
             {basket.map((item, i) => (
               <li key={`${item.name}-${i}`} className="flex items-center gap-2 px-3 py-2">
                 <div className="min-w-0 flex-1">
@@ -456,25 +531,60 @@ export default function BarcodeSheet() {
           </div>
         )}
 
-        {items.length > 0 && !choosing && (
-          <>
+        {food && !choosing && (
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={addCurrent} className="min-h-12 rounded-xl border border-line text-[0.9375rem]">
+              ＋ Juntar e escolher outro
+            </button>
             <button
               onClick={() => {
                 addCurrent()
                 setScanning(true)
               }}
-              className="min-h-12 w-full rounded-xl border border-line text-[1rem]"
+              className="min-h-12 rounded-xl border border-line text-[0.9375rem]"
             >
-              ＋ Ler outro produto
+              Ler outro código
             </button>
+          </div>
+        )}
+
+        {/* Fica montada (só escondida) enquanto se vê um produto: escolher
+            vários seguidos não volta a carregar a lista nem perde a pesquisa. */}
+        <div className={!food && !error && !searching && !typing && !choosing ? 'space-y-3' : 'hidden'}>
+          <div className="grid grid-cols-3 gap-2">
+            {(
+              [
+                ['Código', () => setScanning(true)],
+                ['Procurar', () => setSearching(true)],
+                ['Escrever rótulo', () => setTyping({ ean: null })],
+              ] as const
+            ).map(([text, run]) => (
+              <button key={text} onClick={run} className="min-h-12 rounded-xl bg-surface2 px-1 text-[0.875rem]">
+                {text}
+              </button>
+            ))}
+          </div>
+          <FoodQuickList
+            slot={listSlot}
+            onPick={(picked, g) => {
+              showFood(picked)
+              changeGrams(g)
+            }}
+          />
+        </div>
+
+        {items.length > 0 && !choosing && (
+          <>
             {items.length > 1 && (
               <p className="text-[0.875rem] text-dim tabular-nums">
                 Total: {fmtInt(kcal)} kcal · proteína {fmtInt(protein)} g
               </p>
             )}
-            <button onClick={() => setChoosing(true)} className="min-h-11 text-[0.9375rem] text-eat">
-              Juntar a uma refeição já registada
-            </button>
+            {!mealId && (
+              <button onClick={() => setChoosing(true)} className="min-h-11 text-[0.9375rem] text-eat">
+                Juntar a uma refeição já registada
+              </button>
+            )}
           </>
         )}
 

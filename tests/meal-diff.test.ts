@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_ITEM_GRAMS, diffText, setItemGrams, stepItem } from '../src/lib/meal-diff'
+import { MAX_ITEM_GRAMS, diffText, setItemGrams, setItemKcal, stepItem } from '../src/lib/meal-diff'
 import type { MealItem } from '../src/lib/types'
 
 const arroz = { name: 'Arroz', grams: 180, kcal: 230, protein: 4.3, carbs: 50, fat: 0.5, food_id: null, estimated: true }
@@ -59,5 +59,29 @@ describe('muitos toques no − / + (M19)', () => {
     for (let i = 0; i < 20; i++) item = stepItem(item, 10)
     for (let i = 0; i < 20; i++) item = stepItem(item, -10)
     expect(item).toMatchObject({ grams: 33, kcal: start.kcal, protein: start.protein, carbs: start.carbs })
+  })
+})
+
+describe('kcal escritas à mão', () => {
+  const base = { name: 'Farinha de arroz', grams: 40, kcal: 144, protein: 2.4, carbs: 32, fat: 0.4, food_id: 'f', estimated: true }
+  it('ajustam as gramas e os macros na mesma proporção', () => {
+    const r = setItemKcal(base, 180)
+    expect(r.grams).toBe(50)
+    expect(r.kcal).toBe(180)
+    expect(r.carbs).toBe(40)
+    expect(r.estimated).toBe(false)
+  })
+  it('escala a partir da origem, sem erro acumulado', () => {
+    expect(setItemKcal(setItemGrams(base, 33), 144).grams).toBe(40)
+  })
+  it('item sem kcal, sem gramas, ou valor inválido fica igual', () => {
+    const zero = { ...base, kcal: 0 }
+    expect(setItemKcal(zero, 50)).toBe(zero)
+    expect(setItemKcal({ ...base, grams: 0 }, 50).grams).toBe(0)
+    expect(setItemKcal(base, 0)).toBe(base)
+    expect(setItemKcal(base, Number.NaN)).toBe(base)
+  })
+  it('não passa das 5 000 g', () => {
+    expect(setItemKcal(base, 999999).grams).toBe(MAX_ITEM_GRAMS)
   })
 })
