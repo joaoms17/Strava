@@ -50,6 +50,14 @@ export function setItemGrams(item: MealItem, grams: number): MealItem {
   return scaled
 }
 
+// Kcal escritas à mão (do rótulo): as gramas ajustam-se na mesma proporção,
+// a partir do original. Itens sem kcal ou sem gramas não mexem.
+export function setItemKcal(item: MealItem, kcal: number): MealItem {
+  const origin = ORIGIN.get(item) ?? item
+  if (item.grams <= 0 || origin.kcal <= 0 || !Number.isFinite(kcal) || kcal <= 0) return item
+  return setItemGrams(item, (origin.grams * kcal) / origin.kcal)
+}
+
 // Passos de 10 g num item (nunca abaixo de 5 g).
 export function stepItem(item: MealItem, deltaGrams: number): MealItem {
   if (item.grams <= 0) return item
