@@ -37,3 +37,9 @@ export function gramsFromInput(text: string): number | null {
   if (!text.trim() || !Number.isFinite(n) || n <= 0) return null
   return Math.min(5000, Math.max(1, Math.round(n)))
 }
+
+// Os cestos por refeição que já não valem (expirados ou estragados): saem do
+// telemóvel em vez de se acumularem. O cesto geral fica (é sempre o mesmo).
+export function expiredBasketKeys(keys: string[], read: (key: string) => string | null, now: Date): string[] {
+  return keys.filter((key) => key.startsWith(`${BASKET_KEY}.`) && basketFromStore(read(key), now).length === 0)
+}

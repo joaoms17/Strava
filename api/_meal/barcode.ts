@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { adminClient, HttpError, requireUser } from '../_lib/supabase.js'
+import { sameNameFood } from '../_lib/rules/mais-usados.js'
 import { respondError } from '../_lib/http.js'
 import { MODELS, NO_THINKING, REQUEST_VISION, structuredCall } from '../_lib/anthropic.js'
 import { PROMPT_LABEL_READ, readPrompt } from '../_lib/prompts.js'
@@ -179,7 +180,24 @@ export async function label(req: VercelRequest, res: VercelResponse) {
     if ('values' in body.data) {
       const values = typedFood(body.data.values)
       if (!values) throw new HttpError(422, 'Esses valores não batem certo. Confirma as kcal e a proteína por 100 g.')
-      const food = await saveFood(db, user.id, body.data.ean, values, 'user', true)
+      const ean = body.data.ean
+      // O mesmo nome que um alimento sem código (ou com este): passa a ser
+      // esse, agora com o código, em vez de ficar repetido.
+      const { data: mine } = await db.from('foods').select('id,name,barcode').limit(1000)
+      const same = sameNameFood((mine ?? []) as { id: string; name: string; barcode: string | null }[], values.name)
+      if (same && (same.barcode == null || same.barcode === ean)) {
+        const { data: updated } = await db
+          .from('foods')
+          .update({ ...values, source: 'user', barcode: ean })
+          .eq('id', same.id)
+          .select()
+          .single()
+        if (updated) {
+          res.status(200).json({ food: updated })
+          return
+        }
+      }
+      const food = await saveFood(db, user.id, ean, values, 'user', true)
       res.status(200).json({ food })
       return
     }

@@ -18,27 +18,44 @@ export default function FoodQuickList({ slot, onPick }: { slot: Slot; onPick: (f
   const [foods, setFoods] = useState<FoodRow[] | null>(null)
   const [meals, setMeals] = useState<{ slot: Slot | null; logged_at: string; items: MealItem[] | null }[]>([])
   const [query, setQuery] = useState('')
+  const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let alive = true
+    setFailed(false)
     const since = shiftDate(lisbonDay(), -DAYS)
     void Promise.all([
       supabase.from('foods').select('*').order('use_count', { ascending: false }).limit(300),
       supabase.from('meals').select('slot,logged_at,items').is('deleted_at', null).gte('date', since),
     ]).then(([f, m]) => {
       if (!alive) return
+      if (f.error || m.error) {
+        setFailed(true)
+        return
+      }
       setFoods((f.data ?? []) as FoodRow[])
       setMeals((m.data ?? []) as typeof meals)
-    })
+    }, () => alive && setFailed(true))
     return () => {
       alive = false
     }
-  }, [])
+  }, [attempt])
 
   const ranked = useMemo(() => (foods ? rankFoodsForSlot(foods, meals, slot, foods.length) : []), [foods, meals, slot])
   const q = normalizeFoodName(query)
   const shown = (q ? ranked.filter((u) => normalizeFoodName(u.food.name).includes(q)) : ranked).slice(0, SHOWN)
 
+  if (failed && foods == null) {
+    return (
+      <div className="space-y-2 rounded-xl bg-surface2 px-3 py-3">
+        <p className="text-[0.875rem] text-dim">Não consegui carregar os teus alimentos. Confirma a ligação.</p>
+        <button onClick={() => setAttempt(attempt + 1)} className="min-h-11 text-[0.9375rem] text-eat">
+          Tentar outra vez
+        </button>
+      </div>
+    )
+  }
   if (foods == null) return <p className="text-[0.9375rem] text-dim">A carregar os teus alimentos…</p>
   if (foods.length === 0) {
     return (

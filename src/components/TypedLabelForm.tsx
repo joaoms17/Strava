@@ -7,6 +7,7 @@ import { cleanDecimalText, decimalFromText } from '../lib/campo-numero'
 import { fmtInt } from '../lib/format'
 import { typedFood } from '../../api/_lib/rules/off'
 import { typedLabelFromText } from '../lib/rotulo'
+import { sameNameFood } from '../../api/_lib/rules/mais-usados'
 import type { Food } from '../lib/types'
 
 const BAD_VALUES = 'Esses valores não batem certo. Confirma as kcal e a proteína por 100 g.'
@@ -46,11 +47,12 @@ export default function TypedLabelForm({
           data: { user },
         } = await supabase.auth.getUser()
         if (!user) throw new Error('Sessão expirada. Volta a entrar.')
-        const { data, error } = await supabase
-          .from('foods')
-          .insert({ ...row, user_id: user.id, source: 'user', use_count: 0 })
-          .select()
-          .single()
+        // O mesmo nome que um alimento que já tens: atualiza-o (não fica repetido).
+        const { data: mine } = await supabase.from('foods').select('id,name').limit(1000)
+        const same = sameNameFood((mine ?? []) as { id: string; name: string }[], row.name)
+        const { data, error } = await (same
+          ? supabase.from('foods').update({ ...row, source: 'user' }).eq('id', same.id).select().single()
+          : supabase.from('foods').insert({ ...row, user_id: user.id, source: 'user', use_count: 0 }).select().single())
         if (error || !data) throw new Error('Não consegui guardar o alimento. Tenta outra vez.')
         food = data as Food
       }

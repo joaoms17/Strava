@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BottomSheet from '../ui/BottomSheet'
 import BarcodeScanner from '../BarcodeScanner'
 import FoodQuickList from '../FoodQuickList'
@@ -16,7 +16,7 @@ import { fmtInt } from '../../lib/format'
 import { prepareMenuPhoto } from '../../lib/image'
 import { foodExtrasText } from '../../lib/food-extras'
 import { dayLabel, whenFromParams, whenParams } from '../../lib/when'
-import { basketFromStore, basketKey, basketToStore, gramsFromInput } from '../../lib/barras'
+import { basketFromStore, basketKey, basketToStore, expiredBasketKeys, gramsFromInput } from '../../lib/barras'
 import { readScoped, writeScoped } from '../../lib/scoped'
 import { mealName, mealSlot } from '../../lib/repetir'
 import { round1 } from '../../../api/_lib/rules/meal-totals'
@@ -67,6 +67,9 @@ export default function BarcodeSheet() {
   // Do ícone «Código de barras» do ＋ (?ler=1) abre logo a câmara; de resto,
   // a lista dos mais usados.
   const [scanning, setScanning] = useState(restored === 0 && sheet.params.get('ler') === '1')
+  // Fechar a câmara só fecha a folha quando ela foi o primeiro ecrã; aberta
+  // depois a partir da lista, volta à lista.
+  const [cameraFirst, setCameraFirst] = useState(scanning)
   // O rótulo escrito à mão: com o código não encontrado, ou sem código.
   const [typing, setTyping] = useState<{ ean: string | null } | null>(null)
   const [target, setTarget] = useState<Target | null>(null)
@@ -91,6 +94,11 @@ export default function BarcodeSheet() {
 
   const columns = 'id,items,status,slot,logged_at,date,input_type,raw_text'
 
+  // O aviso e o fecho mais recentes, sem voltar a pedir a refeição a cada
+  // desenho (useSheet devolve um objeto novo de cada vez).
+  const latest = useRef({ toast, close: sheet.close })
+  latest.current = { toast, close: sheet.close }
+
   useEffect(() => {
     if (!mealId) return
     let alive = true
@@ -99,12 +107,18 @@ export default function BarcodeSheet() {
       .select(`${columns},deleted_at`)
       .eq('id', mealId)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error: failed }) => {
         if (!alive) return
         const meal = data as (Target & { deleted_at: string | null }) | null
-        if (!meal || meal.deleted_at || meal.status === 'a_analisar') {
-          toast(meal?.status === 'a_analisar' ? 'Essa refeição ainda está a ser analisada. Espera um pouco.' : 'Não encontrei essa refeição.')
-          sheet.close()
+        if (failed || !meal || meal.deleted_at || meal.status === 'a_analisar') {
+          latest.current.toast(
+            failed
+              ? 'Não consegui abrir a refeição. Confirma a ligação e tenta outra vez.'
+              : meal?.status === 'a_analisar'
+                ? 'Essa refeição ainda está a ser analisada. Espera um pouco.'
+                : 'Não encontrei essa refeição.',
+          )
+          latest.current.close()
           return
         }
         setTarget(meal)
@@ -113,6 +127,18 @@ export default function BarcodeSheet() {
       alive = false
     }
   }, [mealId])
+
+  // Os cestos de refeições que já expiraram saem do telemóvel.
+  useEffect(() => {
+    try {
+      const now = new Date()
+      for (const key of expiredBasketKeys(Object.keys(localStorage), (k) => localStorage.getItem(k), now)) {
+        localStorage.removeItem(key)
+      }
+    } catch {
+      // sem armazenamento: nada a limpar
+    }
+  }, [])
 
   useEffect(() => {
     if (!choosing) return
@@ -127,6 +153,7 @@ export default function BarcodeSheet() {
   }, [choosing, date])
 
   async function lookup(ean: string) {
+    setCameraFirst(false)
     setScanning(false)
     setError(null)
     setMissing(null)
@@ -291,8 +318,13 @@ export default function BarcodeSheet() {
     return (
       <BarcodeScanner
         onDetect={(ean) => void runBusy('A procurar o produto…', () => lookup(ean))}
-        onClose={() => (basket.length > 0 || sheet.params.get('ler') !== '1' ? setScanning(false) : close())}
+        onClose={() => {
+          if (cameraFirst && basket.length === 0) close()
+          else setScanning(false)
+          setCameraFirst(false)
+        }}
         onSearch={() => {
+          setCameraFirst(false)
           setScanning(false)
           setError(null)
           setMissing(null)
@@ -384,6 +416,15 @@ export default function BarcodeSheet() {
                 Procurar pelo nome
               </button>
             </div>
+            <button
+              onClick={() => {
+                setError(null)
+                setMissing(null)
+              }}
+              className="min-h-11 text-[0.9375rem] text-dim"
+            >
+              Voltar à lista
+            </button>
           </div>
         )}
 

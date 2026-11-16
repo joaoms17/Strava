@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeFoodName, rankFoodsForSlot } from '../api/_lib/rules/mais-usados'
+import { normalizeFoodName, rankFoodsForSlot, sameNameFood } from '../api/_lib/rules/mais-usados'
 
 const food = (id: string, name: string, use_count: number, default_portion_g: number | null = null) => ({
   id,
@@ -61,5 +61,14 @@ describe('mais usados por momento', () => {
 
   it('normaliza nomes', () => {
     expect(normalizeFoodName('  Farinha de Arróz  PROZIS ')).toBe('farinha de arroz prozis')
+  })
+})
+
+describe('o mesmo alimento escrito outra vez', () => {
+  it('encontra o que já existe, sem acentos nem maiúsculas', () => {
+    const foods = [food('a', 'Wrap Integral Continente', 1), food('b', 'Pão', 2)]
+    expect(sameNameFood(foods, '  wrap integral  continente ')?.id).toBe('a')
+    expect(sameNameFood(foods, 'Pao')?.id).toBe('b')
+    expect(sameNameFood(foods, 'Wrap')).toBeUndefined()
   })
 })
