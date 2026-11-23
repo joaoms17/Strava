@@ -21,7 +21,7 @@ import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
 import { LEFTOVERS_ADD_HINT, mergeAfterLeftovers } from './rules/sobras.js'
 import { dedupeOrderLines, dropNonFood, orderPeople, pendingSplit, unlinkMultiples, type Order } from './rules/pedido.js'
-import { answeredForPrompt, cleanQuestions, historyForPrompt, pendingQuestions, thisMealAnswers, type MealQuestion } from './rules/perguntas.js'
+import { answeredForPrompt, cleanQuestions, historyForPrompt, statusWithQuestions, thisMealAnswers, type MealQuestion } from './rules/perguntas.js'
 import { shiftDate } from './rules/nutritional-day.js'
 import { slotOf } from './rules/momentos.js'
 import { ANALYSIS_FUNCTION_BUDGET_MS, ANALYSIS_WRITE_MARGIN_MS, requestWithin, type AiRequest } from './rules/tempo-ia.js'
@@ -473,8 +473,9 @@ export async function analyseClaimed(
         // Juntar uma foto (um rótulo, confiança alta) a uma refeição que ninguém
         // confirmou não a dá por certa (M10): fica por rever até «Está certo».
         if (adding && status === 'ok' && !(meal as MealRow & { confirmed_at?: string | null }).confirmed_at) status = 'por_rever'
-        // Perguntas por responder: por rever até a pessoa responder.
-        if (questions && pendingQuestions(questions).length) status = 'por_rever'
+        // Perguntas por responder: por rever. Respondidas: a estimativa final
+        // fica confirmada (um pedido por dividir continua por rever).
+        if (questions && split == null) status = statusWithQuestions(status, questions, answeredBefore)
         const patch: Record<string, unknown> = {
           items: finalItems,
           ...mealTotals(finalItems),
@@ -487,6 +488,7 @@ export async function analyseClaimed(
           // As etiquetas que os números já leram (migração 20261113000020).
           ...(hasTagsColumn ? { analysis_tags: used.tags } : {}),
           analysis_error: null,
+          ...(answeredBefore && status === 'ok' ? { confirmed_at: new Date().toISOString() } : {}),
           model,
           prompt_version: prompt,
           cost_usd: cost,
