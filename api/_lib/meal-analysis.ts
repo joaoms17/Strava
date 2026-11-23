@@ -5,7 +5,7 @@ import { MealAnalysisSchema, MealPhotoQuestionsSchema, type MealAnalysis, type M
 import {
   PROMPT_MEAL_CORRECT,
   PROMPT_MEAL_PHOTO_ADD,
-  PROMPT_MEAL_PHOTO_V5,
+  PROMPT_MEAL_PHOTO_V6,
   PROMPT_MEAL_TEXT_V2,
   promptVersion,
   readPrompt,
@@ -331,7 +331,7 @@ async function runModel(
     ...(context ?? {}),
     ...(answers.length ? { respostas_desta_refeicao: answers } : {}),
   })
-  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V5
+  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V6
 
   if (photos.length > 0) {
     const images = await photoContent(admin, photos.slice(0, 4), meal.user_id)
