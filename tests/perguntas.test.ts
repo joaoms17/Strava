@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { answeredForPrompt, cleanQuestions, historyForPrompt, pendingQuestions, thisMealAnswers, withAnswers } from '../api/_lib/rules/perguntas'
+import { answeredForPrompt, cleanQuestions, historyForPrompt, pendingQuestions, statusWithQuestions, thisMealAnswers, withAnswers } from '../api/_lib/rules/perguntas'
 import type { MealItem } from '../api/_lib/rules/meal-totals'
 
 const it_ = (name: string, kcal: number, grams = 100): MealItem => ({ name, grams, kcal, protein: 10, carbs: 10, fat: 10, food_id: null, estimated: true })
@@ -46,5 +46,19 @@ describe('contexto para a análise', () => {
     expect(answeredForPrompt([{ ...meal('2026-11-22', 'jantar', 'B'), questions: q }], 20)).toEqual([
       { dia: '2026-11-22', pergunta: 'De onde é?', resposta: 'Smash burger' },
     ])
+  })
+})
+
+describe('o estado depois das perguntas', () => {
+  const ask = cleanQuestions([{ pergunta: 'A?', sugestoes: [] }])
+  it('com perguntas por responder fica por rever', () => {
+    expect(statusWithQuestions('ok', ask, false)).toBe('por_rever')
+  })
+  it('respondidas, a estimativa final fica confirmada', () => {
+    expect(statusWithQuestions('por_rever', withAnswers(ask, ['Sim']), true)).toBe('ok')
+  })
+  it('sem perguntas, fica o que a análise disse', () => {
+    expect(statusWithQuestions('por_rever', [], false)).toBe('por_rever')
+    expect(statusWithQuestions('ok', undefined, false)).toBe('ok')
   })
 })

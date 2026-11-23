@@ -31,6 +31,19 @@ export function pendingQuestions(questions: MealQuestion[] | null | undefined): 
   return (questions ?? []).filter((q) => q.resposta == null)
 }
 
+// O estado da refeição com as perguntas: por responder, fica por rever;
+// respondidas, a estimativa que o modelo fez com as respostas fica
+// confirmada (a pessoa já disse o que faltava); sem perguntas, o da análise.
+export function statusWithQuestions<S extends string>(
+  status: S,
+  questions: MealQuestion[] | null | undefined,
+  answered: boolean,
+): S | 'ok' | 'por_rever' {
+  if (pendingQuestions(questions).length) return 'por_rever'
+  if (answered && (questions?.length ?? 0) > 0) return 'ok'
+  return status
+}
+
 // As respostas desta refeição, para a nova estimativa.
 export function thisMealAnswers(questions: MealQuestion[] | null | undefined) {
   return (questions ?? []).filter((q) => q.resposta != null).map((q) => ({ pergunta: q.pergunta, resposta: q.resposta! }))
