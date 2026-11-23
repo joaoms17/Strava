@@ -6,7 +6,7 @@ import { geminiModels } from '../_lib/rules/gemini.js'
 import { DEFERRED_MIGRATIONS, MIGRATIONS, SCHEMA_VERSION, compareSchema, missingMigrations, type SchemaState } from '../_lib/rules/esquema.js'
 import {
   PROMPT_REVIEW_NEUTRAL,
-  PROMPT_MEAL_PHOTO_V3,
+  PROMPT_MEAL_PHOTO_V4,
   PROMPT_MEAL_TEXT_V2,
   PROMPT_MEAL_CORRECT,
   PROMPT_MEAL_PHOTO_ADD,
@@ -87,7 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Os prompts que a app usa hoje (o do narrador antigo já não é chamado).
     [
       PROMPT_REVIEW_NEUTRAL,
-      PROMPT_MEAL_PHOTO_V3,
+      PROMPT_MEAL_PHOTO_V4,
       PROMPT_MEAL_TEXT_V2,
       PROMPT_MEAL_CORRECT,
       PROMPT_MEAL_PHOTO_ADD,

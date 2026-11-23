@@ -13,6 +13,7 @@ import { emitDataChanged } from '../../lib/events'
 import { signedUrls } from '../../lib/photos'
 import { MAX_MEAL_PHOTOS } from '../../lib/capture'
 import AttachPhotoButton from '../ui/AttachPhotoButton'
+import PerguntasIA from '../PerguntasIA'
 import ItemList from '../ItemList'
 import Icon from '../ui/Icon'
 import ErrorReason from '../ui/ErrorReason'
@@ -344,6 +345,31 @@ export default function MealSheet() {
           if (undone) await afterWrite(undone.meal)
         },
       },
+    ])
+  }
+
+  // Responder às perguntas da IA: o modelo volta a ler a foto com as
+  // respostas e faz a estimativa final (com o antes → depois e Anular).
+  async function answerQuestions(answers: (string | null)[]) {
+    const result = await call<{
+      meal: Meal
+      limit?: boolean
+      reread_error?: string
+      previous?: { items: MealItem[]; status: 'ok' | 'por_rever'; model_reserve: boolean }
+    }>('/api/meal/answer', { meal_id: current.id, answers })
+    if (!result) return
+    await afterWrite(result.meal)
+    if (result.limit) {
+      toast('Chegaste ao limite da IA de hoje. As respostas ficaram guardadas.')
+      return
+    }
+    const previous = result.previous
+    if (result.reread_error || !previous) {
+      toast(`Não consegui estimar outra vez: ${result.reread_error ?? 'tenta mais logo'}.`)
+      return
+    }
+    toast(`Estimado com as tuas respostas · ${diffText(previous.items, result.meal.items)}`, [
+      { label: 'Anular', run: () => undo({ items: previous.items, undo: true, ...(previous.status === 'por_rever' ? { confirm: false } : {}) }) },
     ])
   }
 
@@ -769,6 +795,9 @@ export default function MealSheet() {
                   )}
                   <PortionRow value={factor} onPick={pickPortion} />
                 </div>
+              )}
+              {current.deleted_at == null && current.questions && (
+                <PerguntasIA key={current.id} questions={current.questions} onAnswer={answerQuestions} />
               )}
               <ItemList items={items} onChange={setItems} readOnly={current.deleted_at != null} />
               {/* Só nas refeições analisadas: numa que falhou, «Tentar outra vez»
