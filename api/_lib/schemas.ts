@@ -52,7 +52,7 @@ export const MealPhotoAnalysisSchema = MealAnalysisSchema.extend({
 
 export type MealPhotoAnalysis = z.infer<typeof MealPhotoAnalysisSchema>
 
-// A primeira análise das fotos (meal-photo v4) também pode perguntar (0 a 3
+// A primeira análise das fotos (meal-photo v5) também pode perguntar (0 a 3
 // perguntas do próprio modelo, com sugestões de resposta; rules/perguntas.ts).
 export const MealQuestionSchema = z.object({
   pergunta: z.string(),
