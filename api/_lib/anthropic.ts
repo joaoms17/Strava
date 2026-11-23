@@ -9,15 +9,41 @@ import { geminiModels, type AiRole } from './rules/gemini.js'
 import { geminiCall } from './gemini.js'
 
 // IDs confirmados na documentação da API (skill claude-api, docs.claude.com).
+// Nov 2026: Haiku 5.5 no texto (10× mais barato do que o 4.5) e Sonnet 5.5
+// nas fotos. Os pedidos adaptam-se a eles em forModel (thinking e sampling).
 export const MODELS = {
-  text: 'claude-haiku-4-5',
-  vision: 'claude-sonnet-5',
+  text: 'claude-haiku-5-5',
+  vision: 'claude-sonnet-5-5',
 } as const
 
-// USD por milhão de tokens (docs.claude.com/pricing).
+// USD por milhão de tokens (docs.claude.com/pricing). Os modelos antigos
+// ficam para as contas das chamadas já registadas. Haiku 5.5: preço até 100K
+// tokens de entrada (os pedidos da app ficam muito abaixo).
 const PRICES: Record<string, { input: number; output: number }> = {
+  'claude-haiku-5-5': { input: 0.1, output: 0.5 },
+  'claude-sonnet-5-5': { input: 2, output: 10 },
   'claude-haiku-4-5': { input: 1, output: 5 },
   'claude-sonnet-5': { input: 2, output: 10 },
+}
+
+// Os pedidos escrevem-se uma vez (thinking: NO_THINKING, às vezes temperature)
+// e adaptam-se aqui a cada modelo:
+// - Sonnet 5.5 recusa thinking {type:'disabled'} (400): sem raciocínio é
+//   {type:'between_tools'} (sem outros campos; aceite com o esforço por
+//   omissão, high);
+// - Haiku 5.5 pensa por omissão: para extrair JSON vai sem raciocínio, como
+//   o Haiku 4.5 (aceita 'disabled' com o esforço por omissão, medium);
+// - os dois recusam temperature/top_p/top_k fora do valor por omissão.
+type ClaudeParams = Omit<MessageCreateParamsNonStreaming, 'output_config' | 'stream'>
+export function forModel(params: ClaudeParams): ClaudeParams {
+  if (params.model !== MODELS.text && params.model !== MODELS.vision) return params
+  const { temperature: _t, top_p: _p, top_k: _k, ...rest } = params
+  if (params.model === MODELS.vision && params.thinking?.type === 'disabled') {
+    // O SDK instalado (0.124) ainda não tem este tipo; o formato é o da API.
+    return { ...rest, thinking: { type: 'between_tools' } as unknown as ClaudeParams['thinking'] }
+  }
+  if (params.model === MODELS.text && params.thinking == null) return { ...rest, thinking: NO_THINKING }
+  return rest
 }
 
 // Que IA usar: AI_PROVIDER=gemini|anthropic; sem isso, o Gemini quando há
@@ -54,8 +80,8 @@ export function anthropic(): Promise<Anthropic> {
 export const REQUEST_TEXT = { maxRetries: 0, timeout: 25_000 }
 export const REQUEST_VISION = { maxRetries: 0, timeout: 45_000 }
 
-// O Sonnet 5 pensa de forma adaptativa quando o parâmetro é omitido; para
-// extrair JSON não compensa o tempo nem o custo. Com o Gemini, o mesmo pedido
+// Para extrair JSON o raciocínio não compensa o tempo nem o custo (forModel
+// traduz isto para cada modelo Claude). Com o Gemini, o mesmo pedido
 // vai com pouco raciocínio (thinkingLevel 'low' no Gemini 3, thinkingBudget 0
 // no 2.5; rules/gemini.ts).
 export const NO_THINKING = { type: 'disabled' } as const
@@ -214,7 +240,7 @@ export async function structuredCall<T>(
   let response: Anthropic.Message
   try {
     response = await (await anthropic()).messages.create(
-      { ...params, output_config: { format: { type: 'json_schema', schema: json } } },
+      { ...forModel(params), output_config: { format: { type: 'json_schema', schema: json } } },
       meta.request,
     )
   } catch (err) {
