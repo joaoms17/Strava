@@ -12,6 +12,7 @@ import { mealIsEstimate } from '../_lib/rules/estimativas.js'
 import { analyseRequest, appliedText, correctionText, sameTags } from '../_lib/rules/analise.js'
 import { splitStoredError } from '../_lib/rules/resposta-ia.js'
 import { SLOTS, SLOT_TIME, loggedAtFor, slotOf, type Slot } from '../_lib/rules/momentos.js'
+import { pendingQuestions, thisMealAnswers, withAnswers, type MealQuestion } from '../_lib/rules/perguntas.js'
 import { addingToItems, aiLimitReached, claimAndAnalyse, correctItems, estimateItems, type MealRow } from '../_lib/meal-analysis.js'
 import { notifyMealAnalysed } from '../_lib/push.js'
 import { recomputeDirtyPast } from '../_lib/meal-recompute.js'
@@ -80,6 +81,9 @@ const DetachSchema = MealIdSchema.extend({
 })
 
 const CorrectSchema = MealIdSchema.extend({ text: z.string().trim().min(1).max(500) })
+
+// As respostas às perguntas da IA (por ordem; vazia = por responder).
+const AnswerSchema = MealIdSchema.extend({ answers: z.array(z.string().max(200).nullable()).min(1).max(3) })
 
 // Analisar sem gravar (Nova favorita): o que leva, ou a foto (com o nome).
 const EstimateSchema = z.object({
@@ -263,7 +267,7 @@ export const analyse = post(async ({ db, userId, body, res }) => {
   // A outra tentativa pedida pelo telemóvel sozinho, com a refeição que já
   // não está a analisar (erro, sem análise, analisada): fica como está.
   if (input.reread) {
-    await rereadMeal(db, userId, meal, res)
+    res.status(200).json(await rereadMeal(db, userId, meal))
     return
   }
   const { skip, reset } = analyseRequest(input, meal.status as string)
@@ -296,17 +300,14 @@ export const analyse = post(async ({ db, userId, body, res }) => {
 // numa refeição analisada com fotos e sem o que sobrou descontado; conta para
 // o limite diário das fotos e não há «mesmo assim» (S6). Se falhar, a refeição
 // fica como estava (itens, estado e o aviso da reserva).
-async function rereadMeal(db: SupabaseClient, userId: string, meal: MealRow & Record<string, unknown>, res: VercelResponse) {
+async function rereadMeal(db: SupabaseClient, userId: string, meal: MealRow & Record<string, unknown>): Promise<Record<string, unknown>> {
   if (meal.status !== 'ok' && meal.status !== 'por_rever') throw new HttpError(409, 'Só se lê outra vez uma refeição já analisada.')
   if (!(meal.photo_paths ?? []).length) throw new HttpError(422, 'Esta refeição não tem fotos para ler outra vez.')
   if (meal.leftover_photo_path) {
     throw new HttpError(409, 'Esta refeição já tem o que sobrou descontado. Anula isso primeiro para a ler outra vez.')
   }
   const admin = adminClient()
-  if (await aiLimitReached(admin, userId, true)) {
-    res.status(200).json({ meal, limit: true })
-    return
-  }
+  if (await aiLimitReached(admin, userId, true)) return { meal, limit: true }
   const previous = {
     items: meal.items,
     status: meal.status,
@@ -314,10 +315,7 @@ async function rereadMeal(db: SupabaseClient, userId: string, meal: MealRow & Re
     confirmed_at: (meal.confirmed_at as string | null) ?? null,
   }
   const result = await claimAndAnalyse(admin, meal.id, true, { reread: true })
-  if (result) {
-    res.status(200).json({ meal: result, previous })
-    return
-  }
+  if (result) return { meal: result, previous }
   // Falhou: volta ao estado de antes, sem o aviso «a foto nova não foi analisada».
   const failed = await ownMeal(db, meal.id)
   const reason = failed.analysis_error ? splitStoredError(failed.analysis_error as string).message : null
@@ -328,7 +326,7 @@ async function rereadMeal(db: SupabaseClient, userId: string, meal: MealRow & Re
     .eq('status', 'por_rever')
     .is('analysis_started_at', null)
     .select()
-  res.status(200).json({ meal: restored?.[0] ?? failed, reread_error: reason ?? 'Não consegui ler a foto outra vez.' })
+  return { meal: restored?.[0] ?? failed, reread_error: reason ?? 'Não consegui ler a foto outra vez.' }
 }
 
 export const attach = post(async ({ db, userId, body, res }) => {
@@ -425,6 +423,30 @@ export const detach = post(async ({ db, body, res }) => {
     if (!reserveError) data.model_reserve = input.model_reserve
   }
   res.status(200).json({ meal: data })
+})
+
+// Responder às perguntas da IA: as respostas ficam na refeição e o modelo
+// volta a ler as fotos com elas para a estimativa final (como «Analisar
+// outra vez», com o Anular). Responder conta como uma leitura de fotos.
+export const answer = post(async ({ db, userId, body, res }) => {
+  const input = parse(AnswerSchema, body)
+  const meal = await ownMeal(db, input.meal_id)
+  const questions = (meal.questions ?? []) as MealQuestion[]
+  if (!pendingQuestions(questions).length) throw new HttpError(409, 'Esta refeição já não tem perguntas por responder.')
+  const answered = withAnswers(questions, input.answers)
+  if (thisMealAnswers(answered).length === thisMealAnswers(questions).length) {
+    throw new HttpError(422, 'Escolhe ou escreve uma resposta.')
+  }
+  const { error } = await db.from('meals').update({ questions: answered }).eq('id', meal.id)
+  if (error) throw new HttpError(500, error.message)
+  const result = await rereadMeal(db, userId, { ...meal, questions: answered })
+  // Sem estimativa nova (limite, falha): as perguntas voltam a estar por
+  // responder, para tentar outra vez.
+  if (result.limit || result.reread_error) {
+    await db.from('meals').update({ questions }).eq('id', meal.id)
+    result.meal = { ...(result.meal as Record<string, unknown>), questions }
+  }
+  res.status(200).json(result)
 })
 
 export const correct = post(async ({ db, userId, body, res }) => {

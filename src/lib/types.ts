@@ -1,3 +1,4 @@
+import type { MealQuestion } from '../../api/_lib/rules/perguntas'
 export interface MealItem {
   name: string
   grams: number
@@ -88,6 +89,7 @@ export interface Meal {
   share_with?: string[] // «Também para …» à espera do fim da análise (migração 20261018160000)
   share_split?: number | null // a parte de quem regista nessa partilha: 0,5 a meias (migração 20261018210000)
   order_people?: number | null // pedido de entrega para 2 ou mais, ainda por dividir (migração 20261018220000)
+  questions?: MealQuestion[] | null // perguntas da IA sobre a foto (migração 20261123000000)
   // Foto do que sobrou e as kcal que ficaram no prato (migração 20261018200000),
   // à parte das fotos do prato. Sem a migração, não vêm.
   leftover_photo_path?: string | null

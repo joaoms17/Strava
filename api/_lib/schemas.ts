@@ -52,6 +52,17 @@ export const MealPhotoAnalysisSchema = MealAnalysisSchema.extend({
 
 export type MealPhotoAnalysis = z.infer<typeof MealPhotoAnalysisSchema>
 
+// A primeira análise das fotos (meal-photo v4) também pode perguntar (0 a 3
+// perguntas do próprio modelo, com sugestões de resposta; rules/perguntas.ts).
+export const MealQuestionSchema = z.object({
+  pergunta: z.string(),
+  sugestoes: z.array(z.string()),
+})
+
+export const MealPhotoQuestionsSchema = MealPhotoAnalysisSchema.extend({
+  perguntas: z.array(MealQuestionSchema),
+})
+
 // «Sobrou comida?»: a parte comida de cada item (0 a 1, por índice), se a
 // foto do depois é o mesmo prato e se ficou vazio. Sem limites no schema (os
 // structured outputs não os aceitam): a fração arruma-se em rules/sobras.ts.

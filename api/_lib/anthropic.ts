@@ -205,7 +205,8 @@ async function settleCall(
 export async function structuredCall<T>(
   admin: SupabaseClient,
   // `force`: «mesmo assim» (acima do limite): regista, mas não recusa.
-  meta: { userId: string; kind: string; request: { maxRetries: number; timeout: number }; force?: boolean },
+  // `effort`: o esforço do raciocínio no Claude (com thinking adaptativo).
+  meta: { userId: string; kind: string; request: { maxRetries: number; timeout: number }; force?: boolean; effort?: 'low' | 'medium' | 'high' },
   params: Omit<MessageCreateParamsNonStreaming, 'output_config' | 'stream'>,
   schema: z.ZodType<T>,
 ): Promise<{ output: T; cost: number; usage: Usage; model: string; reserve: boolean }> {
@@ -240,7 +241,10 @@ export async function structuredCall<T>(
   let response: Anthropic.Message
   try {
     response = await (await anthropic()).messages.create(
-      { ...forModel(params), output_config: { format: { type: 'json_schema', schema: json } } },
+      {
+        ...forModel(params),
+        output_config: { format: { type: 'json_schema', schema: json }, ...(meta.effort ? { effort: meta.effort } : {}) },
+      },
       meta.request,
     )
   } catch (err) {

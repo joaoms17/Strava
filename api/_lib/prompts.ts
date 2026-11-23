@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 export const PROMPT_REVIEW_NEUTRAL = 'weekly-review.v5.md'
-export const PROMPT_MEAL_PHOTO_V3 = 'meal-photo.v3.md'
+export const PROMPT_MEAL_PHOTO_V4 = 'meal-photo.v4.md'
 export const PROMPT_MEAL_TEXT_V2 = 'meal-text.v2.md'
 export const PROMPT_MEAL_CORRECT = 'meal-correct.v2.md'
 export const PROMPT_MEAL_PHOTO_ADD = 'meal-photo-add.v2.md'

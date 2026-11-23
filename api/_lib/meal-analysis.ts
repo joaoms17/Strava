@@ -1,11 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MODELS, NO_THINKING, REQUEST_TEXT, REQUEST_VISION, aiProvider, structuredCall } from './anthropic.js'
 import { AiError, AiQuotaError, describeAiError, errorForStorage } from './rules/resposta-ia.js'
-import { MealAnalysisSchema, MealPhotoAnalysisSchema, type MealAnalysis, type MealPhotoAnalysis } from './schemas.js'
+import { MealAnalysisSchema, MealPhotoQuestionsSchema, type MealAnalysis, type MealPhotoAnalysis } from './schemas.js'
 import {
   PROMPT_MEAL_CORRECT,
   PROMPT_MEAL_PHOTO_ADD,
-  PROMPT_MEAL_PHOTO_V3,
+  PROMPT_MEAL_PHOTO_V4,
   PROMPT_MEAL_TEXT_V2,
   promptVersion,
   readPrompt,
@@ -21,6 +21,9 @@ import { itemsToLearn } from './rules/aprender.js'
 import { learnFoods } from './foods.js'
 import { LEFTOVERS_ADD_HINT, mergeAfterLeftovers } from './rules/sobras.js'
 import { dedupeOrderLines, dropNonFood, orderPeople, pendingSplit, unlinkMultiples, type Order } from './rules/pedido.js'
+import { answeredForPrompt, cleanQuestions, historyForPrompt, pendingQuestions, thisMealAnswers, type MealQuestion } from './rules/perguntas.js'
+import { shiftDate } from './rules/nutritional-day.js'
+import { slotOf } from './rules/momentos.js'
 import { ANALYSIS_FUNCTION_BUDGET_MS, ANALYSIS_WRITE_MARGIN_MS, requestWithin, type AiRequest } from './rules/tempo-ia.js'
 
 // Análise de refeições em segundo plano (Fase 2): a refeição já existe com
@@ -50,6 +53,7 @@ export interface MealRow {
   share_split?: number | null // migração 20261018210000
   order_people?: number | null // migração 20261018220000 (pedido de entrega para 2 ou mais)
   source_meal_id?: string | null // cópia partilhada por outra pessoa
+  questions?: MealQuestion[] | null // migração 20261123000000 (perguntas da IA)
 }
 
 type ImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
@@ -225,7 +229,38 @@ export function addingToItems(meal: Pick<MealRow, 'items' | 'photo_paths'>): boo
 
 // O que a análise lê de uma refeição (ou de um pedido sem refeição gravada).
 type ModelInput = Pick<MealRow, 'user_id' | 'raw_text' | 'note' | 'tags' | 'slot' | 'logged_at' | 'photo_paths' | 'items'> &
-  Partial<Pick<MealRow, 'leftover_photo_path'>>
+  Partial<Pick<MealRow, 'leftover_photo_path' | 'id' | 'questions'>>
+
+// Contexto da primeira análise das fotos: o que costuma comer neste momento
+// do dia (30 dias, 12 refeições) e as perguntas já respondidas (90 dias, 20).
+// Sem a coluna das perguntas (migração por aplicar), só o histórico.
+const HISTORY_DAYS = 30
+const HISTORY_MEALS = 12
+const ANSWERS_DAYS = 90
+const ANSWERS_MAX = 20
+
+async function mealContext(admin: SupabaseClient, meal: ModelInput) {
+  const today = meal.logged_at.slice(0, 10)
+  const select = (cols: string) => {
+    let q = admin
+      .from('meals')
+      .select(cols)
+      .eq('user_id', meal.user_id)
+      .is('deleted_at', null)
+      .in('status', ['ok', 'por_rever'])
+      .gte('date', shiftDate(today, -ANSWERS_DAYS))
+      .order('logged_at', { ascending: false })
+      .limit(300)
+    if (meal.id) q = q.neq('id', meal.id)
+    return q
+  }
+  let { data, error } = await select('date,slot,logged_at,raw_text,items,questions')
+  if (error) ({ data } = await select('date,slot,logged_at,raw_text,items'))
+  const rows = (data ?? []) as unknown as Parameters<typeof historyForPrompt>[0]
+  const slot = meal.slot ?? slotOf(new Date(meal.logged_at))
+  const recent = rows.filter((m) => m.date >= shiftDate(today, -HISTORY_DAYS))
+  return { historico: historyForPrompt(recent, slot, HISTORY_MEALS), respostas_anteriores: answeredForPrompt(rows, ANSWERS_MAX) }
+}
 
 // Como correr a análise: `reread` («Analisar outra vez» numa foto lida pelo
 // modelo de reserva, M2) lê as fotos de raiz, com o prompt da primeira
@@ -255,6 +290,7 @@ async function runModel(
 ): Promise<{
   analysis: MealAnalysis
   order: Order | null
+  questions: MealQuestion[]
   refs: Record<string, string>
   model: string
   prompt: string
@@ -265,6 +301,11 @@ async function runModel(
   const photos = meal.photo_paths ?? []
   const adding = !reread && addingToItems(meal)
   const byFood = new Map(Object.entries(refs).map(([ref, id]) => [id, ref]))
+  // A primeira leitura das fotos leva o contexto da pessoa e, depois de ela
+  // responder às perguntas, as respostas desta refeição.
+  const firstRead = !adding && photos.length > 0
+  const context = firstRead ? await mealContext(admin, meal) : null
+  const answers = firstRead ? thisMealAnswers(meal.questions) : []
   const payload = JSON.stringify({
     ...(adding
       ? {
@@ -287,30 +328,44 @@ async function runModel(
     hora_local: clockTime(new Date(meal.logged_at)),
     momento: meal.slot,
     alimentos: forPrompt,
+    ...(context ?? {}),
+    ...(answers.length ? { respostas_desta_refeicao: answers } : {}),
   })
-  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V3
+  const photoPrompt = adding ? PROMPT_MEAL_PHOTO_ADD : PROMPT_MEAL_PHOTO_V4
 
   if (photos.length > 0) {
     const images = await photoContent(admin, photos.slice(0, 4), meal.user_id)
     // O tempo de descarregar as fotos já conta.
-    const meta = { userId: meal.user_id, kind: 'meal_photo', request: within(REQUEST_VISION, deadline), force }
+    // No Claude, a primeira leitura raciocina um pouco (esforço low): acerta
+    // mais nas porções e decide melhor se precisa de perguntar. No Gemini e
+    // ao juntar fotos, sem raciocínio, como antes.
+    const think = firstRead && aiProvider() === 'anthropic'
+    const meta = {
+      userId: meal.user_id,
+      kind: 'meal_photo',
+      request: within(REQUEST_VISION, deadline),
+      force,
+      ...(think ? { effort: 'low' as const } : {}),
+    }
     const params = {
       model: MODELS.vision,
-      max_tokens: 4096,
-      thinking: NO_THINKING,
+      max_tokens: think ? 16000 : 4096,
+      thinking: think ? ({ type: 'adaptive' } as const) : NO_THINKING,
       system: readPrompt(photoPrompt),
       messages: [{ role: 'user' as const, content: [...images, { type: 'text' as const, text: payload }] }],
     }
     // A primeira análise lê também o pedido de entrega (captura do resumo do
     // Glovo, Uber Eats…), num schema só das fotos; o juntar fica como estava.
-    let call: { output: MealPhotoAnalysis; cost: number; model: string; reserve: boolean }
+    let call: { output: MealPhotoAnalysis & { perguntas: { pergunta: string; sugestoes: string[] }[] }; cost: number; model: string; reserve: boolean }
     if (adding) {
       const added = await structuredCall(admin, meta, params, MealAnalysisSchema)
-      call = { ...added, output: { ...added.output, order: null } }
+      call = { ...added, output: { ...added.output, order: null, perguntas: [] } }
     } else {
-      call = await structuredCall(admin, meta, params, MealPhotoAnalysisSchema)
+      call = await structuredCall(admin, meta, params, MealPhotoQuestionsSchema)
     }
-    const { order, ...output } = call.output
+    const { order, perguntas, ...output } = call.output
+    // Já respondidas: a estimativa é a final, sem perguntas novas.
+    const questions = answers.length ? [] : cleanQuestions(perguntas)
     // Taxas, gorjeta, saco, talheres ou totais nunca contam, mesmo que a IA os
     // deixe passar; e a mesma linha de duas capturas sobrepostas conta uma vez.
     let items = dropNonFood(output.items, order != null)
@@ -322,7 +377,7 @@ async function runModel(
       throw new AiError('Não vi comida nesta foto. Escreve o que comeste.', 'análise sem itens')
     }
     // A reserva das fotos é o modelo do texto, que acerta menos nas porções.
-    return { analysis, order, refs, model: call.model, prompt: promptVersion(photoPrompt), cost: call.cost, reserve: call.reserve }
+    return { analysis, order, questions, refs, model: call.model, prompt: promptVersion(photoPrompt), cost: call.cost, reserve: call.reserve }
   }
 
   const { output: analysis, cost, model } = await structuredCall(
@@ -338,7 +393,7 @@ async function runModel(
     MealAnalysisSchema,
   )
   if (analysis.items.length === 0) throw new AiError('Não percebi o que comeste. Escreve de outra forma.', 'análise sem itens')
-  return { analysis, order: null, refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost, reserve: false }
+  return { analysis, order: null, questions: [], refs, model, prompt: promptVersion(PROMPT_MEAL_TEXT_V2), cost, reserve: false }
 }
 
 // Analisar sem gravar (a «Nova favorita» escrita ou com foto): o mesmo
@@ -379,7 +434,7 @@ export async function analyseClaimed(
   // volta logo a «por rever» com eles (M3).
   const keepsItems = reread || addingToItems(meal)
   try {
-    const { analysis, order, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline, reread, options.force === true)
+    const { analysis, order, questions: asked, refs, model, prompt, cost, reserve } = await runModel(admin, meal, deadline, reread, options.force === true)
     let analysed = toMealItems(analysis.items, refs)
     const adding = !reread && addingToItems(meal)
     const factor = factorOf(meal.portion_factor)
@@ -403,6 +458,10 @@ export async function analyseClaimed(
     const inputType = meal.input_type === 'photo' ? 'photo' : 'text'
     const read: AnalysisInput = { note: meal.note ?? null, tags }
     const hasTagsColumn = 'analysis_tags' in meal
+    // As perguntas (só na primeira leitura das fotos): as já respondidas
+    // ficam (são o contexto das próximas); senão, as que o modelo fez agora.
+    const answeredBefore = thisMealAnswers(meal.questions).length > 0
+    const questions = adding || !(meal.photo_paths ?? []).length ? undefined : answeredBefore ? meal.questions! : asked
 
     const written = await guardedWrite(items, read, claimedAt, {
       write: async (finalItems, used) => {
@@ -414,6 +473,8 @@ export async function analyseClaimed(
         // Juntar uma foto (um rótulo, confiança alta) a uma refeição que ninguém
         // confirmou não a dá por certa (M10): fica por rever até «Está certo».
         if (adding && status === 'ok' && !(meal as MealRow & { confirmed_at?: string | null }).confirmed_at) status = 'por_rever'
+        // Perguntas por responder: por rever até a pessoa responder.
+        if (questions && pendingQuestions(questions).length) status = 'por_rever'
         const patch: Record<string, unknown> = {
           items: finalItems,
           ...mealTotals(finalItems),
@@ -433,6 +494,8 @@ export async function analyseClaimed(
         // Para quantas pessoas é o pedido (migração 20261018220000), na
         // primeira análise: uma análise nova limpa o que a de antes disse.
         if (!adding && (split != null || 'order_people' in meal)) patch.order_people = split
+        // As perguntas (migração 20261123000000; sem a coluna, grava sem elas).
+        if (questions !== undefined && 'questions' in meal) patch.questions = questions.length ? questions : null
         const run = (values: Record<string, unknown>) => {
           // Apagada a meio (M14): não grava nem avisa «Jantar analisado».
           let query = admin
